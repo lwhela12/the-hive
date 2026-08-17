@@ -19,6 +19,30 @@ import { NAV_DESTINATIONS, HIVE_WIDE_ROUTE } from './navigation';
  * page added to the rail is covered here the day it is added.
  */
 
+/**
+ * The screens that belong to one HIVE but are not in the side rail.
+ *
+ * The rail is not the list of per-HIVE pages — it is the list of pages with a
+ * DOOR in the rail. These four are reached from inside other screens, and every
+ * one of them means exactly the same thing in the HIVE you are switching to.
+ *
+ * Found 2026-08-16, the hard way. The OG check-in email's button carries the
+ * HIVE it belongs to now, so pressing it from HIVE-Wide switches you into OG and
+ * opens the tune-up. Except it didn't: the switch landed, and then this file
+ * called `/monthly-tuneup` unrecognised and sent her to Home. Nat: *"the OG HIVE
+ * check in still only dropped me here ... its supposed to go all the way into
+ * the actual survey!"*
+ *
+ * A deep link into a per-HIVE screen is exactly the case the fallback was
+ * written to catch, and it is the one case where going home is wrong.
+ */
+const HIVE_SCREENS_OFF_THE_RAIL = new Set([
+  '/monthly-tuneup',
+  '/arrival-board',
+  '/meeting-helper',
+  '/newsletter',
+]);
+
 /** Returns a path to navigate to, or null to stay exactly where you are. */
 export function routeAfterHiveSwitch(
   pathname: string | null | undefined,
@@ -49,9 +73,12 @@ export function routeAfterHiveSwitch(
   };
   if (wideOnly[path]) return wideOnly[path];
 
+  // A per-HIVE screen with no door in the rail still stays put — see the list.
+  if (HIVE_SCREENS_OFF_THE_RAIL.has(path)) return null;
+
   const dest = NAV_DESTINATIONS.find((d) => d.route.split('?')[0] === path);
   // Every page in the rail means something inside a HIVE — that is what being
-  // in the rail is — so staying is right for all of them. Only an unrecognised
-  // route (a deep link, a screen mid-flow) falls back to home.
+  // in the rail is — so staying is right for all of them. Only a route that is
+  // neither in the rail nor named above falls back to home.
   return dest ? null : '/hive';
 }
