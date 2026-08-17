@@ -41,7 +41,6 @@ import { MemberProfileLink } from '../../components/ui/MemberProfileLink';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import {
-  CheckInApprovalsPanel,
   HiveMemberPanels,
   NewsletterPanel,
   PANEL_HAIRLINE,
@@ -1522,17 +1521,12 @@ export default function AdminScreen() {
           {/* The newsletter goes out past every HIVE, so its box wears the house
               cream rather than any one HIVE's colour. Nat's draft opens from
               inside it. */}
-          {/* Anything holding up an email to members goes at the very top —
-              it is the one box on this screen with somebody waiting on it. */}
-          {isOwner && (
-            <CheckInApprovalsPanel
-              cellStyle={dashboardCellStyle}
-              panelStyle={dashboardPanelStyle}
-              bodyStyle={dashboardPanelBodyStyle}
-              scrollStyle={panelScrollStyle}
-              Panel={AdminPanel}
-            />
-          )}
+          {/* THE "WAITING ON YOU" BOX IS GONE (Nat, 2026-08-17).
+              *"it shouldn't live in admin. It should send me a preview email
+              and then once I approve it then you can send it out."* The
+              preview email IS the interface: she reads it, says go, and the
+              send is fired for her. A box here was a second place to look for
+              something already sitting in her inbox. */}
 
           {isOwner && (
             <NewsletterPanel

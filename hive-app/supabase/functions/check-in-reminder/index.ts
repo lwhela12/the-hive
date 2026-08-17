@@ -25,10 +25,12 @@ const PUBLIC_SITE_URL = Deno.env.get('PUBLIC_SITE_URL') || 'https://the-hive.app
  * function fires — monthly, day-of, halfway, quarterly, end-of-year, and both of
  * Production's — now goes to this address first and waits.
  *
- * It waits in Admin, not on a link in the email. A one-click "send to everyone"
- * web address in an inbox is a members-wide blast that a mail scanner or a
- * forward can fire on its own; the button in the email lands her on the Admin
- * card instead, where she is signed in and pressing it means she pressed it.
+ * It waits in her inbox and nowhere else. Nat, 2026-08-17: *"it shouldn't live
+ * in admin. It should send me a preview email and then once I approve it then
+ * you can send it out."* So the preview IS the interface — she reads it, says
+ * go, and the send is fired for her. No live link in the email either: a
+ * one-click "send to everyone" web address is a members-wide blast that a mail
+ * scanner or a forward can trip on its own.
  */
 const PREVIEW_EMAIL = Deno.env.get('CHECK_IN_PREVIEW_EMAIL') || 'natwalstead@gmail.com';
 
@@ -562,8 +564,7 @@ function previewBanner(held: HeldTouch, hiveName: string): string {
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto 18px;">
       <div style="background: #fdf3dc; border: 1px solid #e6d2a4; border-radius: 14px; padding: 14px 16px; color: #6b5220;">
         <p style="margin: 0 0 6px; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700;">Waiting for your go-ahead</p>
-        <p style="margin: 0 0 10px; font-size: 14px; line-height: 1.5;">Nobody has this yet. Below is exactly what <strong>${who}</strong> will get. Nothing goes out until you say so in Admin — if you do nothing, nothing sends.</p>
-        <a href="${APP_URL}/admin" style="background: #6b5220; color: #ffffff; text-decoration: none; padding: 9px 20px; border-radius: 999px; font-size: 13px; font-weight: 600; display: inline-block;">Open Admin to approve</a>
+        <p style="margin: 0; font-size: 14px; line-height: 1.5;">Nobody has this yet. Below is exactly what <strong>${who}</strong> will get. Say the word and it goes out — if you do nothing, nothing sends.</p>
       </div>
     </div>`;
 }
@@ -630,7 +631,7 @@ async function holdForApproval(
     community_id: survey.community_id,
     notification_type: 'general',
     title: `✋ ${held.hiveName} check-in is waiting on you`,
-    content: `${held.recipients} ${held.recipients === 1 ? 'person' : 'people'} get "${held.subject}" once you approve it in Admin. The preview is in your inbox.`,
+    content: `${held.recipients} ${held.recipients === 1 ? 'person' : 'people'} get "${held.subject}" once you say go. The preview is in your inbox.`,
     email_sent: !!RESEND_API_KEY,
     metadata: {
       reminder_survey_id: survey.id,
@@ -1128,10 +1129,21 @@ serve(async (req) => {
         // Midpoint doubles as newsletter season: open the "{Month} Newsletter"
         // thread on Announcements so shout-outs and reminders ("come to my
         // lemonade stand Tuesday!") land in one place Nat can write from.
-        // Only once she has said go: these threads are member-visible, and an
-        // announcement that the newsletter is brewing should not appear on a
-        // board before the email that explains it has been let out.
-        let newsletterThread: string | null = null;
+        /**
+         * NO NEWSLETTER THREADS. Nat, 2026-08-17, at length: *"we do not have
+         * newsletter boards period"* — *"stop putting newsletter boards"* —
+         * *"please please for the love of God correct this."*
+         *
+         * This block used to open a "{Month} Newsletter 📰" thread every month
+         * for people to drop shout-outs into, which is what made a board feel
+         * like the place the newsletter gets collected. It is not. The halfway
+         * check-in's answers are where shout-outs come from, and they belong in
+         * Admin's Newsletter box, which is where she writes the letter from.
+         *
+         * The Compliment Corner thread is a different thing and still opens —
+         * it is a standing place to say something nice, not a collection bin
+         * for a newsletter.
+         */
         if (kind === 'midpoint' && mayReachMembers) {
           try {
             const { data: boards } = await supabaseAdmin
@@ -1150,13 +1162,6 @@ serve(async (req) => {
               // the shout-outs that fed the letter stay underneath it. A board
               // of twelve threads a year reads as an archive; twenty-four reads
               // as a mess (Nat 2026-07-25).
-              const threadTitle = `${newsletterMonth} Newsletter 📰`;
-              const { data: existingThread } = await supabaseAdmin
-                .from('board_posts')
-                .select('id')
-                .eq('category_id', boardId)
-                .eq('title', threadTitle)
-                .limit(1);
               const complimentTitle = `${newsletterMonth} Compliment Corner 💐`;
               // These threads speak in Nat's voice, so they should carry her
               // name. "any admin, limit 1" was a coin flip that kept posting
@@ -1168,17 +1173,7 @@ serve(async (req) => {
                 .eq('role', 'admin');
               const admins = (adminRows ?? []) as { user_id: string; user?: { name?: string | null } | null }[];
               const authorId = (admins.find((row) => /^nat\b/i.test(row.user?.name ?? '')) ?? admins[0])?.user_id;
-              if (authorId && !existingThread?.length) {
-                await supabaseAdmin.from('board_posts').insert({
-                  community_id: survey.community_id,
-                  category_id: boardId,
-                  author_id: authorId,
-                  title: threadTitle,
-                  content:
-                    "The newsletter's brewing! 🗞️ Want a shout-out, a plug, or a reminder in it — \"come to my lemonade stand Tuesday!\"-style? Drop it in this thread and it goes straight into the newsletter.",
-                });
-              }
-              // Compliment Corner opens alongside the newsletter thread —
+              // Compliment Corner stands alone now —
               // a standing place to say something nice, harvested for the
               // newsletter and the meeting.
               const { data: existingCompliments } = await supabaseAdmin
@@ -1197,7 +1192,6 @@ serve(async (req) => {
                     'Want to compliment anyone this month? 💐 Drop it here — big, small, silly, sincere. @ them and they get a little love note the moment you post it. Compliments also get read out in the newsletter and at the meeting. No compliment too small.',
                 });
               }
-              newsletterThread = threadTitle;
             }
           } catch (threadError) {
             console.error('Newsletter thread creation failed (non-blocking):', threadError);
@@ -1212,7 +1206,11 @@ serve(async (req) => {
               : '🐝 Monthly check-in is open';
         const notificationBody =
           kind === 'day_of'
-            ? `Tonight's the ${month} ${day} meeting and your check-in isn't in yet — it takes ~2 minutes and lights you up on the Arrival Board.`
+            // Only ever sent to people who have NOT answered (the filter is a
+            // few lines up), so it can say so plainly. Nat, 2026-08-17: *"just
+            // a reminder we have this meeting coming up today. Fill in the
+            // pre-meeting check-in."*
+            ? `Just a reminder — we meet tonight, ${month} ${day}. Your pre-meeting check-in isn't in yet: about 2 minutes, and it lights you up on the Arrival Board.`
             : kind === 'midpoint'
               ? `The newsletter's brewing 🗞️ — want a shout-out, a plug, or a reminder in it? The 2-minute halfway check-in walks you there.`
               : `Take 5 minutes before the ${month} meeting — update your HDs and check in. ` +

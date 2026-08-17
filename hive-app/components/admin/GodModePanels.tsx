@@ -488,7 +488,9 @@ export function NewsletterPanel({
       .select('id')
       .eq('topic_kind', 'newsletter');
     const boardIds = ((boards ?? []) as { id: string }[]).map((b) => b.id);
-    if (boardIds.length === 0) { setShoutOuts([]); setIssues([]); return; }
+    // No newsletter board is a perfectly normal state now — two of the three
+    // HIVEs have never had one. Only the ISSUE list needs one; the shout-outs
+    // below come from the check-ins.
 
     // The issues themselves, and what the send log knows about each. Members
     // are counted here too: the send merges `newsletter_subscribers` with
@@ -554,6 +556,55 @@ export function NewsletterPanel({
      * Nowhere is it deleted — the replies stay on the board thread for good.
      * This box is a worktop, not an archive.
      */
+    /**
+     * Where a shout-out comes from, as of 2026-08-17: **the halfway check-in
+     * itself.**
+     *
+     * Nat, at length and in capitals: *"we do not have newsletter boards
+     * period"* — *"stop putting newsletter boards"* — *"the end of the month
+     * surveys should land in my admin spot ... there's a box in the upper
+     * left-hand corner that says newsletter, those shout-outs, that's where the
+     * halfway newsletter stuff populates for each one, and then we use that
+     * information to write this month."*
+     *
+     * So the answers are read straight off `survey_responses`. Every HIVE's
+     * halfway check-in asks its own version of "anything for the newsletter?",
+     * and every one of those question ids is listed below — a HIVE that grows a
+     * new one is a new entry here, never a new board.
+     *
+     * The board replies are still read UNDERNEATH this, for now, because OG and
+     * Tech's halfway is the tune-up wizard and it still posts what it collects
+     * to a board. Nothing already written is thrown away while that moves.
+     */
+    const NEWSLETTER_ANSWER_IDS = ['q_eom_newsletter', 'q_newsletter', 'q_shoutout'];
+    const hiveNames = new Map(
+      (((await supabase.from('communities').select('id, name')).data ?? []) as {
+        id: string; name: string;
+      }[]).map((c) => [c.id, c.name])
+    );
+    const { data: answered } = await supabase
+      .from('survey_responses')
+      .select('id, answers, submitted_at, created_at, user:profiles!user_id(name), survey:surveys!survey_id(title, community_id)')
+      .order('created_at', { ascending: false })
+      .limit(120);
+    const fromSurveys = ((answered ?? []) as any[]).flatMap((row) => {
+      const answers = (row.answers ?? {}) as Record<string, unknown>;
+      const survey = Array.isArray(row.survey) ? row.survey[0] : row.survey;
+      const author = (Array.isArray(row.user) ? row.user[0] : row.user)?.name ?? 'Someone';
+      const hive = hiveNames.get(survey?.community_id) ?? '';
+      return NEWSLETTER_ANSWER_IDS.flatMap((key) => {
+        const text = String(answers[key] ?? '').trim();
+        if (!text) return [];
+        return [{
+          id: `${row.id}:${key}`,
+          content: text,
+          created_at: row.submitted_at ?? row.created_at,
+          author: hive ? `${author} · ${hive}` : author,
+        }];
+      });
+    });
+
+    // The old home, kept readable while OG and Tech's halfway still posts there.
     const { data: threads } = await supabase
       .from('board_posts')
       .select('id, title')
@@ -563,20 +614,25 @@ export function NewsletterPanel({
       .order('created_at', { ascending: false })
       .limit(1);
     const threadIds = ((threads ?? []) as { id: string }[]).map((t) => t.id);
-    if (threadIds.length === 0) { setShoutOuts([]); return; }
+    const fromBoard = threadIds.length
+      ? (((await supabase
+          .from('board_replies')
+          .select('id, content, created_at, author:profiles!author_id(name)')
+          .in('post_id', threadIds)
+          .order('created_at', { ascending: false })
+          .limit(40)).data ?? []) as any[]).map((r) => ({
+            id: r.id,
+            content: String(r.content ?? '').trim(),
+            created_at: r.created_at,
+            author: r.author?.name ?? 'Someone',
+          })).filter((r) => r.content.length > 0)
+      : [];
 
-    const { data: replies } = await supabase
-      .from('board_replies')
-      .select('id, content, created_at, author:profiles!author_id(name)')
-      .in('post_id', threadIds)
-      .order('created_at', { ascending: false })
-      .limit(40);
-    setShoutOuts(((replies ?? []) as any[]).map((r) => ({
-      id: r.id,
-      content: String(r.content ?? '').trim(),
-      created_at: r.created_at,
-      author: r.author?.name ?? 'Someone',
-    })).filter((r) => r.content.length > 0));
+    setShoutOuts(
+      [...fromSurveys, ...fromBoard].sort(
+        (a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''))
+      )
+    );
   }, []);
 
   // A plain `useEffect` only fires once, on mount — so if this box was
@@ -695,6 +751,10 @@ export function NewsletterPanel({
           about. */}
       <Panel
         title="Newsletter"
+        // In the order the work happens. Nat, 2026-08-17: *"first we collect
+        // the survey responses which are called shout-outs, then we write this
+        // month's newsletter, then we test it, and that's the order that it
+        // goes in."* Signed-up is a list you consult, so it stays last.
         tabs={[
           { key: 'shoutouts', label: `Shout-outs (${shoutOuts.length})` },
           // The draft quotes members before Nat has chosen what stays in, so
@@ -984,200 +1044,6 @@ export function NewsletterPanel({
         destructive
         onConfirm={() => { void removeSubscriber(); }}
         onCancel={() => { if (!removingSub) setConfirmRemoveSub(null); }}
-      />
-    </View>
-  );
-}
-
-/* ------------------------------------------------------- check-ins waiting */
-
-/**
- * Every check-in email waits here until Nat says go.
- *
- * Nat, 2026-08-16: *"we said i should get the preview first? always? for all
- * surveys? they should always get emailed to me first & then once I approve
- * them, then we can send them out to everyone, right?"*
- *
- * So `supabase/functions/check-in-reminder` stops one step short of every send
- * it used to make on its own. It renders the exact email a member would get,
- * mails that one copy to her, and parks the touch. This box is where the touch
- * waits, and pressing the button here is the only thing that lets it out.
- *
- * **If she does nothing, nothing goes out.** That is the point, and the card
- * says so, because a queue that quietly expires is worse than one that waits.
- */
-type HeldCheckIn = {
-  id: string;
-  created_at: string;
-  hiveName: string;
-  subject: string;
-  recipients: number;
-  /** What kind of touch this is, in words a person reads rather than a key. */
-  what: string;
-};
-
-const HELD_TOUCH_WORDS: Record<string, string> = {
-  window: 'The check-in opening, three days before the meeting',
-  day_of: 'The last call, on the day itself',
-  midpoint: 'The halfway check-in, before the newsletter',
-  premeeting: 'The before-we-meet check-in',
-  endofmonth: 'The halfway check-in',
-  quarter: 'The quarterly check-in',
-  year: 'The end-of-year check-in',
-};
-
-export function CheckInApprovalsPanel({
-  panelStyle,
-  bodyStyle,
-  scrollStyle,
-  Panel,
-}: PanelChrome) {
-  const { profile } = useAuth();
-  const [held, setHeld] = useState<HeldCheckIn[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [confirmSend, setConfirmSend] = useState<HeldCheckIn | null>(null);
-  const [sendingId, setSendingId] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    if (!profile?.id) return;
-    setLoading(true);
-    const { data } = await supabase
-      .from('notifications')
-      .select('id, created_at, metadata')
-      .eq('user_id', profile.id)
-      .eq('metadata->>check_in_approval', 'pending')
-      .order('created_at', { ascending: false });
-    const rows = (data ?? []) as { id: string; created_at: string; metadata: Record<string, unknown> }[];
-    setHeld(rows.map((row) => ({
-      id: row.id,
-      created_at: row.created_at,
-      hiveName: String(row.metadata?.check_in_hive_name ?? 'A HIVE'),
-      subject: String(row.metadata?.check_in_subject ?? 'Check-in'),
-      recipients: Number(row.metadata?.check_in_recipients ?? 0),
-      what: HELD_TOUCH_WORDS[String(row.metadata?.check_in_kind ?? '')] ?? 'A check-in',
-    })));
-    setLoading(false);
-  }, [profile?.id]);
-
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
-
-  const approve = useCallback(async (item: HeldCheckIn) => {
-    setSendingId(item.id);
-    try {
-      const { error } = await supabase.functions.invoke('check-in-reminder', {
-        body: { approve_notification_id: item.id },
-      });
-      if (error) throw new Error(await functionErrorMessage(error, 'Could not send that check-in.'));
-      showAlert(
-        'Sent',
-        `${item.hiveName} has it — ${item.recipients} ${item.recipients === 1 ? 'person' : 'people'}.`,
-      );
-      await load();
-    } catch (err) {
-      showAlert('Nothing went out', err instanceof Error ? err.message : 'Try again in a moment.');
-    } finally {
-      setSendingId(null);
-      setConfirmSend(null);
-    }
-  }, [load]);
-
-  // An empty queue is the normal state, so the box only appears when something
-  // is actually waiting — a permanent "nothing waiting" folder is furniture.
-  if (!profile?.is_owner) return null;
-  if (!loading && held.length === 0) return null;
-
-  return (
-    <View>
-      <Panel
-        title={`Waiting on you (${held.length})`}
-        accent={HIVE_GOLD}
-        style={panelStyle}
-        bodyStyle={bodyStyle}
-      >
-        <ScrollView style={scrollStyle} nestedScrollEnabled showsVerticalScrollIndicator>
-          {loading ? (
-            <View style={{ padding: 18, alignItems: 'center' }}>
-              <ThinkingBee label="Looking…" />
-            </View>
-          ) : (
-            <>
-              <Text
-                style={{
-                  fontFamily: 'Lato_400Regular',
-                  fontSize: 11.5,
-                  lineHeight: 17,
-                  color: SPACE_SKIN.inkSoft,
-                  paddingHorizontal: 14,
-                  paddingTop: 12,
-                  paddingBottom: 4,
-                }}
-              >
-                Each of these is in your inbox as a preview.
-                Nobody else has it until you press Send.
-                Leave one sitting here and it never goes out.
-              </Text>
-              {held.map((item) => (
-                <View
-                  key={item.id}
-                  style={{
-                    paddingHorizontal: 14,
-                    paddingVertical: 13,
-                    borderBottomWidth: 1,
-                    borderBottomColor: PANEL_HAIRLINE,
-                    gap: 8,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 1.2, color: SPACE_SKIN.gold, textTransform: 'uppercase' }}>
-                      {item.hiveName}
-                    </Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: SPACE_SKIN.inkSoft }}>
-                      {item.recipients} {item.recipients === 1 ? 'person' : 'people'} · held {formatDateMedium(item.created_at)}
-                    </Text>
-                  </View>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13.5, color: SPACE_SKIN.ink }}>
-                    {item.subject}
-                  </Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: SPACE_SKIN.inkSoft }}>
-                    {item.what}
-                  </Text>
-                  <Pressable
-                    onPress={() => setConfirmSend(item)}
-                    disabled={sendingId === item.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Send ${item.subject} to ${item.hiveName}`}
-                    style={({ pressed }) => ({
-                      alignSelf: 'flex-start',
-                      backgroundColor: HIVE_GOLD,
-                      borderRadius: 999,
-                      paddingHorizontal: 18,
-                      paddingVertical: 8,
-                      opacity: pressed || sendingId === item.id ? 0.7 : 1,
-                    })}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#1a1408' }}>
-                      {sendingId === item.id ? 'Sending…' : 'Send it to everyone'}
-                    </Text>
-                  </Pressable>
-                </View>
-              ))}
-            </>
-          )}
-        </ScrollView>
-      </Panel>
-
-      {/* An email cannot be taken back, so it asks, and it says the number out loud. */}
-      <ConfirmDialog
-        visible={!!confirmSend}
-        title={confirmSend ? `Send this to ${confirmSend.hiveName}?` : ''}
-        body={
-          confirmSend
-            ? `“${confirmSend.subject}” goes to ${confirmSend.recipients} ${confirmSend.recipients === 1 ? 'person' : 'people'} and cannot be undone.`
-            : ''
-        }
-        confirmLabel={sendingId ? 'Sending…' : 'Send it'}
-        onConfirm={() => { if (confirmSend) void approve(confirmSend); }}
-        onCancel={() => { if (!sendingId) setConfirmSend(null); }}
       />
     </View>
   );
