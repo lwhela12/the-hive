@@ -705,10 +705,43 @@ function PostedConfirmation({
 
 export default function MonthlyTuneupScreen() {
   const router = useRouter();
-  const { from, mode } = useLocalSearchParams<{ from?: string; mode?: string }>();
+  const { from, mode, hive: linkedHiveId } = useLocalSearchParams<{
+    from?: string;
+    mode?: string;
+    /** Which HIVE's tune-up the check-in email asked for (2026-08-16). */
+    hive?: string;
+  }>();
   // The halfway nudge deep-links here with mode=midpoint.
   const isMidpoint = mode === 'midpoint';
-  const { profile, community, communityId } = useAuth();
+  const { profile, community, communityId, memberships, switchCommunity, wholeHive } = useAuth();
+
+  /**
+   * A link that names a HIVE is a request to be IN that HIVE.
+   *
+   * Nat, 2026-08-16, pressing the OG check-in button: *"looks like it's not
+   * even working right now, which is weird, because it's just the regular OG
+   * HIVE pre meeting checkin, which has been working for months."* It had been.
+   * What changed underneath it is HIVE-Wide: everybody's app remembers standing
+   * above the HIVEs, and up there no HIVE's rhythm exists, so this screen
+   * honestly answered "coming soon" to a check-in that was open the whole time.
+   *
+   * Same fix Home got on 2026-08-15 — arrive in the HIVE the link named, and
+   * hold the door shut until the switch lands so nobody reads a "coming soon"
+   * that is about to stop being true.
+   */
+  const requestedHiveId = Array.isArray(linkedHiveId) ? linkedHiveId[0] : linkedHiveId;
+  const isMemberOfRequested = !!requestedHiveId
+    && memberships.some((membership) => membership.community_id === requestedHiveId);
+  const switchPending = isMemberOfRequested && (wholeHive || communityId !== requestedHiveId);
+  const switchedForLinkRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!requestedHiveId || !isMemberOfRequested) return;
+    if (switchedForLinkRef.current === requestedHiveId) return;
+    if (!wholeHive && communityId === requestedHiveId) return;
+    switchedForLinkRef.current = requestedHiveId;
+    // `switchCommunity` also steps down out of HIVE-Wide.
+    void switchCommunity(requestedHiveId);
+  }, [requestedHiveId, isMemberOfRequested, wholeHive, communityId, switchCommunity]);
   // Which HIVE's flow this is. Until the community loads, `profile` is null
   // too and the screen renders nothing, so the flow never switches under a
   // member mid-wizard. Only slugs that pass `hasTailoredCheckIns` (checked
@@ -3750,6 +3783,17 @@ export default function MonthlyTuneupScreen() {
   // route boundary here as well as in Admin so a bookmarked/deep-linked URL
   // cannot open a wizard for a HIVE whose rhythm hasn't been designed yet:
   // `hasTailoredCheckIns` fails closed, so Production waits behind this door.
+  // A link that named a HIVE gets to finish arriving first (see the top of this
+  // component) — otherwise the door slams on the way in.
+  if (switchPending) {
+    return (
+      <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <ThinkingBee label="Opening your check-in…" />
+        </View>
+      </SafeAreaView>
+    );
+  }
   if (!hasTailoredCheckIns(community)) {
     return (
       <SafeAreaView className="flex-1 bg-cream" edges={['top']}>

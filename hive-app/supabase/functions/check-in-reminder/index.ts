@@ -13,6 +13,43 @@ import {
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'H.I.V.E. <hive@yourdomain.com>';
 const APP_URL = Deno.env.get('EXPO_PUBLIC_APP_URL') || 'https://app.the-hive.app';
+/** Where the real logo is served from — the same file the invite and The Buzz use. */
+const PUBLIC_SITE_URL = Deno.env.get('PUBLIC_SITE_URL') || 'https://the-hive.app';
+
+/**
+ * Nobody hears from this cron until Nat has read the email herself.
+ *
+ * Nat, 2026-08-16: *"we said i should get the preview first? always? for all
+ * surveys? they should always get emailed to me first & then once I approve
+ * them, then we can send them out to everyone, right?"* Right. Every touch this
+ * function fires — monthly, day-of, halfway, quarterly, end-of-year, and both of
+ * Production's — now goes to this address first and waits.
+ *
+ * It waits in Admin, not on a link in the email. A one-click "send to everyone"
+ * web address in an inbox is a members-wide blast that a mail scanner or a
+ * forward can fire on its own; the button in the email lands her on the Admin
+ * card instead, where she is signed in and pressing it means she pressed it.
+ */
+const PREVIEW_EMAIL = Deno.env.get('CHECK_IN_PREVIEW_EMAIL') || 'natwalstead@gmail.com';
+
+/**
+ * The real logo, not the bee emoji standing in for it.
+ *
+ * Nat, 2026-08-16, looking at the OG check-in: *"I'd like it to be a little
+ * more branded, like get rid of the bee emoji & use one of our logos."* Same
+ * file the invite and the newsletter already send, so the three letters look
+ * like the same HIVE. It is RGB with no transparency despite its name, hence the
+ * white tile underneath; width in the tag as well as the style because Outlook
+ * ignores CSS sizing on images; alt text because a good many people read mail
+ * with images off.
+ */
+const LOGO_BLOCK = `
+      <div style="text-align: center; padding: 8px 0 4px;">
+        <img src="${PUBLIC_SITE_URL}/assets/hive-logo-email.png"
+             alt="H.I.V.E. — Human, Insight, Vision, Execution"
+             width="72" height="72"
+             style="width:72px;height:72px;display:inline-block;border:0;outline:none;text-decoration:none;background:#ffffff;border-radius:36px;" />
+      </div>`;
 
 // How a check-in is recognised now lives in ONE file, read by this function and
 // by the app (see _shared/checkInPatterns.ts). It used to be written out here
@@ -180,21 +217,53 @@ function escapeHtml(value: string): string {
 }
 
 // Warm honey/gold check-in email — shared by the real send and the test preview.
-function checkInEmailHtml(rawName: string, month: string, day: number, kind: ReminderKind = 'window'): string {
+function checkInEmailHtml(
+  rawName: string,
+  month: string,
+  day: number,
+  kind: ReminderKind = 'window',
+  /**
+   * Whose check-in this is, said on the pill under the logo. Nat, 2026-08-16:
+   * *"the Pill should say 'OG HIVE' (not just HIVE, because there are multiples
+   * now)"* — the same reason the season emails grew a kicker the day before.
+   */
+  rawHiveName = 'Your HIVE',
+  /**
+   * The HIVE the tune-up belongs to, carried on the button.
+   *
+   * Without it the link says only `/monthly-tuneup`, and everybody's app
+   * remembers HIVE-Wide — where no HIVE's rhythm exists, so the screen honestly
+   * answers "coming soon" and the check-in is unreachable. Nat, 2026-08-16:
+   * *"looks like it's not even working right now, which is weird, because it's
+   * just the regular OG HIVE pre meeting checkin, which has been working for
+   * months."* It had been; HIVE-Wide is what changed underneath it. Same fix
+   * the season email got on 2026-08-15 — a link that names a HIVE is a request
+   * to be IN that HIVE.
+   */
+  communityId?: string,
+): string {
   // Escaped once, here, so every path out of this function is safe by default.
   const name = escapeHtml(rawName);
+  const hive = escapeHtml(rawHiveName);
+  const kicker = `<p style="text-align: center; color: #bd9348; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 0 0 2px;">${hive}</p>`;
+  const tuneupHref = (mode?: string) => {
+    const params = [
+      ...(communityId ? [`hive=${encodeURIComponent(communityId)}`] : []),
+      ...(mode ? [`mode=${mode}`] : []),
+    ];
+    return `${APP_URL}/monthly-tuneup${params.length ? `?${params.join('&')}` : ''}`;
+  };
   if (kind === 'day_of') {
     return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
-      <div style="text-align: center; padding: 8px 0 4px;">
-        <span style="font-size: 40px;">🐝</span>
-      </div>
+      ${LOGO_BLOCK}
+      ${kicker}
       <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Meeting tonight!</h1>
       <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">Last call to check in before we gather</p>
       <p style="font-size: 15px;">Hi ${name},</p>
       <p style="font-size: 15px;">Tonight's the <strong>${month} ${day} HIVE meeting</strong> and your check-in isn't in yet — no stress, it takes about <strong>2 minutes</strong> with the Looks good → buttons, and it lights you up on the Arrival Board.</p>
       <div style="text-align: center; margin: 28px 0;">
-        <a href="${APP_URL}/monthly-tuneup" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Check in before tonight</a>
+        <a href="${tuneupHref()}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Check in before tonight</a>
       </div>
       <p style="font-size: 13px; color: #9a9a9a; text-align: center;">See you at ${month} ${day}. 🍯</p>
     </div>
@@ -203,9 +272,8 @@ function checkInEmailHtml(rawName: string, month: string, day: number, kind: Rem
   if (kind === 'midpoint') {
     return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
-      <div style="text-align: center; padding: 8px 0 4px;">
-        <span style="font-size: 40px;">🍯</span>
-      </div>
+      ${LOGO_BLOCK}
+      ${kicker}
       <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Halfway check-in</h1>
       <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The newsletter goes out on the 1st</p>
       <p style="font-size: 15px;">Hi ${name},</p>
@@ -216,16 +284,15 @@ function checkInEmailHtml(rawName: string, month: string, day: number, kind: Rem
         <li>Life moved? Update your HD wish</li>
       </ul>
       <div style="text-align: center; margin: 28px 0;">
-        <a href="${APP_URL}/monthly-tuneup?mode=midpoint" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Take the 2-minute check-in</a>
+        <a href="${tuneupHref('midpoint')}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Take the 2-minute check-in</a>
       </div>
     </div>
   `;
   }
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
-      <div style="text-align: center; padding: 8px 0 4px;">
-        <span style="font-size: 40px;">🐝</span>
-      </div>
+      ${LOGO_BLOCK}
+      ${kicker}
       <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Your check-in is open</h1>
       <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">Before the ${month} ${day} meeting</p>
       <p style="font-size: 15px;">Hi ${name},</p>
@@ -238,7 +305,7 @@ function checkInEmailHtml(rawName: string, month: string, day: number, kind: Rem
       <p style="font-size: 15px;">Each step has a <strong>Looks good →</strong> button, so if nothing's new you can breeze through in under a minute. Checking in shows up on the Arrival Board and helps set the room before we gather.</p>
       <p style="font-size: 14px; color: #8a6b30; background: #fdf3dc; border-radius: 12px; padding: 10px 14px;">Already done your check-in this month? You're all set — feel free to skip this, or pop in any time to update your answers.</p>
       <div style="text-align: center; margin: 28px 0;">
-        <a href="${APP_URL}/monthly-tuneup" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open H.I.V.E. and check in</a>
+        <a href="${tuneupHref()}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open H.I.V.E. and check in</a>
       </div>
       <p style="font-size: 13px; color: #9a9a9a; text-align: center;">See you at the ${month} meeting. 🍯</p>
     </div>
@@ -435,6 +502,155 @@ function seasonSubject(
     : `🎉 ${from}One more look at the year — your end-of-year check-in is open`;
 }
 
+/* -------------------------------------------------------------------------- *
+ * The hold: nothing reaches a member until Nat has read it and said go.
+ *
+ * Every touch this cron fires now stops one step short. It renders the exact
+ * email a member would get, sends that one copy to `PREVIEW_EMAIL` with a band
+ * across the top saying who it is for and how many people, and writes a
+ * `notifications` row that is BOTH the receipt (so tomorrow's run does not
+ * preview the same thing again) and the thing Admin lists as waiting.
+ *
+ * Approving replays the touch from that row rather than recomputing it from
+ * today's date — otherwise approving the morning after would find no touch due
+ * and send nothing, silently, which is the worst possible way for this to fail.
+ * ------------------------------------------------------------------------- */
+
+/** Which of the two loops a held touch came from, so approval replays the right one. */
+type CheckInFamily = 'monthly' | 'season';
+
+type HeldTouch = {
+  family: CheckInFamily;
+  /** `window` | `day_of` | `midpoint` for monthly; the SeasonKind for season. */
+  kind: string;
+  /** `window` | `day_of` — season only. */
+  touch?: string;
+  /** The dedup key the real send will write, so approval reuses it exactly. */
+  period: string;
+  dueDateOnly: string;
+  hiveName: string;
+  subject: string;
+  recipients: number;
+};
+
+/** The profile the preview goes to. Fails closed: no Nat, no send to anybody. */
+async function findPreviewProfile(
+  admin: ReturnType<typeof createClient>,
+): Promise<{ id: string; email: string } | null> {
+  const { data: byEmail } = await admin
+    .from('profiles')
+    .select('id, email')
+    .ilike('email', PREVIEW_EMAIL)
+    .maybeSingle();
+  const row = byEmail as { id: string; email: string | null } | null;
+  if (row?.id) return { id: row.id, email: row.email ?? PREVIEW_EMAIL };
+  // She may sign in under a different address than the one she reads mail at.
+  // An owner's profile id still carries the card; the email stays PREVIEW_EMAIL.
+  const { data: owners } = await admin
+    .from('profiles')
+    .select('id')
+    .eq('is_owner', true)
+    .limit(1);
+  const owner = (owners ?? [])[0] as { id: string } | undefined;
+  return owner ? { id: owner.id, email: PREVIEW_EMAIL } : null;
+}
+
+/** A band across the top of the preview saying what pressing go would do. */
+function previewBanner(held: HeldTouch, hiveName: string): string {
+  const who = `${escapeHtml(hiveName)} · ${held.recipients} ${held.recipients === 1 ? 'person' : 'people'}`;
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto 18px;">
+      <div style="background: #fdf3dc; border: 1px solid #e6d2a4; border-radius: 14px; padding: 14px 16px; color: #6b5220;">
+        <p style="margin: 0 0 6px; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700;">Waiting for your go-ahead</p>
+        <p style="margin: 0 0 10px; font-size: 14px; line-height: 1.5;">Nobody has this yet. Below is exactly what <strong>${who}</strong> will get. Nothing goes out until you say so in Admin — if you do nothing, nothing sends.</p>
+        <a href="${APP_URL}/admin" style="background: #6b5220; color: #ffffff; text-decoration: none; padding: 9px 20px; border-radius: 999px; font-size: 13px; font-weight: 600; display: inline-block;">Open Admin to approve</a>
+      </div>
+    </div>`;
+}
+
+/**
+ * Whether this exact touch has already been let through.
+ *
+ * The approval lives on the preview row's own metadata, so there is one object
+ * per held touch and no second table to keep in step.
+ */
+async function findHold(
+  admin: ReturnType<typeof createClient>,
+  surveyId: string,
+  period: string,
+): Promise<{ id: string; approved: boolean } | null> {
+  const { data } = await admin
+    .from('notifications')
+    .select('id, metadata')
+    .eq('metadata->>reminder_survey_id', surveyId)
+    .eq('metadata->>reminder_period', `${period}:preview`)
+    .limit(1);
+  const row = (data ?? [])[0] as { id: string; metadata?: Record<string, unknown> } | undefined;
+  if (!row) return null;
+  return { id: row.id, approved: row.metadata?.check_in_approval === 'approved' };
+}
+
+/**
+ * Send Nat the preview and park the touch. Returns false when there is nobody
+ * to preview to — which stops the send rather than falling back to sending it,
+ * because "we could not ask her" must never mean "so we told everyone".
+ */
+async function holdForApproval(
+  admin: ReturnType<typeof createClient>,
+  survey: Survey,
+  held: HeldTouch,
+  memberHtml: string,
+): Promise<boolean> {
+  const previewTo = await findPreviewProfile(admin);
+  if (!previewTo) {
+    console.error('[check-in-reminder] no preview profile found — holding without sending');
+    return false;
+  }
+
+  if (RESEND_API_KEY) {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: FROM_EMAIL,
+          to: previewTo.email,
+          subject: `[Waiting on you] ${held.subject}`,
+          html: `${previewBanner(held, held.hiveName)}${memberHtml}`,
+        }),
+      });
+      if (!res.ok) console.error('[check-in-reminder] preview email failed:', await res.text());
+    } catch (previewError) {
+      console.error('[check-in-reminder] preview email error:', previewError);
+    }
+  }
+
+  const { error } = await admin.from('notifications').insert({
+    user_id: previewTo.id,
+    community_id: survey.community_id,
+    notification_type: 'general',
+    title: `✋ ${held.hiveName} check-in is waiting on you`,
+    content: `${held.recipients} ${held.recipients === 1 ? 'person' : 'people'} get "${held.subject}" once you approve it in Admin. The preview is in your inbox.`,
+    email_sent: !!RESEND_API_KEY,
+    metadata: {
+      reminder_survey_id: survey.id,
+      reminder_period: `${held.period}:preview`,
+      check_in_approval: 'pending',
+      check_in_family: held.family,
+      check_in_kind: held.kind,
+      check_in_touch: held.touch ?? null,
+      check_in_period: held.period,
+      check_in_due_date: held.dueDateOnly,
+      check_in_community: survey.community_id,
+      check_in_hive_name: held.hiveName,
+      check_in_subject: held.subject,
+      check_in_recipients: held.recipients,
+    },
+  });
+  if (error) console.error('[check-in-reminder] could not park the hold:', error);
+  return true;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   const corsResponse = handleCors(req);
@@ -503,15 +719,27 @@ serve(async (req) => {
     let day = new Date().getDate();
     const { data: previewSurveys } = await supabaseAdmin
       .from('surveys')
-      .select('title, due_date')
+      .select('title, due_date, community_id')
       .eq('is_active', true);
     const previewCheckIn = (previewSurveys ?? []).find(
       (s: { title?: string; due_date?: string }) =>
         MONTHLY_CHECK_IN_PATTERN.test(s.title || '') && s.due_date
-    );
+    ) as { title?: string; due_date?: string; community_id?: string } | undefined;
     if (previewCheckIn?.due_date) {
       const previewDate = toPacificDateOnly(new Date(previewCheckIn.due_date));
       if (previewDate) ({ month, day } = formatMeetingDate(previewDate));
+    }
+    // The preview carries the real HIVE, so the pill and the button in it are
+    // the ones a member gets — a preview whose link works differently from the
+    // real send is how "it's not working" gets missed for months.
+    let previewHiveName = 'Your HIVE';
+    if (previewCheckIn?.community_id) {
+      const { data: previewHive } = await supabaseAdmin
+        .from('communities')
+        .select('name')
+        .eq('id', previewCheckIn.community_id)
+        .maybeSingle();
+      previewHiveName = (previewHive as { name?: string } | null)?.name || previewHiveName;
     }
     const requestedTestKind = typeof body.test_kind === 'string' ? body.test_kind : 'window';
 
@@ -604,11 +832,12 @@ serve(async (req) => {
     const testKind: ReminderKind = requestedTestKind === 'midpoint' || requestedTestKind === 'day_of'
       ? requestedTestKind
       : 'window';
+    const previewFrom = `${shortHiveName(previewHiveName)} · `;
     const previewSubject = testKind === 'midpoint'
-      ? '[Preview] 🍯 Halfway check-in — the newsletter goes out on the 1st'
+      ? `[Preview] 🍯 ${previewFrom}Halfway check-in — the newsletter goes out on the 1st`
       : testKind === 'day_of'
-        ? `[Preview] 🐝 Meeting tonight — ${month} ${day}`
-        : `[Preview] 🐝 Your HIVE check-in is open — meeting ${month} ${day}`;
+        ? `[Preview] 🐝 ${previewFrom}Meeting tonight — ${month} ${day}`
+        : `[Preview] 🐝 ${previewFrom}Your check-in is open — meeting ${month} ${day}`;
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -616,7 +845,11 @@ serve(async (req) => {
         from: FROM_EMAIL,
         to: testEmail,
         subject: previewSubject,
-        html: checkInEmailHtml(typeof body.test_name === 'string' ? body.test_name : 'there', month, day, testKind),
+        html: checkInEmailHtml(
+          typeof body.test_name === 'string' ? body.test_name : 'there',
+          month, day, testKind,
+          previewHiveName, previewCheckIn?.community_id,
+        ),
       }),
     });
     if (!res.ok) return errorResponse(`Preview email failed: ${await res.text()}`, 502);
@@ -630,6 +863,55 @@ serve(async (req) => {
   // CURRENT due date, so a reschedule gets one fresh send and repeat invocations
   // stay safe.
   const forceSend = body.force_send === true;
+
+  /**
+   * Approve mode: POST { "approve_notification_id": "<id>" } lets ONE held
+   * touch through to the members it was rendered for.
+   *
+   * Owners only, like force_send — the owner check above has already run for
+   * anything that is not the cron. The touch is replayed out of the held row's
+   * own metadata rather than recomputed from today's date, so approving the
+   * morning after still sends the thing she read, under the same dedup key it
+   * was held with.
+   */
+  const approveId = typeof body.approve_notification_id === 'string'
+    ? body.approve_notification_id.trim()
+    : '';
+  let approving: {
+    id: string;
+    survey_id: string;
+    family: CheckInFamily;
+    kind: string;
+    touch: string | null;
+    period: string;
+    dueDateOnly: string;
+  } | null = null;
+  if (approveId) {
+    const { data: heldRow } = await supabaseAdmin
+      .from('notifications')
+      .select('id, metadata')
+      .eq('id', approveId)
+      .maybeSingle();
+    const meta = (heldRow as { metadata?: Record<string, unknown> } | null)?.metadata ?? null;
+    if (!meta || meta.check_in_approval !== 'pending') {
+      return errorResponse('That check-in is not waiting for approval.', 404);
+    }
+    approving = {
+      id: approveId,
+      survey_id: String(meta.reminder_survey_id ?? ''),
+      family: (meta.check_in_family === 'season' ? 'season' : 'monthly') as CheckInFamily,
+      kind: String(meta.check_in_kind ?? ''),
+      touch: meta.check_in_touch ? String(meta.check_in_touch) : null,
+      period: String(meta.check_in_period ?? ''),
+      dueDateOnly: String(meta.check_in_due_date ?? ''),
+    };
+    if (!approving.survey_id || !approving.period || !approving.dueDateOnly) {
+      return errorResponse('That held check-in is missing what it needs to send.', 422);
+    }
+  }
+
+  /** True when this run may put email in front of members at all. */
+  const mayReachMembers = forceSend || !!approving;
 
   try {
     // Today's date as an America/Los_Angeles calendar date, 'YYYY-MM-DD'.
@@ -697,28 +979,37 @@ serve(async (req) => {
     let notificationsCreated = 0;
     let pushSent = 0;
     let skippedDedup = 0;
+    /** Touches parked in Admin this run, waiting on Nat. */
+    let heldForApproval = 0;
     const errors: string[] = [];
 
     for (const survey of monthlyCheckIns) {
       try {
+        // Approving is about ONE held touch. Every other survey is left exactly
+        // where it was rather than being re-examined on an unrelated request.
+        if (approving && (approving.family !== 'monthly' || approving.survey_id !== survey.id)) continue;
         if (!survey.due_date) continue;
 
         // Render the stored timestamptz as its Pacific calendar date — this is
         // the real meeting day members experience (see toPacificDateOnly).
-        const dueDateOnly = toPacificDateOnly(new Date(survey.due_date));
+        // On approval it comes off the held row instead, so a meeting that has
+        // since been moved cannot rewrite the email she already read.
+        const dueDateOnly = approving?.dueDateOnly ?? toPacificDateOnly(new Date(survey.due_date));
         if (!dueDateOnly) continue;
 
         // Which touch fires today (Pacific)? At most one per day; force_send
         // always means the full window invitation (rescheduled meetings).
         const windowOpen = getWindowOpenDate(dueDateOnly);
         const midpointDate = newsletterCheckInDate(todayStr);
-        const kind: ReminderKind | null = forceSend || todayStr === windowOpen
-          ? 'window'
-          : todayStr === dueDateOnly
-            ? 'day_of'
-            : todayStr === midpointDate
-              ? 'midpoint'
-              : null;
+        const kind: ReminderKind | null = approving
+          ? (approving.kind as ReminderKind)
+          : forceSend || todayStr === windowOpen
+            ? 'window'
+            : todayStr === dueDateOnly
+              ? 'day_of'
+              : todayStr === midpointDate
+                ? 'midpoint'
+                : null;
         if (!kind) {
           continue;
         }
@@ -726,7 +1017,7 @@ serve(async (req) => {
         // Forced sends dedup per due date so a reschedule can send once more;
         // day-of and midpoint touches dedup under their own keys.
         const basePeriod = getSurveyResponsePeriod(dueDateOnly);
-        const period = forceSend
+        const period = approving?.period ?? (forceSend
           ? `${basePeriod}:${dueDateOnly}`
           : kind === 'window'
             ? basePeriod
@@ -734,7 +1025,7 @@ serve(async (req) => {
               // Month-end touch dedups by calendar month — it no longer belongs
               // to a meeting's cycle, so a reschedule must not re-fire it.
               ? `${todayStr.slice(0, 7)}:midpoint`
-              : `${basePeriod}:${kind}`;
+              : `${basePeriod}:${kind}`);
 
         // Dedup: skip if we've already sent this survey's reminder for this period.
         const { data: existingReminders, error: dedupError } = await supabaseAdmin
@@ -803,11 +1094,24 @@ serve(async (req) => {
         // named for that month — not for whenever the next meeting lands.
         const newsletterMonth = MONTH_NAMES[Number(todayStr.split('-')[1]) - 1] ?? month;
 
+        // Whose check-in this is. The email says it on the pill under the logo
+        // and carries the id on its button, so the tune-up opens in the right
+        // HIVE from wherever the reader's app happened to be standing.
+        const { data: monthlyHiveRow } = await supabaseAdmin
+          .from('communities')
+          .select('name')
+          .eq('id', survey.community_id)
+          .maybeSingle();
+        const monthlyHiveName = (monthlyHiveRow as { name?: string } | null)?.name || 'Your HIVE';
+
         // Midpoint doubles as newsletter season: open the "{Month} Newsletter"
         // thread on Announcements so shout-outs and reminders ("come to my
         // lemonade stand Tuesday!") land in one place Nat can write from.
+        // Only once she has said go: these threads are member-visible, and an
+        // announcement that the newsletter is brewing should not appear on a
+        // board before the email that explains it has been let out.
         let newsletterThread: string | null = null;
-        if (kind === 'midpoint') {
+        if (kind === 'midpoint' && mayReachMembers) {
           try {
             const { data: boards } = await supabaseAdmin
               .from('board_categories')
@@ -892,12 +1196,42 @@ serve(async (req) => {
               ? `The newsletter's brewing 🗞️ — want a shout-out, a plug, or a reminder in it? The 2-minute halfway check-in walks you there.`
               : `Take 5 minutes before the ${month} meeting — update your HDs and check in. ` +
                 `It shows up on the Arrival Board and helps set the room.`;
+        // The subject names the HIVE for the same reason the pill does: an inbox
+        // shows the subject and nothing else, and a person can be in three
+        // HIVEs at once (Nat, 2026-08-16). Same shape the season subjects use.
+        const from = `${shortHiveName(monthlyHiveName)} · `;
         const emailSubject =
           kind === 'day_of'
-            ? `🐝 Meeting tonight (${month} ${day}) — quick check-in if you haven't`
+            ? `🐝 ${from}Meeting tonight (${month} ${day}) — quick check-in if you haven't`
             : kind === 'midpoint'
-              ? `🍯 Halfway check-in — the newsletter goes out on the 1st`
-              : `🐝 Your HIVE check-in is open — meeting ${month} ${day}`;
+              ? `🍯 ${from}Halfway check-in — the newsletter goes out on the 1st`
+              : `🐝 ${from}Your check-in is open — meeting ${month} ${day}`;
+
+        // THE HOLD. Nothing above this line has reached a member.
+        if (!mayReachMembers) {
+          const existingHold = await findHold(supabaseAdmin, survey.id, period);
+          if (existingHold) {
+            skippedDedup++;
+            continue;
+          }
+          const parked = await holdForApproval(
+            supabaseAdmin,
+            survey,
+            {
+              family: 'monthly',
+              kind,
+              period,
+              dueDateOnly,
+              hiveName: monthlyHiveName,
+              subject: emailSubject,
+              recipients: (members as MemberProfile[]).length,
+            },
+            checkInEmailHtml('there', month, day, kind, monthlyHiveName, survey.community_id),
+          );
+          if (parked) heldForApproval++;
+          else errors.push(`hold:${survey.id}:no preview recipient`);
+          continue;
+        }
 
         surveysFired++;
 
@@ -929,7 +1263,10 @@ serve(async (req) => {
 
             // Send email first so we can set email_sent accurately on the row.
             if (hasEmail) {
-              const emailBody = checkInEmailHtml(member.name ?? 'there', month, day, kind);
+              const emailBody = checkInEmailHtml(
+                member.name ?? 'there', month, day, kind,
+                monthlyHiveName, survey.community_id,
+              );
 
               try {
                 const res = await fetch('https://api.resend.com/emails', {
@@ -1034,22 +1371,26 @@ serve(async (req) => {
 
     for (const { survey, kind } of seasonCheckIns) {
       try {
+        // Approving is about ONE held touch — see the monthly loop above.
+        if (approving && (approving.family !== 'season' || approving.survey_id !== survey.id)) continue;
         if (!survey.due_date) continue;
-        const dueDateOnly = toPacificDateOnly(new Date(survey.due_date));
+        const dueDateOnly = approving?.dueDateOnly ?? toPacificDateOnly(new Date(survey.due_date));
         if (!dueDateOnly) continue;
 
         const windowOpen = getWindowOpenDate(dueDateOnly);
-        const touch: SeasonTouch | null = todayStr === windowOpen
-          ? 'window'
-          : todayStr === dueDateOnly
-            ? 'day_of'
-            : null;
+        const touch: SeasonTouch | null = approving
+          ? ((approving.touch ?? 'window') as SeasonTouch)
+          : todayStr === windowOpen
+            ? 'window'
+            : todayStr === dueDateOnly
+              ? 'day_of'
+              : null;
         if (!touch) continue;
 
         // One notification row is the send receipt, exactly like the monthly.
         // The period carries the end date, so relaunching next quarter under
         // the same survey title can never be swallowed by last quarter's send.
-        const period = `${dueDateOnly}:season-${touch}`;
+        const period = approving?.period ?? `${dueDateOnly}:season-${touch}`;
         const { data: existingReminders, error: dedupError } = await supabaseAdmin
           .from('notifications')
           .select('id')
@@ -1129,6 +1470,38 @@ serve(async (req) => {
           .maybeSingle();
         const hiveName = (seasonHive as { name?: string } | null)?.name || 'Your HIVE';
         const emailSubject = seasonSubject(kind, touch, month, day, hiveName);
+
+        // THE HOLD — same as the monthly loop. Nothing above this line has
+        // reached a member.
+        if (!mayReachMembers) {
+          const existingHold = await findHold(supabaseAdmin, survey.id, period);
+          if (existingHold) {
+            skippedDedup++;
+            continue;
+          }
+          const parked = await holdForApproval(
+            supabaseAdmin,
+            survey,
+            {
+              family: 'season',
+              kind,
+              touch,
+              period,
+              dueDateOnly,
+              hiveName,
+              subject: emailSubject,
+              recipients: (members as MemberProfile[]).length,
+            },
+            seasonEmailHtml(
+              'there', kind, touch, month, day, hiveName,
+              survey.id, survey.community_id,
+              `${hiveName} · closes ${month} ${day}`,
+            ),
+          );
+          if (parked) heldForApproval++;
+          else errors.push(`hold:${survey.id}:no preview recipient`);
+          continue;
+        }
 
         surveysFired++;
 
@@ -1215,12 +1588,41 @@ serve(async (req) => {
       }
     }
 
+    // The hold is spent once its members have it: the card leaves Admin, and
+    // the row stays as the record of who approved what, and when.
+    if (approving) {
+      // Sent, or already sent — either way it is spent and the card leaves.
+      // A double press lands on the dedup rows the first press wrote, which is
+      // "done", not "failed", and must not put the card back.
+      const settled = surveysFired > 0 || skippedDedup > 0;
+      const { data: heldRow } = await supabaseAdmin
+        .from('notifications')
+        .select('metadata')
+        .eq('id', approving.id)
+        .maybeSingle();
+      const meta = (heldRow as { metadata?: Record<string, unknown> } | null)?.metadata ?? {};
+      await supabaseAdmin
+        .from('notifications')
+        .update({
+          metadata: {
+            ...meta,
+            check_in_approval: settled ? 'approved' : 'pending',
+            check_in_approved_at: new Date().toISOString(),
+          },
+        })
+        .eq('id', approving.id);
+      if (!settled) {
+        return errorResponse('Nothing went out — that check-in no longer has anyone to send to.', 409);
+      }
+    }
+
     return jsonResponse({
       surveys_fired: surveysFired,
       emails_sent: emailsSent,
       notifications_created: notificationsCreated,
       push_sent: pushSent,
       skipped_dedup: skippedDedup,
+      held_for_approval: heldForApproval,
       errors,
     });
   } catch (error) {

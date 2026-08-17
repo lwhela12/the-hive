@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-16-check-in-email-opens-the-check-in',
+    date: '2026-08-16',
+    title: 'The check-in email lands you on your check-in again',
+    detail: 'The button in "Your check-in is open" was dropping people on a "coming soon" screen, because the app remembers standing at HIVE-Wide and no HIVE\'s check-in lives up there. The link names its HIVE now, so it walks you down into OG HIVE and opens the tune-up. The email wears the real HIVE logo too, and says which HIVE it is from — on the pill and in the subject line.',
+    href: { pathname: '/monthly-tuneup' },
+    action: 'Open your check-in',
+  },
+  {
     id: '2026-08-15-one-door-to-the-meeting',
     date: '2026-08-15',
     title: 'One door to the meeting, and it is the Meeting Helper',

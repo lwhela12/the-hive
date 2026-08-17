@@ -41,6 +41,7 @@ import { MemberProfileLink } from '../../components/ui/MemberProfileLink';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import {
+  CheckInApprovalsPanel,
   HiveMemberPanels,
   NewsletterPanel,
   PANEL_HAIRLINE,
@@ -1521,6 +1522,18 @@ export default function AdminScreen() {
           {/* The newsletter goes out past every HIVE, so its box wears the house
               cream rather than any one HIVE's colour. Nat's draft opens from
               inside it. */}
+          {/* Anything holding up an email to members goes at the very top —
+              it is the one box on this screen with somebody waiting on it. */}
+          {isOwner && (
+            <CheckInApprovalsPanel
+              cellStyle={dashboardCellStyle}
+              panelStyle={dashboardPanelStyle}
+              bodyStyle={dashboardPanelBodyStyle}
+              scrollStyle={panelScrollStyle}
+              Panel={AdminPanel}
+            />
+          )}
+
           {isOwner && (
             <NewsletterPanel
               cellStyle={dashboardCellStyle}

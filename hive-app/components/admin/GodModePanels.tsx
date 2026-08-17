@@ -989,6 +989,200 @@ export function NewsletterPanel({
   );
 }
 
+/* ------------------------------------------------------- check-ins waiting */
+
+/**
+ * Every check-in email waits here until Nat says go.
+ *
+ * Nat, 2026-08-16: *"we said i should get the preview first? always? for all
+ * surveys? they should always get emailed to me first & then once I approve
+ * them, then we can send them out to everyone, right?"*
+ *
+ * So `supabase/functions/check-in-reminder` stops one step short of every send
+ * it used to make on its own. It renders the exact email a member would get,
+ * mails that one copy to her, and parks the touch. This box is where the touch
+ * waits, and pressing the button here is the only thing that lets it out.
+ *
+ * **If she does nothing, nothing goes out.** That is the point, and the card
+ * says so, because a queue that quietly expires is worse than one that waits.
+ */
+type HeldCheckIn = {
+  id: string;
+  created_at: string;
+  hiveName: string;
+  subject: string;
+  recipients: number;
+  /** What kind of touch this is, in words a person reads rather than a key. */
+  what: string;
+};
+
+const HELD_TOUCH_WORDS: Record<string, string> = {
+  window: 'The check-in opening, three days before the meeting',
+  day_of: 'The last call, on the day itself',
+  midpoint: 'The halfway check-in, before the newsletter',
+  premeeting: 'The before-we-meet check-in',
+  endofmonth: 'The halfway check-in',
+  quarter: 'The quarterly check-in',
+  year: 'The end-of-year check-in',
+};
+
+export function CheckInApprovalsPanel({
+  panelStyle,
+  bodyStyle,
+  scrollStyle,
+  Panel,
+}: PanelChrome) {
+  const { profile } = useAuth();
+  const [held, setHeld] = useState<HeldCheckIn[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [confirmSend, setConfirmSend] = useState<HeldCheckIn | null>(null);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!profile?.id) return;
+    setLoading(true);
+    const { data } = await supabase
+      .from('notifications')
+      .select('id, created_at, metadata')
+      .eq('user_id', profile.id)
+      .eq('metadata->>check_in_approval', 'pending')
+      .order('created_at', { ascending: false });
+    const rows = (data ?? []) as { id: string; created_at: string; metadata: Record<string, unknown> }[];
+    setHeld(rows.map((row) => ({
+      id: row.id,
+      created_at: row.created_at,
+      hiveName: String(row.metadata?.check_in_hive_name ?? 'A HIVE'),
+      subject: String(row.metadata?.check_in_subject ?? 'Check-in'),
+      recipients: Number(row.metadata?.check_in_recipients ?? 0),
+      what: HELD_TOUCH_WORDS[String(row.metadata?.check_in_kind ?? '')] ?? 'A check-in',
+    })));
+    setLoading(false);
+  }, [profile?.id]);
+
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
+
+  const approve = useCallback(async (item: HeldCheckIn) => {
+    setSendingId(item.id);
+    try {
+      const { error } = await supabase.functions.invoke('check-in-reminder', {
+        body: { approve_notification_id: item.id },
+      });
+      if (error) throw new Error(await functionErrorMessage(error, 'Could not send that check-in.'));
+      showAlert(
+        'Sent',
+        `${item.hiveName} has it — ${item.recipients} ${item.recipients === 1 ? 'person' : 'people'}.`,
+      );
+      await load();
+    } catch (err) {
+      showAlert('Nothing went out', err instanceof Error ? err.message : 'Try again in a moment.');
+    } finally {
+      setSendingId(null);
+      setConfirmSend(null);
+    }
+  }, [load]);
+
+  // An empty queue is the normal state, so the box only appears when something
+  // is actually waiting — a permanent "nothing waiting" folder is furniture.
+  if (!profile?.is_owner) return null;
+  if (!loading && held.length === 0) return null;
+
+  return (
+    <View>
+      <Panel
+        title={`Waiting on you (${held.length})`}
+        accent={HIVE_GOLD}
+        style={panelStyle}
+        bodyStyle={bodyStyle}
+      >
+        <ScrollView style={scrollStyle} nestedScrollEnabled showsVerticalScrollIndicator>
+          {loading ? (
+            <View style={{ padding: 18, alignItems: 'center' }}>
+              <ThinkingBee label="Looking…" />
+            </View>
+          ) : (
+            <>
+              <Text
+                style={{
+                  fontFamily: 'Lato_400Regular',
+                  fontSize: 11.5,
+                  lineHeight: 17,
+                  color: SPACE_SKIN.inkSoft,
+                  paddingHorizontal: 14,
+                  paddingTop: 12,
+                  paddingBottom: 4,
+                }}
+              >
+                Each of these is in your inbox as a preview.
+                Nobody else has it until you press Send.
+                Leave one sitting here and it never goes out.
+              </Text>
+              {held.map((item) => (
+                <View
+                  key={item.id}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 13,
+                    borderBottomWidth: 1,
+                    borderBottomColor: PANEL_HAIRLINE,
+                    gap: 8,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 1.2, color: SPACE_SKIN.gold, textTransform: 'uppercase' }}>
+                      {item.hiveName}
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: SPACE_SKIN.inkSoft }}>
+                      {item.recipients} {item.recipients === 1 ? 'person' : 'people'} · held {formatDateMedium(item.created_at)}
+                    </Text>
+                  </View>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13.5, color: SPACE_SKIN.ink }}>
+                    {item.subject}
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: SPACE_SKIN.inkSoft }}>
+                    {item.what}
+                  </Text>
+                  <Pressable
+                    onPress={() => setConfirmSend(item)}
+                    disabled={sendingId === item.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Send ${item.subject} to ${item.hiveName}`}
+                    style={({ pressed }) => ({
+                      alignSelf: 'flex-start',
+                      backgroundColor: HIVE_GOLD,
+                      borderRadius: 999,
+                      paddingHorizontal: 18,
+                      paddingVertical: 8,
+                      opacity: pressed || sendingId === item.id ? 0.7 : 1,
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#1a1408' }}>
+                      {sendingId === item.id ? 'Sending…' : 'Send it to everyone'}
+                    </Text>
+                  </Pressable>
+                </View>
+              ))}
+            </>
+          )}
+        </ScrollView>
+      </Panel>
+
+      {/* An email cannot be taken back, so it asks, and it says the number out loud. */}
+      <ConfirmDialog
+        visible={!!confirmSend}
+        title={confirmSend ? `Send this to ${confirmSend.hiveName}?` : ''}
+        body={
+          confirmSend
+            ? `“${confirmSend.subject}” goes to ${confirmSend.recipients} ${confirmSend.recipients === 1 ? 'person' : 'people'} and cannot be undone.`
+            : ''
+        }
+        confirmLabel={sendingId ? 'Sending…' : 'Send it'}
+        onConfirm={() => { if (confirmSend) void approve(confirmSend); }}
+        onCancel={() => { if (!sendingId) setConfirmSend(null); }}
+      />
+    </View>
+  );
+}
+
 /* ------------------------------------------------------------- other hives */
 
 /**
