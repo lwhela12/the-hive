@@ -755,9 +755,25 @@ export default function MonthlyTuneupScreen() {
     if (switchedForLinkRef.current === requestedHiveId) return;
     if (!wholeHive && communityId === requestedHiveId) return;
     switchedForLinkRef.current = requestedHiveId;
-    // `switchCommunity` also steps down out of HIVE-Wide.
-    void switchCommunity(requestedHiveId);
-  }, [requestedHiveId, isMemberOfRequested, wholeHive, communityId, switchCommunity]);
+    // `switchCommunity` also steps down out of HIVE-Wide — and then decides
+    // where to leave you, from a path it is holding in a ref. It has already
+    // dropped this screen once (2026-08-16, `6bbdbb2`: the tune-up is not in
+    // the side rail, so it looked unrecognised and went home). That is fixed
+    // at the source, but a link out of somebody's inbox is not the place to
+    // find out about the next version of the same mistake — so this says the
+    // destination again afterwards, and the screen it wanted is the screen it
+    // gets whatever anyone else decides.
+    void switchCommunity(requestedHiveId).then(() => {
+      router.replace({
+        pathname: '/monthly-tuneup',
+        params: {
+          ...(namedHiveId ? { hive: namedHiveId } : {}),
+          ...(mode ? { mode } : {}),
+          ...(from ? { from: Array.isArray(from) ? from[0] : from } : {}),
+        },
+      } as never);
+    });
+  }, [requestedHiveId, isMemberOfRequested, wholeHive, communityId, switchCommunity, router, namedHiveId, mode, from]);
   // Which HIVE's flow this is. Until the community loads, `profile` is null
   // too and the screen renders nothing, so the flow never switches under a
   // member mid-wizard. Only slugs that pass `hasTailoredCheckIns` (checked
