@@ -176,3 +176,6 @@ verify_jwt = false
 # arbitrary HTML to mail out.
 [functions.send-newsletter]
 verify_jwt = false
+
+[functions.library]
+verify_jwt = false
