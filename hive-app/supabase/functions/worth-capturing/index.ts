@@ -285,14 +285,28 @@ serve(async (req) => {
       topicExists = !!((existing ?? []) as unknown[]).length;
     }
   }
+  /**
+   * The opening line, written to make Clive ASK rather than finish.
+   *
+   * It used to say "help me sharpen it, then post it", and he did exactly that
+   * — one question, three wordings, posted. Nat: *"it was just boop, boop...
+   * there's utility in expanding around that thought, because we had that idea
+   * in a meeting and we talked about that for quite a while, and then just the
+   * one line made it."*
+   *
+   * A sentence out of a twenty-minute conversation is missing the room it came
+   * from, so the ask is for the room back. `chat/index.ts` core behaviour 10
+   * carries the same instruction from his side.
+   */
   const prefill = [
     `I said this in ${meeting}:`,
     '',
     `"${insight}"`,
     '',
     board
-      ? `Help me sharpen it, then post it to the ${board} board${topic ? ` under "${topic}"` : ''} in Tech HIVE.`
-      : 'Help me sharpen it, then post it to the right board in Tech HIVE.',
+      ? `I want to turn it into a proper page for the ${board} board${topic ? ` — "${topic}"` : ''} in Tech HIVE.`
+      : 'I want to turn it into a proper page for the right board in Tech HIVE.',
+    'Ask me whatever you need to know first — there was a lot more around this than the one line.',
   ].join('\n');
   // `hive` rides along so Clive comes down into Tech HIVE on arrival — his
   // board tools only ever see the HIVE he is standing in.
