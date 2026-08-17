@@ -82,8 +82,21 @@ interface CategoryStats {
 async function fetchPostCounts(communityId: string): Promise<Record<string, CategoryStats>> {
   const { data, error } = await supabase
     .from('board_posts')
+    // `archived_at`, and only `archived_at`.
+    //
+    // Nat, 2026-08-17, after seven threads were archived: *"if I look at the
+    // board's view on the things we learned list, there are three different
+    // bullets that look like there are threads there, but then when you click
+    // on it, it says no threads."* The card counted and previewed archived
+    // threads while the board itself, which filters properly, showed none.
+    //
+    // The preview filter below said `status !== 'archived'` — and `status`
+    // only ever holds 'active' or 'completed', so that test could never be
+    // true. `buzz.tsx` had the identical bug and it is written up in
+    // CLAUDE.md; this is the second place it was hiding.
     .select('id, category_id, title, status, created_at, last_reply_at')
-    .eq('community_id', communityId);
+    .eq('community_id', communityId)
+    .is('archived_at', null);
 
   if (error) {
     console.error('Error fetching post counts:', error);
@@ -104,7 +117,7 @@ async function fetchPostCounts(communityId: string): Promise<Record<string, Cate
     if (!stats[row.category_id].latestActivity || activity > stats[row.category_id].latestActivity!) {
       stats[row.category_id].latestActivity = activity;
     }
-    if (row.title && row.status !== 'archived') {
+    if (row.title) {
       (previewCandidates[row.category_id] ??= []).push({ id: row.id, title: row.title, activity });
     }
   });
