@@ -87,6 +87,7 @@ export function DeckVideo({
   transcriptsOn,
   canToggleTranscripts,
   onToggleTranscripts,
+  compact = false,
 }: DeckVideoProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef<DailyCall | null>(null);
@@ -301,7 +302,9 @@ export function DeckVideo({
         display: 'flex',
         alignItems: 'center',
         gap: 8,
-        width: '100%',
+        width: compact ? 'auto' : '100%',
+        flex: compact ? '1 1 auto' : undefined,
+        minWidth: 0,
         fontFamily: 'Lato_700Bold, Lato, sans-serif',
         fontSize: fontSize * 0.9,
         color: transcriptsOn ? '#ffffff' : accentDeep,
@@ -309,7 +312,7 @@ export function DeckVideo({
         border: `1px solid ${transcriptsOn ? accent : softBorder}`,
         borderRadius: 999,
         padding: '7px 14px',
-        marginBottom: 8,
+        marginBottom: compact ? 0 : 8,
         cursor: canToggleTranscripts ? 'pointer' : 'default',
         textAlign: 'left',
       }}
@@ -342,6 +345,41 @@ export function DeckVideo({
       {transcriptsOn ? 'Writing this meeting down' : 'Transcript off'}
     </button>
   );
+
+  /**
+   * Compact and nobody on the call yet: one row, no empty card.
+   *
+   * The frame's mount point is deliberately NOT in this branch — the moment
+   * somebody joins, `state` becomes 'live' and the full panel below renders
+   * with the mount in it, which is the only place the call has ever lived.
+   */
+  if (compact && state !== 'live') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        {transcriptSwitch}
+        <button
+          type="button"
+          onClick={join}
+          disabled={state === 'opening' || !communityId}
+          style={{
+            flex: '0 0 auto',
+            fontFamily: 'Lato_700Bold, Lato, sans-serif',
+            fontSize: fontSize * 0.9,
+            color: '#fff',
+            backgroundColor: accent,
+            border: 'none',
+            borderRadius: 999,
+            padding: '8px 16px',
+            whiteSpace: 'nowrap',
+            cursor: state === 'opening' ? 'default' : 'pointer',
+            opacity: state === 'opening' ? 0.7 : 1,
+          }}
+        >
+          {state === 'opening' ? 'Opening…' : state === 'error' ? 'Try again' : 'Join video'}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>

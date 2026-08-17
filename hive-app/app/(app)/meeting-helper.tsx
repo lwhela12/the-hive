@@ -759,6 +759,21 @@ export default function MeetingHelperScreen() {
   // Kept for the handful of DISCRETE choices — column counts, how many lines a
   // label may wrap to — where there is no in-between value to interpolate.
   const isTV = stageW >= 1180;
+  /**
+   * A phone held upright, where the deck's floating chrome stops floating and
+   * starts landing on the slide.
+   *
+   * Nat, 2026-08-17, testing the deck on her phone three days before the first
+   * Production meeting: *"the meeting helper on the phone is AWFUL!!!! FIX
+   * IT!!!!"* — with the tagline printed across the Present button, the clock
+   * sitting on top of Charlee's face, and the slide counter squashed into the
+   * corner of both. Three separate things had each been given the bottom strip,
+   * and on a wide screen there is room for all three.
+   *
+   * There is not, here. Below this width the footer becomes one honest row and
+   * the clock comes off the slide and joins it.
+   */
+  const deckIsNarrow = stageW < 560;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
 
   // Which deck tonight is. Any HIVE without a designed deck falls to 'default'
@@ -3811,6 +3826,10 @@ export default function MeetingHelperScreen() {
       fontSize: sz(16, 10),
       color: tone === 'live' ? GOLD_DEEP : 'rgba(154,128,96,0.9)',
     });
+    // A pill that wraps stops being a pill. On a phone "Present to the room"
+    // broke over three lines and the tagline printed straight through it, so
+    // the words get shorter rather than the button getting taller.
+    const oneLine = { numberOfLines: 1 as const };
 
     // You have the deck. Tapping puts it down — everybody keeps the slide they
     // are on rather than being dumped back to the start.
@@ -3823,7 +3842,9 @@ export default function MeetingHelperScreen() {
           style={({ pressed }) => ({ ...pillStyle('live'), opacity: pressed ? 0.7 : 1 })}
         >
           <View style={{ width: sz(9, 7), height: sz(9, 7), borderRadius: 999, backgroundColor: GOLD }} />
-          <Text style={labelStyle('live')}>Presenting · tap to stop</Text>
+          <Text {...oneLine} style={labelStyle('live')}>
+            {deckIsNarrow ? 'Presenting · stop' : 'Presenting · tap to stop'}
+          </Text>
         </Pressable>
       );
     }
@@ -3839,7 +3860,7 @@ export default function MeetingHelperScreen() {
           style={({ pressed }) => ({ ...pillStyle('quiet'), opacity: pressed ? 0.7 : 1 })}
         >
           <Ionicons name="arrow-undo-outline" size={sz(17, 12)} color={GOLD_DEEP} />
-          <Text style={labelStyle('quiet')}>Back to {deckSession.presenterName}</Text>
+          <Text {...oneLine} style={labelStyle('quiet')}>Back to {deckSession.presenterName}</Text>
         </Pressable>
       );
     }
@@ -3849,7 +3870,7 @@ export default function MeetingHelperScreen() {
       return (
         <View style={pillStyle('live')} accessibilityRole="text">
           <View style={{ width: sz(9, 7), height: sz(9, 7), borderRadius: 999, backgroundColor: GOLD }} />
-          <Text style={labelStyle('live')}>Following {deckSession.presenterName}</Text>
+          <Text {...oneLine} style={labelStyle('live')}>Following {deckSession.presenterName}</Text>
         </View>
       );
     }
@@ -3864,7 +3885,53 @@ export default function MeetingHelperScreen() {
         style={({ pressed }) => ({ ...pillStyle('quiet'), opacity: pressed ? 0.7 : 1 })}
       >
         <Ionicons name="play-outline" size={sz(17, 12)} color={GOLD_DEEP} />
-        <Text style={labelStyle('quiet')}>Present to the room</Text>
+        <Text {...oneLine} style={labelStyle('quiet')}>
+          {deckIsNarrow ? 'Present' : 'Present to the room'}
+        </Text>
+      </Pressable>
+    );
+  };
+
+  /**
+   * The clock, on a phone, as a word in the footer rather than a card on the
+   * slide.
+   *
+   * It used to float bottom-right over the deck — fine beside a wide slide,
+   * and on a phone it sat squarely on top of whoever's face was in the middle
+   * of the arrival board (Nat, 2026-08-17). The countdown is the half that
+   * matters while a meeting is running; the clock face is decoration, and the
+   * phone has no room for decoration. Still tappable, still sets the hard-out.
+   */
+  const renderNarrowTimekeeper = () => {
+    const [hour, minute] = hardOutTime.split(':').map(Number);
+    const hardOutDate = new Date(clockNow);
+    hardOutDate.setHours(hour, minute, 0, 0);
+    const minutesLeft = Math.round((hardOutDate.getTime() - clockNow.getTime()) / 60_000);
+    const hardOutLabel = hardOutDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const label =
+      minutesLeft <= 0
+        ? `past ${hardOutLabel}`
+        : minutesLeft >= 60
+          ? `${Math.floor(minutesLeft / 60)}h ${minutesLeft % 60}m left`
+          : `${minutesLeft} min left`;
+    return (
+      <Pressable
+        onPress={() => {
+          setHardOutDraft('');
+          setHardOutMeridiem('PM');
+          setShowHardOutEditor(true);
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={`${label} until ${hardOutLabel}. Change when the meeting ends`}
+        hitSlop={8}
+        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, paddingHorizontal: 8 })}
+      >
+        <Text
+          numberOfLines={1}
+          style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), color: accentWash(0.8) }}
+        >
+          {label}
+        </Text>
       </Pressable>
     );
   };
@@ -4183,7 +4250,13 @@ export default function MeetingHelperScreen() {
       <View
         style={
           stackVideo
-            ? { height: videoLive ? Math.round(height * 0.32) : sz(74, 62), padding: sz(12, 9), paddingBottom: 0 }
+            // Idle on a phone the panel is one compact row, so it asks for a
+            // row's worth of height instead of a card's (Nat, 2026-08-17).
+            ? {
+                height: videoLive ? Math.round(height * 0.32) : sz(74, 44),
+                padding: sz(12, 9),
+                paddingBottom: 0,
+              }
             : { width: videoLive ? sz(360, 280) : sz(212, 178), padding: sz(16, 11), paddingRight: 0 }
         }
       >
@@ -4198,6 +4271,7 @@ export default function MeetingHelperScreen() {
           transcriptsOn={transcriptsOn}
           canToggleTranscripts={isAdmin}
           onToggleTranscripts={setTranscriptsFor}
+          compact={stackVideo}
         />
       </View>
       <View
@@ -4334,6 +4408,20 @@ export default function MeetingHelperScreen() {
             alignItems: 'center',
             paddingHorizontal: sz(40, 18),
             paddingBottom: sz(24, 14),
+            // On a phone this stops being an overlay and becomes a real bar.
+            // A see-through strip is fine over a slide that fits; the arrival
+            // board is a LIST, so members scroll up underneath it and their
+            // names print through the counter (Nat, 2026-08-17). Painting it
+            // gives the words a floor. `box-none` still lets a tap through the
+            // background to the slide — only the pill inside takes one.
+            ...(deckIsNarrow
+              ? {
+                  paddingTop: sz(12, 8),
+                  backgroundColor: PAPER,
+                  borderTopWidth: 1,
+                  borderTopColor: GOLD_SOFT,
+                }
+              : null),
           }}
         >
           {/* Whose deck this screen is right now — see renderDeckSessionPill.
@@ -4342,17 +4430,24 @@ export default function MeetingHelperScreen() {
           <View pointerEvents="box-none" style={{ flex: 1 }}>
             {renderDeckSessionPill()}
           </View>
-          <Text
-            style={{
-              fontFamily: 'Lato_700Bold',
-              fontSize: sz(15, 9),
-              letterSpacing: sz(4, 2.5),
-              color: accentWash(0.65),
-              textAlign: 'center',
-            }}
-          >
-            {TAGLINE}
-          </Text>
+          {/* The tagline is the thing that had no room. On a phone the middle
+              of this row carries the countdown instead — the one piece of the
+              old floating clock that a running meeting actually needs. */}
+          {deckIsNarrow ? (
+            renderNarrowTimekeeper()
+          ) : (
+            <Text
+              style={{
+                fontFamily: 'Lato_700Bold',
+                fontSize: sz(15, 9),
+                letterSpacing: sz(4, 2.5),
+                color: accentWash(0.65),
+                textAlign: 'center',
+              }}
+            >
+              {TAGLINE}
+            </Text>
+          )}
           {/* Still deaf to touch, as the whole footer used to be — the slide's
               bottom-right corner and the next-slide strip stay reachable. */}
           <View pointerEvents="none" style={{ flex: 1, alignItems: 'flex-end' }}>
@@ -4365,7 +4460,7 @@ export default function MeetingHelperScreen() {
         {/* Compact timekeeper for narrow screens — wide screens get the full
             agenda rail instead. Pace hint only appears once the meeting is
             actually near (within 3h of the hard-out) — at lunchtime it's noise. */}
-        {!showRail && (() => {
+        {!showRail && !deckIsNarrow && (() => {
           const [hour, minute] = hardOutTime.split(':').map(Number);
           const hardOutDate = new Date(clockNow);
           hardOutDate.setHours(hour, minute, 0, 0);

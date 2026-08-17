@@ -40,6 +40,17 @@ export type DeckVideoProps = {
   /** Admins throw the switch; everyone else can see where it is set. */
   canToggleTranscripts: boolean;
   onToggleTranscripts: (next: boolean) => void;
+  /**
+   * A phone, where nobody is on the call yet.
+   *
+   * Idle, this panel is a full-width switch stacked on a full-width card with
+   * a small button floating in the middle of it — about a fifth of a phone
+   * screen spent saying "no video yet" before the slide gets a pixel (Nat,
+   * 2026-08-17). Compact puts the switch and the way in on one line and drops
+   * the empty card entirely. Once somebody joins, the panel is a video panel
+   * again and this changes nothing.
+   */
+  compact?: boolean;
 };
 
 export function DeckVideo({
