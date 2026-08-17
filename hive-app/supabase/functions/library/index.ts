@@ -54,13 +54,15 @@ type Body = {
 };
 
 /**
- * A board this door will not touch, whatever it is asked.
+ * Where The Buzz's published issues are stored.
  *
- * The newsletter's rows are the seven published issues of The Buzz and nothing
- * else, and Nat has been unambiguous that a newsletter is not a board you post
- * to. Nothing automatic gets to write there.
+ * There is no newsletter board — Nat, repeatedly, and she is right: the
+ * newsletter lives in exactly two places, The Buzz at HIVE-Wide and the public
+ * site. What is left under this `topic_kind` is not a board anybody posts to,
+ * it is seven finished letters that happen to be stored as rows. This door does
+ * not write there, and nothing else should either.
  */
-const OFF_LIMITS = new Set(['newsletter']);
+const PUBLISHED_ISSUES = new Set(['newsletter']);
 
 function todayPacific(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -136,8 +138,8 @@ serve(async (req) => {
       404,
     );
   }
-  if (OFF_LIMITS.has(board.topic_kind ?? '')) {
-    return errorResponse(`"${board.name}" is not a board anything writes to.`, 403);
+  if (PUBLISHED_ISSUES.has(board.topic_kind ?? '')) {
+    return errorResponse(`"${board.name}" holds published issues of The Buzz. Nothing writes there.`, 403);
   }
 
   const topic = (body.topic ?? '').trim();
