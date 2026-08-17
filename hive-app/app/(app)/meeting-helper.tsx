@@ -820,6 +820,8 @@ export default function MeetingHelperScreen() {
   // Is there actually a call on? DeckVideo tells us, and the layout gives the
   // panel real room only once there is somebody in it.
   const [videoLive, setVideoLive] = useState(false);
+  /** How many faces are actually on the call — see `sideVideoHeight` below. */
+  const [videoPeople, setVideoPeople] = useState(0);
 
   /**
    * Does this HIVE write its meetings down? It lives on the HIVE
@@ -1755,7 +1757,13 @@ export default function MeetingHelperScreen() {
   // ---- Slides ----
   // Welcome + Room merged (Lucas: this is the slide up as people arrive, and
   // the date/time header doubles as the "oops, wrong day!" check).
-  const roomColumns = stageW >= 1400 ? 5 : stageW >= 1024 ? 4 : stageW >= 760 ? 3 : stageW >= 480 ? 2 : 1;
+  // Two abreast on a phone. One column meant eleven full-width cards and
+  // eleven screens of scrolling to see who is in the room (Nat, 2026-08-17) —
+  // and the thing a member wants off this slide is a glance at the room, which
+  // a list you have to travel through is not. A single column is now only for
+  // something genuinely too narrow to hold two, which nothing real is.
+  const roomColumns =
+    stageW >= 1400 ? 5 : stageW >= 1024 ? 4 : stageW >= 760 ? 3 : stageW >= 200 ? 2 : 1;
   const renderRoom = () => (
     <View style={{ flex: 1 }}>
       <View style={{ alignItems: 'center', marginBottom: sz(24, 14) }}>
@@ -3972,6 +3980,18 @@ export default function MeetingHelperScreen() {
   }, [editKey, goNext, goPrev]);
 
   const navStripWidth = sz(96, 52);
+  /**
+   * The height a side video column wants: one 16:9 tile per person stacked in a
+   * column this narrow, plus Daily's own header and tray, capped by the deck.
+   * A floor so a single face is not a letterbox.
+   */
+  const sideVideoWidth = sz(360, 280);
+  const sideVideoHeight = Math.round(
+    Math.min(
+      stageH,
+      Math.max(280, Math.max(1, videoPeople) * (sideVideoWidth - sz(16, 11)) * 0.5625 + sz(130, 104)),
+    ),
+  );
   // The plan slide's name is per-deck ("Plan the Meet Ups" / "Plan"), so its
   // edit modal says whichever name is on the slide being edited.
   const editMeta = editKey
@@ -4281,7 +4301,23 @@ export default function MeetingHelperScreen() {
               // rest — so the panel asks for enough that all three fit.
               ? { height: Math.round(height * 0.42), padding: sz(12, 9), paddingBottom: 0 }
               : { minHeight: sz(74, 44), padding: sz(12, 9), paddingBottom: 0 }
-            : { width: videoLive ? sz(360, 280) : sz(212, 178), padding: sz(16, 11), paddingRight: 0 }
+            : {
+                width: videoLive ? sideVideoWidth : sz(212, 178),
+                padding: sz(16, 11),
+                paddingRight: 0,
+                // As tall as the faces need, and no taller.
+                //
+                // Stretched to the full height of the deck, Daily fills what it
+                // is handed: two people in a tall narrow box come out as two
+                // small tiles at the top and a black canyon underneath (Nat,
+                // 2026-08-17: "these dont look good aesthetically"). Daily
+                // stacks one tile per row in a column this narrow, each 16:9,
+                // so the height a call actually wants is countable — tiles,
+                // plus its own header and tray.
+                ...(videoLive
+                  ? { height: sideVideoHeight, alignSelf: 'flex-start' as const }
+                  : null),
+              }
         }
       >
         <DeckVideo
@@ -4292,6 +4328,7 @@ export default function MeetingHelperScreen() {
           softBorder={GOLD_SOFT}
           fontSize={sz(16, 12)}
           onLiveChange={setVideoLive}
+          onPeopleChange={setVideoPeople}
           transcriptsOn={transcriptsOn}
           canToggleTranscripts={isAdmin}
           onToggleTranscripts={setTranscriptsFor}

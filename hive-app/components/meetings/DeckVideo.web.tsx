@@ -84,6 +84,7 @@ export function DeckVideo({
   softBorder,
   fontSize,
   onLiveChange,
+  onPeopleChange,
   transcriptsOn,
   canToggleTranscripts,
   onToggleTranscripts,
@@ -102,6 +103,8 @@ export function DeckVideo({
    * everyone on their own device gets their own name on every line, and a room
    * sharing one laptop is one microphone and therefore one name for the table.
    */
+  const peopleRef = useRef<((count: number) => void) | undefined>(onPeopleChange);
+  peopleRef.current = onPeopleChange;
   const linesRef = useRef<string[]>([]);
   const transcribingRef = useRef(false);
   const isOwnerRef = useRef(false);
@@ -221,8 +224,16 @@ export function DeckVideo({
         frameRef.current = frame;
         // The leave button is Daily's own, so the panel has to hear about it
         // from the frame rather than from a button of ours.
+        const countPeople = () => {
+          const who = frameRef.current?.participants?.() ?? {};
+          peopleRef.current?.(Math.max(1, Object.keys(who).length));
+        };
+        frame.on('joined-meeting', countPeople);
+        frame.on('participant-joined', countPeople);
+        frame.on('participant-left', countPeople);
         frame.on('left-meeting', () => {
           setState('idle');
+          peopleRef.current?.(0);
           void keepTranscript();
         });
         frame.on('error', (event) => {

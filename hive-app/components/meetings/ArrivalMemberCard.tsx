@@ -49,7 +49,18 @@ export function ArrivalMemberCard({
         paddingVertical: (isTV ? 26 : 18) * scale,
         paddingHorizontal: (isTV ? 18 : 14) * scale,
         alignItems: 'center',
-        minHeight: (isTV ? 340 : 220) * scale,
+        /**
+         * A card holds what it holds.
+         *
+         * Every card reserved the height of a FULL one — name for today,
+         * feeling, note, energy dots, hard-out — whether or not any of that had
+         * been written. Before a meeting almost none of it has, so eleven cards
+         * saying "hasn't checked in yet 🌙" each stood as tall as a card with
+         * five lines in it, and on a phone that is a screen apiece (Nat,
+         * 2026-08-17). Somebody who has checked in still gets the full frame,
+         * so the board stays a grid rather than a ragged pile.
+         */
+        minHeight: (isTV ? (checkedIn ? 340 : 210) : checkedIn ? 220 : 132) * scale,
         opacity: checkedIn ? 1 : 0.55,
         shadowColor: '#bd9348',
         shadowOpacity: checkedIn ? 0.12 : 0,

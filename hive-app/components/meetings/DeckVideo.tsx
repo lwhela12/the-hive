@@ -31,6 +31,16 @@ export type DeckVideoProps = {
    */
   onLiveChange?: (live: boolean) => void;
   /**
+   * How many people are on the call right now, so the deck can give the panel
+   * the height that many faces actually need.
+   *
+   * Without it the side column stretches the full height of the deck and Daily
+   * fills whatever it is handed — which, with two people in a tall narrow box,
+   * is two small tiles at the top and a black canyon under them (Nat,
+   * 2026-08-17: *"these dont look good aesthetically"*).
+   */
+  onPeopleChange?: (count: number) => void;
+  /**
    * Does this HIVE write its meetings down? Per-HIVE (migration 183), because
    * a transcript is labelled by microphone: everyone on their own device gets
    * their own name on every line, a room sharing one laptop gets one name for
