@@ -71,6 +71,12 @@ export interface Community extends Record<string, unknown> {
   max_share_scope?: 'hive' | 'all_hives' | 'public';
   /** How often this HIVE meets — weekly HIVEs date their meetings rather than month them. */
   meeting_cadence?: 'monthly' | 'weekly';
+  /**
+   * When this HIVE's meetings have to be over, as 24-hour HH:MM (migration
+   * 184). Null means the deck's 8pm default. OG finishes when it finishes;
+   * Production has Density waiting behind it at 5.
+   */
+  meeting_hard_out?: string | null;
   created_by?: string;
   created_at: string;
 }

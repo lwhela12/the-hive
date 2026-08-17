@@ -951,10 +951,22 @@ export default function MeetingHelperScreen() {
     }
   };
 
-  // Gentle timekeeper: a clock pill with time-'til-hard-out (default 8pm,
-  // tap to change) and a soft per-remaining-slide pace hint — enough to say
-  // "peep the time!" without anyone feeling on the clock.
-  const [hardOutTime, setHardOutTime] = useState('20:00');
+  /**
+   * Gentle timekeeper: a clock with time-'til-hard-out and a soft
+   * per-remaining-slide pace hint — enough to say "peep the time!" without
+   * anyone feeling on the clock.
+   *
+   * The hard out belongs to the HIVE now (migration 184), not to this render.
+   * It used to be React state defaulting to 8pm, so it reset on every page load
+   * and anybody who needed a different one set it again every meeting. Nat,
+   * 2026-08-17: *"we have pro HIVE at 4 & density at 5."* Production's first
+   * meeting has a real wall behind it, and a clock counting to 8pm would have
+   * paced her wrong for the whole hour. Set it once; the HIVE remembers.
+   */
+  const [hardOutTime, setHardOutTime] = useState(community?.meeting_hard_out || '20:00');
+  useEffect(() => {
+    setHardOutTime(community?.meeting_hard_out || '20:00');
+  }, [community?.meeting_hard_out]);
   const [hardOutDraft, setHardOutDraft] = useState('');
   // Evening meetings: a bare "7:45" means PM unless someone says otherwise.
   const [hardOutMeridiem, setHardOutMeridiem] = useState<'AM' | 'PM'>('PM');
@@ -4878,7 +4890,18 @@ export default function MeetingHelperScreen() {
                         if (hardOutMeridiem === 'PM' && hour < 12) hour += 12;
                         if (hardOutMeridiem === 'AM' && hour >= 12) hour -= 12;
                       }
-                      setHardOutTime(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+                      const next = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+                      setHardOutTime(next);
+                      // Remembered for the HIVE, so nobody sets it twice.
+                      if (communityId) {
+                        void supabase
+                          .from('communities')
+                          .update({ meeting_hard_out: next })
+                          .eq('id', communityId)
+                          .then(({ error }) => {
+                            if (error) console.warn('Could not remember the hard out', error);
+                          });
+                      }
                       setShowHardOutEditor(false);
                     }
                   }}
