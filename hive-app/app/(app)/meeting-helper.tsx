@@ -4432,20 +4432,24 @@ export default function MeetingHelperScreen() {
             alignItems: 'center',
             paddingHorizontal: sz(40, 18),
             paddingBottom: sz(24, 14),
-            // On a phone this stops being an overlay and becomes a real bar.
-            // A see-through strip is fine over a slide that fits; the arrival
-            // board is a LIST, so members scroll up underneath it and their
-            // names print through the counter (Nat, 2026-08-17). Painting it
-            // gives the words a floor. `box-none` still lets a tap through the
-            // background to the slide — only the pill inside takes one.
+            // This strip stops being an overlay and becomes a real bar.
+            //
+            // A see-through footer is fine over a slide that FITS. The arrival
+            // board is a list, so members scroll up underneath it and print
+            // through the words — Nat, 2026-08-17, on the phone first and then
+            // on the laptop: *"its not the worst, but its also not the best"*,
+            // with "Present to the room" lying across Oliver and the tagline
+            // through Sara. Painting it gives the words a floor.
+            //
+            // Paper, on every size, because paper is what the deck already is:
+            // on a slide that fits, nothing looks any different at all. What
+            // changes is that a card sliding past goes BEHIND the footer rather
+            // than through it. `box-none` still lets a tap reach the slide
+            // through the background — only the pill inside takes one.
+            backgroundColor: PAPER,
             ...(deckIsNarrow
-              ? {
-                  paddingTop: sz(12, 8),
-                  backgroundColor: PAPER,
-                  borderTopWidth: 1,
-                  borderTopColor: GOLD_SOFT,
-                }
-              : null),
+              ? { paddingTop: sz(12, 8), borderTopWidth: 1, borderTopColor: GOLD_SOFT }
+              : { paddingTop: sz(14, 10) }),
           }}
         >
           {/* Whose deck this screen is right now — see renderDeckSessionPill.
