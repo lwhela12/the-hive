@@ -3988,7 +3988,15 @@ export default function MeetingHelperScreen() {
   // phone turned sideways, or an iPad, a seat you can actually take. Nat,
   // 2026-08-15: "we need to make sure that no matter which device you're on you
   // can still join."
-  const stackVideo = width < 900;
+  /**
+   * Upright only. This used to be `width < 900`, which made a phone turned
+   * SIDEWAYS stack too — 852 wide and 393 tall, so the video got a letterbox
+   * strip across the top with no height for Daily's own controls to sit under
+   * the faces. The comment above always said "a row everywhere else"; the test
+   * did not agree with it. Sideways is exactly the shape a side column suits:
+   * short and wide, so the video takes the height and the slide takes the rest.
+   */
+  const stackVideo = width < 900 && height >= width;
 
   const renderRail = () => {
     const [hour, minute] = hardOutTime.split(':').map(Number);
@@ -4265,7 +4273,13 @@ export default function MeetingHelperScreen() {
             // `minHeight` and not `height` while idle, so a line explaining a
             // failed join has somewhere to go instead of being clipped.
             ? videoLive
-              ? { height: Math.round(height * 0.32), padding: sz(12, 9), paddingBottom: 0 }
+              // A third of the screen is not enough for Daily to lay itself
+              // out: its control tray runs out of room underneath the faces
+              // and sits ON them instead. Nat, 2026-08-17, mid-call on her
+              // phone: *"this bar is still in the way."* The tray is about
+              // 64px, the message under it another 40, and a face wants the
+              // rest — so the panel asks for enough that all three fit.
+              ? { height: Math.round(height * 0.42), padding: sz(12, 9), paddingBottom: 0 }
               : { minHeight: sz(74, 44), padding: sz(12, 9), paddingBottom: 0 }
             : { width: videoLive ? sz(360, 280) : sz(212, 178), padding: sz(16, 11), paddingRight: 0 }
         }
