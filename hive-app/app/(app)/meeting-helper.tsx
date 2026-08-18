@@ -900,6 +900,9 @@ export default function MeetingHelperScreen() {
   // Wrap-Up "Seal tonight's notes" — composes the live app activity into a
   // meeting record on the Meetings tab (the notes write themselves).
   const [sealState, setSealState] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
+  // This is an explicit Wrap-Up roll call, never inferred from somebody's
+  // pre-meeting "can't make it" answer. Empty means nobody is confirmed away.
+  const [confirmedAbsenteeIds, setConfirmedAbsenteeIds] = useState<Set<string>>(new Set());
 
   // HummDinger: which member's full check-in is expanded on the bubbles grid,
   // plus everyone who's had their turn this session (feeds the agenda rail's
@@ -1755,7 +1758,11 @@ export default function MeetingHelperScreen() {
     setSealState('saving');
     try {
       const { data, error } = await supabase.functions.invoke('seal-meeting', {
-        body: { communityId, date: getLocalIsoDate(new Date()) },
+        body: {
+          communityId,
+          date: getLocalIsoDate(new Date()),
+          confirmed_absentee_ids: Array.from(confirmedAbsenteeIds),
+        },
       });
       if (error) throw error;
       if (!data?.sealed) throw new Error(data?.reason ?? 'Nothing to seal yet');
@@ -3520,6 +3527,47 @@ export default function MeetingHelperScreen() {
               📌 New threads: {tonightRecap.threads.join(' · ')}
             </Text>
           ) : null}
+        </View>
+      ) : null}
+
+      {isAdmin ? (
+        <View style={{ marginTop: sz(18, 11), gap: sz(8, 5) }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: CHARCOAL }}>
+            Who actually missed tonight?
+          </Text>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(14, 10), color: MUTED }}>
+            Confirm at Wrap-Up. This is not guessed from the pre-meeting check-in. A recap preview goes to Nat first; members get nothing until she approves.
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(8, 6) }}>
+            {members.map((member) => {
+              const selected = confirmedAbsenteeIds.has(member.id);
+              return (
+                <Pressable
+                  key={member.id}
+                  onPress={() => setConfirmedAbsenteeIds((current) => {
+                    const next = new Set(current);
+                    if (next.has(member.id)) next.delete(member.id);
+                    else next.add(member.id);
+                    return next;
+                  })}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: selected }}
+                  style={{
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: selected ? GOLD : GOLD_SOFT,
+                    backgroundColor: selected ? accentWash(0.16) : CARD,
+                    paddingHorizontal: sz(12, 9),
+                    paddingVertical: sz(7, 5),
+                  }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: selected ? GOLD_DEEP : CHARCOAL }}>
+                    {selected ? '✓ ' : ''}{getFirstName(member.name)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       ) : null}
 

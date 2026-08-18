@@ -103,6 +103,11 @@ const EMAIL_SETTINGS: EmailSetting[] = [
     label: 'The Buzz',
     hint: 'The monthly newsletter — what everyone worked on, what got granted, and what is coming up.',
   },
+  {
+    column: 'email_post_meeting_recap_enabled',
+    label: 'Recap email if I miss a meeting',
+    hint: 'After Wrap-Up confirms you were away, two direct ways to catch up: the sealed summary or Clive.',
+  },
 ];
 
 /** The one card shape this page uses. */

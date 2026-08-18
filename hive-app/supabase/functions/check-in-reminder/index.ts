@@ -267,6 +267,7 @@ function checkInEmailHtml(
       <div style="text-align: center; margin: 28px 0;">
         <a href="${tuneupHref()}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Check in before tonight</a>
       </div>
+      <p style="font-size: 14px; color: #6b6b6b;"><strong>Can't make it tonight?</strong> No worries — HIVE will email you two quick ways to catch up afterward: open the meeting summary or ask Clive what you missed. If you don't want recap emails, turn off <strong>Recap email if I miss a meeting</strong> in Profile → Settings.</p>
       <p style="font-size: 13px; color: #9a9a9a; text-align: center;">See you at ${month} ${day}. 🍯</p>
     </div>
   `;

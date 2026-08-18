@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { View, Text, RefreshControl, Pressable, Linking, useWindowDimensions, Platform, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '../../lib/supabase';
@@ -167,7 +167,10 @@ const parseMeetingSummaryPreview = (summary?: string): MeetingSummaryPreview => 
 
 export default function MeetingsScreen() {
   const router = useRouter();
-  const { profile, communityId, session, communityRole, community, refreshProfile } = useAuth();
+  const { hive: linkedHiveId, meeting: linkedMeetingId } = useLocalSearchParams<{ hive?: string; meeting?: string }>();
+  const { profile, communityId, session, communityRole, community, refreshProfile, memberships, switchCommunity, wholeHive } = useAuth();
+  const requestedHiveId = Array.isArray(linkedHiveId) ? linkedHiveId[0] : linkedHiveId;
+  const requestedMeetingId = Array.isArray(linkedMeetingId) ? linkedMeetingId[0] : linkedMeetingId;
   const { width } = useWindowDimensions();
   const useCompactActions = width < 640;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
@@ -297,6 +300,22 @@ export default function MeetingsScreen() {
   const [uploadingAudioCount, setUploadingAudioCount] = useState(0);
   const [notesDropActive, setNotesDropActive] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
+
+  // Email links name both rooms: first enter the correct HIVE, then open the
+  // exact sealed summary. Holding until the switch finishes avoids briefly
+  // showing the same id against whichever HIVE the app remembered last.
+  useEffect(() => {
+    if (!requestedHiveId) return;
+    if (!memberships.some((membership) => membership.community_id === requestedHiveId)) return;
+    if (!wholeHive && communityId === requestedHiveId) return;
+    void switchCommunity(requestedHiveId);
+  }, [requestedHiveId, memberships, wholeHive, communityId, switchCommunity]);
+
+  useEffect(() => {
+    if (!requestedMeetingId || !requestedHiveId || communityId !== requestedHiveId) return;
+    const match = meetings.find((meeting) => meeting.id === requestedMeetingId);
+    if (match) setSelectedMeeting(match);
+  }, [requestedMeetingId, requestedHiveId, communityId, meetings]);
 
   /**
    * Where you are once you open a summary.

@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
+import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { recordAssistantUsage } from '../_shared/metering.ts';
 
@@ -15,6 +15,8 @@ interface SealMeetingRequest {
   communityId: string;
   /** Local meeting date (YYYY-MM-DD). Defaults to today in Pacific time. */
   date?: string;
+  /** Explicit Wrap-Up roll call. Never inferred from q_attendance. */
+  confirmed_absentee_ids?: string[];
 }
 
 function pacificToday() {
@@ -140,6 +142,9 @@ serve(async (req) => {
     const body = (await req.json()) as SealMeetingRequest;
     const communityId = body.communityId;
     if (!communityId) return errorResponse('Missing communityId', 400);
+    const confirmedAbsenteeIds = Array.isArray(body.confirmed_absentee_ids)
+      ? [...new Set(body.confirmed_absentee_ids.filter((id): id is string => typeof id === 'string' && !!id))]
+      : [];
     const date = /^\d{4}-\d{2}-\d{2}$/.test(body.date ?? '') ? body.date! : pacificToday();
 
     // A nightly run must only seal on a REAL meeting day. Without this, any
@@ -163,17 +168,32 @@ serve(async (req) => {
     // Auth: the daily cron calls with the service key; members seal from the deck.
     const authHeader = req.headers.get('Authorization') ?? '';
     let sealedBy: string | null = null;
+    let mayConfirmAbsence = authHeader === `Bearer ${serviceKey}`;
     if (authHeader !== `Bearer ${serviceKey}`) {
       const auth = await verifySupabaseJwt(authHeader);
       if (isAuthError(auth)) return errorResponse(auth.error, auth.status);
       const { data: membership } = await supabaseAdmin
         .from('community_memberships')
-        .select('id')
+        .select('id, role')
         .eq('community_id', communityId)
         .eq('user_id', auth.userId)
         .maybeSingle();
       if (!membership) return errorResponse('Community membership required', 403);
       sealedBy = auth.userId;
+      mayConfirmAbsence = membership.role === 'admin' || await isOwner(supabaseAdmin, auth.userId);
+    }
+    if (confirmedAbsenteeIds.length > 0 && !mayConfirmAbsence) {
+      return errorResponse('Only a HIVE admin can confirm who missed the meeting.', 403);
+    }
+    if (confirmedAbsenteeIds.length > 0) {
+      const { data: confirmedMembers } = await supabaseAdmin
+        .from('community_memberships')
+        .select('user_id')
+        .eq('community_id', communityId)
+        .in('user_id', confirmedAbsenteeIds);
+      if ((confirmedMembers ?? []).length !== confirmedAbsenteeIds.length) {
+        return errorResponse('Every confirmed absentee must belong to this HIVE.', 422);
+      }
     }
 
     // The meeting-day window in Pacific time (07:00Z ≈ PT midnight).
@@ -539,10 +559,35 @@ serve(async (req) => {
       meetingId = inserted.id;
     }
 
+    // Sealing can only create a held Nat preview. The recap function has no
+    // member-send path without a separate owner approval request.
+    let recapHold: Record<string, unknown> | null = null;
+    if (confirmedAbsenteeIds.length > 0 && meetingId) {
+      try {
+        const recapResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/post-meeting-recap`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${serviceKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            meeting_id: meetingId,
+            confirmed_absentee_ids: confirmedAbsenteeIds,
+          }),
+        });
+        recapHold = await recapResponse.json();
+        if (!recapResponse.ok) console.error('Post-meeting recap hold failed:', recapHold);
+      } catch (recapError) {
+        console.error('Post-meeting recap hold failed:', recapError);
+        recapHold = { held: false, error: 'The meeting sealed, but its recap preview could not be created.' };
+      }
+    }
+
     return jsonResponse({
       success: true,
       sealed: true,
       meetingId,
+      recapHold,
       counts: {
         events: events.length,
         todos: todoGroups.size,

@@ -139,6 +139,11 @@ verify_jwt = false
 [functions.seal-meeting]
 verify_jwt = false
 
+# Creates a Nat-only held preview after an explicit Wrap-Up absence check, then
+# sends to confirmed absentees only when an owner separately approves it.
+[functions.post-meeting-recap]
+verify_jwt = false
+
 # Open (or make) this HIVE's video room and hand back a way in with the
 # caller's own name on it. The only place DAILY_API_KEY is ever read.
 # Membership is checked as the caller, so RLS decides who gets a room.
