@@ -95,7 +95,7 @@ export function recapPreviewBanner(meeting: RecapMeeting, recipientCount: number
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto 18px;">
       <div style="background:#fdf3dc;border:1px solid #e6d2a4;border-radius:14px;padding:14px 16px;color:#6b5220;">
         <p style="margin:0 0 6px;font-size:11px;letter-spacing:1.6px;text-transform:uppercase;font-weight:700;">Waiting for your go-ahead</p>
-        <p style="margin:0;font-size:14px;line-height:1.5;">Nobody has this yet. Below is the member email for <strong>${hive}</strong>. Approval sends it only to the ${recipientCount} confirmed ${recipientCount === 1 ? 'absentee' : 'absentees'} who still have recap email turned on. If you do nothing, nothing sends.</p>
+        <p style="margin:0;font-size:14px;line-height:1.5;">Nobody has this yet. Below is the member email for <strong>${hive}</strong>. Approval sends it only to the ${recipientCount} confirmed ${recipientCount === 1 ? 'absentee who still has' : 'absentees who still have'} recap email turned on. If you do nothing, nothing sends.</p>
       </div>
     </div>`;
 }
