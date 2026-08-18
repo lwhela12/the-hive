@@ -526,6 +526,38 @@ land together whichever happens first.
 and `schedule-meeting` no longer asks Google for a conference link. Do not add
 a second way in.
 
+## The three doors out of the app (2026-08-17)
+
+Three edge functions send a person somewhere, and all three follow the same
+rule: **the button lands on the thing it promised, not near it.**
+
+- `check-in-reminder` — every check-in email, and **nothing reaches a member
+  until Nat approves it.** The cron renders the real email, sends her one copy,
+  and parks the touch; she says go and it fires. Approval replays the held touch
+  out of its own row rather than recomputing it from today's date. `force_send`
+  still bypasses, because an owner firing it deliberately IS the approval.
+- `library` — files what a meeting taught onto a HIVE board. The thread is a
+  topic, its top post is the current answer, each reply is a dated entry.
+  Step 8.5 of the Post-Meeting Ingestion Protocol calls it.
+- `worth-capturing` — emails whoever said something good in a meeting, with
+  three doors: refine it with Clive, ask to join, or take a prompt for your own
+  AI. Clive is told to **grow** the idea before posting — what arrives is one
+  sentence out of a twenty-minute conversation, and the room is what was lost.
+
+**A link that names a HIVE is a request to be IN that HIVE.** Three screens had
+to learn this the hard way in one day — `hive.tsx`, `monthly-tuneup.tsx` and
+Clive — and `app/index.tsx` had to stop sending every cold load to HIVE-Wide.
+Anything deep-linked from an email carries `?hive=<id>` and holds until the
+switch lands.
+
+## The creed (2026-08-17)
+
+One HIVE-Wide board, `The HIVE Creed`, holding one pinned page. **Its words live
+on the board and nowhere else** — Nat rewrites a line with no deploy, and
+members can reply to it. `lib/creed.ts` holds only the version stamp and a
+fallback sentence for when the board will not load. **Ticking the box is how you
+accept an invitation**; Accept & Join is disabled until you do.
+
 ## Gotchas — each of these has cost a real session
 
 - **`Alert.alert` does nothing on web.** react-native-web's implementation is,
@@ -602,6 +634,12 @@ a second way in.
 
 - **`putImageData` is banned in `SpaceGlobe`.** It writes raw device pixels
   while everything around it respects the retina transform.
+
+- **`archived_at`, never `status`, decides whether a post is gone.** `status`
+  only ever holds 'active' or 'completed', so `status !== 'archived'` can never
+  be true. It hid in `buzz.tsx` and again in `useBoardQuery.ts`, where the board
+  card counted and previewed archived threads while the board itself showed
+  none. If you write a filter about archiving, write `archived_at`.
 
 - **Never name a form honeypot field `company`.** Chrome autofills it, so real
   people trip their own bot trap and the form dies silently.
