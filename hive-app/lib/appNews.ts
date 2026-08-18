@@ -28,6 +28,30 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-17-the-creed',
+    date: '2026-08-17',
+    title: 'Every HIVE has a creed now, and you agree to it on the way in',
+    detail: 'A handful of promises the same for all of us — ask out loud, help when you can, say thank you more than feels necessary, what is said here stays here, campsite rules. It is a board you can reach from any HIVE, and you can reply to it and argue with a line. New members tick a box to accept it before they can join.',
+    href: { pathname: '/board' },
+    action: 'Read the creed',
+  },
+  {
+    id: '2026-08-17-deck-on-a-phone',
+    date: '2026-08-17',
+    title: 'The meeting deck works on a phone, held either way up',
+    detail: 'The clock has come off the slide, the footer stopped printing through people\'s names, the video panel gives Daily room for its own buttons, and the arrival board is two abreast instead of one screen per person. Turn the phone sideways and the video moves to a column beside the slide. Two people on the call at once is tested — a phone and a laptop, both faces.',
+    href: { pathname: '/meeting-helper' },
+    action: 'Open the deck',
+  },
+  {
+    id: '2026-08-17-the-buzz-everywhere',
+    date: '2026-08-17',
+    title: 'The Buzz is in every HIVE, and it is the same Buzz',
+    detail: 'It used to live only at HIVE-Wide. It is in every HIVE\'s list now, showing the identical archive, so you never have to go up a level to read the newsletter. Shout-outs for the next one come straight from your halfway check-in — there is no thread to go and find.',
+    href: { pathname: '/buzz' },
+    action: 'Read The Buzz',
+  },
+  {
     id: '2026-08-16-check-in-email-opens-the-check-in',
     date: '2026-08-16',
     title: 'The check-in email lands you on your check-in again',
