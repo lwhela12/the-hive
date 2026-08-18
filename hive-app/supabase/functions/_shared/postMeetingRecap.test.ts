@@ -23,8 +23,11 @@ Deno.test('buildPostMeetingRecapLinks deep-links the exact summary and contextua
     throw new Error(`Clive URL did not preserve HIVE context: ${links.cliveUrl}`);
   }
   const prefill = parsed.searchParams.get('prefill') || '';
-  if (!prefill.includes(meeting.title) || !prefill.includes(meeting.id) || !prefill.includes('decisions')) {
+  if (!prefill.startsWith('Hey Clive') || !prefill.includes(meeting.title) || !prefill.includes('decisions')) {
     throw new Error(`Clive prompt lacks useful meeting context: ${prefill}`);
+  }
+  if (prefill.includes(meeting.id) || prefill.includes('2026-08-18')) {
+    throw new Error(`Clive prompt exposed technical routing details: ${prefill}`);
   }
 });
 

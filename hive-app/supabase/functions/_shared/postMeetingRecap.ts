@@ -31,11 +31,17 @@ export function buildPostMeetingRecapLinks(appUrl: string, meeting: RecapMeeting
   const base = appUrl.replace(/\/$/, '');
   const hive = encodeURIComponent(meeting.communityId);
   const meetingId = encodeURIComponent(meeting.id);
-  const context = [
-    `I missed ${meeting.title} on ${meeting.date}.`,
-    `Please tell me what I missed, using meeting summary ${meeting.id}.`,
-    'Lead with decisions, anything assigned to me, and what I should know before the next meeting.',
-  ].join(' ');
+  const [year, month, day] = meeting.date.split('-').map(Number);
+  const friendlyDate = Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)
+    ? new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        timeZone: 'UTC',
+      })
+    : meeting.date;
+  // This becomes the person's visible first message to Clive. Keep routing ids
+  // in the URL where they belong; nobody talks in UUIDs (Nat, 2026-08-18).
+  const context = `Hey Clive — I missed ${meeting.title} on ${friendlyDate}. Can you catch me up? Start with the decisions, anything I need to do, and what I should know before the next meeting.`;
 
   return {
     summaryUrl: `${base}/meetings?hive=${hive}&meeting=${meetingId}`,
