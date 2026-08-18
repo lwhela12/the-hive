@@ -679,6 +679,12 @@ serve(async (req) => {
     }
   } catch { /* empty body is fine */ }
   const testEmail = typeof body.test_email === 'string' ? body.test_email.trim() : '';
+  // A multi-HIVE preview must name the survey it is previewing. Falling back to
+  // the first active monthly check-in sent Nat a Tech HIVE September preview
+  // when she explicitly asked to inspect OG's August last call (2026-08-18).
+  const testSurveyId = typeof body.test_survey_id === 'string'
+    ? body.test_survey_id.trim()
+    : '';
 
   // This function had no door on it at all. Found 2026-08-03, unused:
   // anyone who knew the web address could POST a test_email and have a real,
@@ -720,12 +726,17 @@ serve(async (req) => {
     let day = new Date().getDate();
     const { data: previewSurveys } = await supabaseAdmin
       .from('surveys')
-      .select('title, due_date, community_id')
+      .select('id, title, due_date, community_id')
       .eq('is_active', true);
     const previewCheckIn = (previewSurveys ?? []).find(
-      (s: { title?: string; due_date?: string }) =>
-        MONTHLY_CHECK_IN_PATTERN.test(s.title || '') && s.due_date
-    ) as { title?: string; due_date?: string; community_id?: string } | undefined;
+      (s: { id?: string; title?: string; due_date?: string }) =>
+        (!testSurveyId || s.id === testSurveyId)
+        && MONTHLY_CHECK_IN_PATTERN.test(s.title || '')
+        && s.due_date
+    ) as { id?: string; title?: string; due_date?: string; community_id?: string } | undefined;
+    if (testSurveyId && !previewCheckIn && !['premeeting', 'endofmonth', 'quarter', 'year'].includes(String(body.test_kind ?? ''))) {
+      return errorResponse('That active monthly check-in could not be previewed.', 404);
+    }
     if (previewCheckIn?.due_date) {
       const previewDate = toPacificDateOnly(new Date(previewCheckIn.due_date));
       if (previewDate) ({ month, day } = formatMeetingDate(previewDate));
@@ -788,7 +799,10 @@ serve(async (req) => {
         .select('id, title, due_date, community_id')
         .eq('is_active', true);
       const match = (candidates ?? []).find(
-        (s: { title?: string; due_date?: string }) => pattern.test(s.title || '') && s.due_date
+        (s: { id?: string; title?: string; due_date?: string }) =>
+          (!testSurveyId || s.id === testSurveyId)
+          && pattern.test(s.title || '')
+          && s.due_date
       ) as { id: string; title: string; due_date: string; community_id: string } | undefined;
       if (!match) {
         return errorResponse(`No active ${seasonKind} check-in to preview.`, 404);

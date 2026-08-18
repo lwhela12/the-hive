@@ -61,6 +61,8 @@ type Body = {
   topic?: string;
   /** Render and return the email rather than sending it. */
   preview?: boolean;
+  /** In preview mode, send the rendered proof here instead of to the speaker. */
+  preview_to?: string;
 };
 
 function escapeHtml(value: string): string {
@@ -318,6 +320,37 @@ serve(async (req) => {
   const subject = `🐝 You said something good in ${meeting}`;
 
   if (body.preview) {
+    const previewTo = (body.preview_to ?? '').trim().toLowerCase();
+    if (previewTo) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(previewTo)) {
+        return errorResponse('`preview_to` must be an email address.', 400);
+      }
+      if (!RESEND_API_KEY) return errorResponse('RESEND_API_KEY not configured', 500);
+      const previewHtml = `
+        <div style="max-width:560px;margin:0 auto 16px;padding:12px 16px;background:#fff3cd;border:1px solid #e3c565;border-radius:12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1.45;">
+          <strong>TEST PREVIEW — this would go only to ${escapeHtml(name)}.</strong><br />
+          Nothing has been sent to them.
+        </div>
+        ${html}`;
+      const previewRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: FROM_EMAIL,
+          to: previewTo,
+          subject: `[Preview for ${name}] ${subject}`,
+          html: previewHtml,
+        }),
+      });
+      if (!previewRes.ok) return errorResponse(`Preview email failed: ${await previewRes.text()}`, 502);
+      return jsonResponse({
+        preview_sent_to: previewTo,
+        would_send_to: to,
+        in_tech_hive: inTechHive,
+        topic_exists: topicExists,
+        subject,
+      });
+    }
     return jsonResponse({ to, in_tech_hive: inTechHive, topic_exists: topicExists, subject, html });
   }
   if (!RESEND_API_KEY) return errorResponse('RESEND_API_KEY not configured', 500);
