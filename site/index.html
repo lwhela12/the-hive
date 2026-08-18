@@ -170,10 +170,15 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
   border:1px solid rgba(222,193,129,.30);border-radius:18px;
   padding:clamp(24px,4vw,38px);box-shadow:0 18px 44px rgba(58,43,28,.24)}
 .creedbox h3{color:var(--goldlight);font-size:clamp(1.15rem,2.6vw,1.45rem);margin-bottom:13px}
-.creedtext{white-space:pre-line;color:#f2ead9;font-family:var(--serif);
-  font-size:clamp(.98rem,2.2vw,1.1rem);line-height:1.75;margin:0}
+.creedtext{color:#f2ead9;font-family:var(--serif);
+  font-size:clamp(.98rem,2.2vw,1.1rem);line-height:1.6;margin:0}
 .creedtext.loading{color:#cbbfa9;font-family:var(--sans);font-size:.94rem}
-.creednote{color:#cbbfa9;font-size:.78rem;margin:15px 0 0;letter-spacing:.01em}
+.creedstamp{color:#d9bd83;font-style:italic;font-size:.88em;margin:0 0 22px}
+.creedrule{color:#f2ead9;font-weight:700;margin:18px 0 0}
+.creeddetail{color:#d8c9b1;font-style:italic;margin:4px 0 0}
+.creedfootnote{color:#bcae99;font-family:var(--sans);font-size:.72rem;
+  line-height:1.55;margin:28px 0 0}
+.creedfootnote::before{content:'* ';color:var(--goldlight)}
 .alone{font-family:var(--serif);font-style:italic;font-size:clamp(1.1rem,2.6vw,1.4rem);
   color:var(--deepgold);text-align:center;margin:30px auto 0;max-width:30ch;line-height:1.5}
 
@@ -487,19 +492,6 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
   </div>
 </section>
 
-<section class="sec wrap" id="creed" aria-labelledby="creed-h">
-  <p class="eyebrow">Different HIVEs. One promise.</p>
-  <h2 id="creed-h">The HIVE Creed</h2>
-  <p class="creedintro">Every HIVE makes its own shape. One may gather around personal wishes,
-    another around ideas its members are building, and another around one shared goal. Each chooses
-    its own people, schedule and cadence. The Creed is what makes all of them HIVE.</p>
-  <div class="creedbox">
-    <h3>What every HIVE agrees to</h3>
-    <p class="creedtext loading" id="creedtext" aria-live="polite">Bringing the Creed in from the HIVE&hellip;</p>
-    <p class="creednote" id="creednote" hidden>The live Creed is kept by the members and changes when the HIVE changes it.</p>
-  </div>
-</section>
-
 <section class="sec wrap" id="meet" aria-labelledby="meet-h">
   <p class="eyebrow">How it works</p>
   <h2 id="meet-h">Three parts to a HIVE</h2>
@@ -620,6 +612,18 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
       </div>
 </section>
 
+<section class="sec wrap" id="creed" aria-labelledby="creed-h">
+  <p class="eyebrow">Different HIVEs. One promise.</p>
+  <h2 id="creed-h">The HIVE Creed</h2>
+  <p class="creedintro">Every HIVE makes its own shape. One may gather around personal wishes,
+    another around ideas its members are building, and another around one shared goal. Each chooses
+    its own people, schedule and cadence. The Creed is what makes all of them HIVE.</p>
+  <div class="creedbox">
+    <h3>What every HIVE agrees to</h3>
+    <div class="creedtext loading" id="creedtext" aria-live="polite">Bringing the Creed in from the HIVE&hellip;</div>
+  </div>
+</section>
+
 <footer class="wrap">
   <!-- Two lines, centred, with the break written in. Nat, 2026-08-06: "i think
        those should be 2 lines, centered." A written-in break lands in the same
@@ -643,14 +647,38 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
 
   /* ---------- one live Creed, from the one page Nat edits in the app ---------- */
   var creedText = document.getElementById('creedtext');
-  var creedNote = document.getElementById('creednote');
+  function unmark(line) {
+    return line.replace(/^\*\*/, '').replace(/\*\*$/, '').replace(/^\*/, '').replace(/\*$/, '').replace(/\*/g, '');
+  }
+  function addCreedLine(kind, text) {
+    var p = document.createElement('p');
+    p.className = kind;
+    p.textContent = text;
+    creedText.appendChild(p);
+  }
+  function renderCreed(content) {
+    var lines = content.split(/\r?\n/).map(function (line) { return line.trim(); }).filter(Boolean);
+    creedText.textContent = '';
+    lines.forEach(function (line) {
+      /* These words belong to the board's conversation door, not its public copy. */
+      if (line === '---' || line.indexOf('This page is the creed.') === 0) return;
+      if (line.indexOf('Some of this comes from') === 0) {
+        addCreedLine('creedfootnote', unmark(line));
+      } else if (/^\*\*.*\*\*$/.test(line)) {
+        addCreedLine('creedrule', unmark(line));
+      } else if (/^\*.*\*$/.test(line)) {
+        addCreedLine('creedstamp', unmark(line));
+      } else {
+        addCreedLine('creeddetail', unmark(line));
+      }
+    });
+    creedText.classList.remove('loading');
+  }
   fetch('/api/creed', { headers: { Accept: 'application/json' } })
     .then(function (r) { return r.json(); })
     .then(function (j) {
       if (!j || !j.creed || !j.creed.content) throw new Error('no creed');
-      creedText.textContent = j.creed.content.replace(/\*\*/g, '').replace(/\*/g, '');
-      creedText.classList.remove('loading');
-      creedNote.hidden = false;
+      renderCreed(j.creed.content);
     })
     .catch(function () {
       creedText.textContent = 'The Creed is taking a breath. Please try again in a moment.';
