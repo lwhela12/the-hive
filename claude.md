@@ -1,3 +1,7 @@
+> **Before you build or change anything here, read The Build Standard** — how anything we ship has to behave.
+> Local: `~/Documents/Hermes_Brain/Productization_of_Nats_Life/THE_BUILD_STANDARD.md`
+> Live: https://docs.google.com/document/d/1SbSbEA5DhzVl9PKORMXQRRxJpU75Pb1vc7XGp5X0474/edit
+
 # HIVE — how this app works, and how to work on it
 
 This file is loaded at the start of every session. It describes the app **as it
@@ -99,6 +103,16 @@ say `hive` for the same rung — `normaliseScope()` in `lib/scopeLook.ts` folds
 them together. **Each HIVE also has a ceiling**, `communities.max_share_scope`
 (migration 125): nothing in that HIVE may travel further than its ceiling
 allows, whatever an individual member picks.
+
+**One switch decides the whole profile** (Nat, 2026-08-19): `profile_scope =
+'all_hives'` means the entire card — bio, honeycombs, 3MIQ AND the Skills
+Garden — shows at HIVE-Wide and inside every HIVE the person is in, with no
+per-HIVE redo. The skills read policy asks the switch directly
+(`profile_travels()`, migration 193); `skills.reach` and `profiles.piece_reach`
+are both vestigial, kept unwritten. A wish is the single exception: each wish
+picks its own rung, and a travelling wish shows on its owner's profile panel
+in every HIVE — so wish mutations there act on `wish.community_id`, never on
+the HIVE the screen is standing in. Do not reintroduce per-field toggles.
 
 Anything unrecognised falls back to `hive`. The safe end of the ladder is always
 the one that travels least.
@@ -214,8 +228,14 @@ zero importers) was deleted too.
 - **Daily.co** for the video call, which happens inside the Meeting Helper.
 - **AssemblyAI** for importing recorded audio after the fact. Live meeting
   transcription comes from Daily instead (see below).
-- **Google Calendar** for scheduling. **Not Google Meet** — since 2026-08-15 a
-  new meeting gets no Meet link, and the invite points at the deck.
+- **Google Calendar** for scheduling. **Not Google Meet** for OG and Production
+  — since 2026-08-15 their meetings get no Meet link, and the invite points at
+  the deck. Tech HIVE is the exception (`communities.meets_on_google_meet`,
+  migration 191): its invites carry a Meet link, and `import-meet-transcripts`
+  files the Meet transcript onto the meeting row afterwards. That import runs
+  on the calendar, not on a poll (migration 192): the cron's own subquery
+  checks `events` and makes zero HTTP calls except in the six hours after a
+  Meet-flagged HIVE's scheduled meeting.
 - **Resend** for email.
 - **Hosting**: Vercel for web (`app.the-hive.app`), Expo EAS for iOS builds.
 
