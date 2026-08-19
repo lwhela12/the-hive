@@ -373,22 +373,6 @@ serve(async (req) => {
     });
     threads.forEach((title) => details.push(`📌 New thread: ${title}`));
 
-    if (details.length === 0) {
-      return jsonResponse({ success: true, sealed: false, reason: 'Nothing happened in the app on that date.' });
-    }
-
-    const month = monthName(date);
-    const todoPeople = new Set(todos.map((todo) => todo.assigned_to).filter(Boolean)).size;
-    const summaryText =
-      `Live notes from the ${month} meeting — written in the app as the night unfolded. ` +
-      [
-        events.length ? `${events.length} event${events.length === 1 ? '' : 's'} penciled in` : null,
-        todoGroups.size ? `${todoGroups.size} to-do${todoGroups.size === 1 ? '' : 's'} handed out across ${todoPeople} list${todoPeople === 1 ? '' : 's'}` : null,
-        notes.length ? `${notes.length} wish note${notes.length === 1 ? '' : 's'}` : null,
-        granted.length ? `${granted.length} wish${granted.length === 1 ? '' : 'es'} granted` : null,
-        threads.length ? `${threads.length} thread${threads.length === 1 ? '' : 's'} opened` : null,
-      ].filter(Boolean).join(' · ') + '.';
-
     // One meeting record per date: merge into an existing row (imported
     // transcript stays as the detail layer) or create a fresh one.
     const { data: existingRows } = await supabaseAdmin
@@ -398,6 +382,47 @@ serve(async (req) => {
       .eq('date', date)
       .order('created_at', { ascending: true });
     const existing = (existingRows ?? []).find((row) => row.transcript_raw) ?? (existingRows ?? [])[0] ?? null;
+
+    /**
+     * "Nothing happened" has to mean nothing was KEPT — not nothing was
+     * clicked.
+     *
+     * `details` is app activity: an event penciled in, a to-do handed out, a
+     * note on a wish, a thread opened. A meeting can have none of that and
+     * still be a whole meeting, and on 2026-08-19 one was: Nat recorded the
+     * room, the transcript came back from AssemblyAI and landed on the row,
+     * and Seal answered "Hmm, try sealing again" forever — because sealing
+     * counted the clicking and not the recording.
+     *
+     * Nat, the same minute: *"I would like the transcripts to not get lost and
+     * like the notes on the meeting helper to not get lost."* So a transcript
+     * on the record counts, and so does anything she typed into the deck.
+     */
+    const wroteItDown = !!(existing?.transcript_raw ?? '').trim()
+      || Object.values(deckNotes).some((value) => typeof value === 'string' && value.trim());
+
+    if (details.length === 0 && !wroteItDown) {
+      return jsonResponse({
+        success: true,
+        sealed: false,
+        reason: 'There is nothing to seal yet — no transcript, no deck notes, and nothing done in the app today.',
+      });
+    }
+
+    const month = monthName(date);
+    const todoPeople = new Set(todos.map((todo) => todo.assigned_to).filter(Boolean)).size;
+    // The tally is a sentence about what was CLICKED, so a night whose whole
+    // record is a recording gets no tally rather than a full stop on its own.
+    const tally = [
+      events.length ? `${events.length} event${events.length === 1 ? '' : 's'} penciled in` : null,
+      todoGroups.size ? `${todoGroups.size} to-do${todoGroups.size === 1 ? '' : 's'} handed out across ${todoPeople} list${todoPeople === 1 ? '' : 's'}` : null,
+      notes.length ? `${notes.length} wish note${notes.length === 1 ? '' : 's'}` : null,
+      granted.length ? `${granted.length} wish${granted.length === 1 ? '' : 'es'} granted` : null,
+      threads.length ? `${threads.length} thread${threads.length === 1 ? '' : 's'} opened` : null,
+    ].filter(Boolean).join(' · ');
+    const summaryText = tally
+      ? `Live notes from the ${month} meeting — written in the app as the night unfolded. ${tally}.`
+      : `Live notes from the ${month} meeting.`;
 
     let previous: Record<string, unknown> = {};
     if (existing?.summary) {

@@ -28,10 +28,18 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-seal-keeps-the-recording',
+    date: '2026-08-19',
+    title: 'Sealing keeps a meeting whose whole record is the recording',
+    detail: 'Seal used to count only things clicked in the app — an event penciled in, a to-do handed out — so a night you simply recorded refused to seal and said "try again" forever. A transcript counts now, and so do your deck notes. And "anyone who did not make it tonight?" moved to underneath the Seal button, where it belongs.',
+    href: { pathname: '/meeting-helper' },
+    action: 'Open the meeting helper',
+  },
+  {
     id: '2026-08-19-two-ways-to-record',
     date: '2026-08-19',
-    title: 'Two ways to keep a meeting: A or B',
-    detail: 'A is video plus a transcript. B is a transcript only, recorded from whichever laptop is running the meeting — no call needed. There used to be three switches here and no way to tell them apart.',
+    title: 'Two ways to join a meeting, and both write it down',
+    detail: 'Video + transcript, or transcript only — recorded from whichever laptop is running the meeting, no call needed. There used to be three switches here and no way to tell them apart.',
     href: { pathname: '/meeting-helper' },
     action: 'Open the meeting helper',
   },

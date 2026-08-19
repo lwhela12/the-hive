@@ -46,8 +46,8 @@ export type DeckCallSnapshot = {
 
 type Theme = { colors: Record<string, string> } | undefined;
 
-const PARKED_WIDTH = 248;
-const PARKED_VIDEO_HEIGHT = 150;
+const PARKED_WIDTH = 320;
+const PARKED_VIDEO_HEIGHT = 202;
 const PARKED_CHROME_HEIGHT = 34;
 const PARKED_MARGIN = 16;
 

@@ -176,11 +176,16 @@ export function DeckVideo({
    * and then 'join the video' ... and then it has that 'either way the meeting
    * gets written down' and that's a lot of text."*
    *
-   * So they are A and B under one heading, which is what she asked for in the
-   * same breath: *"option A is video and transcribe, option B is just
-   * transcriptions."* The letters carry the "these are alternatives" that a
-   * sentence underneath was carrying badly, and the heading carries the "both
-   * of these keep the meeting" — so the explaining line is gone.
+   * So they are two named alternatives under one heading, which is what she
+   * asked for in the same breath: *"option A is video and transcribe, option B
+   * is just transcriptions."* She then took the letters back off ten minutes
+   * later, having read them on screen — *"you don't need to have an A and B
+   * also"* — because the heading and the two names already say it, and a
+   * lettered badge on a two-item list is a label for a label.
+   *
+   * The heading is what you are about to DO, not what happens afterwards:
+   * *"'keep this meeting' — you don't want to keep this meeting. Let's do like
+   * 'join this meeting'."*
    */
   const heading = (
     <div
@@ -194,7 +199,7 @@ export function DeckVideo({
         marginBottom: 6,
       }}
     >
-      Keep this meeting
+      Join this meeting
     </div>
   );
 
@@ -217,26 +222,6 @@ export function DeckVideo({
     whiteSpace: 'nowrap' as const,
   });
 
-  const letter = (mark: string, chosen: boolean) => (
-    <span
-      aria-hidden
-      style={{
-        flex: '0 0 auto',
-        width: 18,
-        height: 18,
-        borderRadius: 999,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: fontSize * 0.72,
-        color: chosen ? accent : '#ffffff',
-        backgroundColor: chosen ? '#ffffff' : accentDeep,
-      }}
-    >
-      {mark}
-    </span>
-  );
-
   const optionA = (
     <button
       type="button"
@@ -249,7 +234,6 @@ export function DeckVideo({
         opacity: communityId && !taping ? 1 : 0.5,
       }}
     >
-      {letter('A', false)}
       {state === 'opening' ? 'Opening…' : state === 'error' ? 'Try again' : 'Video + transcript'}
     </button>
   );
@@ -274,14 +258,16 @@ export function DeckVideo({
         opacity: communityId ? 1 : 0.5,
       }}
     >
-      {tape.recording ? (
-        <span
-          aria-hidden
-          style={{ flex: '0 0 auto', width: 12, height: 12, borderRadius: 3, backgroundColor: '#ffffff' }}
-        />
-      ) : (
-        letter('B', false)
-      )}
+      <span
+        aria-hidden
+        style={{
+          flex: '0 0 auto',
+          width: 11,
+          height: 11,
+          borderRadius: tape.recording ? 3 : 999,
+          backgroundColor: tape.recording ? '#ffffff' : '#c8321f',
+        }}
+      />
       {tape.uploading
         ? 'Saving…'
         : tape.unsaved

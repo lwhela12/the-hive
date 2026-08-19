@@ -1730,9 +1730,21 @@ export default function MeetingHelperScreen() {
     );
   }, [EmptyNote, notes, sz]);
 
+  /**
+   * Why it would not seal, in the words the function used.
+   *
+   * A refusal and a failure are not the same thing and were being shown as
+   * one: "Hmm, try sealing again" for both, so a night the function had
+   * DECIDED not to seal offered a button that would decide the same thing
+   * every time (Nat, 2026-08-19). A refusal now says its reason and stops
+   * pretending pressing again is the answer.
+   */
+  const [sealNote, setSealNote] = useState<string | null>(null);
+
   const handleSealMeeting = async () => {
     if (!communityId || sealState === 'saving' || sealState === 'done') return;
     setSealState('saving');
+    setSealNote(null);
     try {
       const { data, error } = await supabase.functions.invoke('seal-meeting', {
         body: {
@@ -1742,10 +1754,15 @@ export default function MeetingHelperScreen() {
         },
       });
       if (error) throw error;
-      if (!data?.sealed) throw new Error(data?.reason ?? 'Nothing to seal yet');
+      if (!data?.sealed) {
+        setSealNote(data?.reason ?? 'There is nothing to seal yet.');
+        setSealState('idle');
+        return;
+      }
       setSealState('done');
     } catch (error) {
       console.warn('Seal meeting failed', error);
+      setSealNote('That did not save. Check the connection and try once more.');
       setSealState('error');
     }
   };
@@ -3507,47 +3524,6 @@ export default function MeetingHelperScreen() {
         </View>
       ) : null}
 
-      {isAdmin ? (
-        <View style={{ marginTop: sz(18, 11), gap: sz(8, 5) }}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: CHARCOAL }}>
-            Who actually missed tonight?
-          </Text>
-          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(14, 10), color: MUTED }}>
-            Confirm at Wrap-Up. This is not guessed from the pre-meeting check-in. A recap preview goes to Nat first; members get nothing until she approves.
-          </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(8, 6) }}>
-            {members.map((member) => {
-              const selected = confirmedAbsenteeIds.has(member.id);
-              return (
-                <Pressable
-                  key={member.id}
-                  onPress={() => setConfirmedAbsenteeIds((current) => {
-                    const next = new Set(current);
-                    if (next.has(member.id)) next.delete(member.id);
-                    else next.add(member.id);
-                    return next;
-                  })}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: selected }}
-                  style={{
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: selected ? GOLD : GOLD_SOFT,
-                    backgroundColor: selected ? accentWash(0.16) : CARD,
-                    paddingHorizontal: sz(12, 9),
-                    paddingVertical: sz(7, 5),
-                  }}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: selected ? GOLD_DEEP : CHARCOAL }}>
-                    {selected ? '✓ ' : ''}{getFirstName(member.name)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      ) : null}
-
       {/* Seal, always.
           It used to live INSIDE the "Tonight in the app" card, so it only
           existed on a night when something had already happened — an event
@@ -3585,10 +3561,72 @@ export default function MeetingHelperScreen() {
             : sealState === 'done'
               ? '✓ Sealed — it’s in Meeting Summaries'
               : sealState === 'error'
-                ? 'Hmm, try sealing again'
+                ? 'Try sealing again'
                 : '🍯 Seal tonight’s notes → Meeting Summaries'}
         </Text>
       </Pressable>
+      {sealNote ? (
+        <Text
+          style={{
+            marginTop: sz(8, 6),
+            fontFamily: 'Lato_400Regular',
+            fontSize: sz(15, 11),
+            lineHeight: sz(22, 16),
+            color: MUTED,
+            maxWidth: sz(560, 360),
+          }}
+        >
+          {sealNote}
+        </Text>
+      ) : null}
+      {/* Under the button, not above it.
+          Nat drew the order out loud on 2026-08-19: *"you could hit like maybe
+          it could be like seal the meeting and then right below it it could be
+          like, is there anyone who didn't make it today that you want to send
+          this summary to, and then boom you just click on that person."* Seal
+          is the thing that keeps the night; who missed it is what to do with
+          the record afterwards. Asking second reads as the second question. */}
+      {isAdmin ? (
+        <View style={{ marginTop: sz(18, 11), gap: sz(8, 5) }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: CHARCOAL }}>
+            Anyone who did not make it tonight?
+          </Text>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(14, 10), color: MUTED }}>
+            Tap them and they get tonight&rsquo;s summary. Nobody is guessed from the pre-meeting check-in, and nothing is sent until Nat has seen the preview and said yes.
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(8, 6) }}>
+            {members.map((member) => {
+              const selected = confirmedAbsenteeIds.has(member.id);
+              return (
+                <Pressable
+                  key={member.id}
+                  onPress={() => setConfirmedAbsenteeIds((current) => {
+                    const next = new Set(current);
+                    if (next.has(member.id)) next.delete(member.id);
+                    else next.add(member.id);
+                    return next;
+                  })}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: selected }}
+                  style={{
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: selected ? GOLD : GOLD_SOFT,
+                    backgroundColor: selected ? accentWash(0.16) : CARD,
+                    paddingHorizontal: sz(12, 9),
+                    paddingVertical: sz(7, 5),
+                  }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: selected ? GOLD_DEEP : CHARCOAL }}>
+                    {selected ? '✓ ' : ''}{getFirstName(member.name)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+
       <View
         style={{
           // Was 40/22 of top margin — the reminders card is what nudged this
