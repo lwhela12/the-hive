@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-summary-fits-the-hive',
+    date: '2026-08-19',
+    title: 'A summary only mentions a treasurer if your HIVE has one',
+    detail: 'Production said no to a Honey Pot and its summary still opened with a balance of $0.00. And the next meeting line carries the address now, so catching up tells you where to go as well as when.',
+    href: { pathname: '/meetings' },
+    action: 'Open Meeting Summaries',
+  },
+  {
     id: '2026-08-19-summary-reads-like-english',
     date: '2026-08-19',
     title: 'A meeting summary reads like a summary again',
@@ -39,7 +47,7 @@ export const APP_NEWS: AppNewsEntry[] = [
     id: '2026-08-19-hive-has-an-icon',
     date: '2026-08-19',
     title: 'HIVE has its own icon on your home screen',
-    detail: 'Adding HIVE to a phone or desktop used to give you a grey placeholder. It is the bee in the gold ring now, and the browser tab matches.',
+    detail: 'Adding HIVE to a phone or desktop used to give you a grey placeholder. It is the bee on a gold coin now, and the browser tab matches.',
   },
   {
     id: '2026-08-19-everyone-takes-a-job',

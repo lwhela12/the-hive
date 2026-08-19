@@ -263,7 +263,7 @@ serve(async (req) => {
     // working on, stuck on, and focused on. They're what makes a recap readable
     // to someone who wasn't there, rather than a list of clicks.
     const [notesRow, ledgerRows, memberRows, wishRows] = await Promise.all([
-      supabaseAdmin.from('communities').select('meeting_helper_notes, name').eq('id', communityId).maybeSingle(),
+      supabaseAdmin.from('communities').select('meeting_helper_notes, name, honey_pot_enabled').eq('id', communityId).maybeSingle(),
       supabaseAdmin.from('honey_pot_transactions').select('amount').eq('community_id', communityId),
       supabaseAdmin.from('community_memberships').select('user:profiles!user_id(id, name)').eq('community_id', communityId),
       supabaseAdmin.from('wishes')
@@ -295,7 +295,10 @@ serve(async (req) => {
 
     const [nextMeetingRows, upcomingRows, focusRows] = await Promise.all([
       supabaseAdmin.from('events')
-        .select('title, event_date, event_time')
+        // The address comes along. "Next HIVE meeting: Thursday, September 10"
+        // does not tell somebody catching up where to go, and Production moved
+        // to Charlee's house at the meeting that line is summarising.
+        .select('title, event_date, event_time, location')
         .eq('community_id', communityId).eq('event_type', 'meeting')
         .gt('event_date', date).order('event_date', { ascending: true }).limit(1),
       supabaseAdmin.from('events')
@@ -461,10 +464,18 @@ serve(async (req) => {
     const appLines = bulletsFrom(deckNotes.appnews);
     if (appLines.length > 0) sections.push({ title: 'App updates', lines: appLines });
 
-    sections.push({
-      title: 'Treasurer',
-      lines: [`Honey Pot balance: $${potBalance.toFixed(2)}`],
-    });
+    // Only a HIVE that runs a Honey Pot has a treasurer to report. Production
+    // said no to one at its first meeting and its summary still opened with
+    // "Honey Pot balance: $0.00" — Nat, 2026-08-19: *"you can get rid of the
+    // treasurer in the summary because we're not going to have a treasurer or
+    // a honey pot for right now."* The flag already exists (migration 140);
+    // this section simply never asked.
+    if ((notesRow.data as any)?.honey_pot_enabled) {
+      sections.push({
+        title: 'Treasurer',
+        lines: [`Honey Pot balance: $${potBalance.toFixed(2)}`],
+      });
+    }
 
     // The deck's Plan-the-Meet-Ups slide, in the same order: when we meet next,
     // what the HIVE Help focus is, and what's already on the calendar.
@@ -484,7 +495,12 @@ serve(async (req) => {
     };
     const meetupLines: string[] = [];
     if (nextMeeting) {
-      meetupLines.push(`Next HIVE meeting: ${prettyDate(nextMeeting.event_date)}${nextMeeting.event_time ? ` · ${prettyTime(nextMeeting.event_time)}` : ''}`);
+      const where = (nextMeeting as { location?: string | null }).location?.trim();
+      meetupLines.push(
+        `Next HIVE meeting: ${prettyDate(nextMeeting.event_date)}`
+        + `${nextMeeting.event_time ? ` · ${prettyTime(nextMeeting.event_time)}` : ''}`
+        + `${where ? ` · ${where}` : ''}`
+      );
     }
     if (helpFocus) meetupLines.push(`HIVE Help focus: ${helpFocus}`);
     if (upcomingHangs.length > 0) {
