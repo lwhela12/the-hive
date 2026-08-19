@@ -4,6 +4,7 @@ import { EditButton } from '../ui/EditButton';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { ScopeBadge } from '../ui/ScopeBadge';
+import { ReachPill } from '../ui/ReachPill';
 import { formatDateShort } from '../../lib/dateUtils';
 import { getWishBodyPreview, getWishQuickTitle, hasSeparateWishTitle } from '../../lib/wishDisplay';
 import type { Wish, Profile, WishGranter } from '../../types';
@@ -163,16 +164,21 @@ export function WishCard({
                 : formatDateShort(wish.created_at)}
             </Text>
 
-            {/* Whose wish it is, and how far it travels. The hexagon carries
-                the HIVE's own colour so the HIVE-Wide wishes box reads as three
-                HIVEs rather than one long list, and the Earth appears only on
-                the ones that left home (Nat 2026-08-05). */}
+            {/* Whose wish it is, and how far it travels — the one pill (Nat
+                2026-08-19: "one toggle, one pill, one shape everywhere"). The
+                shell keeps the HIVE's own colour so the HIVE-Wide wishes box
+                still reads as three HIVEs rather than one long list. Public
+                keeps the teal chip; the pill has no third state. */}
             <View className="ml-2">
-              <ScopeBadge
-                scope={(wish.share_scope as string) ?? 'hive'}
-                communityId={wish.community_id}
-                compact
-              />
+              {((wish.share_scope as string) ?? 'hive') === 'public' ? (
+                <ScopeBadge scope="public" communityId={wish.community_id} compact />
+              ) : (
+                <ReachPill
+                  reach={(wish.share_scope as string) === 'all_hives' ? 'all_hives' : 'hive'}
+                  communityId={wish.community_id}
+                  size="sm"
+                />
+              )}
             </View>
 
             {/* Granter avatars for granted wishes */}

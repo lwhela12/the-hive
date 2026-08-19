@@ -3299,7 +3299,7 @@ export default function MembersScreen() {
           >
             {listedHiveWide
               ? 'You are listed. Everyone starts visible only inside their own HIVE, and nobody else has opened up yet.'
-              : 'Everyone starts visible only inside their own HIVE. Step into your HIVE, turn on "Visible HIVE-Wide" on your Profile, and you are the first face here.'}
+              : 'Everyone starts visible only inside their own HIVE. Step into your HIVE, switch your card to HIVE-Wide on your Profile, and you are the first face here.'}
           </Text>
         </View>
       )}

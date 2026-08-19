@@ -25,6 +25,7 @@ import { confirmAction, showAlert } from '../../lib/showAlert';
 import { LinkifiedText } from '../ui/LinkifiedText';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
 import { ScopeBadge } from '../ui/ScopeBadge';
+import { ReachPill } from '../ui/ReachPill';
 import { WishCommentItem, type WishCommentNode } from './WishCommentItem';
 import { getFirstName } from '../../lib/hooks/useArrivalBoard';
 import type { Attachment, Wish, Profile, WishComment, WishGranter } from '../../types';
@@ -458,11 +459,19 @@ export function WishDetail({
                     <Text> · Granted {formatDateShort(wish.fulfilled_at)}</Text>
                   )}
                 </Text>
-                <ScopeBadge
-                  scope={(wish.share_scope as string) ?? 'hive'}
-                  communityId={wish.community_id}
-                  caption="Seen by"
-                />
+                {((wish.share_scope as string) ?? 'hive') === 'public' ? (
+                  <ScopeBadge
+                    scope="public"
+                    communityId={wish.community_id}
+                    caption="Seen by"
+                  />
+                ) : (
+                  <ReachPill
+                    reach={(wish.share_scope as string) === 'all_hives' ? 'all_hives' : 'hive'}
+                    communityId={wish.community_id}
+                    size="sm"
+                  />
+                )}
               </View>
             </View>
           </View>

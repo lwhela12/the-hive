@@ -28,6 +28,30 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-one-pill-everywhere',
+    date: '2026-08-19',
+    title: 'One pill for who-sees-it, everywhere',
+    detail: 'Wishes, your profile card, Settings and the tune-up all wear the same pill now — your HIVE\'s colour, "this HIVE only" or "HIVE-Wide", tap to flip. Learn it once, it works the same everywhere.',
+    href: { pathname: '/profile' },
+    action: 'See it on your profile',
+  },
+  {
+    id: '2026-08-19-desires-on-your-profile',
+    date: '2026-08-19',
+    title: 'Things a meeting heard from you show up on your profile',
+    detail: 'When a meeting catches you wishing for something out loud, it appears in italics on your wishes panel — add it, refine it with Clive, or ✕ it away. Only you can turn your own into a real wish.',
+    href: { pathname: '/profile' },
+    action: 'See what was heard',
+  },
+  {
+    id: '2026-08-19-voices-named-production',
+    date: '2026-08-19',
+    title: 'The August Production meeting knows who said what',
+    detail: 'The transcript now reads Nat, Lucas, Charlee and Sara instead of Speaker A, B, C and D.',
+    href: { pathname: '/meetings' },
+    action: 'Read the meeting',
+  },
+  {
     id: '2026-08-19-badge-is-the-toggle',
     date: '2026-08-19',
     title: 'Tap the badge on your wish to change who sees it',

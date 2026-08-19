@@ -5,6 +5,7 @@ import { showAlert } from '../../lib/showAlert';
 import { formatDateLong, formatDateShort } from '../../lib/dateUtils';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { invalidateWishQueries } from '../../lib/queryClient';
+import { desireKey } from '../../lib/desires';
 import { SummarySections } from './SummarySections';
 import {
   SpeakerNames,
@@ -118,18 +119,10 @@ const countProposals = (summary: ParsedSummary) =>
 
 const joinMeta = (parts: (string | null | undefined)[]) => parts.filter(Boolean).join(' · ');
 
-/**
- * A name for one desire that survives the list being rebuilt.
- *
- * Position is no good as a name: reading the notes again renumbers everything,
- * and the fourth desire on Tuesday is the second one on Wednesday. Whose it is
- * and what it says do not move.
- */
-const desireKey = (desire: { person_name: string; description: string }) => {
-  const flatten = (text: string) =>
-    (text ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
-  return `${flatten(desire.person_name)}::${flatten(desire.description).slice(0, 160)}`;
-};
+// One desire's stable name lives in `lib/desires.ts`, shared with the
+// profile's wishes panel — the two screens offer the same desire and must
+// agree on what it is called, or adding it on one keeps it offered on the
+// other.
 
 /** Match the name the meeting used against the people actually in this HIVE. */
 const memberCalled = (personName: string, members: SpeakerMember[]) => {
@@ -796,7 +789,12 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                 const already = parsedSummary.desires_added?.[key];
                 const owner = memberCalled(desire.person_name, members);
                 const isMine = !!owner && owner.id === profile?.id;
-                const canAdd = !!owner && (isMine || isHiveAdmin);
+                // Only the person a desire belongs to may turn it into their
+                // wish — Nat, 2026-08-19: "protect that button by user only,
+                // so each sign-in can only click on their own." Admins used to
+                // be able to add for anyone; a wish is a personal ask, and
+                // putting words in someone's mouth is not an admin job.
+                const canAdd = isMine;
                 const firstName = (owner?.name ?? desire.person_name).trim().split(' ')[0];
                 const working = addingDesire === key;
 

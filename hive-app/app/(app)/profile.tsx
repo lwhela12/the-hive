@@ -17,6 +17,7 @@ import { BirthdayPicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import { clearLastAppPath } from '../../lib/navigationState';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
+import { desireIsFor, desireKey, parseStoredSummary, type SurfacedDesire } from '../../lib/desires';
 import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
 import { fetchSkillWishMatches, type SkillWishMatch } from '../../lib/skillWishMatching';
 import { FadeIn } from '../../components/ui/FadeIn';
@@ -30,12 +31,9 @@ import { WishDetail } from '../../components/hive/WishDetail';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { EditButton } from '../../components/ui/EditButton';
-import { WorldMark } from '../../components/ui/WorldMark';
-import { HiveMark } from '../../components/ui/HiveMark';
-import { ScopeBadge } from '../../components/ui/ScopeBadge';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { normaliseScope } from '../../lib/scopeLook';
-import { SWITCH_LOOK } from '../../components/ui/Switch';
+import { ReachPill } from '../../components/ui/ReachPill';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { showAlert } from '../../lib/showAlert';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
@@ -321,6 +319,69 @@ export default function ProfileScreen() {
     if (wishStarterKey) setStoredItem(wishStarterKey, '1');
     setWishStarterDismissed(true);
   };
+  /**
+   * Desires this HIVE's meetings heard from YOU, offered on your own panel.
+   *
+   * Nat, 2026-08-19: *"those could auto populate in the HD wishes in italics —
+   * yep add it, or I like this but I want to refine it with Clive, or X to get
+   * rid of it... stuff that pops up from the meeting that you might not have
+   * known."* The list lives on each meeting's stored summary
+   * (`wishes_surfaced`); adding or dismissing writes a mark back there
+   * (`desires_added` / `desires_dismissed`), so the Meeting Summary and this
+   * panel always tell one story.
+   */
+  const [meetingDesires, setMeetingDesires] = useState<
+    { meetingId: string; key: string; description: string }[]
+  >([]);
+  const [workingDesire, setWorkingDesire] = useState<string | null>(null);
+  const loadMeetingDesires = useCallback(async () => {
+    if (!profile?.id || !communityId) return;
+    const { data, error } = await supabase
+      .from('meetings')
+      .select('id, summary')
+      .eq('community_id', communityId)
+      .not('summary', 'is', null)
+      .order('date', { ascending: false })
+      .limit(8);
+    if (error || !data) return;
+    const mine: { meetingId: string; key: string; description: string }[] = [];
+    (data as { id: string; summary: string | null }[]).forEach((row) => {
+      const parsed = parseStoredSummary(row.summary);
+      if (!parsed) return;
+      const surfaced = (parsed.wishes_surfaced as SurfacedDesire[] | undefined) ?? [];
+      const added = (parsed.desires_added as Record<string, unknown> | undefined) ?? {};
+      const dismissed = (parsed.desires_dismissed as Record<string, unknown> | undefined) ?? {};
+      surfaced.forEach((desire) => {
+        if (!desire?.description || !desireIsFor(desire.person_name, profile.name)) return;
+        const key = desireKey(desire);
+        if (added[key] || dismissed[key]) return;
+        if (mine.some((item) => item.key === key)) return;
+        mine.push({ meetingId: row.id, key, description: desire.description.trim() });
+      });
+    });
+    setMeetingDesires(mine);
+  }, [profile?.id, profile?.name, communityId]);
+  useEffect(() => { void loadMeetingDesires(); }, [loadMeetingDesires]);
+  /** Read-modify-write one mark onto a meeting's stored summary. */
+  const markMeetingSummary = useCallback(async (
+    meetingId: string,
+    ledger: 'desires_added' | 'desires_dismissed',
+    key: string,
+    value: Record<string, unknown>,
+  ) => {
+    const { data } = await supabase
+      .from('meetings')
+      .select('summary')
+      .eq('id', meetingId)
+      .maybeSingle();
+    const base = parseStoredSummary((data as { summary?: string | null } | null)?.summary) ?? {};
+    const existing = (base[ledger] as Record<string, unknown> | undefined) ?? {};
+    const { error } = await supabase
+      .from('meetings')
+      .update({ summary: JSON.stringify({ ...base, [ledger]: { ...existing, [key]: value } }) } as any)
+      .eq('id', meetingId);
+    return error ?? null;
+  }, []);
   const saveHiveGoal = async (next: string) => {
     if (!communityId || !profile?.id) return;
     setHiveGoalSaving(true);
@@ -620,6 +681,50 @@ export default function ProfileScreen() {
       void fetchData();
     }, [fetchData])
   );
+
+  const addMeetingDesire = useCallback(async (item: { meetingId: string; key: string; description: string }) => {
+    if (!profile?.id || !communityId || workingDesire) return;
+    setWorkingDesire(item.key);
+    // Same row the Meeting Summary's button creates: lowest rung on purpose —
+    // the owner decides whether it travels.
+    const { data, error } = await (supabase.from('wishes') as any)
+      .insert({
+        user_id: profile.id,
+        community_id: communityId,
+        title: null,
+        description: item.description,
+        raw_input: item.description,
+        status: 'public',
+        share_scope: 'hive',
+        is_active: true,
+        extracted_from: 'meeting',
+      })
+      .select('id')
+      .single();
+    if (error) {
+      setWorkingDesire(null);
+      showAlert('Error', 'Could not add that wish. Please try again.');
+      return;
+    }
+    await markMeetingSummary(item.meetingId, 'desires_added', item.key, {
+      wish_id: (data as { id: string }).id,
+      added_at: new Date().toISOString(),
+      added_for: profile.id,
+    });
+    setMeetingDesires((current) => current.filter((d) => d.key !== item.key));
+    setWorkingDesire(null);
+    await invalidateWishQueries(communityId, profile.id);
+    await fetchData();
+  }, [profile?.id, communityId, workingDesire, markMeetingSummary, fetchData]);
+  const dismissMeetingDesire = useCallback(async (item: { meetingId: string; key: string }) => {
+    if (workingDesire) return;
+    setWorkingDesire(item.key);
+    await markMeetingSummary(item.meetingId, 'desires_dismissed', item.key, {
+      dismissed_at: new Date().toISOString(),
+    });
+    setMeetingDesires((current) => current.filter((d) => d.key !== item.key));
+    setWorkingDesire(null);
+  }, [workingDesire, markMeetingSummary]);
 
   // Look for the garden somewhere else only once this one has loaded and come
   // back bare. Everything here is your own, in HIVEs you are a member of, so
@@ -2452,67 +2557,21 @@ export default function ProfileScreen() {
             members list has one too; all three write `profiles.profile_scope`,
             so they can't disagree.
 
-            Nat, 2026-08-05: "i love this, i think its unnecessarily long, we
-            can shorten it and center it." It was a full-width white bar with
-            two sentences in it for a switch with two states, so it is now a
-            small pill that sits in the middle of the page and says the state
-            in three words. The globe emoji went with it: the drawn Earth is
-            HIVE-Wide's mark everywhere else in the app, and an emoji globe
-            beside it is a second planet. The padlock stays — a lock is the
-            right opposite of a world. */}
+            Nat, 2026-08-19: *"one toggle, one pill, one shape everywhere"* —
+            so this is `ReachPill`, the same pill a wish wears, one size up.
+            The words follow the same rule as everything else on the ladder:
+            "<HIVE> only" when the card stays home, "HIVE-Wide" when it
+            travels. The padlock and the hand-drawn switch went with the
+            change; the pill's hexagon-vs-Earth is the vocabulary now. */}
         <FadeIn delay={90}>
         <View className="items-center mb-6">
-        <Pressable
-          onPress={() => void toggleHiveWideVisibility()}
-          disabled={savingHiveWideVisibility}
-          accessibilityRole="switch"
-          accessibilityState={{ checked: listedHiveWide }}
-          className="flex-row items-center bg-white active:opacity-80"
-          style={{
-            alignSelf: 'center',
-            gap: 10,
-            borderRadius: 999,
-            borderWidth: 1,
-            borderColor: 'rgba(222,193,129,0.5)',
-            paddingLeft: 14,
-            paddingRight: 8,
-            paddingVertical: 7,
-            opacity: savingHiveWideVisibility ? 0.6 : 1,
-          }}
-        >
-          {/* Both marks live in the same 20-wide box so the words don't shuffle
-              sideways when you flip the switch. */}
-          <View style={{ width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}>
-            {listedHiveWide ? <WorldMark size={20} /> : <Text style={{ fontSize: 15 }}>🔒</Text>}
-          </View>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13 }} className="text-charcoal">
-            {/* Off names the HIVE. "Only your HIVEs see you" is true and
-                useless — it is the plural that does the damage, because the
-                whole question is WHICH ones. Nat, 2026-08-19: *"I think you
-                need to say 'only this HIVE will see you'."* */}
-            {listedHiveWide ? 'Visible HIVE-Wide' : `Only ${hiveWord} sees you`}
-          </Text>
-          {/* The pill is drawn from `SWITCH_LOOK`, the same numbers
-              `components/ui/Switch.tsx` uses, so this reads as the switch from
-              Settings rather than a near-miss of it. It had drifted to 46×27
-              with a 21 knob and its own grey, against the house 44×26/20 — close
-              enough that nobody would call it wrong and far enough that the two
-              never looked like one control. The row shape stays compact and
-              centred, which is what Nat asked for on 2026-08-05; only the
-              drawing of the switch itself is shared. */}
-          <View
-            style={{
-              width: SWITCH_LOOK.trackWidth,
-              height: SWITCH_LOOK.trackHeight,
-              borderRadius: SWITCH_LOOK.trackHeight / 2,
-              padding: SWITCH_LOOK.inset,
-              backgroundColor: listedHiveWide ? '#bd9348' : 'rgba(49,49,48,0.18)',
-              alignItems: listedHiveWide ? 'flex-end' : 'flex-start',
-            }}
-          >
-            <View style={{ width: SWITCH_LOOK.knob, height: SWITCH_LOOK.knob, borderRadius: SWITCH_LOOK.knob / 2, backgroundColor: '#fffdf5' }} />
-          </View>
-        </Pressable>
+        <ReachPill
+          reach={listedHiveWide ? 'all_hives' : 'hive'}
+          size="md"
+          community={community}
+          onToggle={() => void toggleHiveWideVisibility()}
+          busy={savingHiveWideVisibility}
+        />
         {/* The receipt. A pill that slides under your finger looks the same
             whether or not anything was stored, so it says so in words for a few
             seconds and then leaves. */}
@@ -3187,6 +3246,61 @@ export default function ProfileScreen() {
                             </>
                           )}
                         </View>
+                      </View>
+                    ) : null}
+                    {/* Desires a meeting heard from you, in italics, waiting
+                        on your yes — add it, refine it with Clive, or ✕ it
+                        away. Only ever your own; the guard is in
+                        `loadMeetingDesires`. */}
+                    {wishStatusTab !== 'granted' && meetingDesires.length > 0 ? (
+                      <View style={{ gap: 8, marginBottom: 12 }}>
+                        {meetingDesires.map((item) => (
+                          <View key={item.key} className="bg-white rounded-xl shadow-sm p-4">
+                            <View className="flex-row items-center justify-between mb-1">
+                              <Text
+                                style={{
+                                  fontFamily: 'Lato_700Bold', fontSize: 8.5, letterSpacing: 0.9,
+                                  textTransform: 'uppercase', color: 'rgba(49,49,48,0.55)',
+                                }}
+                              >
+                                Heard in a meeting
+                              </Text>
+                              <Pressable
+                                onPress={() => void dismissMeetingDesire(item)}
+                                hitSlop={10}
+                                accessibilityRole="button"
+                                accessibilityLabel="Not a wish — put it away"
+                              >
+                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'rgba(49,49,48,0.45)' }}>✕</Text>
+                              </Pressable>
+                            </View>
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic' }} className="text-charcoal leading-6">
+                              {item.description}
+                            </Text>
+                            <View className="flex-row gap-4 mt-3">
+                              <Pressable
+                                onPress={() => void addMeetingDesire(item)}
+                                disabled={!!workingDesire}
+                              >
+                                <Text style={{ fontFamily: 'Lato_700Bold', opacity: workingDesire ? 0.5 : 1 }} className="text-gold text-sm">
+                                  {workingDesire === item.key ? 'Adding…' : 'Add it'}
+                                </Text>
+                              </Pressable>
+                              <Pressable
+                                onPress={() => router.push({
+                                  pathname: '/(app)',
+                                  params: {
+                                    prefill: `A HIVE meeting heard this from me: "${item.description}". Help me turn it into a real HD wish.`,
+                                  },
+                                })}
+                              >
+                                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
+                                  Refine with Clive ✨
+                                </Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        ))}
                       </View>
                     ) : null}
                     {visibleProfileWishes.length === 0 ? (

@@ -6,6 +6,7 @@ import { getHdWishStatusLabel, getWishBodyPreview, getWishQuickTitle, hasSeparat
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { ScopeBadge } from '../ui/ScopeBadge';
+import { ReachPill } from '../ui/ReachPill';
 import type { Profile, Wish, WishGranter } from '../../types';
 
 const publicBeeIcon = require('../../assets/BEE ONLY IN GOLD BG.png');
@@ -217,28 +218,22 @@ export function WishCombCard({
             <Text style={[styles.dateText, isGranted ? styles.dateTextGranted : null]}>
               {dateLabel}
             </Text>
-            {onToggleScope ? (
-              <Pressable
-                onPress={(event) => {
-                  // The card behind this opens the wish; the badge flips it.
-                  event.stopPropagation?.();
-                  onToggleScope(wish);
-                }}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Who sees this wish — tap to switch"
-              >
-                <ScopeBadge
-                  scope={(wish.share_scope as string) ?? 'hive'}
-                  communityId={wish.community_id}
-                  compact
-                />
-              </Pressable>
-            ) : (
+            {((wish.share_scope as string) ?? 'hive') === 'public' ? (
+              // A wish somebody deliberately sent to the newsletter and
+              // the-hive.app. The two-state pill cannot say "public", so it
+              // does not get to quietly take it away — the editor owns that
+              // rung, and the teal chip stays a label.
               <ScopeBadge
-                scope={(wish.share_scope as string) ?? 'hive'}
+                scope="public"
                 communityId={wish.community_id}
                 compact
+              />
+            ) : (
+              <ReachPill
+                reach={(wish.share_scope as string) === 'all_hives' ? 'all_hives' : 'hive'}
+                communityId={wish.community_id}
+                size="sm"
+                onToggle={onToggleScope ? () => onToggleScope(wish) : undefined}
               />
             )}
             {showGranters && (
