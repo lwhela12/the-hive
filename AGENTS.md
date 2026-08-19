@@ -40,6 +40,27 @@ git diff --stat
 git diff --check
 ```
 
+## How to work — the rules that got learned the hard way
+
+Moved here from the Trello card at Nat's ask (2026-08-19): checklists are for
+tasks that still need doing; how-to-work lives with the repo.
+
+- **THE RULE, from Nat 2026-08-19:** "I'm making the same decision, and instead
+  of you applying that to the whole site, I'm going around and finding every
+  iteration where it's broken, and then I'm the one debugging it. I should be
+  able to find a problem one time, and then you go fix every instance of it."
+- So when she settles a rule, SWEEP for it. Grep every screen for the old
+  shape, list them, fix them all in one pass, and say which files you touched.
+  Never ship one instance and wait to be told about the next.
+- Same for copy. A word she corrects once is wrong everywhere it appears —
+  search the whole app for it, not just the screen she screenshotted.
+- Show her the running app early. Agents read code and cannot see the screen;
+  half of any day's real findings only exist in a browser.
+- Outside-in proof: check a claim from the running app (the email, the button,
+  the tile), never from the code.
+- No member email without Nat seeing the rendered preview and saying go.
+- Preserve live data; archive, never delete.
+
 ## Development rules
 
 - Keep the repo clean. Do not leave untracked files or uncommitted changes without deciding whether to commit, remove, or intentionally ignore them.

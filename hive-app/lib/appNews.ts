@@ -28,6 +28,22 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-roll-call',
+    date: '2026-08-19',
+    title: 'Every meeting opens with a roll call',
+    detail: 'A new slide right after the outline: everyone says "I\'m ⟨name⟩" out loud, one at a time, so the night\'s transcript can tell your voices apart and name them for you.',
+    href: { pathname: '/meeting-helper' },
+    action: 'See the deck',
+  },
+  {
+    id: '2026-08-19-meet-link-on-meetings',
+    date: '2026-08-19',
+    title: 'Google Meet HIVEs can join from the Meetings page',
+    detail: 'If your HIVE meets on Meet, the next meeting shows its Join button right on Meetings — and an admin can add a missing link with one tap. Red only means recording now, too: the idle record button lost its dot.',
+    href: { pathname: '/meetings' },
+    action: 'Open Meetings',
+  },
+  {
     id: '2026-08-19-a-card-for-each-hive',
     date: '2026-08-19',
     title: 'Keep your card to one HIVE and each HIVE gets its own',

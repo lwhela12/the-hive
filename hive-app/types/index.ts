@@ -40,6 +40,12 @@ export interface Attachment extends Record<string, unknown> {
 }
 
 export interface Community extends Record<string, unknown> {
+  /**
+   * This HIVE's meetings happen on Google Meet (migration 191, Tech only so
+   * far): its invites carry a Meet link and the transcript imports itself
+   * from Drive after the call. Everyone else meets inside the app.
+   */
+  meets_on_google_meet?: boolean;
   id: string;
   name: string;
   slug: string;

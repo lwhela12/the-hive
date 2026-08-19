@@ -258,16 +258,23 @@ export function DeckVideo({
         opacity: communityId ? 1 : 0.5,
       }}
     >
-      <span
-        aria-hidden
-        style={{
-          flex: '0 0 auto',
-          width: 11,
-          height: 11,
-          borderRadius: tape.recording ? 3 : 999,
-          backgroundColor: tape.recording ? '#ffffff' : '#c8321f',
-        }}
-      />
+      {/* The stop square, drawn only WHILE recording. Idle, this was a red
+          dot on one button and nothing on the other — Nat, 2026-08-19: "those
+          look weird, why does one have a red dot and one does not?" A red mark
+          on an idle button reads as recording-right-now, so idle both buttons
+          are plain words and red means it is actually happening. */}
+      {tape.recording ? (
+        <span
+          aria-hidden
+          style={{
+            flex: '0 0 auto',
+            width: 11,
+            height: 11,
+            borderRadius: 3,
+            backgroundColor: '#ffffff',
+          }}
+        />
+      ) : null}
       {tape.uploading
         ? 'Saving…'
         : tape.unsaved

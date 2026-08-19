@@ -349,6 +349,7 @@ export default function MeetingsScreen() {
     event_time: '',
   });
   const [savingEdit, setSavingEdit] = useState(false);
+  const [addingMeetLink, setAddingMeetLink] = useState(false);
   const notesImportDraftKey = communityId ? `the-hive:meeting-notes-import-draft:${communityId}` : null;
   const activeMeetingEditKey = communityId ? `the-hive:meeting-edit-active:${communityId}` : null;
   const eventEditDraftKey = communityId && editingEvent
@@ -1170,6 +1171,38 @@ export default function MeetingsScreen() {
   };
 
   const nextMeeting = upcomingMeetings[0] ?? null;
+  /**
+   * Tech HIVE meets on Google Meet (migration 191) — the one exception to
+   * "the meeting happens in the app". Its next meeting should always carry a
+   * Meet link; one scheduled before the flag existed has none, and this is the
+   * one-tap repair (Nat, 2026-08-19: "it doesn't have a meeting link...
+   * definitely need to update that"). update-meeting adds the link server-side
+   * whenever the HIVE is Meet-flagged and the row has none — the fields sent
+   * are the meeting's own, unchanged, so nothing else moves.
+   */
+  const hiveOnMeet = !!community?.meets_on_google_meet;
+  const addMeetLink = async () => {
+    if (!nextMeeting || addingMeetLink) return;
+    setAddingMeetLink(true);
+    try {
+      const { error } = await supabase.functions.invoke('update-meeting', {
+        body: {
+          eventId: nextMeeting.id,
+          title: nextMeeting.title,
+          date: nextMeeting.event_date,
+          time: nextMeeting.event_time || null,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+      });
+      if (error) throw error;
+      await fetchMeetings();
+      showAlert('Done', 'The Google Meet link is on the meeting and the calendar invite now.');
+    } catch {
+      showAlert('Error', 'Could not add the Meet link. Please try again.');
+    } finally {
+      setAddingMeetLink(false);
+    }
+  };
   const hasImportableNotes = notesImportForm.notes.trim().length >= 40 || notesImportForm.files.length > 0;
   const selectedImportMeeting = notesImportForm.linkedEventId
     ? meetingEvents.find((event) => event.id === notesImportForm.linkedEventId)
@@ -1196,9 +1229,47 @@ export default function MeetingsScreen() {
           }}
         >
           {nextMeeting ? (
-            <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.55)', fontSize: 13, marginBottom: 18 }}>
-              Next up: {formatDateLong(nextMeeting.event_date)}{nextMeeting.event_time ? ` · ${nextMeeting.event_time}` : ''}
-            </Text>
+            <View style={{ marginBottom: 18, gap: 8 }}>
+              <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.55)', fontSize: 13 }}>
+                Next up: {formatDateLong(nextMeeting.event_date)}{nextMeeting.event_time ? ` · ${nextMeeting.event_time}` : ''}
+              </Text>
+              {nextMeeting.meet_link ? (
+                <Pressable
+                  onPress={() => void Linking.openURL(nextMeeting.meet_link!)}
+                  style={({ pressed }) => ({
+                    alignSelf: 'flex-start',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    backgroundColor: 'rgba(255,255,255,0.1)',
+                    borderRadius: 999,
+                    paddingVertical: 6,
+                    paddingHorizontal: 12,
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Text style={{ fontSize: 13 }}>📹</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 12 }}>Join Google Meet</Text>
+                </Pressable>
+              ) : hiveOnMeet && isAdmin ? (
+                <Pressable
+                  onPress={() => void addMeetLink()}
+                  disabled={addingMeetLink}
+                  style={({ pressed }) => ({
+                    alignSelf: 'flex-start',
+                    backgroundColor: 'rgba(255,255,255,0.1)',
+                    borderRadius: 999,
+                    paddingVertical: 6,
+                    paddingHorizontal: 12,
+                    opacity: pressed || addingMeetLink ? 0.6 : 1,
+                  })}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 12 }}>
+                    {addingMeetLink ? 'Adding the Meet link…' : 'Add the Google Meet link'}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : (
             <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.4)', fontSize: 13, marginBottom: 18 }}>
               No upcoming meetings scheduled
@@ -1255,7 +1326,7 @@ export default function MeetingsScreen() {
                   marginTop: 2,
                 }}
               >
-                {meetingDeck ? 'the faces and the deck' : 'coming soon'}
+                {meetingDeck ? (hiveOnMeet ? 'the deck — the call is on Google Meet' : 'the faces and the deck') : 'coming soon'}
               </Text>
             </Pressable>
 

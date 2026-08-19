@@ -114,6 +114,14 @@ const PLAIN_FIELD = {
 type DeckSlideKey =
   | 'room'
   | 'outline'
+  /**
+   * Everyone says "I'm <name>" out loud, one at a time, before the business
+   * starts. Nat, 2026-08-19: "in all of the meeting helpers we want to add in
+   * a check-in just so that the transcripts can know which speaker is which."
+   * The recording's first ~2000 characters are what SpeakerNames.tsx scans for
+   * self-introductions, so this slide sits right at the top of every deck.
+   */
+  | 'rollcall'
   | 'news'
   | 'treasurer'
   | 'meetups'
@@ -327,8 +335,9 @@ const PRODUCTION_JOBS: { key: string; title: string; why: string; asks: string[]
 
 const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
   default: {
-    slides: ['room', 'outline', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
+    slides: ['room', 'outline', 'rollcall', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
     agenda: [
+      { key: 'rollcall', label: 'Roll call' },
       { key: 'news', label: 'News from Nat' },
       { key: 'treasurer', label: 'Treasurer' },
       { key: 'meetups', label: 'Plan the Meet Ups' },
@@ -356,8 +365,9 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
     ],
   },
   tech: {
-    slides: ['room', 'outline', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
+    slides: ['room', 'outline', 'rollcall', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
     agenda: [
+      { key: 'rollcall', label: 'Roll call' },
       { key: 'news', label: 'News from Nat' },
       { key: 'treasurer', label: 'Treasurer' },
       { key: 'meetups', label: 'Plan' },
@@ -425,8 +435,9 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
    *    spends it handing out the work.
    */
   show: {
-    slides: ['room', 'outline', 'news', 'meetups', 'treasurer', 'assignments', 'wrapup', 'thanks'],
+    slides: ['room', 'outline', 'rollcall', 'news', 'meetups', 'treasurer', 'assignments', 'wrapup', 'thanks'],
     agenda: [
+      { key: 'rollcall', label: 'Roll call' },
       { key: 'news', label: 'News from Nat' },
       { key: 'meetups', label: 'How we run' },
       { key: 'treasurer', label: 'Honey Pot' },
@@ -1999,6 +2010,35 @@ export default function MeetingHelperScreen() {
           />
         </View>
       ) : null}
+    </View>
+  );
+
+  /**
+   * Roll call — the transcript learns the voices.
+   *
+   * The recording splits speakers by sound but not by name. SpeakerNames.tsx
+   * reads the FIRST ~2000 characters of the transcript for "I'm <name>"
+   * introductions and offers them as suggestions, so thirty seconds here saves
+   * relabelling every meeting by hand. The phrasing on the slide matches the
+   * patterns the scanner listens for.
+   */
+  const renderRollCall = () => (
+    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: sz(40, 16) }}>
+      <View style={{ flex: 1, justifyContent: 'center' }}>
+        <Kicker>Before the business</Kicker>
+        <SlideTitle>Roll call 🎙️</SlideTitle>
+        <View style={{ marginTop: sz(36, 20), gap: sz(18, 10) }}>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(34, 19), color: CHARCOAL, lineHeight: sz(46, 27) }}>
+            One at a time, out loud:
+          </Text>
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(40, 22), color: GOLD_DEEP, lineHeight: sz(52, 30) }}>
+            {'“I’m ‹your name› — and one word for how I’m arriving.”'}
+          </Text>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(26, 15), color: MUTED, lineHeight: sz(38, 22), marginTop: sz(10, 6) }}>
+            The recording listens for the names, so tonight’s transcript can tell your voices apart.
+          </Text>
+        </View>
+      </View>
     </View>
   );
 
@@ -3957,6 +3997,7 @@ export default function MeetingHelperScreen() {
   const SLIDE_RENDERERS: Record<DeckSlideKey, () => React.ReactNode> = {
     room: renderRoom,
     outline: renderOutline,
+    rollcall: renderRollCall,
     news: renderNews,
     treasurer: renderTreasurer,
     meetups: renderMeetups,
