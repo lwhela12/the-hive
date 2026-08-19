@@ -157,36 +157,104 @@ export function DeckVideo({
   const label =
     state === 'opening' ? 'Opening the room…' : state === 'error' ? 'Try again' : 'Join the video';
 
-  /**
-   * Compact and nobody on the call yet. Declared up here because the record
-   * button below is sized from it, and it was being sized from `compact`
-   * alone — which is true on a phone whether or not anybody is on the call.
-   */
-  const idleCompact = compact && state !== 'live';
+  /** Nobody on the call. The panel is a choice, not an empty video box. */
+  const idle = state !== 'live';
+  /** A phone, idle: the two ways in share a row rather than stacking. */
+  const idleCompact = compact && idle;
 
-  /**
-   * Record the room.
-   *
-   * The switch above is the video call's transcription and needs somebody on
-   * the call for there to be anything to transcribe. This is the other case,
-   * and it is the one a HIVE night in a dining room actually is — Nat, after
-   * Production met around Charlee's table and kept nothing (2026-08-19):
-   * *"if everyone's in the same room, then I just hit the record button on my
-   * meeting helper."* One microphone, this laptop's, no call required.
-   *
-   * It keeps running when she leaves the deck for a board, because the
-   * recording lives in `lib/roomRecorder` rather than in this panel.
-   */
   const taping = tape.recording || tape.uploading || tape.unsaved;
-  const recordLabel = tape.uploading
-    ? 'Saving…'
-    : tape.unsaved
-      ? 'Retry save'
-      : tape.recording
-        ? `Stop · ${roomRecorder.clockFace(tape.seconds)}`
-        : 'Record the room';
 
-  const recordButton = (
+  /**
+   * Two ways to keep a meeting, and they are lettered.
+   *
+   * There were three controls here on the morning of 2026-08-19 — a transcript
+   * switch, a record button and a join button — and Nat could not tell them
+   * apart: *"I wouldn't know which one to do, or if I hadn't done it a while,
+   * I might get confused."* Making the call always transcribe got it to two,
+   * and two was still not enough, because both of them named a THING rather
+   * than a choice: *"'record the room' kind of looks like it could be a video,
+   * and then 'join the video' ... and then it has that 'either way the meeting
+   * gets written down' and that's a lot of text."*
+   *
+   * So they are A and B under one heading, which is what she asked for in the
+   * same breath: *"option A is video and transcribe, option B is just
+   * transcriptions."* The letters carry the "these are alternatives" that a
+   * sentence underneath was carrying badly, and the heading carries the "both
+   * of these keep the meeting" — so the explaining line is gone.
+   */
+  const heading = (
+    <div
+      style={{
+        fontFamily: 'Lato_700Bold, Lato, sans-serif',
+        fontSize: fontSize * 0.72,
+        letterSpacing: 1.6,
+        textTransform: 'uppercase',
+        color: accentDeep,
+        opacity: 0.75,
+        marginBottom: 6,
+      }}
+    >
+      Keep this meeting
+    </div>
+  );
+
+  const optionStyle = (chosen: boolean) => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: 9,
+    width: idleCompact ? ('auto' as const) : ('100%' as const),
+    flex: '0 0 auto',
+    minWidth: 0,
+    fontFamily: 'Lato_700Bold, Lato, sans-serif',
+    fontSize: fontSize * (compact ? 0.8 : 0.9),
+    color: chosen ? '#ffffff' : accentDeep,
+    backgroundColor: chosen ? accent : 'transparent',
+    border: `1px solid ${chosen ? accent : softBorder}`,
+    borderRadius: 999,
+    padding: compact ? '5px 12px' : '8px 14px',
+    marginBottom: idleCompact ? 0 : 6,
+    textAlign: 'left' as const,
+    whiteSpace: 'nowrap' as const,
+  });
+
+  const letter = (mark: string, chosen: boolean) => (
+    <span
+      aria-hidden
+      style={{
+        flex: '0 0 auto',
+        width: 18,
+        height: 18,
+        borderRadius: 999,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: fontSize * 0.72,
+        color: chosen ? accent : '#ffffff',
+        backgroundColor: chosen ? '#ffffff' : accentDeep,
+      }}
+    >
+      {mark}
+    </span>
+  );
+
+  const optionA = (
+    <button
+      type="button"
+      onClick={join}
+      disabled={state === 'opening' || !communityId || taping}
+      title="Open the video room. A call is always written down."
+      style={{
+        ...optionStyle(false),
+        cursor: state === 'opening' || taping ? 'default' : 'pointer',
+        opacity: communityId && !taping ? 1 : 0.5,
+      }}
+    >
+      {letter('A', false)}
+      {state === 'opening' ? 'Opening…' : state === 'error' ? 'Try again' : 'Video + transcript'}
+    </button>
+  );
+
+  const optionB = (
     <button
       type="button"
       onClick={() => {
@@ -197,233 +265,108 @@ export function DeckVideo({
       }}
       disabled={!communityId || tape.uploading}
       aria-pressed={tape.recording}
-      title="Record this room from this laptop's microphone — it keeps going if you leave the deck"
+      title="Record this room from this laptop's microphone. No video, and it keeps going if you leave the deck."
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        width: idleCompact ? 'auto' : '100%',
-        flex: '0 0 auto',
-        alignSelf: idleCompact ? undefined : 'stretch',
-        minWidth: 0,
-        fontFamily: 'Lato_700Bold, Lato, sans-serif',
-        fontSize: fontSize * (compact ? 0.8 : 0.9),
-        color: tape.recording ? '#ffffff' : accentDeep,
+        ...optionStyle(tape.recording),
         backgroundColor: tape.recording ? '#c8321f' : 'transparent',
-        border: `1px solid ${tape.recording ? '#c8321f' : softBorder}`,
-        borderRadius: 999,
-        padding: compact ? '4px 11px' : '7px 14px',
-        marginBottom: idleCompact ? 0 : compact ? 5 : 8,
+        borderColor: tape.recording ? '#c8321f' : softBorder,
         cursor: communityId && !tape.uploading ? 'pointer' : 'default',
-        opacity: communityId ? 1 : 0.6,
-        textAlign: 'left',
-        whiteSpace: 'nowrap',
+        opacity: communityId ? 1 : 0.5,
       }}
     >
-      <span
-        aria-hidden
-        style={{
-          width: 10,
-          height: 10,
-          flex: '0 0 auto',
-          borderRadius: tape.recording ? 3 : 999,
-          backgroundColor: tape.recording ? '#ffffff' : '#c8321f',
-        }}
-      />
-      {recordLabel}
+      {tape.recording ? (
+        <span
+          aria-hidden
+          style={{ flex: '0 0 auto', width: 12, height: 12, borderRadius: 3, backgroundColor: '#ffffff' }}
+        />
+      ) : (
+        letter('B', false)
+      )}
+      {tape.uploading
+        ? 'Saving…'
+        : tape.unsaved
+          ? 'Retry save'
+          : tape.recording
+            ? `Stop · ${roomRecorder.clockFace(tape.seconds)}`
+            : 'Transcript only'}
     </button>
   );
 
-  /**
-   * The one line that tells you the two buttons are not a trick question.
-   *
-   * There were three controls here until 2026-08-19 and Nat could not tell
-   * them apart: *"there's writing this meeting down, record the room and join
-   * the video. And so I wouldn't know which one to do."* Two now — the video,
-   * or just the microphone — and this says the part neither button can say
-   * about itself.
-   */
-  const choiceHint = state !== 'live' && !idleCompact && !taping ? (
+  /** Whatever went wrong, said where it happened rather than as "Try again". */
+  const line = (text: string) => (
     <div
       style={{
-        marginBottom: 8,
+        marginTop: 4,
+        marginBottom: 6,
         fontFamily: 'Lato_400Regular, Lato, sans-serif',
         fontSize: fontSize * 0.8,
         lineHeight: 1.35,
         color: accentDeep,
       }}
     >
-      Either way, the meeting gets written down.
+      {text}
     </div>
-  ) : null;
-
-  const tapeNote = tape.problem || (taping ? null : tape.note) ? (
-    <div
-      style={{
-        marginBottom: 8,
-        fontFamily: 'Lato_400Regular, Lato, sans-serif',
-        fontSize: fontSize * 0.8,
-        lineHeight: 1.35,
-        color: accentDeep,
-      }}
-    >
-      {tape.problem ?? tape.note}
-    </div>
-  ) : null;
-
-  /**
-   * Compact and nobody on the call yet: the switch and the way in share a row,
-   * and the card below collapses to nothing instead of sitting there empty.
-   *
-   * **It collapses. It is never removed.** An earlier version of this returned
-   * a different tree entirely and left `mountRef` unrendered — so `join()` hit
-   * *"Nowhere to put the video"* and the button turned to "Try again" with no
-   * reason given (Nat, 2026-08-17, on her phone: *"this 'join video' button
-   * doesnt work"*). The mount point has to be in the DOM BEFORE anyone presses
-   * join, because that is when Daily is handed it. One tree, one mount, always.
-   */
-
-  /**
-   * Whatever went wrong, said where it happened.
-   *
-   * The compact row had no room for this and so said nothing at all: a button
-   * reading "Try again" and not one word about what to try again FROM. A dead
-   * end with no reason is worse than a dead end.
-   */
-  const problemLine = problem ? (
-    <div
-      style={{
-        marginTop: 6,
-        fontFamily: 'Lato_400Regular, Lato, sans-serif',
-        fontSize: fontSize * 0.8,
-        lineHeight: 1.3,
-        color: accentDeep,
-      }}
-    >
-      {problem}
-    </div>
-  ) : null;
+  );
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      {idleCompact ? (
+      {/* B is on its own once it is running: offering "video + transcript" mid
+          recording reads like a second thing to press, and it is not. */}
+      {idle && !taping ? (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
-            {recordButton}
-            <button
-              type="button"
-              onClick={join}
-              disabled={state === 'opening' || !communityId}
-              style={{
-                flex: '0 0 auto',
-                fontFamily: 'Lato_700Bold, Lato, sans-serif',
-                fontSize: fontSize * 0.9,
-                color: '#fff',
-                backgroundColor: accent,
-                border: 'none',
-                borderRadius: 999,
-                padding: '8px 16px',
-                whiteSpace: 'nowrap',
-                cursor: state === 'opening' ? 'default' : 'pointer',
-                opacity: state === 'opening' ? 0.7 : 1,
-              }}
-            >
-              {state === 'opening' ? 'Opening…' : state === 'error' ? 'Try again' : 'Join video'}
-            </button>
+          {!idleCompact && heading}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: idleCompact ? 'row' : 'column',
+              alignItems: idleCompact ? 'center' : 'stretch',
+              gap: idleCompact ? 8 : 0,
+              minWidth: 0,
+              flexWrap: 'wrap',
+            }}
+          >
+            {optionA}
+            {optionB}
           </div>
-          {problemLine}
-          {tapeNote}
-          {transcriptNote ? (
-            <div
-              style={{
-                marginTop: 6,
-                fontFamily: 'Lato_400Regular, Lato, sans-serif',
-                fontSize: fontSize * 0.8,
-                lineHeight: 1.3,
-                color: accentDeep,
-              }}
-            >
-              {transcriptNote}
-            </div>
-          ) : null}
         </>
       ) : (
-        <>
-          {recordButton}
-          {choiceHint}
-          {tapeNote}
-          {transcriptNote && (
-            <div
-              style={{
-                fontFamily: 'Lato_400Regular, Lato, sans-serif',
-                fontSize: fontSize * 0.8,
-                lineHeight: 1.35,
-                color: accentDeep,
-                marginBottom: 8,
-              }}
-            >
-              {transcriptNote}
-            </div>
-          )}
-        </>
+        // Live, or taping: only the control that means anything now.
+        !idle ? null : optionB
       )}
+
+      {problem ? line(problem) : null}
+      {tape.problem ? line(tape.problem) : null}
+      {!taping && tape.note ? line(tape.note) : null}
+      {transcriptNote ? line(transcriptNote) : null}
 
       <div
         style={{
-          // Collapsed rather than gone — see the note above the return.
-          flex: idleCompact ? '0 0 0px' : 1,
-          width: idleCompact ? 0 : undefined,
+          // Collapsed rather than gone.
+          //
+          // **It collapses. It is never removed.** An earlier version returned
+          // a different tree entirely and left `mountRef` unrendered — so
+          // `join()` hit *"Nowhere to put the video"* and the button turned to
+          // "Try again" with no reason given (Nat, 2026-08-17, on her phone:
+          // *"this 'join video' button doesnt work"*). The mount point has to
+          // be in the DOM BEFORE anyone presses join. One tree, one mount.
+          //
+          // It collapses whenever there is no call now, not only on a phone —
+          // idle on a laptop it was a tall empty card with a button floating in
+          // the middle of it, which is most of the panel spent saying nothing.
+          flex: idle ? '0 0 0px' : 1,
+          width: idle ? 0 : undefined,
           minHeight: 0,
           borderRadius: 14,
-          border: idleCompact ? 'none' : `1px solid ${softBorder}`,
-          backgroundColor: idleCompact ? 'transparent' : cardColor,
+          border: idle ? 'none' : `1px solid ${softBorder}`,
+          backgroundColor: idle ? 'transparent' : cardColor,
           overflow: 'hidden',
           position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
         }}
       >
-      {/* Where the call SITS, not where it lives. `lib/deckCall` measures this
-          box every frame and moves its own fixed layer over it, so the video
-          reads as part of the panel while surviving this panel's unmount. */}
-      <div ref={mountRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
-
-      {state !== 'live' && !idleCompact && (
-        <div style={{ textAlign: 'center', padding: '0 14px', zIndex: 1 }}>
-          <button
-            type="button"
-            onClick={join}
-            disabled={state === 'opening' || !communityId}
-            style={{
-              fontFamily: 'Lato_700Bold, Lato, sans-serif',
-              fontSize,
-              color: '#fff',
-              backgroundColor: accent,
-              border: 'none',
-              borderRadius: 999,
-              padding: '9px 18px',
-              cursor: state === 'opening' ? 'default' : 'pointer',
-              opacity: state === 'opening' ? 0.7 : 1,
-            }}
-          >
-            {label}
-          </button>
-          {problem && (
-            <div
-              style={{
-                marginTop: 8,
-                fontFamily: 'Lato_400Regular, Lato, sans-serif',
-                fontSize: fontSize * 0.85,
-                lineHeight: 1.35,
-                color: accentDeep,
-              }}
-            >
-              {problem}
-            </div>
-          )}
-        </div>
-      )}
+        {/* Where the call SITS, not where it lives. `lib/deckCall` measures this
+            box every frame and moves its own fixed layer over it, so the video
+            reads as part of the panel while surviving this panel's unmount. */}
+        <div ref={mountRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
       </div>
     </div>
   );

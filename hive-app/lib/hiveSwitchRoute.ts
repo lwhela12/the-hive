@@ -23,8 +23,13 @@ import { NAV_DESTINATIONS, HIVE_WIDE_ROUTE } from './navigation';
  * The screens that belong to one HIVE but are not in the side rail.
  *
  * The rail is not the list of per-HIVE pages — it is the list of pages with a
- * DOOR in the rail. These four are reached from inside other screens, and every
- * one of them means exactly the same thing in the HIVE you are switching to.
+ * DOOR in the rail. These are reached from inside other screens, and every one
+ * of them means exactly the same thing in the HIVE you are switching to.
+ *
+ * The Meeting Helper was here until 2026-08-19 and has a door of its own now,
+ * so it is covered by the lookup below like every other page in the rail — and
+ * going UP is covered too, which is the half that was broken while it had no
+ * entry at all: Nat clicked HIVE-Wide from the deck and stayed on the deck.
  *
  * Found 2026-08-16, the hard way. The OG check-in email's button carries the
  * HIVE it belongs to now, so pressing it from HIVE-Wide switches you into OG and
@@ -39,7 +44,6 @@ import { NAV_DESTINATIONS, HIVE_WIDE_ROUTE } from './navigation';
 const HIVE_SCREENS_OFF_THE_RAIL = new Set([
   '/monthly-tuneup',
   '/arrival-board',
-  '/meeting-helper',
   '/newsletter',
 ]);
 

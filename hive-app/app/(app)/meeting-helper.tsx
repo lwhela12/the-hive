@@ -724,27 +724,9 @@ export default function MeetingHelperScreen() {
     if (from === 'admin') router.replace('/admin');
     else router.replace('/meetings');
   };
-  const { communityId, communityRole, profile, session, community, wholeHive, switchCommunity } = useAuth();
+  const { communityId, communityRole, profile, session, community } = useAuth();
   const { width, height } = useWindowDimensions();
 
-  /**
-   * Asking for the Meeting Helper is asking to be in a HIVE.
-   *
-   * The row sits in the rail at HIVE-Wide too, at Nat's explicit ask on
-   * 2026-08-19 — *"it needs to always be there"* — because the reason it is in
-   * the rail is getting back to a meeting already running. Standing above the
-   * HIVEs does not erase which one you were last in (`enterWholeHive` leaves
-   * `communityId` alone), so there is an obvious answer to whose deck you
-   * meant, and this steps back down into it rather than drawing one HIVE's
-   * meeting under the HIVE-Wide banner. Same rescue the Monthly Tune-up makes
-   * for a check-in link that names no HIVE.
-   */
-  const steppedDownRef = useRef(false);
-  useEffect(() => {
-    if (!wholeHive || !communityId || steppedDownRef.current) return;
-    steppedDownRef.current = true;
-    void switchCommunity(communityId).then(() => router.replace('/meeting-helper'));
-  }, [wholeHive, communityId, switchCommunity, router]);
 
   /**
    * The deck sizes itself to the space it actually has, not to the window.
