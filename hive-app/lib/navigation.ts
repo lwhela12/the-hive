@@ -140,6 +140,23 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   // Every HIVE's next meeting is already on the Whole HIVE page itself, and the
   // meetings screen is where you CREATE one — which has no all-HIVEs meaning.
   { key: 'meetings', label: 'Meetings', emoji: '🗓️', route: '/meetings', gate: 'everyone', atWholeHive: 'hidden' },
+  /**
+   * The deck you actually run a meeting from, one row under Meetings.
+   *
+   * It used to be reachable only from inside Meetings, which is two clicks from
+   * anywhere and no clicks that look like anything. Nat, 2026-08-19, after
+   * running the first Production HIVE off it: *"I want meeting helper on the
+   * left-hand side of the nav bar, instead of just inside of the meetings,
+   * because when I'm running a meeting... I have so many clicks away if I want
+   * to get back to where I was."* And Oliver, in the room: *"I'm locked out, I
+   * can't figure out how to get back."*
+   *
+   * `same` at HIVE-Wide, at her explicit ask — *"it needs to always be there"* —
+   * because the reason it is in the rail at all is getting BACK to a meeting
+   * already in progress. It opens the deck of whichever HIVE you were last in,
+   * which is the one whose meeting you are running.
+   */
+  { key: 'meeting-helper', label: 'Meeting Helper', emoji: '🎬', shortLabel: 'Helper', route: '/meeting-helper', gate: 'everyone', atWholeHive: 'same' },
   // Real money, belonging to one HIVE. It is already switched off for Tech.
   { key: 'honey-pot', label: 'Honey Pot', emoji: '🍯', route: '/honey-pot', gate: 'everyone', atWholeHive: 'hidden' },
   /**
@@ -248,13 +265,17 @@ export function activeKeyForPath(pathname: string | null | undefined): string | 
   // the rail should light up Boards there rather than the HIVE you came from.
   // Checked before the HIVE-Wide prefix, which would otherwise swallow it.
   if (pathname.startsWith('/hive-wide-boards')) return 'boards';
-  // Screens reached from inside Meetings rather than the rail. They belong to
-  // Meetings in the footer trail — without this the strip showed only the
-  // HIVE's name and stopped, which is what Nat saw standing in the Meeting
-  // Helper on 2026-08-14: *"the footer's not keeping up with us at the bottom,
-  // it just says Production HIVE. It doesn't say Production HIVE, Meetings,
-  // Meeting Helper — and I think that it should."*
-  if (pathname.startsWith('/meeting-helper') || pathname.startsWith('/monthly-tuneup')) return 'meetings';
+  // The Monthly Tune-up is still reached from inside Meetings rather than the
+  // rail, so it belongs to Meetings in the footer trail — without this the
+  // strip showed only the HIVE's name and stopped, which is what Nat saw
+  // standing in the Meeting Helper on 2026-08-14: *"the footer's not keeping up
+  // with us at the bottom, it just says Production HIVE."*
+  //
+  // The Meeting Helper is no longer one of them. It has its own row in the rail
+  // as of 2026-08-19, so it lights up as itself and names itself in the footer,
+  // exactly like every other page — and `meeting-helper.tsx` dropped the deep
+  // crumb it used to add, which would now say its own name twice.
+  if (pathname.startsWith('/monthly-tuneup')) return 'meetings';
   if (pathname.startsWith(HIVE_WIDE_ROUTE)) return 'hive-wide';
   let best: NavDestination | null = null;
   for (const d of [...NAV_DESTINATIONS, ADMIN_DESTINATION]) {

@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-helper-in-the-rail',
+    date: '2026-08-19',
+    title: 'Meeting Helper is in the side bar now, from every screen',
+    detail: 'It used to be buried inside Meetings, so once you were running a meeting and wandered off to a board there was no obvious way back. It is its own row now, under Meetings, and it is there at HIVE-Wide too.',
+    href: { pathname: '/meeting-helper' },
+    action: 'Open the meeting helper',
+  },
+  {
     id: '2026-08-19-record-the-room',
     date: '2026-08-19',
     title: 'Meetings get written down even when nobody is on the video',
