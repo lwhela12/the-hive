@@ -114,6 +114,25 @@ picks its own rung, and a travelling wish shows on its owner's profile panel
 in every HIVE — so wish mutations there act on `wish.community_id`, never on
 the HIVE the screen is standing in. Do not reintroduce per-field toggles.
 
+**With the switch OFF, each HIVE has its own card** (migration 194,
+`hive_cards`): the card fields (title, bio, ask-me-about, honeycomb favourites,
+fun facts, 3MIQ) come from that HIVE's row, honestly blank until written; the
+travelling card is the matching columns on `profiles` itself, shown everywhere
+while the switch is on. Name, phone, birthday, avatar and preferences always
+live on `profiles`. Every card read AND write must follow the switch — profile
+page, member cards, the tune-up's quarterly review and the members-screen
+editor all do; a new surface that reads card fields straight off `profiles`
+for a stay-home member is a bug. The seed put each person's existing card into
+their first-joined HIVE.
+
+**The this-HIVE-only ↔ HIVE-Wide control is `components/ui/ReachPill.tsx`**,
+one pill, one shape everywhere (Nat: "one toggle, one pill, one shape
+everywhere"): home HIVE's colour on the shell, hexagon or Earth for the reach,
+a mini track only when pressable. Wishes wear it on the card; the profile
+switch, Settings and the tune-up render it too. Public things keep the teal
+`ScopeBadge` — the pill has no third state on purpose. Events, birthdays and
+boards keep the two-chip `ScopeBadge`.
+
 Anything unrecognised falls back to `hive`. The safe end of the ladder is always
 the one that travels least.
 
