@@ -1466,7 +1466,50 @@ export default function MeetingHelperScreen() {
   const [openJobKey, setOpenJobKey] = useState<string | null>(null);
   const [jobDrafts, setJobDrafts] = useState<Record<string, string>>({});
   const [jobSaving, setJobSaving] = useState<string | null>(null);
-  const [jobsAssigned, setJobsAssigned] = useState<Record<string, string>>({});
+
+  /**
+   * Who has each job, read back from the lists it landed on.
+   *
+   * This used to be a plain object set when the Assign button succeeded, so it
+   * knew only what had happened while this screen happened to be open. Nat
+   * refreshed mid-meeting and the room concluded nothing had saved — *"when I
+   * refreshed, my tag went away"* — and started assigning everything a second
+   * time, which is where ten of the thirty-one rows on 2026-08-18 came from.
+   * The to-dos were fine the whole time; the panel had simply forgotten.
+   */
+  const [jobTakers, setJobTakers] = useState<Record<string, string[]>>({});
+
+  const loadJobTakers = useCallback(async () => {
+    if (!communityId || members.length === 0) return;
+    const { data, error } = await supabase
+      .from('action_items')
+      .select('related_board_post_id, assigned_to')
+      .eq('community_id', communityId)
+      .in('related_board_post_id', PRODUCTION_JOBS.map((job) => job.threadId))
+      .is('archived_at', null);
+    if (error) {
+      console.warn('Could not read who has which job:', error);
+      return;
+    }
+    const nameOf = new Map(members.map((member) => [member.id, getFirstName(member.name)]));
+    const byThread = new Map<string, Set<string>>();
+    ((data ?? []) as { related_board_post_id: string | null; assigned_to: string | null }[]).forEach((row) => {
+      if (!row.related_board_post_id || !row.assigned_to) return;
+      const found = byThread.get(row.related_board_post_id) ?? new Set<string>();
+      const name = nameOf.get(row.assigned_to);
+      if (name) found.add(name);
+      byThread.set(row.related_board_post_id, found);
+    });
+    setJobTakers(
+      Object.fromEntries(
+        PRODUCTION_JOBS.map((job) => [job.key, [...(byThread.get(job.threadId) ?? [])]])
+      )
+    );
+  }, [communityId, members]);
+
+  useEffect(() => {
+    void loadJobTakers();
+  }, [loadJobTakers]);
 
   const handleAssignJob = async (job: { key: string; title: string; asks: string[]; threadId: string }) => {
     const typed = (jobDrafts[job.key] ?? '').trim();
@@ -1486,26 +1529,59 @@ export default function MeetingHelperScreen() {
       // without them is the exact thing Nat said was useless: "Notoriety spec
       // sheet — and you're like, okay, what do I do with that?"
       const questions = job.asks.map((ask) => `  · ${ask}`).join('\n');
-      const extra = typed.replace(/@[\w.-]+/g, '').trim();
+      // Whatever is left once the @names are lifted out. The trim has to take
+      // the punctuation that held the names apart too, or "@Charlee, @Sara"
+      // leaves ", " behind and the to-do reads "Go and see Vegas Theatre
+      // Company — ," — which is a real row from the first Production HIVE.
+      const extra = typed
+        .replace(/@[\w.-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .replace(/^[\s,;·&/-]+|[\s,;·&/-]+$/g, '')
+        .trim();
       const description = `${job.title}${extra ? ` — ${extra}` : ''}\n${questions}`;
 
-      const { error } = await (supabase as any).from('action_items').insert(
-        mentioned.map((member) => ({
-          description,
-          assigned_to: member.id,
-          community_id: communityId,
-          // The to-do opens the Pre-Production thread that holds the brief and
-          // collects what they find out — Nat's design, 2026-08-14.
-          related_board_post_id: job.threadId,
-        }))
-      );
-      if (error) throw error;
+      /**
+       * One person, one job, one to-do.
+       *
+       * The first Production HIVE wrote 31 rows for 21 real assignments,
+       * because Assign inserted every time it was pressed and three people
+       * were pressing it — Lucas, Nat and Charlee, none of whom could see what
+       * the others had already done. Anybody who already has this job is
+       * skipped here rather than handed it twice.
+       */
+      const { data: already } = await supabase
+        .from('action_items')
+        .select('assigned_to')
+        .eq('community_id', communityId)
+        .eq('related_board_post_id', job.threadId)
+        .is('archived_at', null);
+      const has = new Set(((already ?? []) as { assigned_to: string | null }[]).map((row) => row.assigned_to));
 
-      const names = mentioned.map((member) => getFirstName(member.name)).join(' & ');
-      setJobsAssigned((prev) => ({ ...prev, [job.key]: names }));
+      const fresh = mentioned.filter((member) => !has.has(member.id));
+      const repeats = mentioned.filter((member) => has.has(member.id));
+
+      if (fresh.length > 0) {
+        const { error } = await (supabase as any).from('action_items').insert(
+          fresh.map((member) => ({
+            description,
+            assigned_to: member.id,
+            community_id: communityId,
+            // The to-do opens the Pre-Production thread that holds the brief and
+            // collects what they find out — Nat's design, 2026-08-14.
+            related_board_post_id: job.threadId,
+          }))
+        );
+        if (error) throw error;
+      }
+
       setJobDrafts((drafts) => ({ ...drafts, [job.key]: '' }));
       setOpenJobKey(null);
-      await loadDeckData();
+      await Promise.all([loadJobTakers(), loadDeckData()]);
+
+      if (fresh.length === 0) {
+        const names = repeats.map((member) => getFirstName(member.name)).join(' & ');
+        showAlert('Already on it', `${names} already ${repeats.length === 1 ? 'has' : 'have'} this one — nothing added twice.`);
+      }
     } catch (error) {
       console.error('Could not hand out the job:', error);
       showAlert('Hmm', 'That did not save — try again in a moment.');
@@ -3719,10 +3795,18 @@ export default function MeetingHelperScreen() {
       >
         Tap one, say who is taking it.
       </Text>
-      <BounceScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: sz(180, 130), gap: sz(8, 6) }}>
+      {/* A plain column, not a scroller.
+          This was a BounceScrollView inside the stage's own BounceScrollView,
+          and two scrollers stacked on top of each other is why the room could
+          not reach the bottom job — Nat, live: *"my scroll isn't working, so I
+          can't finish tagging everybody"*, and on Charlee's smaller screen the
+          text box under the last job was simply unreachable. The stage already
+          scrolls the whole slide, so the list just grows and everything below
+          it comes with it. */}
+      <View style={{ gap: sz(8, 6), paddingBottom: sz(40, 24) }}>
         {PRODUCTION_JOBS.map((job) => {
           const open = openJobKey === job.key;
-          const takenBy = jobsAssigned[job.key];
+          const takenBy = (jobTakers[job.key] ?? []).join(' & ');
           return (
             <View
               key={job.key}
@@ -3780,26 +3864,32 @@ export default function MeetingHelperScreen() {
                       · {ask}
                     </Text>
                   ))}
-                  <TextInput
-                    value={jobDrafts[job.key] ?? ''}
-                    onChangeText={(text) => setJobDrafts((drafts) => ({ ...drafts, [job.key]: text }))}
-                    placeholder="@name — and anything else worth remembering"
-                    placeholderTextColor={MUTED}
-                    multiline
-                    style={{
-                      marginTop: sz(16, 12),
-                      minHeight: sz(70, 52),
-                      borderWidth: 1,
-                      borderColor: GOLD_SOFT,
-                      borderRadius: sz(14, 11),
-                      paddingHorizontal: sz(16, 12),
-                      paddingVertical: sz(12, 9),
-                      fontFamily: 'Lato_400Regular',
-                      fontSize: sz(22, 14),
-                      color: CHARCOAL,
-                      backgroundColor: '#fff',
-                    }}
-                  />
+                  {/* The same composer as everywhere else, so typing "@cha"
+                      offers Charlee instead of leaving you to spell her. Nat,
+                      after doing it by hand all night: *"when I was adding
+                      them, they weren't populating, and I like it when you
+                      type and it shows you who you can select from — that's
+                      the feature you're missing."* */}
+                  <View style={{ marginTop: sz(16, 12) }}>
+                    <ComposerBar
+                      variant="form"
+                      value={jobDrafts[job.key] ?? ''}
+                      onChangeText={(next) =>
+                        setJobDrafts((drafts) => ({
+                          ...drafts,
+                          [job.key]: typeof next === 'function' ? next(drafts[job.key] ?? '') : next,
+                        }))
+                      }
+                      placeholder="@name — and anything else worth remembering"
+                      onSubmit={() => handleAssignJob(job)}
+                      minHeight={sz(70, 52)}
+                      fieldClassName={isTV ? 'text-[17px]' : 'text-[12px]'}
+                      // No currentUserId: whoever is driving must be able to
+                      // put a job on their own list with "@their name".
+                      mentionMembers={members}
+                      mentionReach={mentionReach}
+                    />
+                  </View>
                   <Pressable
                     onPress={() => handleAssignJob(job)}
                     disabled={jobSaving === job.key}
@@ -3824,7 +3914,7 @@ export default function MeetingHelperScreen() {
             </View>
           );
         })}
-      </BounceScrollView>
+      </View>
     </View>
   );
 

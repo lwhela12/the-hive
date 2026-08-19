@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-jobs-panel',
+    date: '2026-08-19',
+    title: 'The jobs list scrolls, remembers, and stops handing out the same job twice',
+    detail: 'Typing @ now offers you names to pick from. Who has each job is read back from their actual to-do list, so a refresh no longer wipes the tags. Assigning someone a job they already have adds nothing. And the list is one scroll again — the bottom job and its box were unreachable before.',
+    href: { pathname: '/meeting-helper' },
+    action: 'Open the meeting helper',
+  },
+  {
     id: '2026-08-19-seal-keeps-the-recording',
     date: '2026-08-19',
     title: 'Sealing keeps a meeting whose whole record is the recording',
