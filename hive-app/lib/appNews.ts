@@ -28,6 +28,28 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-badge-is-the-toggle',
+    date: '2026-08-19',
+    title: 'Tap the badge on your wish to change who sees it',
+    detail: 'The little badge on each of your wishes flips between this HIVE only and HIVE-Wide with one tap — the extra "who sees it" row underneath is gone.',
+    href: { pathname: '/profile' },
+    action: 'Open your wishes',
+  },
+  {
+    id: '2026-08-19-wish-starters',
+    date: '2026-08-19',
+    title: 'Every HIVE opens with its own starter question',
+    detail: 'No wish yet? Each HIVE now asks you its own question to get you going — write it yourself or find the words with Clive, and close it with the ✕ if you are all set.',
+    href: { pathname: '/profile' },
+    action: 'See yours',
+  },
+  {
+    id: '2026-08-19-real-logo-in-the-tab',
+    date: '2026-08-19',
+    title: 'The browser tab wears the real HIVE logo',
+    detail: 'The gold sunburst bee from our actual logo is the tab icon and home-screen icon now, sized so the bee still reads at tab size.',
+  },
+  {
     id: '2026-08-19-garden-follows-you',
     date: '2026-08-19',
     title: 'Your Skills Garden follows you into every HIVE',

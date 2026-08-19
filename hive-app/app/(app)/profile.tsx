@@ -176,85 +176,6 @@ function readAllPieceReach(profile: Profile | null): Record<string, PieceReach> 
 }
 
 /**
- * The control itself: one small pill that says where this piece stands, and
- * turns it round when you press it.
- *
- * Small and quiet on purpose. Every field on this page has one, so a switch the
- * size of the Settings switches would have turned the editor into a wall of
- * them. It wears the marks the rest of the app already uses — a filled hexagon
- * in this HIVE's colour for something that stays home, the Earth for something
- * that travels — so this reads as the same vocabulary as the badge it produces
- * on a wish or an event (`lib/scopeLook.ts`).
- */
-function ReachToggle({
-  reach,
-  onChange,
-  hiveName,
-  hiveColour,
-  pieceLabel,
-  locked,
-}: {
-  reach: PieceReach;
-  onChange: (next: PieceReach) => void;
-  hiveName: string;
-  hiveColour: string;
-  /** What this is the reach OF, so a screen reader hears a whole sentence. */
-  pieceLabel: string;
-  /**
-   * This HIVE keeps everything inside itself, so there is nothing to choose.
-   * The pill still shows where the piece stands; it just does not pretend the
-   * other rung is available.
-   */
-  locked?: boolean;
-}) {
-  const travels = reach === 'all_hives';
-  const words = travels ? 'HIVE-Wide' : `${hiveName} only`;
-  return (
-    <Pressable
-      onPress={locked ? undefined : () => onChange(travels ? 'hive' : 'all_hives')}
-      disabled={locked}
-      accessibilityRole="switch"
-      accessibilityState={{ checked: travels, disabled: !!locked }}
-      accessibilityLabel={
-        travels
-          ? `${pieceLabel} is HIVE-Wide. Everyone in every HIVE can see it.`
-          : `${pieceLabel} is ${hiveName} only.`
-      }
-      className="active:opacity-70"
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: travels ? 'rgba(11,11,18,0.34)' : 'rgba(222,193,129,0.55)',
-        backgroundColor: travels ? 'rgba(11,11,18,0.06)' : '#fffdf7',
-        paddingLeft: 7,
-        paddingRight: 9,
-        paddingVertical: 3,
-        opacity: locked ? 0.65 : 1,
-      }}
-    >
-      {/* One box for both marks, so the words never shuffle sideways when the
-          pill turns round. */}
-      <View style={{ width: 14, height: 14, alignItems: 'center', justifyContent: 'center' }}>
-        {travels ? <WorldMark size={14} /> : <HiveMark size={12} colour={hiveColour} />}
-      </View>
-      <Text
-        numberOfLines={1}
-        style={{
-          fontFamily: 'Lato_700Bold',
-          fontSize: 10.5,
-          color: travels ? '#0B0B12' : hiveColour,
-        }}
-      >
-        {words}
-      </Text>
-    </Pressable>
-  );
-}
-
-/**
  * Every room Profile can be closed back into, with the name that room goes by.
  *
  * A table rather than a chain of `if`s, and the same table `monthly-tuneup.tsx`
@@ -371,6 +292,35 @@ export default function ProfileScreen() {
       });
     return () => { active = false; };
   }, [showsHiveGoal, communityId, profile?.id]);
+  /**
+   * The wish starter — a themed opening question for each HIVE, shown when the
+   * wishes panel is empty. Nat, 2026-08-19 memo: "every section that doesn't
+   * have an HD wish filled out should have that little starter... a default to
+   * help you get started in each HIVE, each one with its own theme," with an X
+   * to close it. Production's theme is the show goal block below; these cover
+   * the rest.
+   *
+   * The X remembers per HIVE, per browser — the same shelf the deck drafts
+   * live on. Closing a nudge is a taste call, not shared state.
+   */
+  const WISH_STARTERS: Record<string, string> = {
+    default: 'What do you need a hand with right now? 🐝',
+    tech: 'What are you building — and what would help? 💻',
+  };
+  const wishStarterHeading =
+    WISH_STARTERS[community?.slug ?? ''] ?? 'What do you need help with right now?';
+  const wishStarterKey =
+    profile?.id && communityId ? `the-hive:wish-starter-dismissed:${profile.id}:${communityId}` : null;
+  // Starts true so the card never flashes in and out while storage is read.
+  const [wishStarterDismissed, setWishStarterDismissed] = useState(true);
+  useEffect(() => {
+    if (!wishStarterKey) return;
+    setWishStarterDismissed(getStoredItem(wishStarterKey) === '1');
+  }, [wishStarterKey]);
+  const dismissWishStarter = () => {
+    if (wishStarterKey) setStoredItem(wishStarterKey, '1');
+    setWishStarterDismissed(true);
+  };
   const saveHiveGoal = async (next: string) => {
     if (!communityId || !profile?.id) return;
     setHiveGoalSaving(true);
@@ -2138,60 +2088,34 @@ export default function ProfileScreen() {
 
   const renderWishCard = (wish: Wish) => {
     const wishScope = normaliseScope((wish as any).share_scope);
-    // A HIVE-Wide wish shows on this panel in every HIVE you are in. Its pill
-    // still speaks for the HIVE it was written in: switching the Nellie wish
-    // (written in OG) to "this HIVE only" while standing in Production would
-    // keep it in OG, so the pill must say OG or it is lying.
+    // The badge on the card IS the control now. It carried the answer already
+    // — whose HIVE, how far it goes — and a "Who sees it" pill underneath said
+    // the same thing twice (Nat, 2026-08-19: "this who sees it is doubling
+    // up... that should just be a little toggle on there"). Tapping the badge
+    // flips this-HIVE-only ↔ HIVE-Wide; a public wish keeps its badge as a
+    // label, because a two-state flip cannot say "public" and does not get to
+    // quietly take it away — that one is changed in the wish editor.
     const wishFromHere = !wish.community_id || wish.community_id === communityId;
-    const wishHomeCommunity = wishFromHere
-      ? community
-      : memberships.find((m) => m.community_id === wish.community_id)?.community;
-    const wishHiveWord = wishFromHere ? hiveWord : hiveDisplayName(wishHomeCommunity?.name);
-    const wishHiveColour = wishFromHere ? hiveColour : hiveAccent(wishHomeCommunity);
+    const canFlipReach =
+      wishScope !== 'public' &&
+      // The ceiling that matters is the wish's own HIVE's. A wish that reached
+      // here from another HIVE already cleared its ceiling.
+      (!wishFromHere || hiveLetsThingsTravel) &&
+      savingWishReachId !== wish.id;
     return (
-      <View key={wish.id} style={{ gap: 6 }}>
-        <WishCombCard
-          wish={wish}
-          ownerId={profile.id}
-          ownerName={profile.name}
-          ownerAvatarUrl={profile.avatar_url}
-          compact={isProfilePhone}
-          onOpen={(selectedWish) => openWishDetail(selectedWish as Wish)}
-          onManage={canOpenWishActions(wish) ? (selectedWish) => setManagingWish(selectedWish as Wish) : undefined}
-        />
-        {/* The caption is what tells the pill below from the badge on the card
-            above: one says where this wish stands, this one changes it. The
-            same reason `ScopeBadge` grew a caption — an unlabelled badge is
-            fine on its own and ambiguous the moment there are two. */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingLeft: 4, flexWrap: 'wrap' }}>
-          <Text
-            style={{
-              fontFamily: 'Lato_700Bold', fontSize: 8.5, letterSpacing: 0.9,
-              textTransform: 'uppercase', color: 'rgba(49,49,48,0.62)',
-            }}
-          >
-            Who sees it
-          </Text>
-          {wishScope === 'public' ? (
-            // A wish somebody deliberately sent to the newsletter and
-            // the-hive.app. A two-state pill cannot say "public", so it does
-            // not get to quietly take it away either — that one is changed in
-            // the wish editor, where the whole ladder is on offer.
-            <ScopeBadge scope="public" size="sm" hideHive />
-          ) : (
-            <ReachToggle
-              reach={wishScope === 'all_hives' ? 'all_hives' : 'hive'}
-              onChange={(next) => void setWishReach(wish, next)}
-              hiveName={wishHiveWord}
-              hiveColour={wishHiveColour}
-              pieceLabel="This wish"
-              // The ceiling that matters is the wish's own HIVE's. A wish that
-              // reached here from another HIVE already cleared its ceiling.
-              locked={(wishFromHere && !hiveLetsThingsTravel) || savingWishReachId === wish.id}
-            />
-          )}
-        </View>
-      </View>
+      <WishCombCard
+        key={wish.id}
+        wish={wish}
+        ownerId={profile.id}
+        ownerName={profile.name}
+        ownerAvatarUrl={profile.avatar_url}
+        compact={isProfilePhone}
+        onOpen={(selectedWish) => openWishDetail(selectedWish as Wish)}
+        onManage={canOpenWishActions(wish) ? (selectedWish) => setManagingWish(selectedWish as Wish) : undefined}
+        onToggleScope={canFlipReach
+          ? () => void setWishReach(wish, wishScope === 'all_hives' ? 'hive' : 'all_hives')
+          : undefined}
+      />
     );
   };
 
@@ -3182,11 +3106,26 @@ export default function ProfileScreen() {
                         section."* They are the same conversation — a goal is the
                         direction, a wish is what you need from the room to get
                         there — and two headings made them look like two chores. */}
-                    {showsHiveGoal ? (
+                    {showsHiveGoal && (hiveGoal || editingHiveGoal || !wishStarterDismissed) ? (
                       <View style={{ marginBottom: 12 }}>
-                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/70 mb-2">
-                          What are you working toward with this show? 🎬
-                        </Text>
+                        <View className="flex-row items-center justify-between mb-2">
+                          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/70">
+                            What are you working toward with this show? 🎬
+                          </Text>
+                          {/* The X closes the nudge, never the goal itself — a
+                              written goal keeps its card (Nat, 2026-08-19:
+                              "an X somewhere where we can X out the helper"). */}
+                          {!hiveGoal && !editingHiveGoal ? (
+                            <Pressable
+                              onPress={dismissWishStarter}
+                              hitSlop={10}
+                              accessibilityRole="button"
+                              accessibilityLabel="Close this helper"
+                            >
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'rgba(49,49,48,0.45)' }}>✕</Text>
+                            </Pressable>
+                          ) : null}
+                        </View>
                         <View className="bg-white rounded-xl shadow-sm p-4">
                           {editingHiveGoal ? (
                             <>
@@ -3251,44 +3190,56 @@ export default function ProfileScreen() {
                       </View>
                     ) : null}
                     {visibleProfileWishes.length === 0 ? (
-                      wishStatusTab === 'granted' ? (
+                      wishStatusTab !== 'granted' && !showsHiveGoal && !wishStarterDismissed ? (
+                        /* The starter: each HIVE opens with its own question
+                           (Nat, 2026-08-19 memo: "a default to help you get
+                           started in each HIVE, each one with its own theme"),
+                           closable with the X. Production's theme is the show
+                           goal block above, so it skips this one. */
+                        <View>
+                          <View className="flex-row items-center justify-between mb-2">
+                            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/70">
+                              {wishStarterHeading}
+                            </Text>
+                            <Pressable
+                              onPress={dismissWishStarter}
+                              hitSlop={10}
+                              accessibilityRole="button"
+                              accessibilityLabel="Close this helper"
+                            >
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'rgba(49,49,48,0.45)' }}>✕</Text>
+                            </Pressable>
+                          </View>
+                          <View className="bg-white rounded-xl shadow-sm p-4">
+                            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
+                              Get clear on it — Clive can help you find the words.
+                            </Text>
+                            <View className="flex-row gap-4 mt-3">
+                              <Pressable onPress={() => setAddWishModalVisible(true)}>
+                                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
+                                  Write it myself
+                                </Text>
+                              </Pressable>
+                              <Pressable
+                                onPress={() => router.push({
+                                  pathname: '/(app)',
+                                  params: {
+                                    prefill: `Help me shape an HD wish. The question on my profile asks: "${wishStarterHeading}" — help me find the words.`,
+                                  },
+                                })}
+                              >
+                                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
+                                  Find with Clive ✨
+                                </Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        </View>
+                      ) : (
                         <View style={{ backgroundColor: '#fffdf5', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.32)' }}>
                           <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(45,45,45,0.48)', textAlign: 'center' }}>
                             {profileWishEmptyText}
                           </Text>
-                        </View>
-                      ) : (
-                        /* The same offer in every HIVE, not just Production's
-                           goal box (Nat, 2026-08-19 memo: "that prompt should
-                           always be there when you don't have a wish yet").
-                           Same shape as the goal card so the panel reads the
-                           same wherever you open it. */
-                        <View className="bg-white rounded-xl shadow-sm p-4">
-                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
-                            {profileWishEmptyText}
-                          </Text>
-                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 leading-6 mt-1">
-                            Get clear on it — Clive can help you find the words.
-                          </Text>
-                          <View className="flex-row gap-4 mt-3">
-                            <Pressable onPress={() => setAddWishModalVisible(true)}>
-                              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
-                                Write it myself
-                              </Text>
-                            </Pressable>
-                            <Pressable
-                              onPress={() => router.push({
-                                pathname: '/(app)',
-                                params: {
-                                  prefill: 'Help me shape an HD wish — something specific I need help with right now.',
-                                },
-                              })}
-                            >
-                              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
-                                Find with Clive ✨
-                              </Text>
-                            </Pressable>
-                          </View>
                         </View>
                       )
                     ) : (

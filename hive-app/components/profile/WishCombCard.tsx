@@ -24,6 +24,14 @@ type WishCombCardProps = {
   compact?: boolean;
   onOpen?: (wish: WishCombCardWish) => void;
   onManage?: (wish: WishCombCardWish) => void;
+  /**
+   * Makes the scope badge itself the control. Nat, 2026-08-19, looking at the
+   * badge on the card AND a "Who sees it" pill under it saying the same thing:
+   * "this who sees it is doubling up... that should just be a little toggle on
+   * there." Only the owner's own profile panel passes this; everywhere else
+   * the badge stays a label.
+   */
+  onToggleScope?: (wish: WishCombCardWish) => void;
 };
 
 function getStatusMeta(status: Wish['status']) {
@@ -96,6 +104,7 @@ export function WishCombCard({
   compact = false,
   onOpen,
   onManage,
+  onToggleScope,
 }: WishCombCardProps) {
   const status = getStatusMeta(wish.status);
   const isGranted = wish.status === 'fulfilled';
@@ -208,11 +217,30 @@ export function WishCombCard({
             <Text style={[styles.dateText, isGranted ? styles.dateTextGranted : null]}>
               {dateLabel}
             </Text>
-            <ScopeBadge
-              scope={(wish.share_scope as string) ?? 'hive'}
-              communityId={wish.community_id}
-              compact
-            />
+            {onToggleScope ? (
+              <Pressable
+                onPress={(event) => {
+                  // The card behind this opens the wish; the badge flips it.
+                  event.stopPropagation?.();
+                  onToggleScope(wish);
+                }}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Who sees this wish — tap to switch"
+              >
+                <ScopeBadge
+                  scope={(wish.share_scope as string) ?? 'hive'}
+                  communityId={wish.community_id}
+                  compact
+                />
+              </Pressable>
+            ) : (
+              <ScopeBadge
+                scope={(wish.share_scope as string) ?? 'hive'}
+                communityId={wish.community_id}
+                compact
+              />
+            )}
             {showGranters && (
               <View style={styles.granterRow}>
                 <Text style={styles.granterLabel}>by</Text>
