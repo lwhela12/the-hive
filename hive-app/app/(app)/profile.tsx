@@ -457,7 +457,6 @@ export default function ProfileScreen() {
   const [skillsModalVisible, setSkillsModalVisible] = useState(false);
   const [replantingGarden, setReplantingGarden] = useState(false);
   const [replantNotice, setReplantNotice] = useState<string | null>(null);
-  const [savingGardenReach, setSavingGardenReach] = useState(false);
   /**
    * Your skill flowers in your OTHER HIVEs, and only when this garden is bare.
    *
@@ -586,6 +585,13 @@ export default function ProfileScreen() {
   const fetchData = useCallback(async () => {
     if (!profile || !communityId) return;
 
+    // One switch decides the whole card (Nat, 2026-08-19): with Visible
+    // HIVE-Wide on, the garden is ONE garden that follows you into every HIVE
+    // — "my skills garden that I've already done in OG HIVE should also
+    // already be visible here". With it off, gardens stay one per HIVE, which
+    // is her own definition of setting each profile up differently.
+    const cardTravels = profile.profile_scope === 'all_hives';
+
     const [
       skillsResult,
       wishesResult,
@@ -595,13 +601,17 @@ export default function ProfileScreen() {
         .from('skills')
         .select('*')
         .eq('user_id', profile.id)
-        .eq('community_id', communityId)
         .order('created_at', { ascending: true }),
+      // This HIVE's wishes plus every wish of yours that travels, whichever
+      // HIVE it was written in. Her Nellie wish, written in OG and marked
+      // HIVE-Wide, showed on this panel in OG and vanished in Tech and
+      // Production — the same bug the member card fixed on 2026-08-19, on the
+      // one screen that fix never reached.
       supabase
         .from('wishes')
         .select('*, board_category:board_categories(id,name,topic_kind), granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))')
         .eq('user_id', profile.id)
-        .eq('community_id', communityId)
+        .or(`community_id.eq.${communityId},share_scope.in.(all_hives,public)`)
         .order('created_at', { ascending: false }),
       // Use maybeSingle() to gracefully handle cases where no record exists yet
       supabase
@@ -626,13 +636,18 @@ export default function ProfileScreen() {
         .from('wishes')
         .select('*')
         .eq('user_id', profile.id)
-        .eq('community_id', communityId)
+        .or(`community_id.eq.${communityId},share_scope.in.(all_hives,public)`)
         .order('created_at', { ascending: false });
       wishesData = (fallback.data as unknown as Wish[] | null) ?? null;
       wishesError = fallback.error;
     }
 
-    if (skillsResult.data) setSkills(skillsResult.data);
+    const gardenSkills = skillsResult.data
+      ? (cardTravels
+        ? (skillsResult.data as Skill[])
+        : (skillsResult.data as Skill[]).filter((skill) => skill.community_id === communityId))
+      : null;
+    if (gardenSkills) setSkills(gardenSkills);
     if (wishesData) setWishes(wishesData);
     if (wishesError) console.error('Error fetching profile wishes:', wishesError);
     setUserInsights(insightsResult.data);
@@ -640,15 +655,15 @@ export default function ProfileScreen() {
 
     // Garden bees: match my planted skills against other members' public
     // wishes. Fails silent (no bees) so the garden never blocks on this.
-    if (skillsResult.data) {
+    if (gardenSkills) {
       const matches = await fetchSkillWishMatches({
-        skills: skillsResult.data,
+        skills: gardenSkills,
         currentUserId: profile.id,
         communityId,
       });
       setSkillWishMatches(matches);
     }
-  }, [profile?.id, communityId]);
+  }, [profile?.id, profile?.profile_scope, communityId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1198,12 +1213,18 @@ export default function ProfileScreen() {
   const handleArchiveWish = (wish: Wish) => {
     if (!profile || !communityId || !canArchiveWish(wish)) return;
 
+    // The wish's own HIVE, not the one you are standing in. This panel shows
+    // your HIVE-Wide wishes in every HIVE you are in, and pinning the write to
+    // the current HIVE made Archive a button that silently matched zero rows
+    // on exactly those wishes.
+    const wishHome = wish.community_id ?? communityId;
+
     const archiveWish = async () => {
       let query = supabase
         .from('wishes')
         .update({ status: 'replaced', is_active: false, replaced_at: new Date().toISOString() } as any)
         .eq('id', wish.id)
-        .eq('community_id', communityId);
+        .eq('community_id', wishHome);
 
       if (!isAdmin) {
         query = query.eq('user_id', profile.id);
@@ -1216,7 +1237,7 @@ export default function ProfileScreen() {
         return;
       }
 
-      await invalidateWishQueries(communityId, wish.user_id);
+      await invalidateWishQueries(wishHome, wish.user_id);
       await fetchData();
       setManagingWish(null);
     };
@@ -1267,8 +1288,9 @@ export default function ProfileScreen() {
 
     // Home, the member card and the boards all read wishes through these
     // queries — a wish that has just started travelling should be somewhere
-    // else the moment you look, not after a refresh.
-    await invalidateWishQueries(communityId, wish.user_id);
+    // else the moment you look, not after a refresh. Invalidated for the
+    // wish's own HIVE, which is where those queries file it.
+    await invalidateWishQueries(wish.community_id ?? communityId, wish.user_id);
   }, [profile?.id, communityId, savingWishReachId, fetchData]);
 
   const handleGrantWish = async (data: {
@@ -1309,12 +1331,15 @@ export default function ProfileScreen() {
       current.map((item) => item.id === skill.id ? { ...item, ...updates } : item)
     );
 
+    // No community pin: a travelling garden shows flowers planted in other
+    // HIVEs, and pinning the update to the HIVE you are standing in made it
+    // silently match zero rows for exactly those flowers. The row's id plus
+    // your own user id is the whole address.
     const { error } = await supabase
       .from('skills')
       .update(updates)
       .eq('id', skill.id)
-      .eq('user_id', profile.id)
-      .eq('community_id', communityId);
+      .eq('user_id', profile.id);
 
     if (error) {
       showAlert('Error', 'Failed to update that skill flower. Please try again.');
@@ -1394,8 +1419,7 @@ export default function ProfileScreen() {
         .from('skills')
         .update(updates)
         .eq('id', existingSkill.id)
-        .eq('user_id', profile.id)
-        .eq('community_id', communityId);
+        .eq('user_id', profile.id);
 
       if (error) {
         showAlert('Error', 'Failed to plant that skill. Please try again.');
@@ -1452,15 +1476,23 @@ export default function ProfileScreen() {
     if (uniqueSeeds.length === 0) return 0;
 
     if (mode === 'replace') {
-      const { error: resetError } = await supabase
+      // A replace clears the garden you are looking at. With the card set
+      // Visible HIVE-Wide that garden IS all your flowers everywhere, so the
+      // reset reaches them all; kept to this HIVE it clears this HIVE's patch
+      // only, exactly as before. The graveyard (migration 174) archives every
+      // wipe either way.
+      let resetQuery = supabase
         .from('skills')
         .update({
           enthusiasm_level: 0,
           display_x: null,
           display_y: null,
         })
-        .eq('user_id', profile.id)
-        .eq('community_id', communityId);
+        .eq('user_id', profile.id);
+      if (profile.profile_scope !== 'all_hives') {
+        resetQuery = resetQuery.eq('community_id', communityId);
+      }
+      const { error: resetError } = await resetQuery;
 
       if (resetError) {
         showAlert('Error', 'Failed to clear your current garden. Please try again.');
@@ -1513,7 +1545,6 @@ export default function ProfileScreen() {
           .update(plantedSkill)
           .eq('id', existingSkill.id)
           .eq('user_id', profile.id)
-          .eq('community_id', communityId)
           .select('*')
           .single();
 
@@ -1594,38 +1625,6 @@ export default function ProfileScreen() {
   };
 
   /**
-   * How far the whole garden goes.
-   *
-   * One control for the patch rather than one per flower: Nat named the Skills
-   * Garden as a single piece alongside the bio and the honeycombs, and a
-   * hexagon on every bloom would bury the flowers under badges. The value still
-   * lives on each row, because a row is where the HIVE it grows in lives.
-   */
-  const setGardenReach = useCallback(async (next: PieceReach) => {
-    if (!profile?.id || !communityId || savingGardenReach) return;
-    setSavingGardenReach(true);
-    setSkills((current) => current.map((skill) => ({ ...skill, reach: next } as Skill)));
-
-    const { error } = await (supabase.from('skills') as any)
-      .update({ reach: next })
-      .eq('user_id', profile.id)
-      .eq('community_id', communityId);
-
-    setSavingGardenReach(false);
-
-    if (error) {
-      console.warn('[Profile] garden reach save failed', error);
-      showAlert(
-        'That did not save',
-        String(error.message ?? '').includes('reach')
-          ? 'Your garden cannot travel yet — this needs the profile reach migration applied once. Everything else still saved.'
-          : `${error.message ?? 'Your choice was not stored.'} Please try again.`
-      );
-      await fetchData();
-    }
-  }, [profile?.id, communityId, savingGardenReach, fetchData]);
-
-  /**
    * Plant the garden you already have somewhere else in this HIVE too.
    *
    * A copy rather than a move: the flowers in the other HIVE stay exactly where
@@ -1647,12 +1646,13 @@ export default function ProfileScreen() {
     if (!profile || !communityId) return;
 
     const deleteSkill = async () => {
+      // id + owner, no community pin — a travelling garden holds flowers from
+      // other HIVEs, and the pin made deleting one of those a silent no-op.
       const { error } = await supabase
         .from('skills')
         .delete()
         .eq('id', skill.id)
-        .eq('user_id', profile.id)
-        .eq('community_id', communityId);
+        .eq('user_id', profile.id);
 
       if (error) {
         showAlert('Error', 'Failed to remove that skill. Please try again.');
@@ -1668,10 +1668,13 @@ export default function ProfileScreen() {
   const handleDeleteWish = (wish: Wish) => {
     if (!profile || !communityId || !canDeleteWish(wish)) return;
 
+    // Same rule as Archive above: the write goes to the wish's own HIVE.
+    const wishHome = wish.community_id ?? communityId;
+
     const deleteWish = async () => {
       const { error } = await deleteWishById({
         wishId: wish.id,
-        communityId,
+        communityId: wishHome,
         ownerId: isAdmin ? null : profile.id,
       });
 
@@ -1680,7 +1683,7 @@ export default function ProfileScreen() {
         return;
       }
 
-      await invalidateWishQueries(communityId, wish.user_id);
+      await invalidateWishQueries(wishHome, wish.user_id);
       await fetchData();
       setManagingWish(null);
     };
@@ -1846,16 +1849,12 @@ export default function ProfileScreen() {
   );
   const bloomingSkillCount = skills.filter(hasBloomingSkill).length;
   /**
-   * Where the garden stands, read from the flowers themselves.
-   *
-   * One flower already travelling means the patch is HIVE-Wide — the toggle
-   * writes every row at once, so a mixed garden only happens if something went
-   * wrong halfway, and answering "it travels" is the one that matches what
-   * another HIVE can actually see.
+   * Whether this garden holds flowers planted in another HIVE — true only when
+   * the card travels, because that is the only time `fetchData` brings them.
+   * Used for the one line that tells you why a garden you planted in OG HIVE
+   * is blooming here too.
    */
-  const gardenReach: PieceReach = skills.some((skill) => (skill as any).reach === 'all_hives')
-    ? 'all_hives'
-    : 'hive';
+  const gardenHasTravellingFlowers = skills.some((skill) => skill.community_id !== communityId);
   /**
    * What this HIVE's ceiling means for the things inside it, said once.
    *
@@ -1912,11 +1911,9 @@ export default function ProfileScreen() {
   const visibleProfileWishes = wishStatusTab === 'granted'
     ? grantedWishes
     : publicWishes;
-  const profileWishEmptyText = wishes.length === 0
-    ? 'No wishes yet. What do you need help with?'
-    : wishStatusTab === 'granted'
-      ? 'No granted HD wishes yet.'
-      : 'No HD wishes yet.';
+  const profileWishEmptyText = wishStatusTab === 'granted'
+    ? 'No granted HD wishes yet.'
+    : 'No wishes yet. What do you need help with?';
   const renderDeepQuizField = ({
     label,
     value,
@@ -2141,6 +2138,16 @@ export default function ProfileScreen() {
 
   const renderWishCard = (wish: Wish) => {
     const wishScope = normaliseScope((wish as any).share_scope);
+    // A HIVE-Wide wish shows on this panel in every HIVE you are in. Its pill
+    // still speaks for the HIVE it was written in: switching the Nellie wish
+    // (written in OG) to "this HIVE only" while standing in Production would
+    // keep it in OG, so the pill must say OG or it is lying.
+    const wishFromHere = !wish.community_id || wish.community_id === communityId;
+    const wishHomeCommunity = wishFromHere
+      ? community
+      : memberships.find((m) => m.community_id === wish.community_id)?.community;
+    const wishHiveWord = wishFromHere ? hiveWord : hiveDisplayName(wishHomeCommunity?.name);
+    const wishHiveColour = wishFromHere ? hiveColour : hiveAccent(wishHomeCommunity);
     return (
       <View key={wish.id} style={{ gap: 6 }}>
         <WishCombCard
@@ -2175,10 +2182,12 @@ export default function ProfileScreen() {
             <ReachToggle
               reach={wishScope === 'all_hives' ? 'all_hives' : 'hive'}
               onChange={(next) => void setWishReach(wish, next)}
-              hiveName={hiveWord}
-              hiveColour={hiveColour}
+              hiveName={wishHiveWord}
+              hiveColour={wishHiveColour}
               pieceLabel="This wish"
-              locked={!hiveLetsThingsTravel || savingWishReachId === wish.id}
+              // The ceiling that matters is the wish's own HIVE's. A wish that
+              // reached here from another HIVE already cleared its ceiling.
+              locked={(wishFromHere && !hiveLetsThingsTravel) || savingWishReachId === wish.id}
             />
           )}
         </View>
@@ -2591,7 +2600,7 @@ export default function ProfileScreen() {
             }}
           >
             {listedHiveWide
-              ? 'Saved. You are in the HIVE-Wide members list now.'
+              ? 'Saved. Your whole card — Skills Garden included — now shows at HIVE-Wide and in every HIVE you are in.'
               : 'Saved. You show up only inside your own HIVEs now.'}
           </Text>
         )}
@@ -3242,11 +3251,46 @@ export default function ProfileScreen() {
                       </View>
                     ) : null}
                     {visibleProfileWishes.length === 0 ? (
-                      <View style={{ backgroundColor: '#fffdf5', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.32)' }}>
-                        <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(45,45,45,0.48)', textAlign: 'center' }}>
-                          {profileWishEmptyText}
-                        </Text>
-                      </View>
+                      wishStatusTab === 'granted' ? (
+                        <View style={{ backgroundColor: '#fffdf5', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.32)' }}>
+                          <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(45,45,45,0.48)', textAlign: 'center' }}>
+                            {profileWishEmptyText}
+                          </Text>
+                        </View>
+                      ) : (
+                        /* The same offer in every HIVE, not just Production's
+                           goal box (Nat, 2026-08-19 memo: "that prompt should
+                           always be there when you don't have a wish yet").
+                           Same shape as the goal card so the panel reads the
+                           same wherever you open it. */
+                        <View className="bg-white rounded-xl shadow-sm p-4">
+                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
+                            {profileWishEmptyText}
+                          </Text>
+                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 leading-6 mt-1">
+                            Get clear on it — Clive can help you find the words.
+                          </Text>
+                          <View className="flex-row gap-4 mt-3">
+                            <Pressable onPress={() => setAddWishModalVisible(true)}>
+                              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
+                                Write it myself
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={() => router.push({
+                                pathname: '/(app)',
+                                params: {
+                                  prefill: 'Help me shape an HD wish — something specific I need help with right now.',
+                                },
+                              })}
+                            >
+                              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
+                                Find with Clive ✨
+                              </Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      )
                     ) : (
                       <View style={{ gap: 12 }}>
                         {visibleProfileWishes.map(renderWishCard)}
@@ -3292,7 +3336,7 @@ export default function ProfileScreen() {
                     </Text>
                     <Text style={{ fontFamily: 'Lato_400Regular', fontSize: compactProfileLandscape ? 9 : 11, color: '#a09274', marginTop: compactProfileLandscape ? 0 : 2 }}>
                       {bloomingSkillCount > 0
-                        ? `${bloomingSkillCount} skill flower${bloomingSkillCount !== 1 ? 's' : ''} blooming`
+                        ? `${bloomingSkillCount} skill flower${bloomingSkillCount !== 1 ? 's' : ''} blooming${gardenHasTravellingFlowers ? ' · one garden, every HIVE' : ''}`
                         : 'Nothing planted yet'}
                     </Text>
                   </View>
@@ -3340,6 +3384,9 @@ export default function ProfileScreen() {
                   </Text>
                   <Text style={{ fontFamily: 'Lato_400Regular', color: '#2f7147', fontSize: 12.5, lineHeight: 18 }}>
                     Plant the same flowers here and both gardens keep growing.
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', color: '#2f7147', fontSize: 12.5, lineHeight: 18 }}>
+                    Or switch on Visible HIVE-Wide above and one garden follows you into every HIVE.
                   </Text>
                   <Pressable
                     onPress={() => void bringGardenOver(

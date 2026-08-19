@@ -28,6 +28,22 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-garden-follows-you',
+    date: '2026-08-19',
+    title: 'Your Skills Garden follows you into every HIVE',
+    detail: 'With Visible HIVE-Wide on, the garden you already planted blooms in every HIVE you are in — no replanting. Keep your card to one HIVE instead and each HIVE grows its own garden.',
+    href: { pathname: '/profile' },
+    action: 'See your garden',
+  },
+  {
+    id: '2026-08-19-wishes-everywhere',
+    date: '2026-08-19',
+    title: 'A HIVE-Wide wish shows up in all your HIVEs',
+    detail: 'Your profile now lists every wish of yours that travels, whichever HIVE you wrote it in — and when you have none yet, every HIVE offers to help you find the words, with Clive or on your own.',
+    href: { pathname: '/profile' },
+    action: 'Open your wishes',
+  },
+  {
     id: '2026-08-19-each-piece-chooses',
     date: '2026-08-19',
     title: 'One switch decides whether your card travels',

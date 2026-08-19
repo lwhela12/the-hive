@@ -264,11 +264,16 @@ function useTravellingPiecesQuery({ userIds, enabled }: { userIds: string[]; ena
           .in('share_scope', ['all_hives', 'public'])
           .in('status', ['public', 'fulfilled'])
           .order('created_at', { ascending: false }),
+        // No reach filter: whether a garden travels is the owner's one card
+        // switch (migration 193 — the policy asks `profile_travels()`), not a
+        // per-row flag. Row-level security hands back what the viewer may see;
+        // the merge below only uses these rows for people whose card travels,
+        // so a stay-home member's other gardens never leak sideways through a
+        // HIVE the viewer happens to share with them.
         supabase
           .from('skills')
-          .select('user_id, id, community_id, description, enthusiasm_level, display_x, display_y, reach')
-          .in('user_id', ids)
-          .eq('reach', 'all_hives'),
+          .select('user_id, id, community_id, description, enthusiasm_level, display_x, display_y')
+          .in('user_id', ids),
         supabase
           .from('profiles')
           .select('id, profile_scope, piece_reach')
@@ -2899,13 +2904,20 @@ export default function MembersScreen() {
         // the HIVEs, only the pieces that travel belong.
         const localSkills = skillsByUser.get(m.id) ?? [];
         const localWishes = wishesByUser.get(m.id) ?? [];
+        const reach = travelling?.reachByUser[m.id];
+        // A garden travels with the whole card, or not at all (Nat's one
+        // switch). A wish decides for itself — the travelling wishes query
+        // already asked share_scope, so no gate is needed on that side.
+        const gardenTravels = reach?.profile_scope === 'all_hives';
         m.skills = travellingReady
-          ? mergeById(wholeHive ? [] : localSkills, travellingSkillsByUser.get(m.id) ?? [])
+          ? mergeById(
+              wholeHive ? [] : localSkills,
+              gardenTravels ? (travellingSkillsByUser.get(m.id) ?? []) : []
+            )
           : localSkills;
         m.wishes = travellingReady
           ? mergeById(wholeHive ? [] : localWishes, travellingWishesByUser.get(m.id) ?? [])
           : localWishes;
-        const reach = travelling?.reachByUser[m.id];
         if (reach) {
           m.piece_reach = reach.piece_reach;
           m.profile_scope = reach.profile_scope;

@@ -133,13 +133,19 @@ async function fetchUserContext(
   communityId: string
 ): Promise<UserContextData> {
   const [profileResult, skillsResult, wishesResult, actionItemsResult] = await Promise.all([
-    supabase.from('profiles').select('name, email').eq('id', userId).single(),
-    supabase.from('skills').select('description').eq('user_id', userId).eq('community_id', communityId),
+    supabase.from('profiles').select('name, email, profile_scope').eq('id', userId).single(),
+    // All of the member's flowers, filtered below: with the card set Visible
+    // HIVE-Wide the garden is ONE garden that follows them into this HIVE
+    // (Nat, 2026-08-19), and Clive telling someone their garden is empty when
+    // it is blooming on their card is the same bug the profile page had.
+    supabase.from('skills').select('description, community_id').eq('user_id', userId),
+    // This HIVE's wishes plus the ones marked to travel — a HIVE-Wide wish
+    // shows everywhere, and Clive is a surface like any other.
     supabase
       .from('wishes')
       .select('id, description, status, is_active')
       .eq('user_id', userId)
-      .eq('community_id', communityId),
+      .or(`community_id.eq.${communityId},share_scope.in.(all_hives,public)`),
     supabase
       .from('action_items')
       .select('description, due_date, completed')
@@ -150,9 +156,14 @@ async function fetchUserContext(
       .limit(5),
   ]);
 
+  const cardTravels = (profileResult.data as any)?.profile_scope === 'all_hives';
+  const skills = (skillsResult.data || []).filter(
+    (skill: any) => cardTravels || skill.community_id === communityId
+  );
+
   return {
     profile: profileResult.data || { name: 'Unknown', email: '' },
-    skills: skillsResult.data || [],
+    skills,
     wishes: wishesResult.data || [],
     actionItems: actionItemsResult.data || [],
   };
