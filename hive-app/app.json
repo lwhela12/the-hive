@@ -45,7 +45,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/BEE ONLY IN GOLD BG.png",
+      "favicon": "./assets/hive-favicon.png",
       "bundler": "metro",
       "name": "HIVE",
       "shortName": "HIVE",
