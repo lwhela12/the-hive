@@ -30,8 +30,8 @@ export const APP_NEWS: AppNewsEntry[] = [
   {
     id: '2026-08-19-each-piece-chooses',
     date: '2026-08-19',
-    title: 'Every piece of your profile chooses for itself who sees it',
-    detail: 'Your bio, each fun fact, your 3MIQ, your Skills Garden and every wish now carry their own setting: this HIVE, or HIVE-Wide. And HIVE-Wide finally means what it says — it shows at the umbrella and inside every HIVE you are in, which is the bit that was quietly broken.',
+    title: 'One switch decides whether your card travels',
+    detail: 'Visible HIVE-Wide sends your whole card to the umbrella and into every HIVE you are in — which is what it always said and did not do. Keep it here instead and you can write a different you in each HIVE. Each wish still chooses for itself.',
     href: { pathname: '/profile' },
     action: 'Open your profile',
   },
