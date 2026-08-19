@@ -1511,6 +1511,29 @@ export default function MeetingHelperScreen() {
     void loadJobTakers();
   }, [loadJobTakers]);
 
+  /**
+   * Everybody's screen learns who took what, the moment they take it.
+   *
+   * Nat, describing the room she actually had (2026-08-19): *"we're all sitting
+   * in front of our computers ... it was like, okay, who wants what? It's like,
+   * me, I'll take this one. Me, I'll take this one. And it's like, wait, you
+   * can't do it, only I can — that feels weird."* Assigning was never limited
+   * to one person; seeing it was. So the panel listens to the to-do list
+   * itself, and a job taken on Charlee's laptop shows up on everyone's.
+   */
+  useEffect(() => {
+    if (!communityId) return;
+    const channel = supabase
+      .channel(`job-takers:${communityId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'action_items', filter: `community_id=eq.${communityId}` },
+        () => { void loadJobTakers(); }
+      )
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [communityId, loadJobTakers]);
+
   const handleAssignJob = async (job: { key: string; title: string; asks: string[]; threadId: string }) => {
     const typed = (jobDrafts[job.key] ?? '').trim();
     if (!communityId || jobSaving) return;
@@ -3819,7 +3842,17 @@ export default function MeetingHelperScreen() {
               }}
             >
               <Pressable
-                onPress={() => setOpenJobKey(open ? null : job.key)}
+                onPress={() => {
+                  // Opening a job is settling down to type in it, so the room
+                  // stops dragging you along while you do. The presenter still
+                  // leads everybody through the deck — Nat wants that — but
+                  // *"on that last who's-gonna-do-what screen I want everyone
+                  // to be able to update their own"*, and you cannot finish a
+                  // sentence on a screen that keeps moving. The catch-up pill
+                  // is already there to bring you back.
+                  if (!open && isFollowing) lookAround();
+                  setOpenJobKey(open ? null : job.key);
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={`${job.title}${takenBy ? `, taken by ${takenBy}` : ''}`}
                 style={{ paddingHorizontal: sz(20, 14), paddingVertical: sz(13, 10) }}

@@ -207,9 +207,14 @@ serve(async (req) => {
         .eq('community_id', communityId)
         .gte('created_at', startIso).lt('created_at', endIso),
       supabaseAdmin
+        // Retired to-dos stay out of the record. A jot that was archived the
+        // same night was archived FOR a reason — a duplicate, or a HIVE Help
+        // focus that got replaced — and a summary that lists it is telling
+        // people to go and do something nobody is asking them to do.
         .from('action_items')
         .select('description, assigned_to, assignee:profiles!assigned_to(name), about:profiles!related_user_id(name)')
         .eq('community_id', communityId)
+        .is('archived_at', null)
         .gte('created_at', startIso).lt('created_at', endIso),
       supabaseAdmin
         .from('wish_comments')
@@ -526,6 +531,36 @@ serve(async (req) => {
     } else if (hdLines.length > 0) {
       sections.push({ title: "HummDingers — everyone's POP", lines: hdLines });
     }
+
+    /**
+     * What was handed out, and to whom.
+     *
+     * The to-dos used to reach the summary ONLY through the HummDingers
+     * section, as a "Took on:" line under a person's check-in — so a HIVE that
+     * does not run check-ins lost every one of them. Production's first meeting
+     * handed out eleven jobs across four lists on 2026-08-18 and its summary
+     * came out as two lines: the Honey Pot balance and the next meeting date.
+     * Nat, opening it: *"if I click on that it is completely blank."*
+     *
+     * Only what the check-ins did not already account for lands here, so OG's
+     * summary does not say the same thing twice.
+     */
+    const spokenFor = new Set<string>();
+    people.forEach((person) => person.took.forEach((text) => spokenFor.add(text)));
+    const jobLines: string[] = [];
+    todoGroups.forEach((group, text) => {
+      if (spokenFor.has(text)) return;
+      const [headline, ...rest] = text.split('\n');
+      const who = group.names.length > 0 ? group.names.join(' & ') : 'nobody yet';
+      const about = group.about ? ` (re: ${group.about}'s HD)` : '';
+      jobLines.push(`${headline.trim()}${about} — ${who}`);
+      // The questions travel with the job, because a job without them is the
+      // thing Nat called useless: "and you're like, okay, what do I do with
+      // that?"
+      rest.map((line) => line.replace(/^[\s·•-]+/, '').trim()).filter(Boolean)
+        .forEach((line) => jobLines.push(`    ${line}`));
+    });
+    if (jobLines.length > 0) sections.push({ title: 'Who takes what', lines: jobLines });
 
     // Granted wishes are the whole point of the HIVE, so they keep a section of
     // their own rather than being buried in a wrap-up. The rest of the old

@@ -28,6 +28,22 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-everyone-takes-a-job',
+    date: '2026-08-19',
+    title: 'Everyone can take a job, and everyone sees it happen',
+    detail: 'Open a job on the jobs slide and the room stops dragging your screen along, so you can actually type. Whatever anyone takes shows up on every laptop in the room straight away.',
+    href: { pathname: '/meeting-helper' },
+    action: 'Open the meeting helper',
+  },
+  {
+    id: '2026-08-19-summary-says-who-takes-what',
+    date: '2026-08-19',
+    title: 'Meeting summaries say who took what',
+    detail: 'The jobs handed out at a meeting only reached the summary through someone\u2019s check-in, so a HIVE that does not run check-ins lost all of them. There is a Who takes what section now, with the questions that travel with each job.',
+    href: { pathname: '/meetings' },
+    action: 'Open Meeting Summaries',
+  },
+  {
     id: '2026-08-19-jobs-panel',
     date: '2026-08-19',
     title: 'The jobs list scrolls, remembers, and stops handing out the same job twice',
