@@ -4049,7 +4049,11 @@ export default function MeetingHelperScreen() {
   const sideVideoHeight = Math.round(
     Math.min(
       stageH,
-      Math.max(280, Math.max(1, videoPeople) * (sideVideoWidth - sz(16, 11)) * 0.5625 + sz(130, 104)),
+      // The allowance below the tiles covers Daily's header and tray AND the
+      // panel's own two controls — the transcript switch and, since 2026-08-19,
+      // the Record the room button. Sized for both, or the tray sits on the
+      // faces again (Nat, 2026-08-17: "this bar is still in the way").
+      Math.max(280, Math.max(1, videoPeople) * (sideVideoWidth - sz(16, 11)) * 0.5625 + sz(174, 142)),
     ),
   );
   // The plan slide's name is per-deck ("Plan the Meet Ups" / "Plan"), so its

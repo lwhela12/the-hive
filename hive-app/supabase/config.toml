@@ -155,6 +155,12 @@ verify_jwt = false
 [functions.save-transcript]
 verify_jwt = false
 
+# The room's own recording, for a HIVE that meets around one table with nobody
+# on the call. Same door as save-transcript: the function verifies the caller
+# itself and checks their membership, so the gateway does not.
+[functions.save-recording]
+verify_jwt = false
+
 # Harvest the cycle (newsletter thread, compliments, helper log, grants,
 # check-ins) into the same sections[] shape the meeting summary uses.
 # Auth (member JWT or service key) is handled in function code.

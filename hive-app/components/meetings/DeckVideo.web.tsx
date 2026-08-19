@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import DailyIframe, { type DailyCall } from '@daily-co/daily-js';
-import { supabase } from '../../lib/supabase';
+import { useRouter } from 'expo-router';
+import * as deckCall from '../../lib/deckCall';
+import * as roomRecorder from '../../lib/roomRecorder';
 import type { DeckVideoProps } from './DeckVideo';
 
 /**
@@ -17,10 +18,12 @@ import type { DeckVideoProps } from './DeckVideo';
  * pickers, mute buttons, participant grid and screen share, so the deck does
  * not have to grow a second set of any of them.
  *
- * **The frame is created once and never re-created.** Tearing the iframe down
- * and building it again drops the call, so joining, leaving and re-joining all
- * happen inside the same frame, and the frame only goes away when you leave the
- * deck entirely.
+ * **The frame is created once and never re-created, and it does not live in
+ * this component.** It lives in `lib/deckCall`, on a fixed layer attached to
+ * the document, because this panel unmounts every time Nat opens a board
+ * mid-meeting and the call used to hang up with it (2026-08-19). What is drawn
+ * here is a placeholder; the layer is moved to sit exactly over it, and parks
+ * itself in the corner when the deck goes away.
  */
 
 type State = 'idle' | 'opening' | 'live' | 'error';
@@ -90,201 +93,65 @@ export function DeckVideo({
   onToggleTranscripts,
   compact = false,
 }: DeckVideoProps) {
+  const router = useRouter();
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const frameRef = useRef<DailyCall | null>(null);
-  const [state, setState] = useState<State>('idle');
-  const [problem, setProblem] = useState<string | null>(null);
+  const [call, setCall] = useState<deckCall.DeckCallSnapshot>(deckCall.getSnapshot);
+  const [tape, setTape] = useState<roomRecorder.RecorderSnapshot>(roomRecorder.getSnapshot);
 
-  /**
-   * What has been said, in order, with the name of the microphone it came from.
-   *
-   * Daily transcribes each participant's OWN audio track, which is the whole
-   * reason this is worth having for Tech HIVE and not for OG's dining room:
-   * everyone on their own device gets their own name on every line, and a room
-   * sharing one laptop is one microphone and therefore one name for the table.
-   */
-  const peopleRef = useRef<((count: number) => void) | undefined>(onPeopleChange);
-  peopleRef.current = onPeopleChange;
-  const linesRef = useRef<string[]>([]);
-  const transcribingRef = useRef(false);
-  const isOwnerRef = useRef(false);
-  const communityRef = useRef(communityId);
-  communityRef.current = communityId;
-  const wantsTranscriptRef = useRef(transcriptsOn);
-  wantsTranscriptRef.current = transcriptsOn;
-  const [transcriptNote, setTranscriptNote] = useState<string | null>(null);
-
-  /** Hand the evening over to `save-transcript`, then start a clean page. */
-  const keepTranscript = useCallback(async () => {
-    const lines = linesRef.current;
-    linesRef.current = [];
-    transcribingRef.current = false;
-    if (!lines.length || !communityRef.current) return;
-    try {
-      await supabase.functions.invoke('save-transcript', {
-        body: { community_id: communityRef.current, transcript: lines.join('\n') },
-      });
-      setTranscriptNote('Transcript saved to this meeting.');
-    } catch {
-      setTranscriptNote('The transcript could not be saved.');
-    }
-  }, []);
+  // The call is somebody else's HIVE if it is live on another community, and
+  // this deck must not claim it, dock it, or offer to leave it.
+  const mine = !call.communityId || call.communityId === communityId;
+  const state = mine ? call.state : 'idle';
+  const problem = mine ? call.problem : null;
+  const transcriptNote = mine ? call.note : null;
 
   // The deck decides how much room to give this panel, so it has to be told
   // when there is actually a call in it.
   const liveRef = useRef(onLiveChange);
   liveRef.current = onLiveChange;
+  const peopleRef = useRef(onPeopleChange);
+  peopleRef.current = onPeopleChange;
+
+  useEffect(() => deckCall.subscribe(setCall), []);
+  useEffect(() => roomRecorder.subscribe(setTape), []);
+
   useEffect(() => {
     liveRef.current?.(state === 'live');
   }, [state]);
 
-  // Leaving the deck mid-call should hang up rather than leave a ghost of you
-  // in the room with everybody looking at it — and whatever was said before you
-  // went is kept rather than thrown away.
   useEffect(() => {
-    return () => {
-      const frame = frameRef.current;
-      frameRef.current = null;
-      void keepTranscript();
-      if (frame) {
-        frame.leave().catch(() => {});
-        frame.destroy().catch(() => {});
-      }
-    };
-  }, [keepTranscript]);
+    peopleRef.current?.(mine ? call.people : 0);
+  }, [call.people, mine]);
 
-  // Throwing the switch during a call takes effect during that call: turning it
-  // on starts writing from here, turning it off stops and keeps what there is
-  // so far. Nobody has to leave and come back for the setting to mean anything.
+  // Dock the layer over this panel while the deck is open; park it in the
+  // corner when the deck goes away. Unmounting is a move, never a hang-up.
   useEffect(() => {
-    const frame = frameRef.current;
-    if (state !== 'live' || !frame || !isOwnerRef.current) return;
-    if (transcriptsOn && !transcribingRef.current) {
-      try {
-        frame.startTranscription();
-      } catch {
-        setTranscriptNote('Daily would not start transcribing — the rest of the call is fine.');
-      }
-    } else if (!transcriptsOn && transcribingRef.current) {
-      try {
-        frame.stopTranscription();
-      } catch {
-        /* the stop event will not arrive; the leave path still keeps the lines */
-      }
-      void keepTranscript();
-    }
-  }, [transcriptsOn, state, keepTranscript]);
+    deckCall.dock(mountRef.current);
+    return () => deckCall.dock(null);
+  }, [state]);
 
-  const join = useCallback(async () => {
-    if (!communityId || state === 'opening' || state === 'live') return;
-    setProblem(null);
-    setState('opening');
-    try {
-      const { data, error } = await supabase.functions.invoke('daily-room', {
-        body: { community_id: communityId },
-      });
-      if (error) throw new Error(error.message);
-      const { url, token, isOwner } = (data ?? {}) as {
-        url?: string;
-        token?: string;
-        isOwner?: boolean;
-      };
-      if (!url) throw new Error('No room came back.');
-      isOwnerRef.current = !!isOwner;
+  // "Back" on the parked tile has to land somewhere, and the deck is the only
+  // screen that knows where it lives.
+  useEffect(() => {
+    deckCall.setReturnHandler(() => router.push('/meeting-helper'));
+    return () => deckCall.setReturnHandler(null);
+  }, [router]);
 
-      const parent = mountRef.current;
-      if (!parent) throw new Error('Nowhere to put the video.');
+  // Throwing the switch during a call takes effect during that call: on starts
+  // writing from here, off stops and keeps what there is so far.
+  useEffect(() => {
+    if (!mine) return;
+    deckCall.setTranscripts(transcriptsOn);
+  }, [transcriptsOn, state, mine]);
 
-      // Reuse the frame across a leave-then-rejoin; only build one the first
-      // time, because building a second one in the same parent throws.
-      let frame = frameRef.current;
-      if (!frame) {
-        // Daily allows exactly one call instance per page. A first attempt that
-        // threw part-way — an unsupported theme, say — can leave one behind
-        // that we never got a handle on, and every retry after it would fail
-        // with "duplicate DailyIframe instances" instead of the real reason.
-        const theme = deckTheme(accent, accentDeep, cardColor, softBorder);
-        const stray = DailyIframe.getCallInstance?.();
-        if (stray) await stray.destroy().catch(() => {});
-        parent.replaceChildren?.();
-
-        frame = DailyIframe.createFrame(parent, {
-          showLeaveButton: true,
-          showFullscreenButton: true,
-          iframeStyle: {
-            width: '100%',
-            height: '100%',
-            border: '0',
-            borderRadius: '14px',
-          },
-          // Spread rather than `theme: undefined` — Daily reads the key being
-          // present as a theme it then has to make sense of.
-          ...(theme ? { theme } : {}),
-        });
-        frameRef.current = frame;
-        // The leave button is Daily's own, so the panel has to hear about it
-        // from the frame rather than from a button of ours.
-        const countPeople = () => {
-          const who = frameRef.current?.participants?.() ?? {};
-          peopleRef.current?.(Math.max(1, Object.keys(who).length));
-        };
-        frame.on('joined-meeting', countPeople);
-        frame.on('participant-joined', countPeople);
-        frame.on('participant-left', countPeople);
-        frame.on('left-meeting', () => {
-          setState('idle');
-          peopleRef.current?.(0);
-          void keepTranscript();
-        });
-        frame.on('error', (event) => {
-          setProblem(event?.errorMsg ?? 'The video dropped.');
-          setState('error');
-          void keepTranscript();
-        });
-
-        // Every finished line, with the speaker's own name in front of it.
-        // `participants()` is asked at the moment the line lands rather than
-        // cached, so somebody who joins mid-meeting is still named.
-        frame.on('transcription-message', (event) => {
-          if (!event?.text?.trim()) return;
-          const who = frame!.participants?.() ?? {};
-          const speaker = Object.values(who).find(
-            (participant: any) => participant?.session_id === event.participantId
-          ) as { user_name?: string } | undefined;
-          const name = speaker?.user_name?.trim() || 'Someone';
-          linesRef.current.push(`${name}: ${event.text.trim()}`);
-        });
-        frame.on('transcription-started', () => {
-          transcribingRef.current = true;
-          setTranscriptNote(null);
-        });
-        frame.on('transcription-stopped', () => {
-          transcribingRef.current = false;
-        });
-        frame.on('transcription-error', () => {
-          transcribingRef.current = false;
-          setTranscriptNote('Daily would not start transcribing — the rest of the call is fine.');
-        });
-      }
-
-      await frame.join({ url, token });
-      setState('live');
-
-      // Only an owner may start it, and only if this HIVE has said yes. A
-      // member joining a HIVE that transcribes does not start a second one —
-      // Daily runs one transcription per room and ignores the rest.
-      if (wantsTranscriptRef.current && isOwnerRef.current) {
-        try {
-          frame.startTranscription();
-        } catch {
-          setTranscriptNote('Daily would not start transcribing — the rest of the call is fine.');
-        }
-      }
-    } catch (err) {
-      setProblem(err instanceof Error ? err.message : 'Could not open the video room.');
-      setState('error');
-    }
-  }, [communityId, state, accent, accentDeep, cardColor, softBorder]);
+  const join = useCallback(() => {
+    if (!communityId) return;
+    void deckCall.join({
+      communityId,
+      theme: deckTheme(accent, accentDeep, cardColor, softBorder),
+      transcriptsOn,
+    });
+  }, [communityId, accent, accentDeep, cardColor, softBorder, transcriptsOn]);
 
   const label =
     state === 'opening' ? 'Opening the room…' : state === 'error' ? 'Try again' : 'Join the video';
@@ -373,6 +240,90 @@ export function DeckVideo({
   );
 
   /**
+   * Record the room.
+   *
+   * The switch above is the video call's transcription and needs somebody on
+   * the call for there to be anything to transcribe. This is the other case,
+   * and it is the one a HIVE night in a dining room actually is — Nat, after
+   * Production met around Charlee's table and kept nothing (2026-08-19):
+   * *"if everyone's in the same room, then I just hit the record button on my
+   * meeting helper."* One microphone, this laptop's, no call required.
+   *
+   * It keeps running when she leaves the deck for a board, because the
+   * recording lives in `lib/roomRecorder` rather than in this panel.
+   */
+  const taping = tape.recording || tape.uploading || tape.unsaved;
+  const recordLabel = tape.uploading
+    ? 'Saving…'
+    : tape.unsaved
+      ? 'Retry save'
+      : tape.recording
+        ? `Stop · ${roomRecorder.clockFace(tape.seconds)}`
+        : 'Record the room';
+
+  const recordButton = (
+    <button
+      type="button"
+      onClick={() => {
+        if (tape.uploading) return;
+        if (tape.unsaved) return void roomRecorder.retry();
+        if (tape.recording) return void roomRecorder.stop();
+        if (communityId) void roomRecorder.start(communityId);
+      }}
+      disabled={!communityId || tape.uploading}
+      aria-pressed={tape.recording}
+      title="Record this room from this laptop's microphone — it keeps going if you leave the deck"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        width: idleCompact ? 'auto' : '100%',
+        flex: '0 0 auto',
+        alignSelf: idleCompact ? undefined : 'stretch',
+        minWidth: 0,
+        fontFamily: 'Lato_700Bold, Lato, sans-serif',
+        fontSize: fontSize * (compact ? 0.8 : 0.9),
+        color: tape.recording ? '#ffffff' : accentDeep,
+        backgroundColor: tape.recording ? '#c8321f' : 'transparent',
+        border: `1px solid ${tape.recording ? '#c8321f' : softBorder}`,
+        borderRadius: 999,
+        padding: compact ? '4px 11px' : '7px 14px',
+        marginBottom: idleCompact ? 0 : compact ? 5 : 8,
+        cursor: communityId && !tape.uploading ? 'pointer' : 'default',
+        opacity: communityId ? 1 : 0.6,
+        textAlign: 'left',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: 10,
+          height: 10,
+          flex: '0 0 auto',
+          borderRadius: tape.recording ? 3 : 999,
+          backgroundColor: tape.recording ? '#ffffff' : '#c8321f',
+        }}
+      />
+      {recordLabel}
+    </button>
+  );
+
+  const tapeNote = tape.problem || (taping ? null : tape.note) ? (
+    <div
+      style={{
+        marginBottom: 8,
+        fontFamily: 'Lato_400Regular, Lato, sans-serif',
+        fontSize: fontSize * 0.8,
+        lineHeight: 1.35,
+        color: accentDeep,
+      }}
+    >
+      {tape.problem ?? tape.note}
+    </div>
+  ) : null;
+
+  /**
    * Compact and nobody on the call yet: the switch and the way in share a row,
    * and the card below collapses to nothing instead of sitting there empty.
    *
@@ -409,8 +360,9 @@ export function DeckVideo({
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       {idleCompact ? (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
             {transcriptSwitch}
+            {recordButton}
             <button
               type="button"
               onClick={join}
@@ -433,6 +385,7 @@ export function DeckVideo({
             </button>
           </div>
           {problemLine}
+          {tapeNote}
           {transcriptNote ? (
             <div
               style={{
@@ -450,6 +403,8 @@ export function DeckVideo({
       ) : (
         <>
           {transcriptSwitch}
+          {recordButton}
+          {tapeNote}
           {transcriptNote && (
             <div
               style={{
@@ -482,17 +437,10 @@ export function DeckVideo({
           justifyContent: 'center',
         }}
       >
-      {/* The frame's home. It is always in the tree, so the call survives every
-          re-render of the deck around it, and it only shows once we are live. */}
-      <div
-        ref={mountRef}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          opacity: state === 'live' ? 1 : 0,
-          pointerEvents: state === 'live' ? 'auto' : 'none',
-        }}
-      />
+      {/* Where the call SITS, not where it lives. `lib/deckCall` measures this
+          box every frame and moves its own fixed layer over it, so the video
+          reads as part of the panel while surviving this panel's unmount. */}
+      <div ref={mountRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
 
       {state !== 'live' && !idleCompact && (
         <div style={{ textAlign: 'center', padding: '0 14px', zIndex: 1 }}>

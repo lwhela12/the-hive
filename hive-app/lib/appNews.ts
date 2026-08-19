@@ -28,6 +28,20 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-record-the-room',
+    date: '2026-08-19',
+    title: 'Meetings get written down even when nobody is on the video',
+    detail: 'There is a Record the room button next to the transcript switch in the meeting helper. One microphone — the laptop running the meeting — so a HIVE sitting around one table gets a transcript without everybody joining a call. It keeps recording while you go look at a board and come back, and a little red pill in the corner tells you it is still going.',
+    href: { pathname: '/meeting-helper' },
+    action: 'Open the meeting helper',
+  },
+  {
+    id: '2026-08-19-call-follows-you',
+    date: '2026-08-19',
+    title: 'The video call stops hanging up when you leave the deck',
+    detail: 'Opening a board mid-meeting used to end the call and close the transcript. Now the call shrinks into a corner tile and follows you, with Back to get to the meeting and an X when you actually mean to leave.',
+  },
+  {
     id: '2026-08-17-the-creed',
     date: '2026-08-17',
     title: 'Every HIVE has a creed now, and you agree to it on the way in',
