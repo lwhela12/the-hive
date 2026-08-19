@@ -2639,6 +2639,7 @@ export default function ProfileScreen() {
           community={community}
           onToggle={() => void toggleHiveWideVisibility()}
           busy={savingHiveWideVisibility}
+          alignSelf="center"
         />
         {/* The receipt. A pill that slides under your finger looks the same
             whether or not anything was stored, so it says so in words for a few
@@ -2667,11 +2668,13 @@ export default function ProfileScreen() {
               title instead of sitting on the same line". It did: the row was
               `justify-end` with nothing in it but the button, so it hung in the
               air over "HIVErs should ask me about" with no line of its own.
-              "Your Card" is her word for this block — of a member's profile,
-              2026-08-06: "like we're pulling up their card". */}
+              "About You" replaced "Your Card" on 2026-08-19 (Nat, memo 207) —
+              once the whole profile travels as one entity, "card" read as one
+              section of it, and this heading matches the member card's own
+              About You block. */}
           <View className="flex-row items-center justify-between mb-2">
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
-              Your Card
+              About You
             </Text>
             {!isEditing ? (
               // The pencil, like everywhere else (Nat 2026-08-04: "all edit

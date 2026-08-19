@@ -37,6 +37,7 @@ export function ReachPill({
   community,
   communityId,
   label,
+  alignSelf = 'flex-start',
 }: {
   reach: 'hive' | 'all_hives';
   /** Present = a control (mini switch track drawn); absent = a label. */
@@ -49,6 +50,13 @@ export function ReachPill({
   communityId?: string | null;
   /** Override the stays-home wording; default is "<HIVE name> only". */
   label?: { hive?: string; wide?: string };
+  /**
+   * Where the pill sits in its parent. Defaults to hugging the left, which is
+   * right inside rows and cards; the profile's whole-card switch passes
+   * 'center' — Nat, memo 207: "if it really is going to toggle the whole
+   * profile, it needs to be centered."
+   */
+  alignSelf?: 'flex-start' | 'center';
 }) {
   const { community: current, memberships } = useAuth();
   const owner: Community | null =
@@ -108,7 +116,7 @@ export function ReachPill({
   const shellStyle = {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    alignSelf: 'flex-start' as const,
+    alignSelf,
     gap: dims.gap,
     borderRadius: 999,
     borderWidth: 1,
