@@ -41,24 +41,14 @@ export type DeckVideoProps = {
    */
   onPeopleChange?: (count: number) => void;
   /**
-   * Does this HIVE write its meetings down? Per-HIVE (migration 183), because
-   * a transcript is labelled by microphone: everyone on their own device gets
-   * their own name on every line, a room sharing one laptop gets one name for
-   * the whole table.
-   */
-  transcriptsOn: boolean;
-  /** Admins throw the switch; everyone else can see where it is set. */
-  canToggleTranscripts: boolean;
-  onToggleTranscripts: (next: boolean) => void;
-  /**
    * A phone, where nobody is on the call yet.
    *
-   * Idle, this panel is a full-width switch stacked on a full-width card with
+   * Idle, this panel is a full-width button stacked on a full-width card with
    * a small button floating in the middle of it — about a fifth of a phone
    * screen spent saying "no video yet" before the slide gets a pixel (Nat,
-   * 2026-08-17). Compact puts the switch and the way in on one line and drops
-   * the empty card entirely. Once somebody joins, the panel is a video panel
-   * again and this changes nothing.
+   * 2026-08-17). Compact puts both ways in on one line and drops the empty
+   * card entirely. Once somebody joins, the panel is a video panel again and
+   * this changes nothing.
    */
   compact?: boolean;
 };
@@ -68,7 +58,6 @@ export function DeckVideo({
   cardColor,
   softBorder,
   fontSize,
-  transcriptsOn,
 }: DeckVideoProps) {
   return (
     <View
@@ -95,7 +84,8 @@ export function DeckVideo({
         Video runs in the browser.
         {'\n'}
         Open the deck at app.the-hive.app to join the room.
-        {transcriptsOn ? '\nThis HIVE writes its meetings down.' : ''}
+        {'\n'}
+        Every meeting is written down.
       </Text>
     </View>
   );

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import * as deckCall from '../../lib/deckCall';
 import * as roomRecorder from '../../lib/roomRecorder';
@@ -88,12 +89,19 @@ export function DeckVideo({
   fontSize,
   onLiveChange,
   onPeopleChange,
-  transcriptsOn,
-  canToggleTranscripts,
-  onToggleTranscripts,
   compact = false,
 }: DeckVideoProps) {
   const router = useRouter();
+  // Not `mounted` — FOCUSED.
+  //
+  // Expo Router's tabs keep a screen mounted after you leave it, which is what
+  // makes coming back instant and what made the first version of this wrong:
+  // the unmount that was supposed to park the call never ran, so the video sat
+  // docked at its last measured position, floating over the middle of the
+  // Boards page (Nat, 2026-08-19, with a screenshot: *"it didn't go to the
+  // bottom right"*). Focus is the thing that actually changes when she walks
+  // away from the deck.
+  const focused = useIsFocused();
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [call, setCall] = useState<deckCall.DeckCallSnapshot>(deckCall.getSnapshot);
   const [tape, setTape] = useState<roomRecorder.RecorderSnapshot>(roomRecorder.getSnapshot);
@@ -123,12 +131,13 @@ export function DeckVideo({
     peopleRef.current?.(mine ? call.people : 0);
   }, [call.people, mine]);
 
-  // Dock the layer over this panel while the deck is open; park it in the
-  // corner when the deck goes away. Unmounting is a move, never a hang-up.
+  // Dock the layer over this panel while the deck is the screen you are on;
+  // park it in the corner the moment it is not. Leaving is a move, never a
+  // hang-up.
   useEffect(() => {
-    deckCall.dock(mountRef.current);
+    deckCall.dock(focused ? mountRef.current : null);
     return () => deckCall.dock(null);
-  }, [state]);
+  }, [state, focused]);
 
   // "Back" on the parked tile has to land somewhere, and the deck is the only
   // screen that knows where it lives.
@@ -137,107 +146,23 @@ export function DeckVideo({
     return () => deckCall.setReturnHandler(null);
   }, [router]);
 
-  // Throwing the switch during a call takes effect during that call: on starts
-  // writing from here, off stops and keeps what there is so far.
-  useEffect(() => {
-    if (!mine) return;
-    deckCall.setTranscripts(transcriptsOn);
-  }, [transcriptsOn, state, mine]);
-
   const join = useCallback(() => {
     if (!communityId) return;
     void deckCall.join({
       communityId,
       theme: deckTheme(accent, accentDeep, cardColor, softBorder),
-      transcriptsOn,
     });
-  }, [communityId, accent, accentDeep, cardColor, softBorder, transcriptsOn]);
+  }, [communityId, accent, accentDeep, cardColor, softBorder]);
 
   const label =
     state === 'opening' ? 'Opening the room…' : state === 'error' ? 'Try again' : 'Join the video';
 
   /**
-   * Compact and nobody on the call yet. Declared up here because the switch
-   * below is sized from it, and it was being sized from `compact` alone —
-   * which is true on a phone whether or not anybody is on the call.
+   * Compact and nobody on the call yet. Declared up here because the record
+   * button below is sized from it, and it was being sized from `compact`
+   * alone — which is true on a phone whether or not anybody is on the call.
    */
   const idleCompact = compact && state !== 'live';
-
-  /**
-   * The transcript switch, sitting on top of the video panel.
-   *
-   * Nat asked for it here and nowhere else, 2026-08-15: *"as long as there's a
-   * big, obvious toggle in the meeting helper, where the people join with the
-   * video, that would be freaking awesome."* It says which way it is set even
-   * to people who cannot change it, because everyone in the call deserves to
-   * know whether the room is being written down.
-   */
-  const transcriptSwitch = (
-    <button
-      type="button"
-      onClick={canToggleTranscripts ? () => onToggleTranscripts(!transcriptsOn) : undefined}
-      disabled={!canToggleTranscripts}
-      aria-pressed={transcriptsOn}
-      title={
-        canToggleTranscripts
-          ? 'Whether this HIVE writes its meetings down'
-          : 'Only a HIVE admin can change this'
-      }
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        // Only the idle ROW shares its main axis with anything. Once the call
-        // is live the panel is a column again — and `flex: 1 1 auto` on a
-        // column grows DOWNWARD, which turned this into a switch the height of
-        // a playing card sitting on top of the video (Nat, 2026-08-17:
-        // "it still looks sensationally bad in these 2 views on my phone").
-        // Keyed on idleCompact now, never on `compact` alone.
-        width: idleCompact ? 'auto' : '100%',
-        flex: idleCompact ? '1 1 auto' : '0 0 auto',
-        alignSelf: idleCompact ? undefined : 'stretch',
-        minWidth: 0,
-        fontFamily: 'Lato_700Bold, Lato, sans-serif',
-        // A phone spends this space on the faces, not on a label.
-        fontSize: fontSize * (compact ? 0.8 : 0.9),
-        color: transcriptsOn ? '#ffffff' : accentDeep,
-        backgroundColor: transcriptsOn ? accent : 'transparent',
-        border: `1px solid ${transcriptsOn ? accent : softBorder}`,
-        borderRadius: 999,
-        padding: compact ? '4px 11px' : '7px 14px',
-        marginBottom: idleCompact ? 0 : compact ? 5 : 8,
-        cursor: canToggleTranscripts ? 'pointer' : 'default',
-        textAlign: 'left',
-      }}
-    >
-      <span
-        aria-hidden
-        style={{
-          width: 30,
-          height: 16,
-          flex: '0 0 auto',
-          borderRadius: 999,
-          backgroundColor: transcriptsOn ? '#ffffff' : softBorder,
-          position: 'relative',
-          display: 'inline-block',
-        }}
-      >
-        <span
-          style={{
-            position: 'absolute',
-            top: 2,
-            left: transcriptsOn ? 16 : 2,
-            width: 12,
-            height: 12,
-            borderRadius: 999,
-            backgroundColor: transcriptsOn ? accent : '#ffffff',
-            transition: 'left 120ms ease',
-          }}
-        />
-      </span>
-      {transcriptsOn ? 'Writing this meeting down' : 'Transcript off'}
-    </button>
-  );
 
   /**
    * Record the room.
@@ -309,6 +234,29 @@ export function DeckVideo({
     </button>
   );
 
+  /**
+   * The one line that tells you the two buttons are not a trick question.
+   *
+   * There were three controls here until 2026-08-19 and Nat could not tell
+   * them apart: *"there's writing this meeting down, record the room and join
+   * the video. And so I wouldn't know which one to do."* Two now — the video,
+   * or just the microphone — and this says the part neither button can say
+   * about itself.
+   */
+  const choiceHint = state !== 'live' && !idleCompact && !taping ? (
+    <div
+      style={{
+        marginBottom: 8,
+        fontFamily: 'Lato_400Regular, Lato, sans-serif',
+        fontSize: fontSize * 0.8,
+        lineHeight: 1.35,
+        color: accentDeep,
+      }}
+    >
+      Either way, the meeting gets written down.
+    </div>
+  ) : null;
+
   const tapeNote = tape.problem || (taping ? null : tape.note) ? (
     <div
       style={{
@@ -361,7 +309,6 @@ export function DeckVideo({
       {idleCompact ? (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
-            {transcriptSwitch}
             {recordButton}
             <button
               type="button"
@@ -402,8 +349,8 @@ export function DeckVideo({
         </>
       ) : (
         <>
-          {transcriptSwitch}
           {recordButton}
+          {choiceHint}
           {tapeNote}
           {transcriptNote && (
             <div

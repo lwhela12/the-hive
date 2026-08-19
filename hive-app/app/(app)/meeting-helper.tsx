@@ -846,39 +846,11 @@ export default function MeetingHelperScreen() {
   /** How many faces are actually on the call — see `sideVideoHeight` below. */
   const [videoPeople, setVideoPeople] = useState(0);
 
-  /**
-   * Does this HIVE write its meetings down? It lives on the HIVE
-   * (migration 183), so the switch is one setting the whole HIVE shares rather
-   * than a thing each person turns on for themselves — and it is shown here
-   * even to people who cannot change it, because everyone in the call deserves
-   * to know whether the room is being written down.
-   *
-   * Seeded from the community row and then kept locally so the switch answers
-   * the moment it is pressed instead of after a round trip.
-   */
-  const [transcriptsOn, setTranscriptsOn] = useState<boolean>(
-    () => !!community?.transcripts_enabled
-  );
-  useEffect(() => {
-    setTranscriptsOn(!!community?.transcripts_enabled);
-  }, [community]);
-
-  const setTranscriptsFor = useCallback(
-    (next: boolean) => {
-      if (!communityId) return;
-      setTranscriptsOn(next);
-      void supabase
-        .from('communities')
-        .update({ transcripts_enabled: next })
-        .eq('id', communityId)
-        .then(({ error }) => {
-          // Only an admin may write this; if the row refuses, put the switch
-          // back rather than leaving it saying something untrue.
-          if (error) setTranscriptsOn(!next);
-        });
-    },
-    [communityId]
-  );
+  // Whether the meeting is written down is no longer a switch. A call always
+  // transcribes and the room recorder is the other way in — two choices, which
+  // is what Nat asked for on 2026-08-19 after three of them sat side by side:
+  // *"I wouldn't know which one to do, or if I hadn't done it a while, I might
+  // get confused."*
 
   // Slide 1 (Welcome) and slide 2 (Who's in the room) act as the pre-meeting
   // screen, so the arrival data keeps polling while either is showing.
@@ -4416,9 +4388,6 @@ export default function MeetingHelperScreen() {
           fontSize={sz(16, 12)}
           onLiveChange={setVideoLive}
           onPeopleChange={setVideoPeople}
-          transcriptsOn={transcriptsOn}
-          canToggleTranscripts={isAdmin}
-          onToggleTranscripts={setTranscriptsFor}
           compact={stackVideo}
         />
       </View>

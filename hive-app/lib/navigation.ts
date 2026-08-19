@@ -151,12 +151,15 @@ export const NAV_DESTINATIONS: NavDestination[] = [
    * to get back to where I was."* And Oliver, in the room: *"I'm locked out, I
    * can't figure out how to get back."*
    *
-   * `same` at HIVE-Wide, at her explicit ask — *"it needs to always be there"* —
-   * because the reason it is in the rail at all is getting BACK to a meeting
-   * already in progress. It opens the deck of whichever HIVE you were last in,
-   * which is the one whose meeting you are running.
+   * Hidden at HIVE-Wide. It was `same` for about an hour, on her first ask that
+   * it *"always be there"* — and she took it straight back the moment she saw
+   * it up there (2026-08-19): *"meeting helper can't be hive wide because it
+   * depends on which meeting helper you're in. So get rid of meeting helper
+   * from hive wide, but each hive should have its own meeting helper in the
+   * sidebar."* A deck belongs to one HIVE's meeting, so a row above all three
+   * can only guess which one you meant.
    */
-  { key: 'meeting-helper', label: 'Meeting Helper', emoji: '🎬', shortLabel: 'Helper', route: '/meeting-helper', gate: 'everyone', atWholeHive: 'same' },
+  { key: 'meeting-helper', label: 'Meeting Helper', emoji: '🎬', shortLabel: 'Helper', route: '/meeting-helper', gate: 'everyone', atWholeHive: 'hidden' },
   // Real money, belonging to one HIVE. It is already switched off for Tech.
   { key: 'honey-pot', label: 'Honey Pot', emoji: '🍯', route: '/honey-pot', gate: 'everyone', atWholeHive: 'hidden' },
   /**

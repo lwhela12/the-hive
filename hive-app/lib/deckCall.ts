@@ -59,7 +59,6 @@ let frame: DailyCall | null = null;
 
 let lines: string[] = [];
 let isOwner = false;
-let wantsTranscript = false;
 let docked: HTMLElement | null = null;
 let followRaf = 0;
 let lastRect = '';
@@ -276,31 +275,11 @@ export function dock(placeholder: HTMLElement | null) {
   applyPlacement();
 }
 
-export function setTranscripts(on: boolean) {
-  wantsTranscript = on;
-  if (snapshot.state !== 'live' || !frame || !isOwner) return;
-  if (on && !snapshot.transcribing) {
-    try {
-      frame.startTranscription();
-    } catch {
-      publish({ note: 'Daily would not start transcribing — the rest of the call is fine.' });
-    }
-  } else if (!on && snapshot.transcribing) {
-    try {
-      frame.stopTranscription();
-    } catch {
-      /* the stop event will not arrive; leaving still keeps the lines */
-    }
-    void keepTranscript();
-  }
-}
-
-export async function join(options: { communityId: string; theme: Theme; transcriptsOn: boolean }) {
-  const { communityId, theme, transcriptsOn } = options;
+export async function join(options: { communityId: string; theme: Theme }) {
+  const { communityId, theme } = options;
   if (!communityId || snapshot.state === 'opening' || snapshot.state === 'live') return;
 
   buildLayer();
-  wantsTranscript = transcriptsOn;
   publish({ state: 'opening', problem: null, communityId });
 
   try {
@@ -375,9 +354,17 @@ export async function join(options: { communityId: string; theme: Theme; transcr
     publish({ state: 'live' });
     applyPlacement();
 
-    // Only an owner may start it, and only if this HIVE has said yes. Daily
-    // runs one transcription per room and ignores every other request.
-    if (wantsTranscript && isOwner) {
+    // A call is always written down. There used to be a switch beside this
+    // panel and it made three ways to record one meeting sit next to each
+    // other — Nat, 2026-08-19: *"there's writing this meeting down, record the
+    // room and join the video. And so I wouldn't know which one to do."* Her
+    // rule instead: *"let's just have the video always have transcripts if
+    // there's a video, then you can choose video plus transcripts or
+    // transcripts only. Those would be the only two options."*
+    //
+    // Only an owner may start it. Daily runs one transcription per room and
+    // ignores every other request, so a member joining does not start a second.
+    if (isOwner) {
       try {
         frame.startTranscription();
       } catch {

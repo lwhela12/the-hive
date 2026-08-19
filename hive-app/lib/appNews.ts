@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-two-ways-to-record',
+    date: '2026-08-19',
+    title: 'Two ways to keep a meeting, instead of three switches',
+    detail: 'Join the video, or record the room from this laptop. Either way it gets written down — the separate transcript switch is gone, because a call always transcribes now.',
+    href: { pathname: '/meeting-helper' },
+    action: 'Open the meeting helper',
+  },
+  {
     id: '2026-08-19-helper-in-the-rail',
     date: '2026-08-19',
     title: 'Meeting Helper is in the side bar now, from every screen',
