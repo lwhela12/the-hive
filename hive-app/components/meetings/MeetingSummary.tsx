@@ -1,8 +1,17 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
-import { View, Text, ScrollView, Pressable, Alert } from 'react-native';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
+import { View, Text, ScrollView, Pressable } from 'react-native';
 import { supabase } from '../../lib/supabase';
+import { showAlert } from '../../lib/showAlert';
 import { formatDateLong, formatDateShort } from '../../lib/dateUtils';
+import { useAuth } from '../../lib/hooks/useAuth';
+import { invalidateWishQueries } from '../../lib/queryClient';
 import { SummarySections } from './SummarySections';
+import {
+  SpeakerNames,
+  transcriptLineWithNames,
+  type SpeakerMember,
+  type SpeakerNameMap,
+} from './SpeakerNames';
 import type { Meeting, ActionItem, Profile } from '../../types';
 
 interface MeetingSummaryProps {
@@ -22,10 +31,13 @@ interface MeetingSummaryProps {
  *      night happens. Nothing to review; the summary is already the summary.
  *
  * OG HIVE meets in person and lives on (B), which is why (A) was pulled out on
- * 2026-07-25. Tech HIVE and Show HIVE meet on Google Meet, where a transcript
- * is a real artifact, so (A) is back — minus the two pieces that never earned
- * their keep: raw transcript blocks and speaker attribution. Working out who
- * said what in a recording was never reliable enough to trust.
+ * 2026-07-25. Tech HIVE and Show HIVE talk over a call, where a transcript is a
+ * real artifact, so (A) is back.
+ *
+ * The transcript block came back with it, and so did who-said-what — a machine
+ * splitting a recording by voice is reliable, and a machine deciding which
+ * voice is Charlee is not. So the split is automatic and the names are a
+ * person's to confirm (`SpeakerNames`, migration 188).
  *
  * `sections` is the modern shape; everything below it is how older meetings were
  * saved and stays for them.
@@ -58,6 +70,15 @@ interface ParsedSummary {
   sections?: { title: string; lines: string[] }[];
   details?: string[];
   wishes_surfaced?: { person_name: string; description: string }[];
+  /**
+   * Which of those desires somebody has already turned into a real HD wish.
+   *
+   * It lives in the meeting's own stored summary rather than in this screen's
+   * memory, because a panel that only remembers while it is open tells you a
+   * different story every time you come back to it. Keyed by `desireKey()` so
+   * the mark survives a re-read of the notes, which renumbers the list.
+   */
+  desires_added?: Record<string, { wish_id: string; added_at: string; added_for: string }>;
   /** Set only when this meeting came in as notes rather than a live deck. */
   import_status?: 'pending' | 'preview' | 'applied' | 'live';
   preview_generated_at?: string;
@@ -96,6 +117,35 @@ const countProposals = (summary: ParsedSummary) =>
   + (summary.board_suggestions?.length ?? 0);
 
 const joinMeta = (parts: (string | null | undefined)[]) => parts.filter(Boolean).join(' · ');
+
+/**
+ * A name for one desire that survives the list being rebuilt.
+ *
+ * Position is no good as a name: reading the notes again renumbers everything,
+ * and the fourth desire on Tuesday is the second one on Wednesday. Whose it is
+ * and what it says do not move.
+ */
+const desireKey = (desire: { person_name: string; description: string }) => {
+  const flatten = (text: string) =>
+    (text ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  return `${flatten(desire.person_name)}::${flatten(desire.description).slice(0, 160)}`;
+};
+
+/** Match the name the meeting used against the people actually in this HIVE. */
+const memberCalled = (personName: string, members: SpeakerMember[]) => {
+  const wanted = (personName ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!wanted) return null;
+  return (
+    members.find((member) => (member.name ?? '').toLowerCase().trim() === wanted)
+    // A meeting says "Charlee" where the profile says "Charlee Shae". First
+    // names are how a room refers to people, so a first-name hit counts.
+    ?? members.find((member) => {
+      const first = (member.name ?? '').toLowerCase().trim().split(' ')[0];
+      return !!first && (first === wanted || wanted.split(' ')[0] === first);
+    })
+    ?? null
+  );
+};
 
 function PreviewReviewSection<T>({
   title,
@@ -165,8 +215,58 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   // The transcript starts folded away: the summary is what a person came for,
   // and the exact words are for the night you need them.
   const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const [members, setMembers] = useState<SpeakerMember[]>([]);
+  const [addingDesire, setAddingDesire] = useState<string | null>(null);
+
+  const { profile, communityId, communityRole } = useAuth();
+
+  /**
+   * Naming the voices is a HIVE admin's job, and an owner may do it anywhere.
+   * The role is held per HIVE, so it only counts when the meeting you are
+   * reading belongs to the HIVE you are standing in.
+   */
+  const isHiveAdmin =
+    (communityId === meeting.community_id && communityRole === 'admin')
+    || profile?.is_owner === true;
 
   useEffect(() => { setMeeting(initialMeeting); }, [initialMeeting]);
+
+  // Who is in this HIVE — used twice: to put a name to a voice in the
+  // transcript, and to know whose desire is whose.
+  useEffect(() => {
+    let stale = false;
+    const communityIdForMeeting = meeting.community_id;
+    if (!communityIdForMeeting) return;
+
+    supabase
+      .from('community_memberships')
+      .select('user_id, profiles:user_id(id, name)')
+      .eq('community_id', communityIdForMeeting)
+      .then(({ data, error }) => {
+        if (stale || error || !data) return;
+        const people = data
+          .map((row) => (row as unknown as { profiles?: SpeakerMember | null }).profiles)
+          .filter((person): person is SpeakerMember => !!person && !!person.id);
+        setMembers(people);
+      });
+
+    return () => { stale = true; };
+  }, [meeting.community_id]);
+
+  /**
+   * Who each voice belongs to (migration 188). Held here rather than read off
+   * `meeting` every render so that saving a name repaints the transcript
+   * underneath it straight away.
+   */
+  const speakerNames: SpeakerNameMap = useMemo(() => {
+    const stored = (meeting as { speaker_names?: unknown }).speaker_names;
+    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return {};
+    const names: SpeakerNameMap = {};
+    for (const [label, value] of Object.entries(stored as Record<string, unknown>)) {
+      if (typeof value === 'string' && value.trim()) names[label] = value.trim();
+    }
+    return names;
+  }, [meeting]);
 
   const loadActionItems = useCallback(async () => {
     const { data } = await supabase
@@ -295,13 +395,13 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
       }
 
       const total = data?.preview_counts?.total ?? 0;
-      Alert.alert(
+      showAlert(
         'Preview ready',
         `Clive found ${total} proposed update${total === 1 ? '' : 's'} to look over before anything is created.`
       );
     } catch (error) {
       console.error('Error previewing meeting notes:', error);
-      Alert.alert('Preview failed', 'Clive could not read those notes just now. Please try again.');
+      showAlert('Preview failed', 'Clive could not read those notes just now. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -310,7 +410,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   const applyApprovedNotes = async () => {
     if (busy) return;
     if (selectedCount === 0) {
-      Alert.alert('Nothing ticked', 'Choose at least one proposed update to create.');
+      showAlert('Nothing ticked', 'Choose at least one proposed update to create.');
       return;
     }
 
@@ -340,10 +440,10 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         `${data?.events_created ?? 0} event${(data?.events_created ?? 0) === 1 ? '' : 's'}`,
         `${data?.board_posts_created ?? 0} board post${(data?.board_posts_created ?? 0) === 1 ? '' : 's'}`,
       ].join(', ');
-      Alert.alert('Notes applied', `Created ${made}.`);
+      showAlert('Notes applied', `Created ${made}.`);
     } catch (error) {
       console.error('Error applying meeting notes:', error);
-      Alert.alert('Apply failed', 'Clive could not apply those notes just now. Please try again.');
+      showAlert('Apply failed', 'Clive could not apply those notes just now. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -370,13 +470,129 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
     }
   };
 
-  // What the room actually said, if this HIVE writes its meetings down
-  // (migration 183). Every line already carries the name of the person who said
-  // it, so it is shown as it was kept rather than re-attributed here.
-  const transcriptLines = (meeting.transcript_raw ?? '')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
+  /** The stored summary exactly as it is on the row, ready to be written back. */
+  const storedSummaryBase = (): Record<string, unknown> => {
+    const raw = (meeting.summary ?? '')
+      .trim()
+      .replace(/^```json\s*\n?/, '')
+      .replace(/\n?```\s*$/, '')
+      .replace(/^```\s*\n?/, '')
+      .replace(/\n?```\s*$/, '');
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // An older meeting kept plain text here. Fall through.
+    }
+    return { ...parsedSummary };
+  };
+
+  /**
+   * A desire from the meeting becomes a real HD wish for the person it belongs
+   * to.
+   *
+   * Nat, 2026-08-19, having gone looking for these on Charlee's profile and
+   * found nothing: *"Maybe instead of 'wishes', it says like 'desires
+   * identified', and then there can be a button like 'add this to my HD
+   * wishes'."* Until now the list created nothing anywhere.
+   *
+   * The mark saying it has been added is written onto the meeting's stored
+   * summary, so it is still true tomorrow on somebody else's screen.
+   */
+  const addDesireToWishes = async (
+    desire: { person_name: string; description: string },
+    owner: SpeakerMember
+  ) => {
+    const key = desireKey(desire);
+    if (addingDesire || parsedSummary.desires_added?.[key]) return;
+
+    setAddingDesire(key);
+    try {
+      const description = desire.description.trim();
+      const { data: wish, error } = await supabase
+        .from('wishes')
+        .insert({
+          user_id: owner.id,
+          community_id: meeting.community_id,
+          title: null,
+          description,
+          raw_input: description,
+          status: 'public',
+          // The bottom rung of the ladder. Something said out loud in a meeting
+          // has been offered to that room and nowhere else, so the wish starts
+          // at home and its owner decides if it goes further.
+          share_scope: 'hive',
+          is_active: true,
+          extracted_from: 'meeting',
+        })
+        .select('id')
+        .single();
+      if (error) throw error;
+
+      const added = {
+        ...(parsedSummary.desires_added ?? {}),
+        [key]: {
+          wish_id: wish?.id as string,
+          added_at: new Date().toISOString(),
+          added_for: owner.id,
+        },
+      };
+
+      const { data: updated, error: saveError } = await supabase
+        .from('meetings')
+        .update({ summary: JSON.stringify({ ...storedSummaryBase(), desires_added: added }) })
+        .eq('id', meeting.id)
+        .select('*')
+        .single();
+      if (saveError) throw saveError;
+
+      if (updated) {
+        setMeeting(updated as Meeting);
+        onMeetingUpdated?.(updated as Meeting);
+      }
+
+      await invalidateWishQueries(meeting.community_id, owner.id);
+
+      showAlert(
+        'Added',
+        owner.id === profile?.id
+          ? 'It is on your HD wishes now.'
+          : `It is on ${owner.name ? `${owner.name}'s` : 'their'} HD wishes now.`
+      );
+    } catch (error) {
+      console.error('Error adding a desire to HD wishes:', error);
+      showAlert('Not added', 'That desire could not be saved as a wish just now. Please try again.');
+    } finally {
+      setAddingDesire(null);
+    }
+  };
+
+  const handleSpeakerNamesSaved = (names: SpeakerNameMap) => {
+    const updated = { ...meeting, speaker_names: names } as Meeting;
+    setMeeting(updated);
+    onMeetingUpdated?.(updated);
+  };
+
+  /**
+   * What the room actually said.
+   *
+   * Lines from the Daily call carry the speaker's real name already. Lines from
+   * a recording carry "Speaker A", because AssemblyAI tells voices apart rather
+   * than people — so wherever somebody has put a name to a voice
+   * (`meetings.speaker_names`, migration 188) that name is what shows here.
+   *
+   * Held in a memo because `SpeakerNames` reads this list: a fresh array on
+   * every render would wipe the name somebody was halfway through typing.
+   */
+  const transcriptLines = useMemo(
+    () => (meeting.transcript_raw ?? '')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean),
+    [meeting.transcript_raw]
+  );
 
   const hasAnything = Boolean(
     parsedSummary.sections?.length
@@ -562,17 +778,58 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         )}
 
         {/* What people said they need is worth the same on any meeting,
-            sections or not — same reasoning as Decisions above. */}
+            sections or not — same reasoning as Decisions above.
+
+            It used to be headed "Wishes Surfaced" and it created nothing
+            anywhere, so Nat went looking for one on Charlee's profile and it
+            was not there. Both halves are fixed: the heading says what the list
+            IS, and each line can become a real HD wish for the person it
+            belongs to. */}
         {parsedSummary.wishes_surfaced && parsedSummary.wishes_surfaced.length > 0 && (
           <View className="mb-6">
-            <Text className="text-lg font-semibold text-gray-700 mb-2">Wishes Surfaced</Text>
+            <Text className="text-lg font-semibold text-gray-700 mb-2">Desires identified</Text>
+            <Text className="text-label mb-1">These came out of the conversation.</Text>
+            <Text className="text-label mb-2">Nothing has been created from them yet.</Text>
             <View className="bg-honey-50 rounded-xl p-4">
-              {parsedSummary.wishes_surfaced.map((wish, index) => (
-                <View key={index} className={index > 0 ? 'mt-3 pt-3 border-t border-honey-200' : ''}>
-                  <Text className="font-medium text-honey-800">{wish.person_name}</Text>
-                  <Text className="text-gray-700 mt-1">{wish.description}</Text>
-                </View>
-              ))}
+              {parsedSummary.wishes_surfaced.map((desire, index) => {
+                const key = desireKey(desire);
+                const already = parsedSummary.desires_added?.[key];
+                const owner = memberCalled(desire.person_name, members);
+                const isMine = !!owner && owner.id === profile?.id;
+                const canAdd = !!owner && (isMine || isHiveAdmin);
+                const firstName = (owner?.name ?? desire.person_name).trim().split(' ')[0];
+                const working = addingDesire === key;
+
+                return (
+                  <View key={index} className={index > 0 ? 'mt-3 pt-3 border-t border-honey-200' : ''}>
+                    <Text className="font-medium text-honey-800">{desire.person_name}</Text>
+                    <Text className="text-gray-700 mt-1">{desire.description}</Text>
+
+                    {already ? (
+                      <Text className="text-honey-700 font-medium mt-2">
+                        ✓ Added to {isMine ? 'your' : `${firstName}'s`} HD wishes
+                      </Text>
+                    ) : canAdd && owner ? (
+                      <Pressable
+                        onPress={() => addDesireToWishes(desire, owner)}
+                        disabled={!!addingDesire}
+                        accessibilityRole="button"
+                        className={`mt-3 bg-honey-500 px-4 py-2 rounded-lg self-start active:bg-honey-600 ${
+                          addingDesire ? 'opacity-60' : ''
+                        }`}
+                      >
+                        <Text className="text-white font-semibold">
+                          {working
+                            ? 'Adding…'
+                            : isMine
+                              ? 'Add to my HD wishes'
+                              : `Add to ${firstName}'s HD wishes`}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                );
+              })}
             </View>
           </View>
         )}
@@ -637,6 +894,17 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
             need the exact words. */}
         {transcriptLines.length > 0 && (
           <View className="mb-6">
+            {/* Naming the voices comes first, because the transcript
+                underneath reads differently once it is done. */}
+            <SpeakerNames
+              meetingId={meeting.id}
+              lines={transcriptLines}
+              members={members}
+              names={speakerNames}
+              canEdit={isHiveAdmin}
+              onSaved={handleSpeakerNamesSaved}
+            />
+
             <Pressable
               onPress={() => setTranscriptOpen((open) => !open)}
               accessibilityRole="button"
@@ -650,14 +918,14 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
               <View className="bg-gray-50 rounded-xl p-4">
                 {transcriptLines.map((line, index) => (
                   <Text key={index} className={`text-gray-700 ${index > 0 ? 'mt-2' : ''}`}>
-                    {line}
+                    {transcriptLineWithNames(line, speakerNames)}
                   </Text>
                 ))}
               </View>
             ) : (
               <Text className="text-label">
-                {transcriptLines.length} {transcriptLines.length === 1 ? 'line' : 'lines'}, with
-                everyone's name on what they said.
+                {transcriptLines.length} {transcriptLines.length === 1 ? 'line' : 'lines'}, each one
+                marked with who said it.
               </Text>
             )}
           </View>

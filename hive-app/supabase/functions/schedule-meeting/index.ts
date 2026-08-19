@@ -34,6 +34,8 @@ interface GoogleCalendarEvent {
   id: string;
   htmlLink: string;
   summary: string;
+  /** Google's own shortcut to the Meet link, when the event has one. */
+  hangoutLink?: string;
   conferenceData?: {
     entryPoints?: Array<{
       entryPointType: string;
@@ -103,21 +105,46 @@ async function createCalendarEvent(
     timeZone: string;
     attendees?: Attendee[];
     location?: string;
+    /** Does this HIVE meet on Meet? `communities.meets_on_google_meet`. */
+    onGoogleMeet?: boolean;
   }
 ): Promise<GoogleCalendarEvent> {
-  const { title, description, startDateTime, endDateTime, timeZone, attendees, location } = params;
+  const { title, description, startDateTime, endDateTime, timeZone, attendees, location, onGoogleMeet } = params;
 
-  // No Google Meet link. Nat, 2026-08-15: *"we need to make sure that the
-  // Google Meet buttons are gone off of everywhere ... all paths lead to the
-  // same campfire."* The meeting happens inside HIVE now — faces and the deck
-  // on one screen — so a second front door leads to an empty room with nobody
-  // in it. The calendar invite says where to actually go instead.
+  // A Meet link only where the HIVE actually meets on Meet.
+  //
+  // Nat, 2026-08-15, when the meeting moved into the app: *"we need to make
+  // sure that the Google Meet buttons are gone off of everywhere ... all paths
+  // lead to the same campfire."* True of a room. OG sits around her table with
+  // the deck on the TV and Production sits around Charlee's with five laptops
+  // open, and a second front door there is an empty Meet with nobody in it.
+  //
+  // Tech HIVE is not a room — everybody is remote on their own machine, Meet is
+  // where they already live, and the in-app call is metered where Meet is free
+  // (Nat and Lucas, 2026-08-19). So the choice is the HIVE's, on its own row,
+  // for the same reason transcripts are (migration 183).
+  //
+  // And it is what makes the transcript exist somewhere the app can reach:
+  // Meet saves one into the HOST's Drive, the host is the HIVE Google account
+  // that creates these invitations, so `import-meet-transcripts` finds it
+  // without anybody sharing a personal folder.
   const requestBody: Record<string, unknown> = {
     summary: title,
     description: [description, '', `Join in HIVE: ${MEETING_HOME}`].filter(Boolean).join('\n'),
     start: { dateTime: startDateTime, timeZone },
     end: { dateTime: endDateTime, timeZone },
   };
+
+  if (onGoogleMeet) {
+    // `requestId` only has to be unique per request; Google returns the same
+    // conference for a repeat of the same id rather than making a second one.
+    requestBody.conferenceData = {
+      createRequest: {
+        requestId: `hive-${startDateTime}-${Math.round(Date.now() / 1000)}`,
+        conferenceSolutionKey: { type: 'hangoutsMeet' },
+      },
+    };
+  }
 
   // Add location if provided (for in-person meetings)
   if (location) {
@@ -133,6 +160,9 @@ async function createCalendarEvent(
 
   const url = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events');
   url.searchParams.set('sendUpdates', 'all'); // Ensure invites are sent
+  // Google ignores conferenceData entirely without this, and says nothing
+  // about having done so — the event comes back looking fine, with no link.
+  if (onGoogleMeet) url.searchParams.set('conferenceDataVersion', '1');
 
   const response = await fetch(url.toString(), {
     method: 'POST',
@@ -345,10 +375,17 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Does this HIVE meet on Meet? Its own row says (migration 191).
+    const { data: hiveRow } = await supabaseAdmin
+      .from('communities')
+      .select('meets_on_google_meet')
+      .eq('id', communityId)
+      .maybeSingle();
+    const onGoogleMeet = !!(hiveRow as { meets_on_google_meet?: boolean } | null)?.meets_on_google_meet;
+
     // Get Google access token
     const accessToken = await getAccessToken();
 
-    // Create Google Calendar event with Meet link and attendees
     const calendarEvent = await createCalendarEvent(accessToken, {
       title,
       description,
@@ -357,12 +394,16 @@ Deno.serve(async (req) => {
       timeZone,
       attendees,
       location,
+      onGoogleMeet,
     });
 
-    // Nothing to extract any more — the meeting has one door and it is in the
-    // app. Kept as an explicit null so the column reads as "deliberately none"
-    // rather than "we forgot".
-    const meetLink: string | null = null;
+    // A HIVE that meets in the app has one door and this stays null on purpose,
+    // so the column reads as "deliberately none" rather than "we forgot".
+    const meetLink: string | null = onGoogleMeet
+      ? (calendarEvent.hangoutLink
+        ?? calendarEvent.conferenceData?.entryPoints?.find((point) => point.entryPointType === 'video')?.uri
+        ?? null)
+      : null;
 
     // Create authenticated Supabase client
     const supabase = createClient(

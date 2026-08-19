@@ -193,3 +193,16 @@ verify_jwt = false
 
 [functions.worth-capturing]
 verify_jwt = false
+
+# Brings Google Meet's transcript Docs out of Drive and files them onto the
+# right HIVE's meeting record. Two ways in, and only two: the cron with the
+# service key, or Nat and Lucas signed in — checked in function code, because a
+# function that reads Drive and writes into any HIVE cannot be left open.
+#
+# Needs two things a deploy cannot give it: the HIVE Google token must carry
+# drive.readonly (scripts/get-google-token.js asks for calendar.events only), and
+# Nat's "Default Folder for Meeting Recordings" must be shared read-only with the
+# HIVE Google account. Set MEET_TRANSCRIPTS_FOLDER_ID to that folder to narrow
+# the search. Both are spelled out at the top of the function.
+[functions.import-meet-transcripts]
+verify_jwt = false

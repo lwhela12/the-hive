@@ -83,9 +83,19 @@ async function updateCalendarEvent(
     startDateTime?: string;
     endDateTime?: string;
     timeZone?: string;
+    /**
+     * Give this event a Meet link if it has not got one.
+     *
+     * `schedule-meeting` adds one when the HIVE meets on Meet (migration 191),
+     * but every event made BEFORE that flag existed has none — including Tech
+     * HIVE's own September meeting, the first one that needs it. Editing a
+     * meeting is the natural place to fix that, rather than asking somebody to
+     * delete a meeting people have already accepted and make it again.
+     */
+    addMeetLink?: boolean;
   }
-): Promise<void> {
-  const { title, description, location, startDateTime, endDateTime, timeZone } = params;
+): Promise<string | null> {
+  const { title, description, location, startDateTime, endDateTime, timeZone, addMeetLink } = params;
 
   // Build the update payload - only include changed fields
   const requestBody: Record<string, unknown> = {};
@@ -120,7 +130,19 @@ async function updateCalendarEvent(
    * their own settings onto our request. Escaped, it can only ever be one event
    * id in one calendar, which is all it was ever meant to be.
    */
-  const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(googleEventId)}?sendUpdates=all`;
+  if (addMeetLink) {
+    requestBody.conferenceData = {
+      createRequest: {
+        requestId: `hive-${googleEventId}`,
+        conferenceSolutionKey: { type: 'hangoutsMeet' },
+      },
+    };
+  }
+
+  // Google ignores conferenceData without this and says nothing about having
+  // done so — the event comes back looking fine, with no link on it.
+  const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(googleEventId)}?sendUpdates=all`
+    + (addMeetLink ? '&conferenceDataVersion=1' : '');
 
   const response = await fetch(url, {
     method: 'PATCH',
@@ -135,6 +157,16 @@ async function updateCalendarEvent(
     const error = await response.text();
     throw new Error(`Failed to update calendar event: ${error}`);
   }
+
+  // Hand the link back so it can be written down. A link that exists only on
+  // Google is a link the app cannot show anybody.
+  const updated = await response.json().catch(() => null) as {
+    hangoutLink?: string;
+    conferenceData?: { entryPoints?: { entryPointType: string; uri: string }[] };
+  } | null;
+  return updated?.hangoutLink
+    ?? updated?.conferenceData?.entryPoints?.find((point) => point.entryPointType === 'video')?.uri
+    ?? null;
 }
 
 Deno.serve(async (req) => {
@@ -177,7 +209,7 @@ Deno.serve(async (req) => {
     // allowed anywhere near the rest of it.
     const { data: event, error: fetchError } = await adminSupabase
       .from('events')
-      .select('id, community_id, google_event_id, event_date, event_time')
+      .select('id, community_id, google_event_id, event_date, event_time, event_type, meet_link')
       .eq('id', eventId)
       .maybeSingle();
 
@@ -283,14 +315,29 @@ Deno.serve(async (req) => {
           endDateTime = `${eventDate}T${endTimeStr}`;
         }
 
-        await updateCalendarEvent(accessToken, event.google_event_id, {
+        // A HIVE that meets on Meet, on a meeting that has no link yet, gets
+        // one now — see `addMeetLink`. Editing is where somebody fixes a
+        // meeting made before the HIVE moved to Meet, and the alternative was
+        // deleting a meeting people have already accepted.
+        const { data: hiveRow } = await adminSupabase
+          .from('communities')
+          .select('meets_on_google_meet')
+          .eq('id', event.community_id)
+          .maybeSingle();
+        const addMeetLink = !!(hiveRow as { meets_on_google_meet?: boolean } | null)?.meets_on_google_meet
+          && event.event_type === 'meeting'
+          && !event.meet_link;
+
+        const meetLink = await updateCalendarEvent(accessToken, event.google_event_id, {
           title,
           description,
           location,
           startDateTime,
           endDateTime,
           timeZone,
+          addMeetLink,
         });
+        if (addMeetLink && meetLink) dbUpdate.meet_link = meetLink;
         console.log('Updated Google Calendar event:', event.google_event_id);
       } catch (calendarError) {
         // Log but don't fail - still update database

@@ -271,10 +271,11 @@ from `NAV_DESTINATIONS` in `lib/navigation.ts`:
 | `/profile` | your own profile |
 | `/settings` | notifications, email preferences, who can see you, your name in a HIVE |
 | `/app-feedback` | tell the people who build the app something |
+| `/meeting-helper` | the deck you run a meeting from. In the rail since 2026-08-19, hidden at HIVE-Wide because a deck belongs to one HIVE's meeting |
 | `/admin` | running a HIVE. Tabbed per HIVE |
 
 Reached from inside other screens rather than the rail: `arrival-board.tsx`,
-`meeting-helper.tsx`, `monthly-tuneup.tsx`, `newsletter.tsx`.
+`monthly-tuneup.tsx`, `newsletter.tsx`.
 
 **Adding a destination**: add it to `NAV_DESTINATIONS`, pick a standard emoji,
 done. It appears in the rail in that order and nowhere else needs editing. Nav
@@ -452,11 +453,23 @@ secrets: `ANTHROPIC_API_KEY`, `ASSEMBLYAI_API_KEY`, `RESEND_API_KEY`,
 `HIVE_GOOGLE_REFRESH_TOKEN`, `INVITE_URL_BASE`, `EXPO_PUBLIC_APP_URL`,
 `SUPABASE_SERVICE_ROLE_KEY`.
 
-**The service-role key in `hive-app/.env` is dead.** Get a live one from the
-Supabase management API — `GET /v1/projects/<ref>/api-keys?reveal=true`, using
-the token in the macOS keychain under `Supabase CLI`. A stale key returns a 403
-reading *"Failed to base64url decode the signature"*, which looks like a policy
-problem and is not.
+**The service-role key in `hive-app/.env` works again** (checked 2026-08-19 —
+this file said it was dead, and it is not). If one ever does go stale, get a
+live one from the Supabase management API —
+`GET /v1/projects/<ref>/api-keys?reveal=true`, using the token in the macOS
+keychain under `Supabase CLI`. A stale key returns a 403 reading *"Failed to
+base64url decode the signature"*, which looks like a policy problem and is not.
+
+**Running SQL without the database password**: POST the statement to
+`https://api.supabase.com/v1/projects/<ref>/database/query` with that same
+keychain token. It **403s with Cloudflare error 1010 unless the request carries
+a `User-Agent`**, which looks exactly like an auth failure and is not.
+
+**Do not use `supabase db push`.** `supabase_migrations.schema_migrations` has
+only a handful of versions recorded (186, 155, 101, 100, 099 …) because recent
+migrations have been applied by hand, so a push would try to replay dozens of
+old files. Apply one migration through the query endpoint above, then record it:
+`insert into supabase_migrations.schema_migrations(version) values ('190')`.
 
 Database pushes need the real database password in `SUPABASE_DB_PASSWORD`. Never
 ask Nat to paste a secret into chat.
@@ -511,16 +524,35 @@ Rooms are prefixed because the Daily account is shared with Jasmine's Jammin
 Sprouts. Daily's theme takes **plain hex only** — the deck's non-OG palette is
 `rgb()`/`rgba()`, which is what "unsupported theme configuration" means.
 
-**Transcripts are per HIVE.** `communities.transcripts_enabled` (migration 183),
-thrown from a switch on the video panel by an admin, on for Tech and off for OG
-and Production. The reason is not preference: **a transcript is labelled by
-microphone, not by voice.** Everyone on their own device gets their own name on
-every line; a room sharing one laptop is one microphone and therefore one name
-for the whole table. That is why Google Meet always said "Lucas Whelan" for
-Nat's dining room, and why no service can fix it. `save-transcript` files the
-lines on that day's `meetings` row — the same row `seal-meeting` looks for, and
-it prefers a row that already has a `transcript_raw`, so the notes and the words
-land together whichever happens first.
+**Every meeting is written down, and there are two ways in** (2026-08-19). The
+panel offers exactly two, under the heading *Join this meeting*:
+
+- **Video + transcript** — the Daily call, which always transcribes. Lines are
+  labelled by microphone: everyone on their own device gets their own name, a
+  room sharing one laptop gets one name for the whole table. `save-transcript`
+  files them on that day's `meetings` row.
+- **Transcript only** — `lib/roomRecorder.ts` records the presenting laptop's
+  microphone with no call at all, which is what a HIVE around one table
+  actually is. `save-recording` puts the audio on the same `meetings` row and
+  hands it to `transcribe`, and AssemblyAI splits the speakers afterwards.
+
+`communities.transcripts_enabled` (migration 183) is **vestigial**. The
+per-HIVE switch is gone — three controls for one decision was one too many for
+anyone to tell apart — and nothing reads the column now.
+
+**Neither of them lives in the screen.** `lib/deckCall.ts` and
+`lib/roomRecorder.ts` are module singletons: the Daily iframe sits on a fixed
+layer attached to the document, docked over the deck's placeholder while the
+deck is the focused screen and parked as a corner tile when it is not. Nat
+walks off the deck to a board and back constantly mid-meeting, and hanging the
+teardown on unmount ended the call every time she did. **Expo Router's tabs
+keep a screen mounted after you leave it** — dock on `useIsFocused`, never on
+mount.
+
+`seal-meeting` looks for the same day's row and prefers one that already has a
+`transcript_raw`, so the notes and the words land together whichever happens
+first — and it seals a night whose whole record IS the transcript, which it
+refused to do until 2026-08-19.
 
 **There is one door.** Google Meet is gone: no Join tile, no per-event Join,
 and `schedule-meeting` no longer asks Google for a conference link. Do not add

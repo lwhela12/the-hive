@@ -31,6 +31,10 @@ import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { EditButton } from '../../components/ui/EditButton';
 import { WorldMark } from '../../components/ui/WorldMark';
+import { HiveMark } from '../../components/ui/HiveMark';
+import { ScopeBadge } from '../../components/ui/ScopeBadge';
+import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { normaliseScope } from '../../lib/scopeLook';
 import { SWITCH_LOOK } from '../../components/ui/Switch';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { showAlert } from '../../lib/showAlert';
@@ -93,6 +97,162 @@ const DEEP_PROFILE_STEPS = ['Basics', 'Now', 'Favorites', '3MIQ'] as const;
 // keeping a copy of the list in this file would only have gone stale.
 
 const PROFILE_FORM_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * How far one piece of you goes — two rungs, and only ever two.
+ *
+ * Nat, 2026-08-19: *"each chunk of this, you can toggle if you want it to be
+ * just this HIVE or HIVE wide, and if it's HIVE wide, then it shows up in every
+ * HIVE you're in and the HIVE-wide umbrella."* And, on being asked whether the
+ * choice was which HIVEs: *"It shouldn't be to which HIVEs; you shouldn't have
+ * to choose between the three HIVEs. It's either just this HIVE or HIVE-wide on
+ * each one of them, because you might want different skills in each one."*
+ *
+ * Public — the third rung of `SCOPE_LADDER` — is deliberately not here. That
+ * one sends a thing to the newsletter and the-hive.app, and it belongs to
+ * things a HIVE publishes. A bio does not get a megaphone from a control this
+ * small; the full picker on a wish is where public lives.
+ */
+type PieceReach = 'hive' | 'all_hives';
+
+/**
+ * The pieces of a card that carry their own reach, and the key each one is
+ * stored under in `profiles.piece_reach`.
+ *
+ * One key per thing a person would think of as a separate answer, which is what
+ * Nat asked for: *"the About You section, I think each one of those should be
+ * toggleable... And my biggest, the honeycombs from the middle, maybe I want to
+ * toggle those. Same with skills garden."*
+ *
+ * Birthday is missing on purpose — it has had its own pair of columns since
+ * migration 164 and can reach the public, so it keeps its own control.
+ * Your name and face are missing too: they are the card itself, and the
+ * HIVE-Wide switch at the top of this page is what decides whether the card
+ * travels at all.
+ */
+const PIECE_KEYS = {
+  bio: 'bio',
+  knownFor: 'known_for',
+  miq: 'miq',
+  /** The honeycomb's Title cell, which falls back to your occupation. */
+  title: 'profile_title',
+  hometown: 'hometown',
+  project: 'current_project',
+  reading: 'currently_reading',
+  book: 'favorite_book',
+  food: 'favorite_food',
+  hobby: 'favorite_hobby',
+} as const;
+
+/** Fun facts are a list, so each one is keyed by where it sits in that list. */
+const funFactPieceKey = (index: number) => `fun_fact:${index}`;
+
+/**
+ * What a stored map says about one piece — and what it means when it says
+ * nothing.
+ *
+ * An unset piece follows `profile_scope`, which is exactly what every one of
+ * these fields did before `piece_reach` existed: your whole card travelled or
+ * it did not. So a member who has never touched one of these controls sees no
+ * change at all, in either direction, which is the only safe way to add a
+ * column that decides who can read a bio.
+ */
+function readPieceReach(profile: Profile | null, key: string): PieceReach {
+  const map = ((profile as any)?.piece_reach ?? {}) as Record<string, unknown>;
+  const stored = map?.[key];
+  if (stored === 'all_hives' || stored === 'hive') return stored;
+  return (profile as any)?.profile_scope === 'all_hives' ? 'all_hives' : 'hive';
+}
+
+/** Every piece's reach as it stands, ready for the form to edit. */
+function readAllPieceReach(profile: Profile | null): Record<string, PieceReach> {
+  const keys = [
+    ...Object.values(PIECE_KEYS),
+    ...(((profile as any)?.fun_facts as string[] | null) ?? []).map((_, index) => funFactPieceKey(index)),
+  ];
+  const out: Record<string, PieceReach> = {};
+  keys.forEach((key) => { out[key] = readPieceReach(profile, key); });
+  return out;
+}
+
+/**
+ * The control itself: one small pill that says where this piece stands, and
+ * turns it round when you press it.
+ *
+ * Small and quiet on purpose. Every field on this page has one, so a switch the
+ * size of the Settings switches would have turned the editor into a wall of
+ * them. It wears the marks the rest of the app already uses — a filled hexagon
+ * in this HIVE's colour for something that stays home, the Earth for something
+ * that travels — so this reads as the same vocabulary as the badge it produces
+ * on a wish or an event (`lib/scopeLook.ts`).
+ */
+function ReachToggle({
+  reach,
+  onChange,
+  hiveName,
+  hiveColour,
+  pieceLabel,
+  locked,
+}: {
+  reach: PieceReach;
+  onChange: (next: PieceReach) => void;
+  hiveName: string;
+  hiveColour: string;
+  /** What this is the reach OF, so a screen reader hears a whole sentence. */
+  pieceLabel: string;
+  /**
+   * This HIVE keeps everything inside itself, so there is nothing to choose.
+   * The pill still shows where the piece stands; it just does not pretend the
+   * other rung is available.
+   */
+  locked?: boolean;
+}) {
+  const travels = reach === 'all_hives';
+  const words = travels ? 'HIVE-Wide' : `${hiveName} only`;
+  return (
+    <Pressable
+      onPress={locked ? undefined : () => onChange(travels ? 'hive' : 'all_hives')}
+      disabled={locked}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: travels, disabled: !!locked }}
+      accessibilityLabel={
+        travels
+          ? `${pieceLabel} is HIVE-Wide. Everyone in every HIVE can see it.`
+          : `${pieceLabel} is ${hiveName} only.`
+      }
+      className="active:opacity-70"
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: travels ? 'rgba(11,11,18,0.34)' : 'rgba(222,193,129,0.55)',
+        backgroundColor: travels ? 'rgba(11,11,18,0.06)' : '#fffdf7',
+        paddingLeft: 7,
+        paddingRight: 9,
+        paddingVertical: 3,
+        opacity: locked ? 0.65 : 1,
+      }}
+    >
+      {/* One box for both marks, so the words never shuffle sideways when the
+          pill turns round. */}
+      <View style={{ width: 14, height: 14, alignItems: 'center', justifyContent: 'center' }}>
+        {travels ? <WorldMark size={14} /> : <HiveMark size={12} colour={hiveColour} />}
+      </View>
+      <Text
+        numberOfLines={1}
+        style={{
+          fontFamily: 'Lato_700Bold',
+          fontSize: 10.5,
+          color: travels ? '#0B0B12' : hiveColour,
+        }}
+      >
+        {words}
+      </Text>
+    </Pressable>
+  );
+}
 
 /**
  * Every room Profile can be closed back into, with the name that room goes by.
@@ -166,6 +326,12 @@ type ProfileFormDraftFields = {
   miqGrowth: string;
   miqContribution: string;
   funFacts: string[];
+  /**
+   * How far each piece of the card goes, alongside the words themselves — a
+   * draft saved before this control existed simply has no key here, and the
+   * profile's own values stand.
+   */
+  pieceReach?: Record<string, PieceReach>;
 };
 
 type ProfileFormDraft = {
@@ -176,7 +342,9 @@ type ProfileFormDraft = {
 };
 
 export default function ProfileScreen() {
-  const { profile, communityId, community, communityRole, refreshProfile } = useAuth();
+  // `memberships` is here for one thing: naming the HIVE a Skills Garden is
+  // already planted in, when the garden in front of you is empty.
+  const { profile, communityId, community, communityRole, memberships, refreshProfile } = useAuth();
   // Production HIVE's MVP piece (Nat voice memo, 2026-08-13): "get clear on
   // what your production goals are... maybe it lives in your profile, where
   // we have the three MIQs." Lives on the membership row (migration 179),
@@ -289,9 +457,23 @@ export default function ProfileScreen() {
   const [skillsModalVisible, setSkillsModalVisible] = useState(false);
   const [replantingGarden, setReplantingGarden] = useState(false);
   const [replantNotice, setReplantNotice] = useState<string | null>(null);
+  const [savingGardenReach, setSavingGardenReach] = useState(false);
+  /**
+   * Your skill flowers in your OTHER HIVEs, and only when this garden is bare.
+   *
+   * Charlee told Nat *"it never saves my profile"*. Nothing was lost: a Skills
+   * Garden is rows in one HIVE, hers was planted in OG HIVE, and Production
+   * HIVE showed her a patch of soil with no explanation at all. An empty thing
+   * that says nothing about itself is indistinguishable from a broken one, so
+   * this is what the garden says instead — where the flowers are, and a way to
+   * plant them here too.
+   */
+  const [skillsElsewhere, setSkillsElsewhere] = useState<{ communityId: string; descriptions: string[] }[]>([]);
   const [addWishModalVisible, setAddWishModalVisible] = useState(false);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
   const [managingWish, setManagingWish] = useState<Wish | null>(null);
+  /** The wish whose reach is being stored right now, so its pill sits still. */
+  const [savingWishReachId, setSavingWishReachId] = useState<string | null>(null);
   const [wishStatusTab, setWishStatusTab] = useState<WishStatusTabKey>('public');
   const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
   const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
@@ -386,6 +568,16 @@ export default function ProfileScreen() {
   const [editMiqGrowth, setEditMiqGrowth] = useState('');
   const [editMiqContribution, setEditMiqContribution] = useState('');
   const [editFunFacts, setEditFunFacts] = useState(['', '', '']);
+  /**
+   * How far each piece of your card travels, edited alongside the words.
+   *
+   * Saved with the rest of the form rather than the moment you press the pill:
+   * a reach and the sentence it applies to are one decision, so Save stores
+   * both and Cancel puts both back. The controls on your wishes and your
+   * garden save on the spot instead, because those are rows of their own with
+   * no Save button in front of them.
+   */
+  const [editPieceReach, setEditPieceReach] = useState<Record<string, PieceReach>>({});
   const [deepQuizVisible, setDeepQuizVisible] = useState(false);
   const [deepQuizStep, setDeepQuizStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
@@ -464,6 +656,36 @@ export default function ProfileScreen() {
     }, [fetchData])
   );
 
+  // Look for the garden somewhere else only once this one has loaded and come
+  // back bare. Everything here is your own, in HIVEs you are a member of, so
+  // there is nothing to ask permission for.
+  useEffect(() => {
+    if (!profile?.id || !communityId || initialLoading) return;
+    if (skills.length > 0) {
+      setSkillsElsewhere([]);
+      return;
+    }
+    let active = true;
+    (async () => {
+      const { data, error } = await supabase
+        .from('skills')
+        .select('description, community_id')
+        .eq('user_id', profile.id)
+        .neq('community_id', communityId);
+      if (!active || error || !data) return;
+      const byHive = new Map<string, string[]>();
+      (data as { description: string; community_id: string }[]).forEach((row) => {
+        if (!row.community_id || !row.description) return;
+        if (!byHive.has(row.community_id)) byHive.set(row.community_id, []);
+        byHive.get(row.community_id)!.push(row.description);
+      });
+      setSkillsElsewhere(
+        Array.from(byHive.entries()).map(([id, descriptions]) => ({ communityId: id, descriptions }))
+      );
+    })();
+    return () => { active = false; };
+  }, [profile?.id, communityId, initialLoading, skills.length]);
+
   // Initialize edit fields when profile loads or changes
   useEffect(() => {
     if (isEditing || deepQuizVisible) return;
@@ -489,6 +711,7 @@ export default function ProfileScreen() {
       setEditMiqGrowth((profile as any).miq_growth || '');
       setEditMiqContribution((profile as any).miq_contribution || '');
       setEditFunFacts(((profile as any).fun_facts as string[] | null) ?? ['', '', '']);
+      setEditPieceReach(readAllPieceReach(profile));
     }
   }, [deepQuizVisible, isEditing, profile]);
 
@@ -513,6 +736,7 @@ export default function ProfileScreen() {
       setEditMiqGrowth((profile as any).miq_growth || '');
       setEditMiqContribution((profile as any).miq_contribution || '');
       setEditFunFacts(((profile as any).fun_facts as string[] | null) ?? ['', '', '']);
+      setEditPieceReach(readAllPieceReach(profile));
     }
   };
 
@@ -534,6 +758,7 @@ export default function ProfileScreen() {
     miqGrowth: editMiqGrowth,
     miqContribution: editMiqContribution,
     funFacts: editFunFacts,
+    pieceReach: editPieceReach,
   });
 
   const applyProfileDraftFields = (fields: ProfileFormDraftFields) => {
@@ -554,6 +779,9 @@ export default function ProfileScreen() {
     setEditMiqGrowth(fields.miqGrowth);
     setEditMiqContribution(fields.miqContribution);
     setEditFunFacts(fields.funFacts.length > 0 ? fields.funFacts : ['', '', '']);
+    // A draft written before these controls existed says nothing about reach,
+    // and silence is not an instruction — what the profile holds stands.
+    if (fields.pieceReach) setEditPieceReach(fields.pieceReach);
   };
 
   const readProfileFormDraft = (): ProfileFormDraft | null => {
@@ -751,6 +979,22 @@ export default function ProfileScreen() {
         miq_growth: editMiqGrowth.trim() || null,
         miq_contribution: editMiqContribution.trim() || null,
         fun_facts: funFacts.length > 0 ? funFacts : null,
+        // How far each of the above goes (migration 190). Only the pieces that
+        // still exist are kept: deleting your third fun fact takes its reach
+        // with it, so position 2 never inherits an answer about a sentence
+        // nobody can read any more.
+        piece_reach: Object.fromEntries(
+          // Merged onto what is already stored rather than written over it, so
+          // a save that happened before this form had read your answers can
+          // never blank them. A form's silence is not an instruction.
+          Object.entries({
+            ...(((profile as any)?.piece_reach ?? {}) as Record<string, PieceReach>),
+            ...editPieceReach,
+          }).filter(([key]) => (
+            !key.startsWith('fun_fact:')
+            || Number(key.slice('fun_fact:'.length)) < funFacts.length
+          ))
+        ),
         updated_at: new Date().toISOString(),
       },
     };
@@ -767,10 +1011,24 @@ export default function ProfileScreen() {
 
     setIsSaving(true);
     try {
-      const { error } = await supabase
+      let { error } = await supabase
         .from('profiles')
         .update(payload)
         .eq('id', profile.id);
+
+      // A bundle can reach a browser before its migration reaches the database.
+      // If `piece_reach` is not there yet, the words are still worth saving —
+      // losing a rewritten bio because a new column is a day behind is the
+      // worse of the two outcomes, and the reach pills go back to following
+      // your HIVE-Wide switch until the migration lands.
+      if (error && String(error.message ?? '').includes('piece_reach')) {
+        const { piece_reach: _pieceReach, ...withoutPieceReach } = payload as Record<string, unknown>;
+        console.warn('[Profile] piece_reach not in the database yet — saving the rest', error);
+        ({ error } = await supabase
+          .from('profiles')
+          .update(withoutPieceReach as any)
+          .eq('id', profile.id));
+      }
 
       if (error) {
         showAlert('Error', failureMessage);
@@ -973,6 +1231,45 @@ export default function ProfileScreen() {
       onConfirm: archiveWish,
     });
   };
+
+  /**
+   * How far one wish goes, changed on the wish itself.
+   *
+   * Nat, 2026-08-19: *"each individual wish, you decide who can see it."* The
+   * full picker — the one that can also send a wish to the public newsletter —
+   * lives in the wish editor behind the pencil. This is the everyday half of
+   * that decision, on the card, where you are when you notice it is wrong.
+   *
+   * Saved the moment you press it, and the card redraws from what came back:
+   * a pill that slides under your finger looks the same whether or not
+   * anything was stored.
+   */
+  const setWishReach = useCallback(async (wish: Wish, next: PieceReach) => {
+    if (!profile || !communityId || savingWishReachId) return;
+    setSavingWishReachId(wish.id);
+    setWishes((current) => current.map((item) => (
+      item.id === wish.id ? { ...item, share_scope: next } as Wish : item
+    )));
+
+    const { error } = await (supabase.from('wishes') as any)
+      .update({ share_scope: next })
+      .eq('id', wish.id)
+      .eq('user_id', profile.id);
+
+    setSavingWishReachId(null);
+
+    if (error) {
+      console.warn('[Profile] wish reach save failed', error);
+      showAlert('That did not save', `${error.message ?? 'Your choice was not stored.'} Please try again.`);
+      await fetchData();
+      return;
+    }
+
+    // Home, the member card and the boards all read wishes through these
+    // queries — a wish that has just started travelling should be somewhere
+    // else the moment you look, not after a refresh.
+    await invalidateWishQueries(communityId, wish.user_id);
+  }, [profile?.id, communityId, savingWishReachId, fetchData]);
 
   const handleGrantWish = async (data: {
     wishId: string;
@@ -1296,6 +1593,56 @@ export default function ProfileScreen() {
     }
   };
 
+  /**
+   * How far the whole garden goes.
+   *
+   * One control for the patch rather than one per flower: Nat named the Skills
+   * Garden as a single piece alongside the bio and the honeycombs, and a
+   * hexagon on every bloom would bury the flowers under badges. The value still
+   * lives on each row, because a row is where the HIVE it grows in lives.
+   */
+  const setGardenReach = useCallback(async (next: PieceReach) => {
+    if (!profile?.id || !communityId || savingGardenReach) return;
+    setSavingGardenReach(true);
+    setSkills((current) => current.map((skill) => ({ ...skill, reach: next } as Skill)));
+
+    const { error } = await (supabase.from('skills') as any)
+      .update({ reach: next })
+      .eq('user_id', profile.id)
+      .eq('community_id', communityId);
+
+    setSavingGardenReach(false);
+
+    if (error) {
+      console.warn('[Profile] garden reach save failed', error);
+      showAlert(
+        'That did not save',
+        String(error.message ?? '').includes('reach')
+          ? 'Your garden cannot travel yet — this needs the profile reach migration applied once. Everything else still saved.'
+          : `${error.message ?? 'Your choice was not stored.'} Please try again.`
+      );
+      await fetchData();
+    }
+  }, [profile?.id, communityId, savingGardenReach, fetchData]);
+
+  /**
+   * Plant the garden you already have somewhere else in this HIVE too.
+   *
+   * A copy rather than a move: the flowers in the other HIVE stay exactly where
+   * they are, because the people there are still looking at them.
+   */
+  const bringGardenOver = useCallback(async (descriptions: string[]) => {
+    const planted = await handlePlantSkills(
+      descriptions.map((description) => ({ description, enthusiasmLevel: 1 })),
+      { mode: 'fill' }
+    );
+    if (planted === null) return;
+    setSkillsElsewhere([]);
+    if (descriptions.length > planted) {
+      setReplantNotice(`Planted ${planted} — the garden holds ${SKILLS_GARDEN_CAPACITY}, so ${descriptions.length - planted} stayed where they were.`);
+    }
+  }, [handlePlantSkills]);
+
   const handleDeleteSkill = (skill: Pick<Skill, 'id' | 'description'> & Partial<Skill>) => {
     if (!profile || !communityId) return;
 
@@ -1449,7 +1796,75 @@ export default function ProfileScreen() {
 
   const isProfilePhone = screenWidth < 640;
   const profileWishPanelHeight = isProfilePhone ? 500 : 520;
+  /** This HIVE's name and colour, for every reach pill on the page. */
+  const hiveWord = hiveDisplayName(community?.name);
+  const hiveColour = hiveAccent(community);
+  /**
+   * Whether anything in this HIVE is allowed out of it at all.
+   *
+   * `communities.max_share_scope` is the HIVE's ceiling (migration 125) and the
+   * database enforces it: a wish or a skill flower marked HIVE-Wide inside a
+   * HIVE whose ceiling is `hive` stays put whatever its owner picked. Production
+   * HIVE's ceiling is `hive` today, so the pills on wishes and on the garden say
+   * so rather than offering a choice the database will refuse.
+   *
+   * Your card's own pieces are not capped by this, and never have been: a
+   * profile belongs to a person rather than to a HIVE, which is why the
+   * HIVE-Wide switch at the top of this page has never asked a ceiling either.
+   */
+  const hiveLetsThingsTravel = ((community as any)?.max_share_scope ?? 'hive') !== 'hive';
+
+  /**
+   * A field's name, with how far it goes sitting on the same line.
+   *
+   * The reach belongs beside the words rather than in a settings page of its
+   * own — you decide who a sentence is for while you are writing it, and Nat
+   * asked for the control to be on the piece: *"each part of your profile
+   * should be toggleable."*
+   */
+  const pieceLabelRow = (key: string, label: string) => (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
+      <Text style={{ fontFamily: 'Lato_400Regular', flexShrink: 1 }} className="text-sm text-charcoal/50">
+        {label}
+      </Text>
+      <ReachToggle
+        reach={editPieceReach[key] ?? readPieceReach(profile, key)}
+        onChange={(next) => setEditPieceReach((current) => ({ ...current, [key]: next }))}
+        hiveName={hiveWord}
+        hiveColour={hiveColour}
+        pieceLabel={label}
+      />
+    </View>
+  );
   const bloomingSkillCount = skills.filter(hasBloomingSkill).length;
+  /**
+   * Where the garden stands, read from the flowers themselves.
+   *
+   * One flower already travelling means the patch is HIVE-Wide — the toggle
+   * writes every row at once, so a mixed garden only happens if something went
+   * wrong halfway, and answering "it travels" is the one that matches what
+   * another HIVE can actually see.
+   */
+  const gardenReach: PieceReach = skills.some((skill) => (skill as any).reach === 'all_hives')
+    ? 'all_hives'
+    : 'hive';
+  /**
+   * What this HIVE's ceiling means for the things inside it, said once.
+   *
+   * A pill that offers HIVE-Wide in a HIVE whose `max_share_scope` is `hive`
+   * would be a lie the database corrects silently — which is the exact shape of
+   * the bug this whole change is about.
+   */
+  const ceilingNote = hiveLetsThingsTravel ? null : (
+    <View style={{ marginBottom: 8 }}>
+      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: '#9a8060' }}>
+        {hiveWord} keeps everything written in it inside {hiveWord} for now.
+      </Text>
+      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: '#9a8060' }}>
+        An admin opens that up for the whole HIVE in Admin.
+      </Text>
+    </View>
+  );
   const unplantedSkillCount = skills.length - bloomingSkillCount;
   const gardenOpenSlots = Math.max(0, SKILLS_GARDEN_CAPACITY - bloomingSkillCount);
   const deepQuizCanGoBack = deepQuizStep > 0;
@@ -1716,18 +2131,52 @@ export default function ProfileScreen() {
     );
   };
 
-  const renderWishCard = (wish: Wish) => (
-    <WishCombCard
-      key={wish.id}
-      wish={wish}
-      ownerId={profile.id}
-      ownerName={profile.name}
-      ownerAvatarUrl={profile.avatar_url}
-      compact={isProfilePhone}
-      onOpen={(selectedWish) => openWishDetail(selectedWish as Wish)}
-      onManage={canOpenWishActions(wish) ? (selectedWish) => setManagingWish(selectedWish as Wish) : undefined}
-    />
-  );
+  const renderWishCard = (wish: Wish) => {
+    const wishScope = normaliseScope((wish as any).share_scope);
+    return (
+      <View key={wish.id} style={{ gap: 6 }}>
+        <WishCombCard
+          wish={wish}
+          ownerId={profile.id}
+          ownerName={profile.name}
+          ownerAvatarUrl={profile.avatar_url}
+          compact={isProfilePhone}
+          onOpen={(selectedWish) => openWishDetail(selectedWish as Wish)}
+          onManage={canOpenWishActions(wish) ? (selectedWish) => setManagingWish(selectedWish as Wish) : undefined}
+        />
+        {/* The caption is what tells the pill below from the badge on the card
+            above: one says where this wish stands, this one changes it. The
+            same reason `ScopeBadge` grew a caption — an unlabelled badge is
+            fine on its own and ambiguous the moment there are two. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingLeft: 4, flexWrap: 'wrap' }}>
+          <Text
+            style={{
+              fontFamily: 'Lato_700Bold', fontSize: 8.5, letterSpacing: 0.9,
+              textTransform: 'uppercase', color: 'rgba(49,49,48,0.62)',
+            }}
+          >
+            Who sees it
+          </Text>
+          {wishScope === 'public' ? (
+            // A wish somebody deliberately sent to the newsletter and
+            // the-hive.app. A two-state pill cannot say "public", so it does
+            // not get to quietly take it away either — that one is changed in
+            // the wish editor, where the whole ladder is on offer.
+            <ScopeBadge scope="public" size="sm" hideHive />
+          ) : (
+            <ReachToggle
+              reach={wishScope === 'all_hives' ? 'all_hives' : 'hive'}
+              onChange={(next) => void setWishReach(wish, next)}
+              hiveName={hiveWord}
+              hiveColour={hiveColour}
+              pieceLabel="This wish"
+              locked={!hiveLetsThingsTravel || savingWishReachId === wish.id}
+            />
+          )}
+        </View>
+      </View>
+    );
+  };
 
   const wishManageModal = (
     <WishManageModal
@@ -2176,6 +2625,23 @@ export default function ProfileScreen() {
             )}
           </View>
 
+          {/* Where the reach pills are, said once.
+              Nat went looking for her card in another HIVE and found half of it
+              missing (2026-08-19), so the page says out loud that each piece
+              carries its own answer and where that answer is set. Only while
+              you are reading the card — inside the editor the pills are right
+              there beside every field, and a caption repeating them is noise. */}
+          {!isEditing ? (
+            <View style={{ marginBottom: 10 }}>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: '#9a8060' }}>
+                Every piece of your card chooses its own reach: {hiveWord} only, or HIVE-Wide.
+              </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: '#9a8060' }}>
+                The pencil is where you set them.
+              </Text>
+            </View>
+          ) : null}
+
           {!isEditing ? (
             <View className="gap-4">
               <ProfileShowcase
@@ -2290,7 +2756,10 @@ export default function ProfileScreen() {
 
             {/* Self-appointed title */}
             <View className="p-4 border-b border-cream">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Self-appointed title</Text>
+              {/* This one pill covers the honeycomb's Title cell, which shows
+                  your self-appointed title and falls back to your occupation —
+                  one cell on the card, so one decision about who sees it. */}
+              {pieceLabelRow(PIECE_KEYS.title, 'Self-appointed title')}
               {isEditing ? (
                 <ComposerBar
                   tone="light"
@@ -2330,7 +2799,7 @@ export default function ProfileScreen() {
 
             {/* Bio */}
             <View className="p-4 border-b border-cream">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">About me</Text>
+              {pieceLabelRow(PIECE_KEYS.bio, 'About me')}
               {isEditing ? (
                 <ComposerBar
                   tone="light"
@@ -2350,7 +2819,7 @@ export default function ProfileScreen() {
 
             {/* Current Project */}
             <View className="p-4 border-b border-cream">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Current project</Text>
+              {pieceLabelRow(PIECE_KEYS.project, 'Current project')}
               {isEditing ? (
                 // Prose here, same as the walk-through's version of this very
                 // field. The two editors write the same column and used to
@@ -2373,7 +2842,7 @@ export default function ProfileScreen() {
 
             {/* Hometown */}
             <View className="p-4 border-b border-cream">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Hometown</Text>
+              {pieceLabelRow(PIECE_KEYS.hometown, 'Hometown')}
               {isEditing ? (
                 <ComposerBar
                   tone="light"
@@ -2393,7 +2862,7 @@ export default function ProfileScreen() {
 
             {/* HIVE ask */}
             <View className="p-4 border-b border-cream">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">HIVErs should ask me about</Text>
+              {pieceLabelRow(PIECE_KEYS.knownFor, 'HIVErs should ask me about')}
               {isEditing ? (
                 <ComposerBar
                   tone="light"
@@ -2413,11 +2882,23 @@ export default function ProfileScreen() {
 
             {/* 3MIQ */}
             <View className="p-4 border-b border-cream">
-              <View className="flex-row items-center justify-between mb-3">
+              <View className="flex-row items-center justify-between mb-2">
                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/50">3 Most Important Questions</Text>
                 <Pressable onPress={handleFind3MiqWithClive} className="bg-gold-light px-3 py-1 rounded-full active:opacity-70">
                   <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">{miq3ActionLabel}</Text>
                 </Pressable>
+              </View>
+              {/* One pill for all three answers. They are one question asked
+                  three ways, and the card shows them as one block, so who sees
+                  them is one decision rather than three. */}
+              <View style={{ alignSelf: 'flex-start', marginBottom: 12 }}>
+                <ReachToggle
+                  reach={editPieceReach[PIECE_KEYS.miq] ?? readPieceReach(profile, PIECE_KEYS.miq)}
+                  onChange={(next) => setEditPieceReach((current) => ({ ...current, [PIECE_KEYS.miq]: next }))}
+                  hiveName={hiveWord}
+                  hiveColour={hiveColour}
+                  pieceLabel="Your 3MIQ"
+                />
               </View>
               {isEditing ? (
                 <View>
@@ -2481,7 +2962,11 @@ export default function ProfileScreen() {
                 const values = [editFavBook, editFavFood, editFavHobby];
                 return (
                   <View key={field} className={idx < 2 ? 'mb-3' : ''}>
-                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">{labels[idx]}</Text>
+                    {/* Each favourite is its own honeycomb cell, so each one
+                        gets its own answer about who sees it. The key IS the
+                        column name — favorite_book, favorite_food,
+                        favorite_hobby — which is what PIECE_KEYS holds. */}
+                    {pieceLabelRow(field, labels[idx])}
                     {isEditing ? (
                       <ComposerBar
                         tone="light"
@@ -2507,23 +2992,30 @@ export default function ProfileScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-3">3 fun facts about me</Text>
               {isEditing ? (
                 editFunFacts.map((fact, idx) => (
-                  <ComposerBar
-                    tone="light"
-                    key={idx}
-                    variant="form"
-                    containerClassName="mb-3"
-                    value={fact}
-                    // This one lives in a list, so it takes the new text — or
-                    // works it out from the old, which is what talking does.
-                    onChangeText={(next) => {
-                      const updated = [...editFunFacts];
-                      updated[idx] = typeof next === 'function' ? next(fact) : next;
-                      setEditFunFacts(updated);
-                    }}
-                    placeholder={`Fun fact ${idx + 1}...`}
-                    minHeight={86}
-                    submitOnEnterKey={false}
-                  />
+                  <View key={idx}>
+                    {/* Nat asked for this one by name: "each individual wish,
+                        you decide who can see it" — and a fun fact is the same
+                        shape of thing. One pill per fact, keyed by where it
+                        sits in the list, so keeping two at home and sending
+                        one out works. */}
+                    {pieceLabelRow(funFactPieceKey(idx), `Fun fact ${idx + 1}`)}
+                    <ComposerBar
+                      tone="light"
+                      variant="form"
+                      containerClassName="mb-3"
+                      value={fact}
+                      // This one lives in a list, so it takes the new text — or
+                      // works it out from the old, which is what talking does.
+                      onChangeText={(next) => {
+                        const updated = [...editFunFacts];
+                        updated[idx] = typeof next === 'function' ? next(fact) : next;
+                        setEditFunFacts(updated);
+                      }}
+                      placeholder={`Fun fact ${idx + 1}...`}
+                      minHeight={86}
+                      submitOnEnterKey={false}
+                    />
+                  </View>
                 ))
               ) : (
                 <View className="gap-2">
@@ -2538,6 +3030,21 @@ export default function ProfileScreen() {
                   }
                 </View>
               )}
+            </View>
+
+            {/* Currently reading — a cell you fill in somewhere else.
+                It comes from the monthly check-in rather than from this form,
+                because it changes too often to be something you'd remember to
+                come back and edit. It is still a cell on your card, so it still
+                gets to say how far it goes; there is just nothing to type. */}
+            <View className="p-4 border-b border-cream">
+              {pieceLabelRow(PIECE_KEYS.reading, 'Currently reading')}
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                {(profile as any).currently_reading || 'Not set'}
+              </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-1">
+                This one comes from your monthly check-in.
+              </Text>
             </View>
 
             {/* Preferred Contact Method */}
@@ -2711,6 +3218,8 @@ export default function ProfileScreen() {
                   ]}
                 />
 
+                {ceilingNote ? <View style={{ marginTop: 8 }}>{ceilingNote}</View> : null}
+
                 <View style={{
                   backgroundColor: '#fdf3dc',
                   borderRadius: 20,
@@ -2792,17 +3301,81 @@ export default function ProfileScreen() {
                         : 'Seed your Skills Garden'}
                     </Text>
                   </View>
-                  {/* Its own pencil (Nat 2026-08-04): "what's missing is an edit
-                      button for the skills garden — if you want to edit the
-                      garden, you have to scroll all the way up to the top."
-                      Which was true: the only way in was the profile Edit
-                      control a full page above, so the one block on this page
-                      you actually fiddle with was the one block with no way to
-                      open it from where you were standing. */}
-                  <EditButton
-                    onPress={() => setSkillsModalVisible(true)}
-                    accessibilityLabel="Edit your Skills Garden"
-                  />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {/* One pill for the whole patch. Nat, 2026-08-19, on what
+                        she could not find in Production HIVE: "it doesn't show
+                        my skills garden or my HD wishes, even though I toggled
+                        it on to HIVE wide." */}
+                    <ReachToggle
+                      reach={gardenReach}
+                      onChange={(next) => void setGardenReach(next)}
+                      hiveName={hiveWord}
+                      hiveColour={hiveColour}
+                      pieceLabel="Your Skills Garden"
+                      locked={!hiveLetsThingsTravel || savingGardenReach || skills.length === 0}
+                    />
+                    {/* Its own pencil (Nat 2026-08-04): "what's missing is an
+                        edit button for the skills garden — if you want to edit
+                        the garden, you have to scroll all the way up to the
+                        top." Which was true: the only way in was the profile
+                        Edit control a full page above, so the one block on this
+                        page you actually fiddle with was the one block with no
+                        way to open it from where you were standing. */}
+                    <EditButton
+                      onPress={() => setSkillsModalVisible(true)}
+                      accessibilityLabel="Edit your Skills Garden"
+                    />
+                  </View>
+                </View>
+              )}
+              {!immersiveSkillsGarden && ceilingNote}
+              {/* Where your flowers actually are, when this patch is bare.
+                  Charlee's "it never saves my profile" was this — a garden
+                  planted in one HIVE, an empty one in another, and nothing on
+                  screen saying the two are different places. */}
+              {!immersiveSkillsGarden && skills.length === 0 && skillsElsewhere.length > 0 && (
+                <View
+                  style={{
+                    backgroundColor: '#eef6ee',
+                    borderWidth: 1,
+                    borderColor: '#cfe3d2',
+                    borderRadius: 14,
+                    paddingVertical: 11,
+                    paddingHorizontal: 14,
+                    marginBottom: 8,
+                    gap: 4,
+                  }}
+                >
+                  <Text style={{ fontFamily: 'Lato_400Regular', color: '#2f7147', fontSize: 12.5, lineHeight: 18 }}>
+                    🌱 A Skills Garden is planted one HIVE at a time, and yours is growing in {
+                      skillsElsewhere
+                        .map(entry => hiveDisplayName(
+                          memberships.find(m => m.community_id === entry.communityId)?.community?.name
+                        ))
+                        .join(' and ')
+                    }.
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', color: '#2f7147', fontSize: 12.5, lineHeight: 18 }}>
+                    Plant the same flowers here and both gardens keep growing.
+                  </Text>
+                  <Pressable
+                    onPress={() => void bringGardenOver(
+                      Array.from(new Set(skillsElsewhere.flatMap(entry => entry.descriptions)))
+                    )}
+                    accessibilityRole="button"
+                    style={{
+                      alignSelf: 'flex-start',
+                      backgroundColor: '#315d4e',
+                      borderRadius: 999,
+                      paddingVertical: 6,
+                      paddingHorizontal: 14,
+                      marginTop: 4,
+                    }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 12 }}>
+                      Plant them in {hiveWord} too
+                    </Text>
+                  </Pressable>
                 </View>
               )}
               {/* Replant helper — only rendered here on the user's own garden

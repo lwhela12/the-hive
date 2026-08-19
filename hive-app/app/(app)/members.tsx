@@ -5,6 +5,7 @@ import { View, Text, Pressable, ActivityIndicator, useWindowDimensions, TextInpu
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import type { Profile, Skill, UserRole, Wish, WishGranter } from '../../types';
 import { supabase } from '../../lib/supabase';
@@ -12,6 +13,7 @@ import { invalidateWishQueries } from '../../lib/queryClient';
 import { deleteWishById } from '../../lib/wishMutations';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { usePageSkin } from '../../lib/pageSkin';
+import { hiveDisplayName } from '../../lib/hiveBrand';
 import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { AppHeader } from '../../components/navigation';
@@ -107,6 +109,24 @@ interface MemberData {
    */
   birthday_visibility?: string | null;
   birthday_invited_scope?: string | null;
+  /**
+   * How far each single piece of this person's card travels — `profiles.
+   * piece_reach` (migration 190), one entry per piece, each one either `hive`
+   * or `all_hives`. A missing entry follows `profile_scope`, which is what
+   * every field on a card did before the column existed.
+   */
+  piece_reach?: Record<string, string> | null;
+  /** Whether this person's whole card travels — `profiles.profile_scope`. */
+  profile_scope?: string | null;
+  /**
+   * Whether the two above have actually arrived.
+   *
+   * They come in a later trip than the roster, and "I have not been told yet"
+   * and "this piece stays home" are different answers. Without this flag the
+   * gap between the two fetches would blank half of everybody's card for a
+   * moment at HIVE-Wide, which reads as the bug this whole change fixes.
+   */
+  reachKnown?: boolean;
   skills: MemberSkill[];
   wishes: MemberWish[];
   introPost?: { title: string; content: string } | null;
@@ -146,7 +166,142 @@ const PROFILE_EMPTY_COPY = {
   miq: '3MIQ answers are not shared yet.',
   wishes: 'No HD wishes shared yet.',
   skills: 'No skills planted yet — garden coming soon!',
+  /**
+   * What a piece says when it exists and is kept to its owner's own HIVE.
+   *
+   * Nothing is missing here and nothing is broken — somebody chose. Saying
+   * "not shared yet" in this spot would call a decision an omission.
+   */
+  keptHome: 'Kept to their own HIVE.',
 };
+
+/**
+ * Which piece of a card each honeycomb cell is, so the card can be asked how
+ * far that one piece goes. The keys are `profiles.piece_reach`'s (migration
+ * 190) and they match `PIECE_KEYS` in `app/(app)/profile.tsx`, which is the
+ * screen that writes them.
+ */
+const PIECE_KEYS = {
+  bio: 'bio',
+  knownFor: 'known_for',
+  miq: 'miq',
+  title: 'profile_title',
+  hometown: 'hometown',
+  project: 'current_project',
+  reading: 'currently_reading',
+  book: 'favorite_book',
+  food: 'favorite_food',
+  hobby: 'favorite_hobby',
+} as const;
+
+const funFactPieceKey = (index: number) => `fun_fact:${index}`;
+
+/**
+ * Whether one piece of somebody's card reaches where you are standing.
+ *
+ * The whole rule, in two lines: a piece marked HIVE-Wide shows wherever you
+ * are, and a piece kept to its HIVE shows only when you are standing inside a
+ * HIVE with its owner. At HIVE-Wide you are standing above all of them, so only
+ * the travelling pieces are there.
+ *
+ * A piece nobody has ever set follows `profile_scope` — the switch on Profile
+ * that already decided whether this person's card travels at all. That is what
+ * each of these fields did before `piece_reach` existed, so nobody's card
+ * changed in either direction the day the column appeared.
+ */
+function pieceReaches(member: MemberData, key: string, wholeHive: boolean): boolean {
+  if (!wholeHive) return true;
+  // The answer has not arrived yet; drawing the card as though everything were
+  // private would be a guess, and the wrong one for most people.
+  if (!member.reachKnown) return true;
+  const stored = member.piece_reach?.[key];
+  if (stored === 'all_hives') return true;
+  if (stored === 'hive') return false;
+  return member.profile_scope === 'all_hives';
+}
+
+type TravellingPieces = {
+  wishes: any[];
+  skills: any[];
+  reachByUser: Record<string, { piece_reach: Record<string, string> | null; profile_scope: string | null }>;
+};
+
+/**
+ * The pieces of these people that have left their own HIVE.
+ *
+ * This is the fix for the thing Nat hit twice on 2026-08-19. `lib/hooks/
+ * useMembersQuery.ts` asks for one HIVE's rows — `.eq('community_id', …)` on
+ * both skills and wishes — which is right for the HIVE you are standing in and
+ * is the whole answer nowhere else. So her Nellie wish, written in OG HIVE and
+ * marked HIVE-Wide, appeared in OG HIVE and vanished in Production: *"it only
+ * showed up on the HIVE-wide and OG HIVE. It skipped Production HIVE."*
+ *
+ * This asks the other half of the question — **everything of theirs that
+ * reaches this far, whichever HIVE it was written in** — and the screen puts
+ * the two answers together. No community filter here on purpose: row-level
+ * security already decides what may cross a HIVE line, and it checks the
+ * OWNING HIVE's ceiling while it does it, so a HIVE that keeps its things to
+ * itself still does.
+ *
+ * If any of it fails — most likely because migration 190 has not been applied
+ * yet — the screen keeps doing exactly what it did before rather than showing
+ * an emptier card. See `honoured`.
+ */
+function useTravellingPiecesQuery({ userIds, enabled }: { userIds: string[]; enabled: boolean }) {
+  const ids = [...userIds].sort();
+
+  return useQuery<TravellingPieces>({
+    queryKey: ['membersTravelling', ids.join(',')],
+    enabled: enabled && ids.length > 0,
+    queryFn: async () => {
+      const wishColumns = 'user_id, id, community_id, share_scope, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))';
+
+      const [wishesRes, skillsRes, reachRes] = await Promise.all([
+        supabase
+          .from('wishes')
+          .select(wishColumns)
+          .in('user_id', ids)
+          .in('share_scope', ['all_hives', 'public'])
+          .in('status', ['public', 'fulfilled'])
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('skills')
+          .select('user_id, id, community_id, description, enthusiasm_level, display_x, display_y, reach')
+          .in('user_id', ids)
+          .eq('reach', 'all_hives'),
+        supabase
+          .from('profiles')
+          .select('id, profile_scope, piece_reach')
+          .in('id', ids),
+      ]);
+
+      if (wishesRes.error) console.warn('[Members] travelling wishes load failed', wishesRes.error);
+      if (skillsRes.error) console.warn('[Members] travelling skills load failed', skillsRes.error);
+      if (reachRes.error) console.warn('[Members] piece reach load failed', reachRes.error);
+
+      // Any one of these failing is the whole answer failing: half of "what
+      // reaches this far" is a card that hides things it should show.
+      if (wishesRes.error || skillsRes.error || reachRes.error) {
+        throw wishesRes.error ?? skillsRes.error ?? reachRes.error;
+      }
+
+      const reachByUser: TravellingPieces['reachByUser'] = {};
+      ((reachRes.data ?? []) as any[]).forEach((row) => {
+        if (!row?.id) return;
+        reachByUser[row.id] = {
+          piece_reach: (row.piece_reach ?? null) as Record<string, string> | null,
+          profile_scope: (row.profile_scope ?? null) as string | null,
+        };
+      });
+
+      return {
+        wishes: (wishesRes.data ?? []) as any[],
+        skills: (skillsRes.data ?? []) as any[],
+        reachByUser,
+      };
+    },
+  });
+}
 
 type MemberDailyAnswer = {
   questionIndex: number;
@@ -180,6 +335,21 @@ function normalizeMemberSort(value: string | null): MemberSortKey {
   return MEMBER_SORT_OPTIONS.some(option => option.key === value)
     ? (value as MemberSortKey)
     : 'first-name';
+}
+
+/**
+ * Two lists of the same kind of thing, as one list, each thing once.
+ *
+ * A wish written in the HIVE you are standing in AND marked HIVE-Wide comes
+ * back from both questions; it is still one wish. First list wins, so the row
+ * the HIVE itself handed over is the one kept.
+ */
+function mergeById<T extends { id: string }>(first: T[], second: T[]): T[] {
+  const byId = new Map<string, T>();
+  [...first, ...second].forEach((item) => {
+    if (item?.id && !byId.has(item.id)) byId.set(item.id, item);
+  });
+  return Array.from(byId.values());
 }
 
 function memberFirstName(name: string) {
@@ -422,7 +592,7 @@ function MemberDetailPage({
 }) {
   const router = useRouter();
   const { width: viewportWidth } = useWindowDimensions();
-  const { profile, session, communityRole } = useAuth();
+  const { profile, session, communityRole, community, wholeHive } = useAuth();
   const { grantWish } = useWishes();
   const currentAuthId = session?.user?.id ?? profile?.id ?? null;
   const isCurrentUser = !!currentAuthId && member.id === currentAuthId;
@@ -452,6 +622,21 @@ function MemberDetailPage({
   // a bloom tap into the "Leave a 🌻" offer; on your own card the badge just
   // shows who visited.
   const memberSkillIds = useMemo(() => member.skills.map((s) => s.id), [member.skills]);
+  /**
+   * The flowers that actually grow in the HIVE you are standing in.
+   *
+   * `member.skills` is now what you can SEE — this HIVE's garden plus anything
+   * of theirs marked HIVE-Wide from anywhere else (migration 190). The skills
+   * editor below works out what to delete by comparing that list against the
+   * draft, and its delete is keyed on user_id alone, so handing it the merged
+   * list would let editing a garden in one HIVE quietly uproot another one.
+   * Rows that came from this HIVE's own fetch carry no community_id at all,
+   * because that query already filtered on it — so no id means this HIVE.
+   */
+  const skillsInThisHive = useMemo(
+    () => member.skills.filter((s) => !s.community_id || s.community_id === communityId),
+    [member.skills, communityId]
+  );
   const { flowersBySkill, toggleFlower } = useSkillFlowers(memberSkillIds);
   const [introExpanded, setIntroExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -485,7 +670,7 @@ function MemberDetailPage({
   const [draftFunFact2, setDraftFunFact2] = useState(member.fun_facts?.[1] ?? '');
   const [draftFunFact3, setDraftFunFact3] = useState(member.fun_facts?.[2] ?? '');
   // Skill bubbles — array-based so we can add/remove individual chips
-  const [draftSkillList, setDraftSkillList] = useState<string[]>(member.skills.map(s => s.description));
+  const [draftSkillList, setDraftSkillList] = useState<string[]>(skillsInThisHive.map(s => s.description));
   const [newSkillInput, setNewSkillInput] = useState('');
   const [savingSkills, setSavingSkills] = useState(false);
   const [showSkillPicker, setShowSkillPicker] = useState(false);
@@ -525,26 +710,82 @@ function MemberDetailPage({
   const myGrantedWishes = myWishes.filter(w => w.status === 'fulfilled');
   const visibleMyWishes = wishStatusTab === 'granted' ? myGrantedWishes : myPublicWishes;
   const dailyAnswers = member.dailyAnswers ?? [];
+  /** Does this piece of their card reach where you are standing? */
+  const showsPiece = (key: string) => pieceReaches(member, key, wholeHive);
+  const hiveWord = hiveDisplayName(community?.name);
+  /**
+   * What a piece says when it exists and stays home.
+   *
+   * On your own card it says "your", because standing at HIVE-Wide and finding
+   * half your card missing is exactly the moment Nat reported as broken — this
+   * is the card telling you it is doing what you asked, rather than leaving you
+   * to guess (2026-08-19).
+   */
+  const keptHomeCopy = isCurrentUser
+    ? 'You keep this one inside your own HIVEs.'
+    : PROFILE_EMPTY_COPY.keptHome;
+
+  /**
+   * Why this patch of soil is bare.
+   *
+   * Charlee, to Nat: *"it never saves my profile."* Nothing had been lost — a
+   * Skills Garden is rows in one HIVE, hers were planted in another one, and
+   * this spot said nothing at all about the difference. An empty thing that
+   * cannot explain itself is indistinguishable from a broken one, so it
+   * explains itself.
+   */
+  const gardenEmptyLines: string[] = wholeHive
+    ? [
+      'A Skills Garden grows in one HIVE at a time.',
+      'The flowers marked HIVE-Wide are the ones that show up here.',
+    ]
+    : isCurrentUser
+      ? [
+        `A Skills Garden grows in one HIVE at a time, and your ${hiveWord} patch is still bare.`,
+        'Your Profile shows where your other flowers are growing, and can plant them here too.',
+      ]
+      : [
+        'A Skills Garden grows in one HIVE at a time.',
+        `${memberFirstName(member.name)} has not planted one in ${hiveWord} yet.`,
+      ];
+
+  /** The same question, asked of the wishes panel. */
+  const wishesEmptyLines: string[] = wholeHive
+    ? [
+      'The HD wishes marked HIVE-Wide are the ones that show up here.',
+      'Step into a HIVE to see everything that stayed there.',
+    ]
+    : [PROFILE_EMPTY_COPY.wishes];
   const memberHoneycombItems = [
-    { label: 'Title', value: member.profile_title || member.occupation },
-    { label: 'From', value: member.hometown },
+    { label: 'Title', value: member.profile_title || member.occupation, piece: PIECE_KEYS.title },
+    { label: 'From', value: member.hometown, piece: PIECE_KEYS.hometown },
     {
       label: 'Birthday',
       value: member.birthday
         ? new Date(`${member.birthday}T12:00:00`).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })
         : null,
+      // A birthday keeps its own pair of controls (migration 164) — it is the
+      // one cell here that can reach the public, so it never joined the
+      // two-rung set.
+      piece: null,
     },
-    { label: 'Project', value: member.current_project },
+    { label: 'Project', value: member.current_project, piece: PIECE_KEYS.project },
     // From their monthly check-in, so it's current rather than aspirational.
-    { label: 'Reading', value: member.currently_reading },
-    { label: 'Book', value: member.favorite_book },
-    { label: 'Food', value: member.favorite_food },
-    { label: 'Hobby', value: member.favorite_hobby },
+    { label: 'Reading', value: member.currently_reading, piece: PIECE_KEYS.reading },
+    { label: 'Book', value: member.favorite_book, piece: PIECE_KEYS.book },
+    { label: 'Food', value: member.favorite_food, piece: PIECE_KEYS.food },
+    { label: 'Hobby', value: member.favorite_hobby, piece: PIECE_KEYS.hobby },
     ...(member.fun_facts ?? []).map((fact, i) => ({
       label: `Fun Fact ${i + 1}`,
       value: fact,
+      piece: funFactPieceKey(i),
     })),
-  ];
+  ]
+    // A cell kept to its own HIVE simply is not here when you are standing
+    // above the HIVEs — an empty cell in its place would say "they left this
+    // blank", which is a different and untrue thing.
+    .filter((item) => !item.piece || showsPiece(item.piece))
+    .map(({ label, value }) => ({ label, value }));
 
   useEffect(() => {
     setIntroExpanded(false);
@@ -571,7 +812,7 @@ function MemberDetailPage({
     setDraftFunFact1(member.fun_facts?.[0] ?? '');
     setDraftFunFact2(member.fun_facts?.[1] ?? '');
     setDraftFunFact3(member.fun_facts?.[2] ?? '');
-    setDraftSkillList(member.skills.map(s => s.description));
+    setDraftSkillList(skillsInThisHive.map(s => s.description));
     setNewSkillInput('');
     setShowSkillPicker(false);
     setSkillSearch('');
@@ -718,8 +959,8 @@ function MemberDetailPage({
     const skillDescriptions = Array.from(new Set(draftSkillList.map(s => s.trim()).filter(Boolean)));
     try {
       const nextSkillSet = new Set(skillDescriptions.map(d => d.toLowerCase()));
-      const existingSkillSet = new Set(member.skills.map(s => s.description.toLowerCase()));
-      const idsToDelete = member.skills
+      const existingSkillSet = new Set(skillsInThisHive.map(s => s.description.toLowerCase()));
+      const idsToDelete = skillsInThisHive
         .filter(s => !nextSkillSet.has(s.description.toLowerCase()))
         .map(s => s.id)
         .filter(id => !id.startsWith('draft-skill-'));
@@ -753,8 +994,9 @@ function MemberDetailPage({
       onMemberUpdated({
         ...member,
         skills: skillDescriptions.map((description, i) => ({
-          id: member.skills[i]?.id ?? `draft-skill-${i}`,
+          id: skillsInThisHive[i]?.id ?? `draft-skill-${i}`,
           description,
+          community_id: communityId ?? undefined,
         })),
       });
       return true;
@@ -780,13 +1022,27 @@ function MemberDetailPage({
     created_at: wish.created_at ?? new Date(0).toISOString(),
   } as Wish);
 
-  const canGrantWish = (wish: MemberWish) => canManageMemberWishes && wish.status === 'public';
-  const canEditWish = (wish: MemberWish) => canManageMemberWishes && wish.status !== 'fulfilled';
-  const canArchiveWish = (wish: MemberWish) => (
-    canManageMemberWishes && wish.status === 'public' && wish.is_active !== false
+  /**
+   * A wish from another HIVE is here to be READ.
+   *
+   * Since migration 190 this panel can hold wishes written elsewhere and marked
+   * HIVE-Wide, and an admin's authority stops at their own HIVE's edge
+   * (migration 128) — `is_community_admin(community_id)` would refuse the write
+   * anyway. A pencil that opens onto a refusal is worse than no pencil, so the
+   * actions only appear on wishes that belong to the HIVE you are standing in.
+   * The owner still edits their own from their own Profile.
+   */
+  const wishIsFromHere = (wish: MemberWish) => (
+    !wish.community_id || wish.community_id === communityId
   );
-  const canDeleteWish = (_wish: MemberWish) => canManageMemberWishes;
-  const canRefineWish = (wish: MemberWish) => canManageMemberWishes && wish.status !== 'fulfilled';
+  const canManageThisWish = (wish: MemberWish) => canManageMemberWishes && wishIsFromHere(wish);
+  const canGrantWish = (wish: MemberWish) => canManageThisWish(wish) && wish.status === 'public';
+  const canEditWish = (wish: MemberWish) => canManageThisWish(wish) && wish.status !== 'fulfilled';
+  const canArchiveWish = (wish: MemberWish) => (
+    canManageThisWish(wish) && wish.status === 'public' && wish.is_active !== false
+  );
+  const canDeleteWish = (wish: MemberWish) => canManageThisWish(wish);
+  const canRefineWish = (wish: MemberWish) => canManageThisWish(wish) && wish.status !== 'fulfilled';
   const canOpenWishActions = (wish: MemberWish) => (
     canGrantWish(wish) || canEditWish(wish) || canArchiveWish(wish) || canDeleteWish(wish) || canRefineWish(wish)
   );
@@ -1103,8 +1359,8 @@ function MemberDetailPage({
 
       if (communityId) {
         const nextSkillLookup = new Set(skillDescriptions.map(description => description.toLowerCase()));
-        const existingSkillLookup = new Set(member.skills.map(skill => skill.description.toLowerCase()));
-        const skillIdsToDelete = member.skills
+        const existingSkillLookup = new Set(skillsInThisHive.map(skill => skill.description.toLowerCase()));
+        const skillIdsToDelete = skillsInThisHive
           .filter(skill => !nextSkillLookup.has(skill.description.toLowerCase()))
           .map(skill => skill.id)
           .filter(id => !id.startsWith('draft-skill-'));
@@ -1139,8 +1395,9 @@ function MemberDetailPage({
         ...member,
         ...updates,
         skills: skillDescriptions.map((description, index) => ({
-          id: member.skills[index]?.id ?? `draft-skill-${index}`,
+          id: skillsInThisHive[index]?.id ?? `draft-skill-${index}`,
           description,
+          community_id: communityId ?? undefined,
         })),
       });
       setEditing(false);
@@ -1310,7 +1567,7 @@ function MemberDetailPage({
               {/* Save bar */}
               <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.3)', padding: 20, paddingBottom: 32, flexDirection: 'row', gap: 10 }}>
                 <Pressable
-                  onPress={() => { setShowSkillPicker(false); setDraftSkillList(member.skills.map(s => s.description)); setSkillSearch(''); }}
+                  onPress={() => { setShowSkillPicker(false); setDraftSkillList(skillsInThisHive.map(s => s.description)); setSkillSearch(''); }}
                   style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', color: '#8e7a5e', textAlign: 'center' }}>Cancel</Text>
@@ -1973,9 +2230,14 @@ function MemberDetailPage({
                   >
                     {visibleMemberWishes.length === 0 ? (
                       <View style={{ backgroundColor: '#fffdf5', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.32)' }}>
-                        <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(45,45,45,0.48)', textAlign: 'center' }}>
-                          {wishStatusTab === 'granted' ? 'No granted HD wishes yet.' : PROFILE_EMPTY_COPY.wishes}
-                        </Text>
+                        {(wishStatusTab === 'granted' ? ['No granted HD wishes yet.'] : wishesEmptyLines).map(line => (
+                          <Text
+                            key={line}
+                            style={{ fontFamily: 'Lato_400Regular', color: 'rgba(45,45,45,0.48)', textAlign: 'center', lineHeight: 20 }}
+                          >
+                            {line}
+                          </Text>
+                        ))}
                       </View>
                     ) : (
                       // `onOpen` on every card, whoever the member is: reading
@@ -2143,19 +2405,23 @@ function MemberDetailPage({
               </View>
             ) : null}
 
+            {/* Each panel here is its own piece with its own reach, so each one
+                is asked separately. A piece that stays home leaves its words
+                behind and says it was kept, rather than reading as a blank
+                somebody never filled in. */}
             <ProfileShowcase
               honeycombItems={memberHoneycombItems}
-              knownFor={member.known_for}
-              bio={member.bio}
-              miq={{
+              knownFor={showsPiece(PIECE_KEYS.knownFor) ? member.known_for : null}
+              bio={showsPiece(PIECE_KEYS.bio) ? member.bio : null}
+              miq={showsPiece(PIECE_KEYS.miq) ? {
                 experiences: member.miq_experiences,
                 growth: member.miq_growth,
                 contribution: member.miq_contribution,
-              }}
+              } : {}}
               style={{ marginBottom: 20 }}
-              knownForPlaceholder={PROFILE_EMPTY_COPY.knownFor}
-              bioPlaceholder={PROFILE_EMPTY_COPY.bio}
-              miqPlaceholder={PROFILE_EMPTY_COPY.miq}
+              knownForPlaceholder={showsPiece(PIECE_KEYS.knownFor) ? PROFILE_EMPTY_COPY.knownFor : keptHomeCopy}
+              bioPlaceholder={showsPiece(PIECE_KEYS.bio) ? PROFILE_EMPTY_COPY.bio : keptHomeCopy}
+              miqPlaceholder={showsPiece(PIECE_KEYS.miq) ? PROFILE_EMPTY_COPY.miq : keptHomeCopy}
               showMiqWhenEmpty
               showEmptyCells
             />
@@ -2208,7 +2474,7 @@ function MemberDetailPage({
               {member.skills.length === 0 && false ? (
                 <Pressable
                   onPress={() => {
-                    setDraftSkillList(member.skills.map(s => s.description));
+                    setDraftSkillList(skillsInThisHive.map(s => s.description));
                     setShowSkillPicker(true);
                   }}
                   style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 9, borderStyle: 'dashed', alignSelf: 'flex-start' }}
@@ -2218,9 +2484,34 @@ function MemberDetailPage({
               ) : member.skills.length === 0 ? (
                 <View style={{ backgroundColor: '#fdf8ec', borderRadius: 16, paddingVertical: 24, paddingHorizontal: 20, alignItems: 'center' }}>
                   <Text style={{ fontSize: 32, marginBottom: 8 }}>🌱</Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#a09274', textAlign: 'center' }}>
-                    {PROFILE_EMPTY_COPY.skills}
-                  </Text>
+                  {gardenEmptyLines.map(line => (
+                    <Text
+                      key={line}
+                      style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#a09274', textAlign: 'center' }}
+                    >
+                      {line}
+                    </Text>
+                  ))}
+                  {/* The way to bring it over. It lives on Profile, where your
+                      own garden is, so this is a door rather than a second set
+                      of controls for the same thing. */}
+                  {isCurrentUser && !wholeHive ? (
+                    <Pressable
+                      onPress={() => router.push({ pathname: '/profile', params: { focus: 'garden', from: 'members' } })}
+                      accessibilityRole="button"
+                      style={{
+                        marginTop: 12,
+                        backgroundColor: '#315d4e',
+                        borderRadius: 999,
+                        paddingVertical: 7,
+                        paddingHorizontal: 16,
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 12 }}>
+                        Plant your garden here
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               ) : (
                 <SkillBubbleGarden
@@ -2391,6 +2682,12 @@ export default function MembersScreen() {
     enabled: !!communityId && rosterUserIds.length > 0,
   });
 
+  // Everything of theirs that reaches past its own HIVE — see the hook.
+  const travellingQuery = useTravellingPiecesQuery({
+    userIds: rosterUserIds,
+    enabled: rosterUserIds.length > 0,
+  });
+
   const loading = rosterQuery.isPending && !roster;
   /**
    * Whether the second fetch has landed.
@@ -2463,6 +2760,50 @@ export default function MembersScreen() {
     }));
 
     const details = detailsQuery.data;
+
+    /**
+     * The travelling half of the answer, ready to be put next to the local one.
+     *
+     * `travellingReady` is what keeps a missing migration or a failed request
+     * from making anybody's card look emptier than it did yesterday: until this
+     * question has actually been answered, the screen behaves exactly as it
+     * always has.
+     */
+    const travelling = travellingQuery.data;
+    const travellingReady = !!travelling;
+    const travellingSkillsByUser = new Map<string, MemberSkill[]>();
+    (travelling?.skills ?? []).forEach((s: any) => {
+      if (!travellingSkillsByUser.has(s.user_id)) travellingSkillsByUser.set(s.user_id, []);
+      travellingSkillsByUser.get(s.user_id)!.push({
+        id: s.id,
+        description: s.description,
+        // The HIVE this flower grows in, carried through because the skills
+        // editor below decides what to delete from this list and must never
+        // reach into another HIVE's garden to do it.
+        community_id: s.community_id,
+        enthusiasm_level: s.enthusiasm_level,
+        display_x: s.display_x,
+        display_y: s.display_y,
+      });
+    });
+    const travellingWishesByUser = new Map<string, MemberWish[]>();
+    (travelling?.wishes ?? []).forEach((w: any) => {
+      if (!travellingWishesByUser.has(w.user_id)) travellingWishesByUser.set(w.user_id, []);
+      travellingWishesByUser.get(w.user_id)!.push({
+        id: w.id,
+        community_id: w.community_id,
+        share_scope: w.share_scope,
+        title: w.title,
+        description: w.description,
+        status: w.status,
+        is_active: w.is_active,
+        created_at: w.created_at,
+        fulfilled_at: w.fulfilled_at,
+        thank_you_message: w.thank_you_message,
+        granters: w.granters ?? [],
+      });
+    });
+
     if (details) {
       const skillsByUser = new Map<string, MemberSkill[]>();
       details.skills.forEach((s: any) => {
@@ -2548,8 +2889,28 @@ export default function MembersScreen() {
       const dailyMatches = buildSwarmMatches(currentUserId, swarmAnswers);
 
       memberList.forEach(m => {
-        m.skills = skillsByUser.get(m.id) ?? [];
-        m.wishes = wishesByUser.get(m.id) ?? [];
+        // What this HIVE holds, and what reaches this far from anywhere —
+        // put together by the rule Nat wrote on 2026-08-19: a thing marked
+        // HIVE-Wide "shows up in every HIVE you're in and the HIVE-wide
+        // umbrella", and a thing kept to its HIVE shows only inside it.
+        //
+        // Standing at HIVE-Wide, `local` is whichever single HIVE you were in
+        // last, which is why her Nellie wish appeared up there at all. Above
+        // the HIVEs, only the pieces that travel belong.
+        const localSkills = skillsByUser.get(m.id) ?? [];
+        const localWishes = wishesByUser.get(m.id) ?? [];
+        m.skills = travellingReady
+          ? mergeById(wholeHive ? [] : localSkills, travellingSkillsByUser.get(m.id) ?? [])
+          : localSkills;
+        m.wishes = travellingReady
+          ? mergeById(wholeHive ? [] : localWishes, travellingWishesByUser.get(m.id) ?? [])
+          : localWishes;
+        const reach = travelling?.reachByUser[m.id];
+        if (reach) {
+          m.piece_reach = reach.piece_reach;
+          m.profile_scope = reach.profile_scope;
+          m.reachKnown = true;
+        }
         m.introPost = introByUser.get(m.id) ?? null;
         m.dailyAnswers = answersByUser.get(m.id) ?? [];
         m.questionAnswerCount = m.dailyAnswers.length;
@@ -2578,7 +2939,7 @@ export default function MembersScreen() {
     });
 
     return withEdits;
-  }, [currentUserId, deckFor, detailsQuery.data, memberEdits, roster]);
+  }, [currentUserId, deckFor, detailsQuery.data, memberEdits, roster, travellingQuery.data, wholeHive]);
 
   /**
    * Pull-to-refresh: go and ask again, and drop anything the card was holding
@@ -2588,11 +2949,11 @@ export default function MembersScreen() {
     setRefreshing(true);
     setMemberEdits({});
     try {
-      await Promise.all([rosterQuery.refetch(), detailsQuery.refetch()]);
+      await Promise.all([rosterQuery.refetch(), detailsQuery.refetch(), travellingQuery.refetch()]);
     } finally {
       setRefreshing(false);
     }
-  }, [detailsQuery, rosterQuery]);
+  }, [detailsQuery, rosterQuery, travellingQuery]);
 
   /**
    * Whether you are listed HIVE-Wide. Read here, changed elsewhere.
@@ -2673,27 +3034,34 @@ export default function MembersScreen() {
   const filtered = useMemo(() => {
     if (!search.trim()) return members;
     return members.filter(m => {
+      // Search reads what the card would show you and nothing else. A person
+      // you could not find by looking should not be findable by typing: a
+      // match on a bio kept at home would put their tile on screen and tell
+      // you what it said, one guess at a time.
+      const readable = (key: string, value?: string | null) => (
+        pieceReaches(m, key, wholeHive) ? value : null
+      );
       return matchesMemberSearchText([
         m.name,
         m.role,
         ROLE_LABELS[m.role],
-        m.profile_title,
-        m.occupation,
-        m.bio,
-        m.current_project,
-        m.hometown,
-        m.known_for,
-        m.miq_experiences,
-        m.miq_growth,
-        m.miq_contribution,
-        m.favorite_book,
-        m.favorite_food,
-        m.favorite_hobby,
+        readable(PIECE_KEYS.title, m.profile_title),
+        readable(PIECE_KEYS.title, m.occupation),
+        readable(PIECE_KEYS.bio, m.bio),
+        readable(PIECE_KEYS.project, m.current_project),
+        readable(PIECE_KEYS.hometown, m.hometown),
+        readable(PIECE_KEYS.knownFor, m.known_for),
+        readable(PIECE_KEYS.miq, m.miq_experiences),
+        readable(PIECE_KEYS.miq, m.miq_growth),
+        readable(PIECE_KEYS.miq, m.miq_contribution),
+        readable(PIECE_KEYS.book, m.favorite_book),
+        readable(PIECE_KEYS.food, m.favorite_food),
+        readable(PIECE_KEYS.hobby, m.favorite_hobby),
         ...m.skills.map(s => s.description),
         ...m.wishes.map(w => w.description),
       ], search);
     });
-  }, [members, search]);
+  }, [members, search, wholeHive]);
   const matchedMemberCount = filtered.filter(member =>
     member.id !== currentUserId &&
     typeof member.dailyMatchPercent === 'number' &&
@@ -3185,7 +3553,18 @@ export default function MembersScreen() {
               >
                   {honeycombPlacements.map(({ item: member, index, left, top }) => {
                     const isMe = member.id === currentUserId;
-                    const titleLine = member.profile_title || member.occupation;
+                    // Everything printed on a tile is a piece of that person's
+                    // card, so each one is asked how far it goes before it is
+                    // drawn (migration 190). Without this the directory would
+                    // put a bio on screen at HIVE-Wide that the member card two
+                    // taps away has already decided to keep at home.
+                    const titleLine = pieceReaches(member, PIECE_KEYS.title, wholeHive)
+                      ? (member.profile_title || member.occupation)
+                      : null;
+                    const combKnownFor = pieceReaches(member, PIECE_KEYS.knownFor, wholeHive) ? member.known_for : null;
+                    const combProject = pieceReaches(member, PIECE_KEYS.project, wholeHive) ? member.current_project : null;
+                    const combMiq = pieceReaches(member, PIECE_KEYS.miq, wholeHive) ? member.miq_experiences : null;
+                    const combBio = pieceReaches(member, PIECE_KEYS.bio, wholeHive) ? member.bio : null;
                     const profileCurrentWishes = member.wishes.filter(w => w.status === 'public' && w.is_active !== false);
                     // The comb answers "what's everyone's focus right now" —
                     // this month's HD leads; Ask-me-about is the fallback.
@@ -3193,14 +3572,14 @@ export default function MembersScreen() {
                     const activeWishSpotlight = spotlightWish
                       ? (spotlightWish.title?.trim() || spotlightWish.description)
                       : null;
-                    const spotlight = activeWishSpotlight || member.known_for || member.current_project || member.miq_experiences || member.skills[0]?.description || member.bio;
+                    const spotlight = activeWishSpotlight || combKnownFor || combProject || combMiq || member.skills[0]?.description || combBio;
                     const spotlightLabel = activeWishSpotlight
                       ? "This month's HD"
-                      : member.known_for
+                      : combKnownFor
                         ? 'Ask me about'
-                        : member.current_project
+                        : combProject
                           ? 'Building'
-                          : member.miq_experiences
+                          : combMiq
                             ? '3MIQ'
                             : member.skills[0]?.description === spotlight
                               ? 'Skill'
@@ -3372,7 +3751,7 @@ export default function MembersScreen() {
                               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 8.5, color: '#bd9348', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 2 }} numberOfLines={1}>
                                 {spotlightLabel}
                               </Text>
-                              <Text style={{ fontFamily: member.known_for ? 'LibreBaskerville_400Regular' : 'Lato_400Regular', fontSize: member.known_for ? 10.8 : 10.5, color: '#5c5648', lineHeight: 14.5, textAlign: 'center', fontStyle: member.known_for ? 'italic' : 'normal' }} numberOfLines={2}>
+                              <Text style={{ fontFamily: combKnownFor ? 'LibreBaskerville_400Regular' : 'Lato_400Regular', fontSize: combKnownFor ? 10.8 : 10.5, color: '#5c5648', lineHeight: 14.5, textAlign: 'center', fontStyle: combKnownFor ? 'italic' : 'normal' }} numberOfLines={2}>
                                 {spotlight}
                               </Text>
                             </View>

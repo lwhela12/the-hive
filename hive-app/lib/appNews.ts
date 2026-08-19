@@ -28,6 +28,28 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-each-piece-chooses',
+    date: '2026-08-19',
+    title: 'Every piece of your profile chooses for itself who sees it',
+    detail: 'Your bio, each fun fact, your 3MIQ, your Skills Garden and every wish now carry their own setting: this HIVE, or HIVE-Wide. And HIVE-Wide finally means what it says — it shows at the umbrella and inside every HIVE you are in, which is the bit that was quietly broken.',
+    href: { pathname: '/profile' },
+    action: 'Open your profile',
+  },
+  {
+    id: '2026-08-19-name-the-voices',
+    date: '2026-08-19',
+    title: 'Put names to the voices in a recording',
+    detail: 'A recorded meeting comes back as Speaker A, Speaker B. On the summary you get a row for each voice with a line of what they said, and a box for their name. Do a quick roll call at the top of the meeting and the boxes fill themselves in for you to confirm.',
+    href: { pathname: '/meetings' },
+    action: 'Open Meeting Summaries',
+  },
+  {
+    id: '2026-08-19-tech-meets-on-meet',
+    date: '2026-08-19',
+    title: 'Tech HIVE meets on Google Meet',
+    detail: 'Tech is the one HIVE where everybody is somewhere else, and Meet is where they already are. Its invitations carry a Meet link again. OG and Production still meet in the app, where the room shares one screen.',
+  },
+  {
     id: '2026-08-19-summary-fits-the-hive',
     date: '2026-08-19',
     title: 'A summary only mentions a treasurer if your HIVE has one',
