@@ -43,7 +43,7 @@ import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { WishManageModal } from '../../components/wishes/WishManageModal';
 import { Ionicons } from '@expo/vector-icons';
 import { formatDateLong, formatDateShort, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
-import type { Skill, Wish, UserInsights, Profile } from '../../types';
+import type { Skill, Wish, UserInsights, Profile, HiveCard } from '../../types';
 import { EventScopeFields, invalidateBirthdayQueries, type EventAudience } from '../../components/events/EventAudienceToggle';
 
 import { ComposerBar } from '../../components/ui/ComposerBar';
@@ -498,7 +498,6 @@ export default function ProfileScreen() {
   const immersiveSkillsGarden = compactProfileLandscape;
   const skillsGardenY = useRef(0);
   const restoredProfileDraftRef = useRef(false);
-  const profileFormDraftKey = profile?.id ? `the-hive:profile-form-draft:${profile.id}` : null;
   const activeSurveyStorageKey = profile?.id ? `the-hive:active-survey:${profile.id}` : null;
   const pendingSurveyIds = new Set(pendingSurveys.map((survey) => survey.id));
   const monthlyCheckInSurvey = availableSurveys.find((survey) => (
@@ -593,6 +592,41 @@ export default function ProfileScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
+  /** This HIVE's own card row for me (migration 194). Null until fetched, or when this HIVE's card was never written. */
+  const [hiveCard, setHiveCard] = useState<HiveCard | null>(null);
+  /**
+   * The card this page shows and edits.
+   *
+   * Nat's model, 2026-08-19: with the switch on HIVE-Wide there is ONE
+   * travelling card — the columns on `profiles` — shown in every HIVE. With
+   * the switch on "this HIVE only", each HIVE has a card of its own
+   * (`hive_cards`), and a HIVE you never filled out is honestly blank: "my
+   * percentage-complete bee would go back and all of my information would go
+   * out — but if I toggled HIVE-Wide on, then it would all come back."
+   * Name, phone, birthday and preferences stay on the person, not the card.
+   */
+  const cardTravels = (profile as any)?.profile_scope === 'all_hives';
+  const card: Record<string, unknown> = cardTravels
+    ? (((profile as any) ?? {}) as Record<string, unknown>)
+    : {
+        profile_title: hiveCard?.profile_title ?? null,
+        bio: hiveCard?.bio ?? null,
+        known_for: hiveCard?.known_for ?? null,
+        hometown: hiveCard?.hometown ?? null,
+        current_project: hiveCard?.current_project ?? null,
+        favorite_book: hiveCard?.favorite_book ?? null,
+        favorite_food: hiveCard?.favorite_food ?? null,
+        favorite_hobby: hiveCard?.favorite_hobby ?? null,
+        fun_facts: hiveCard?.fun_facts ?? null,
+        miq_experiences: hiveCard?.miq_experiences ?? null,
+        miq_growth: hiveCard?.miq_growth ?? null,
+        miq_contribution: hiveCard?.miq_contribution ?? null,
+      };
+
+  const profileFormDraftKey = profile?.id
+    ? `the-hive:profile-form-draft:${profile.id}:${cardTravels ? 'travelling' : (communityId ?? 'hive')}`
+    : null;
+
   const fetchData = useCallback(async () => {
     if (!profile || !communityId) return;
 
@@ -607,6 +641,7 @@ export default function ProfileScreen() {
       skillsResult,
       wishesResult,
       insightsResult,
+      cardResult,
     ] = await Promise.all([
       supabase
         .from('skills')
@@ -631,7 +666,14 @@ export default function ProfileScreen() {
         .eq('user_id', profile.id)
         .eq('community_id', communityId)
         .maybeSingle(),
+      supabase
+        .from('hive_cards')
+        .select('*')
+        .eq('user_id', profile.id)
+        .eq('community_id', communityId)
+        .maybeSingle(),
     ]);
+    setHiveCard(((cardResult as any).data as HiveCard | null) ?? null);
 
     let wishesData: Wish[] | null = (wishesResult.data as unknown as Wish[] | null) ?? null;
     let wishesError = wishesResult.error;
@@ -768,22 +810,22 @@ export default function ProfileScreen() {
       setEditBirthdayVisibility((((profile as any).birthday_visibility as EventAudience) || 'members'));
       setEditBirthdayInvitedScope((((profile as any).birthday_invited_scope as EventAudience) || 'members'));
       setEditOccupation(profile.occupation || '');
-      setEditProfileTitle((profile as any).profile_title || '');
+      setEditProfileTitle((card as any).profile_title || '');
       setEditPreferredContact(profile.preferred_contact || 'email');
-      setEditBio((profile as any).bio || '');
-      setEditCurrentProject((profile as any).current_project || '');
-      setEditHometown((profile as any).hometown || '');
-      setEditFavBook((profile as any).favorite_book || '');
-      setEditFavFood((profile as any).favorite_food || '');
-      setEditFavHobby((profile as any).favorite_hobby || '');
-      setEditKnownFor((profile as any).known_for || '');
-      setEditMiqExperiences((profile as any).miq_experiences || '');
-      setEditMiqGrowth((profile as any).miq_growth || '');
-      setEditMiqContribution((profile as any).miq_contribution || '');
-      setEditFunFacts(((profile as any).fun_facts as string[] | null) ?? ['', '', '']);
+      setEditBio((card as any).bio || '');
+      setEditCurrentProject((card as any).current_project || '');
+      setEditHometown((card as any).hometown || '');
+      setEditFavBook((card as any).favorite_book || '');
+      setEditFavFood((card as any).favorite_food || '');
+      setEditFavHobby((card as any).favorite_hobby || '');
+      setEditKnownFor((card as any).known_for || '');
+      setEditMiqExperiences((card as any).miq_experiences || '');
+      setEditMiqGrowth((card as any).miq_growth || '');
+      setEditMiqContribution((card as any).miq_contribution || '');
+      setEditFunFacts(((card as any).fun_facts as string[] | null) ?? ['', '', '']);
       setEditPieceReach(readAllPieceReach(profile));
     }
-  }, [deepQuizVisible, isEditing, profile]);
+  }, [deepQuizVisible, isEditing, profile, hiveCard, cardTravels]);
 
   const resetProfileDrafts = () => {
     if (profile) {
@@ -793,19 +835,19 @@ export default function ProfileScreen() {
       setEditBirthdayVisibility((((profile as any).birthday_visibility as EventAudience) || 'members'));
       setEditBirthdayInvitedScope((((profile as any).birthday_invited_scope as EventAudience) || 'members'));
       setEditOccupation(profile.occupation || '');
-      setEditProfileTitle((profile as any).profile_title || '');
+      setEditProfileTitle((card as any).profile_title || '');
       setEditPreferredContact(profile.preferred_contact || 'email');
-      setEditBio((profile as any).bio || '');
-      setEditCurrentProject((profile as any).current_project || '');
-      setEditHometown((profile as any).hometown || '');
-      setEditFavBook((profile as any).favorite_book || '');
-      setEditFavFood((profile as any).favorite_food || '');
-      setEditFavHobby((profile as any).favorite_hobby || '');
-      setEditKnownFor((profile as any).known_for || '');
-      setEditMiqExperiences((profile as any).miq_experiences || '');
-      setEditMiqGrowth((profile as any).miq_growth || '');
-      setEditMiqContribution((profile as any).miq_contribution || '');
-      setEditFunFacts(((profile as any).fun_facts as string[] | null) ?? ['', '', '']);
+      setEditBio((card as any).bio || '');
+      setEditCurrentProject((card as any).current_project || '');
+      setEditHometown((card as any).hometown || '');
+      setEditFavBook((card as any).favorite_book || '');
+      setEditFavFood((card as any).favorite_food || '');
+      setEditFavHobby((card as any).favorite_hobby || '');
+      setEditKnownFor((card as any).known_for || '');
+      setEditMiqExperiences((card as any).miq_experiences || '');
+      setEditMiqGrowth((card as any).miq_growth || '');
+      setEditMiqContribution((card as any).miq_contribution || '');
+      setEditFunFacts(((card as any).fun_facts as string[] | null) ?? ['', '', '']);
       setEditPieceReach(readAllPieceReach(profile));
     }
   };
@@ -1026,9 +1068,30 @@ export default function ProfileScreen() {
     const birthdayIso = cleanBirthday ? parseAmericanDate(cleanBirthday) : null;
     const funFacts = editFunFacts.map(f => f.trim()).filter(Boolean);
 
+    // The card's words. Where they land depends on the switch: HIVE-Wide
+    // writes the travelling card (profiles), this-HIVE-only writes this HIVE's
+    // own card (hive_cards, migration 194).
+    const cardPayload = {
+      profile_title: editProfileTitle.trim() || null,
+      bio: editBio.trim() || null,
+      current_project: editCurrentProject.trim() || null,
+      hometown: editHometown.trim() || null,
+      favorite_book: editFavBook.trim() || null,
+      favorite_food: editFavFood.trim() || null,
+      favorite_hobby: editFavHobby.trim() || null,
+      known_for: editKnownFor.trim() || null,
+      miq_experiences: editMiqExperiences.trim() || null,
+      miq_growth: editMiqGrowth.trim() || null,
+      miq_contribution: editMiqContribution.trim() || null,
+      fun_facts: funFacts.length > 0 ? funFacts : null,
+    };
+
     return {
       cleanBirthday,
       birthdayIso,
+      cardPayload,
+      // Facts about the person, not the card — these write `profiles` whatever
+      // the switch says.
       payload: {
         name: editName.trim(),
         phone: editPhone.trim() || null,
@@ -1036,23 +1099,10 @@ export default function ProfileScreen() {
         birthday_visibility: editBirthdayVisibility,
         birthday_invited_scope: editBirthdayInvitedScope,
         occupation: editOccupation.trim() || null,
-        profile_title: editProfileTitle.trim() || null,
         preferred_contact: editPreferredContact,
-        bio: editBio.trim() || null,
-        current_project: editCurrentProject.trim() || null,
-        hometown: editHometown.trim() || null,
-        favorite_book: editFavBook.trim() || null,
-        favorite_food: editFavFood.trim() || null,
-        favorite_hobby: editFavHobby.trim() || null,
-        known_for: editKnownFor.trim() || null,
-        miq_experiences: editMiqExperiences.trim() || null,
-        miq_growth: editMiqGrowth.trim() || null,
-        miq_contribution: editMiqContribution.trim() || null,
-        fun_facts: funFacts.length > 0 ? funFacts : null,
-        // How far each of the above goes (migration 190). Only the pieces that
-        // still exist are kept: deleting your third fun fact takes its reach
-        // with it, so position 2 never inherits an answer about a sentence
-        // nobody can read any more.
+        // How far each piece goes (migration 190, vestigial). Only the pieces
+        // that still exist are kept: deleting your third fun fact takes its
+        // reach with it.
         piece_reach: Object.fromEntries(
           // Merged onto what is already stored rather than written over it, so
           // a save that happened before this form had read your answers can
@@ -1073,17 +1123,21 @@ export default function ProfileScreen() {
   const saveProfileDraft = async (failureMessage: string) => {
     if (!profile) return false;
 
-    const { cleanBirthday, birthdayIso, payload } = buildProfileUpdate();
+    const { cleanBirthday, birthdayIso, payload, cardPayload } = buildProfileUpdate();
     if (cleanBirthday && !birthdayIso) {
       showAlert('Birthday format', 'Please enter your birthday as MM-DD-YYYY, like 10-12-1987.');
       return false;
     }
 
+    // The card's words follow the switch (Nat's model, 2026-08-19): HIVE-Wide
+    // edits the one travelling card; this-HIVE-only edits this HIVE's own.
+    const profilesPayload = cardTravels ? { ...payload, ...cardPayload } : payload;
+
     setIsSaving(true);
     try {
       let { error } = await supabase
         .from('profiles')
-        .update(payload)
+        .update(profilesPayload)
         .eq('id', profile.id);
 
       // A bundle can reach a browser before its migration reaches the database.
@@ -1092,12 +1146,25 @@ export default function ProfileScreen() {
       // worse of the two outcomes, and the reach pills go back to following
       // your HIVE-Wide switch until the migration lands.
       if (error && String(error.message ?? '').includes('piece_reach')) {
-        const { piece_reach: _pieceReach, ...withoutPieceReach } = payload as Record<string, unknown>;
+        const { piece_reach: _pieceReach, ...withoutPieceReach } = profilesPayload as Record<string, unknown>;
         console.warn('[Profile] piece_reach not in the database yet — saving the rest', error);
         ({ error } = await supabase
           .from('profiles')
           .update(withoutPieceReach as any)
           .eq('id', profile.id));
+      }
+
+      if (!error && !cardTravels && communityId) {
+        ({ error } = await (supabase.from('hive_cards') as any)
+          .upsert(
+            {
+              user_id: profile.id,
+              community_id: communityId,
+              ...cardPayload,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id,community_id' }
+          ));
       }
 
       if (error) {
@@ -1106,6 +1173,7 @@ export default function ProfileScreen() {
       }
 
       await refreshProfile();
+      await fetchData();
       // This payload includes birthday_visibility/birthday_invited_scope
       // (migration 164). `members.tsx`'s member card and the birthday's own
       // event card in `hive.tsx` both read those two columns through the
@@ -1771,9 +1839,9 @@ export default function ProfileScreen() {
    * and the message the button sends.
    */
   const hasProfileMiq = !!profile && [
-    (profile as any).miq_experiences,
-    (profile as any).miq_growth,
-    (profile as any).miq_contribution,
+    (card as any).miq_experiences,
+    (card as any).miq_growth,
+    (card as any).miq_contribution,
   ].some(value => hasProfileText(value));
   /** "Refine" once there is something to refine, "Find" while it is blank. */
   const miq3ActionLabel = hasProfileMiq ? 'Refine with Clive' : 'Find with Clive';
@@ -1941,25 +2009,25 @@ export default function ProfileScreen() {
     ? hasAny3MiqDraft ? 'Save & finish' : 'Save without 3MIQ'
     : 'Save & continue';
   const profileHoneycombItems = [
-    { label: 'Title', value: (profile as any).profile_title || profile.occupation },
-    { label: 'From', value: (profile as any).hometown },
+    { label: 'Title', value: (card as any).profile_title || (cardTravels ? profile.occupation : null) },
+    { label: 'From', value: (card as any).hometown },
     { label: 'Birthday', value: formatBirthdayForDisplay(profile.birthday) },
-    { label: 'Project', value: (profile as any).current_project },
+    { label: 'Project', value: (card as any).current_project },
     // Collected in the monthly check-in, not typed here — it changes too often
     // to survive as something you'd remember to come back and edit.
     { label: 'Reading', value: (profile as any).currently_reading },
-    { label: 'Book', value: (profile as any).favorite_book },
-    { label: 'Food', value: (profile as any).favorite_food },
-    { label: 'Hobby', value: (profile as any).favorite_hobby },
-    ...(((profile as any).fun_facts as string[] | null) ?? []).map((fact: string, idx: number) => ({
+    { label: 'Book', value: (card as any).favorite_book },
+    { label: 'Food', value: (card as any).favorite_food },
+    { label: 'Hobby', value: (card as any).favorite_hobby },
+    ...(((card as any).fun_facts as string[] | null) ?? []).map((fact: string, idx: number) => ({
       label: `Fun Fact ${idx + 1}`,
       value: fact,
     })),
   ];
   const profileMiq = {
-    experiences: (profile as any).miq_experiences as string | null | undefined,
-    growth: (profile as any).miq_growth as string | null | undefined,
-    contribution: (profile as any).miq_contribution as string | null | undefined,
+    experiences: (card as any).miq_experiences as string | null | undefined,
+    growth: (card as any).miq_growth as string | null | undefined,
+    contribution: (card as any).miq_contribution as string | null | undefined,
   };
   const publicWishes = wishes.filter(wish => wish.status === 'public' && wish.is_active !== false);
   const grantedWishes = wishes.filter(wish => wish.status === 'fulfilled');
@@ -2309,20 +2377,20 @@ export default function ProfileScreen() {
             const seededSkillsGarden = skills.some(hasBloomingSkill);
             const checks = [
               { label: 'Add a photo', actionLabel: 'Photo', done: !!profile.avatar_url },
-              { label: 'Choose your title', actionLabel: 'Title', done: hasProfileText((profile as any).profile_title) },
+              { label: 'Choose your title', actionLabel: 'Title', done: hasProfileText((card as any).profile_title) },
               { label: 'Add your birthday', actionLabel: 'Birthday', done: !!profile.birthday },
               { label: 'Add your phone', actionLabel: 'Phone', done: hasProfileText(profile.phone) },
-              { label: 'Add your hometown', actionLabel: 'Hometown', done: hasProfileText((profile as any).hometown) },
-              { label: 'Share what HIVErs should ask you about', actionLabel: 'Ask me about', done: hasProfileText((profile as any).known_for) },
-              { label: 'Write a bio', actionLabel: 'Bio', done: hasProfileText((profile as any).bio) },
-              { label: 'Add your current focus', actionLabel: 'Current focus', done: hasProfileText((profile as any).current_project) },
+              { label: 'Add your hometown', actionLabel: 'Hometown', done: hasProfileText((card as any).hometown) },
+              { label: 'Share what HIVErs should ask you about', actionLabel: 'Ask me about', done: hasProfileText((card as any).known_for) },
+              { label: 'Write a bio', actionLabel: 'Bio', done: hasProfileText((card as any).bio) },
+              { label: 'Add your current focus', actionLabel: 'Current focus', done: hasProfileText((card as any).current_project) },
               {
                 label: 'Add favorites',
                 actionLabel: 'Favorites',
                 done: ['favorite_food', 'favorite_book', 'favorite_hobby'].some(key => hasProfileText((profile as any)[key])),
               },
-              { label: 'Add a fun fact', actionLabel: 'Fun fact', done: hasProfileListItem((profile as any).fun_facts) },
-              { label: 'Answer your 3MIQ', actionLabel: '3MIQ', done: !!((profile as any).miq_experiences && (profile as any).miq_growth && (profile as any).miq_contribution) },
+              { label: 'Add a fun fact', actionLabel: 'Fun fact', done: hasProfileListItem((card as any).fun_facts) },
+              { label: 'Answer your 3MIQ', actionLabel: '3MIQ', done: !!((card as any).miq_experiences && (card as any).miq_growth && (card as any).miq_contribution) },
               { label: "Complete this month's check-in", actionLabel: 'Check-in', done: pendingSurveys.length === 0 },
               { label: 'Seed your Skills Garden', actionLabel: 'Skills Garden', done: seededSkillsGarden },
               { label: 'Share a wish', actionLabel: 'Wish', done: wishes.length > 0 },
@@ -2369,9 +2437,9 @@ export default function ProfileScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d99' }}>
                 {profile.email}
               </Text>
-              {((profile as any).profile_title || profile.occupation) && (
+              {((card as any).profile_title || (cardTravels ? profile.occupation : null)) && (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#2d2d2d80', marginTop: 2 }}>
-                  {(profile as any).profile_title || profile.occupation}
+                  {(card as any).profile_title || (cardTravels ? profile.occupation : null)}
                 </Text>
               )}
               {communityRole && communityRole !== 'member' && (
@@ -2643,8 +2711,8 @@ export default function ProfileScreen() {
             <View className="gap-4">
               <ProfileShowcase
                 honeycombItems={profileHoneycombItems}
-                knownFor={(profile as any).known_for}
-                bio={(profile as any).bio}
+                knownFor={(card as any).known_for}
+                bio={(card as any).bio}
                 miq={profileMiq}
                 knownForPlaceholder="Add the thing HIVErs should ask you about."
                 bioPlaceholder="Add your bio here."
@@ -2769,7 +2837,7 @@ export default function ProfileScreen() {
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
-                  {(profile as any).profile_title || 'Not set'}
+                  {(card as any).profile_title || 'Not set'}
                 </Text>
               )}
             </View>
@@ -2809,7 +2877,7 @@ export default function ProfileScreen() {
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
-                  {(profile as any).bio || 'Not set'}
+                  {(card as any).bio || 'Not set'}
                 </Text>
               )}
             </View>
@@ -2832,7 +2900,7 @@ export default function ProfileScreen() {
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
-                  {(profile as any).current_project || 'Not set'}
+                  {(card as any).current_project || 'Not set'}
                 </Text>
               )}
             </View>
@@ -2852,7 +2920,7 @@ export default function ProfileScreen() {
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
-                  {(profile as any).hometown || 'Not set'}
+                  {(card as any).hometown || 'Not set'}
                 </Text>
               )}
             </View>
@@ -2872,7 +2940,7 @@ export default function ProfileScreen() {
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
-                  {(profile as any).known_for || 'Not set'}
+                  {(card as any).known_for || 'Not set'}
                 </Text>
               )}
             </View>
@@ -2923,9 +2991,9 @@ export default function ProfileScreen() {
               ) : (
                 <View className="gap-3">
                   {[
-                    ['Experiences', (profile as any).miq_experiences],
-                    ['Growth', (profile as any).miq_growth],
-                    ['Contribution', (profile as any).miq_contribution],
+                    ['Experiences', (card as any).miq_experiences],
+                    ['Growth', (card as any).miq_growth],
+                    ['Contribution', (card as any).miq_contribution],
                   ].map(([label, value]) => (
                     <View key={label as string}>
                       <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-gold mb-1">{label as string}</Text>
@@ -3004,8 +3072,8 @@ export default function ProfileScreen() {
                 ))
               ) : (
                 <View className="gap-2">
-                  {(((profile as any).fun_facts as string[] | null) ?? []).length > 0
-                    ? ((profile as any).fun_facts as string[]).map((fact: string, idx: number) => (
+                  {(((card as any).fun_facts as string[] | null) ?? []).length > 0
+                    ? ((card as any).fun_facts as string[]).map((fact: string, idx: number) => (
                         <View key={idx} className="flex-row items-start">
                           <Text className="text-gold mr-2">✦</Text>
                           <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal flex-1">{fact}</Text>

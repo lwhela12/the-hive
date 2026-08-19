@@ -821,6 +821,31 @@ export interface TourMark extends Record<string, unknown> {
   outcome: 'finished' | 'skipped';
 }
 
+/**
+ * One profile card per person per HIVE (migration 194), shown while the
+ * owner's `profile_scope` is 'hive'. The travelling card — shown everywhere
+ * while the scope is 'all_hives' — is the matching columns on `profiles`
+ * itself. Name, phone, birthday and preferences never move here: they are
+ * facts about the person, not about the face they show one room.
+ */
+export interface HiveCard extends Record<string, unknown> {
+  user_id: string;
+  community_id: string;
+  profile_title: string | null;
+  bio: string | null;
+  known_for: string | null;
+  hometown: string | null;
+  current_project: string | null;
+  favorite_book: string | null;
+  favorite_food: string | null;
+  favorite_hobby: string | null;
+  fun_facts: string[] | null;
+  miq_experiences: string | null;
+  miq_growth: string | null;
+  miq_contribution: string | null;
+  updated_at: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -828,6 +853,12 @@ export interface Database {
         Row: TourMark;
         Insert: Omit<TourMark, 'completed_at'>;
         Update: Partial<Omit<TourMark, 'completed_at'>>;
+        Relationships: [];
+      };
+      hive_cards: {
+        Row: HiveCard;
+        Insert: Omit<HiveCard, 'updated_at'> & Partial<Pick<HiveCard, 'updated_at'>>;
+        Update: Partial<Omit<HiveCard, 'user_id' | 'community_id'>>;
         Relationships: [];
       };
       communities: {

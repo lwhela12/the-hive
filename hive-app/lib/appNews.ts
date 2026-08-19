@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-a-card-for-each-hive',
+    date: '2026-08-19',
+    title: 'Keep your card to one HIVE and each HIVE gets its own',
+    detail: 'With your card set to this-HIVE-only, every HIVE now shows the card you wrote FOR it — blank until you fill it in, so you can be a different you in each room. Flip to HIVE-Wide and your one travelling card comes back everywhere.',
+    href: { pathname: '/profile' },
+    action: 'Try the switch',
+  },
+  {
     id: '2026-08-19-one-pill-everywhere',
     date: '2026-08-19',
     title: 'One pill for who-sees-it, everywhere',

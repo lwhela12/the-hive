@@ -98,6 +98,8 @@ export type MemberDetailRows = {
   wishes: any[];
   intros: any[];
   answers: any[];
+  /** This HIVE's own cards (migration 194) — shown for members whose whole card does not travel. */
+  cards: any[];
 };
 
 /** Highest role anybody holds anywhere wins. */
@@ -253,7 +255,7 @@ export function useMemberDetailsQuery({
     queryKey: ['membersDetails', communityId ?? '', scopeKey(scopeIds), ids.join(',')],
     enabled: enabled && !!communityId && ids.length > 0,
     queryFn: async () => {
-      const [skillsRes, wishesRes, introRes, answersRes] = await Promise.all([
+      const [skillsRes, wishesRes, introRes, answersRes, cardsRes] = await Promise.all([
         supabase
           .from('skills')
           .select('user_id, id, description, enthusiasm_level, display_x, display_y')
@@ -298,6 +300,15 @@ export function useMemberDetailsQuery({
           // meaning instead of shared words.
           .select('user_id, community_id, question_index, question_date, answer, created_at, gist')
           .in('community_id', scopeIds)
+          .in('user_id', ids),
+        // This HIVE's own cards (migration 194). A member whose switch keeps
+        // their card home shows THIS HIVE's card here — honestly blank when
+        // they never wrote one — while a travelling card keeps reading from
+        // the profile row itself.
+        supabase
+          .from('hive_cards')
+          .select('*')
+          .eq('community_id', communityId!)
           .in('user_id', ids),
       ]);
 
@@ -344,12 +355,14 @@ export function useMemberDetailsQuery({
       if (wishesError) console.warn('[Members] wishes load failed', wishesError);
       if (introRes.error) console.warn('[Members] intro posts load failed', introRes.error);
       if (answersRes.error) console.warn('[Members] daily answers load failed', answersRes.error);
+      if (cardsRes.error) console.warn('[Members] hive cards load failed', cardsRes.error);
 
       return {
         skills: (skillsRes.data ?? []) as any[],
         wishes: wishesData ?? [],
         intros: (introRes.data ?? []) as any[],
         answers: (answersRes.data ?? []) as any[],
+        cards: (cardsRes.data ?? []) as any[],
       };
     },
   });

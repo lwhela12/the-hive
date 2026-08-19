@@ -2172,38 +2172,88 @@ export default function MonthlyTuneupScreen() {
     });
   };
 
-  // Seed both from whatever the profile already says, so the quarterly pass
-  // opens showing your real answers rather than empty boxes.
+  // Which card this HIVE's tune-up reviews (Nat's model, 2026-08-19, migration
+  // 194): a travelling card lives on `profiles`; a stay-home card is this
+  // HIVE's own `hive_cards` row, honestly blank when never written.
+  const tuneupCardTravels = (profile as any)?.profile_scope === 'all_hives';
+  const [tuneupHiveCard, setTuneupHiveCard] = useState<Record<string, unknown> | null>(null);
+  useEffect(() => {
+    if (!profile?.id || !communityId || tuneupCardTravels) {
+      setTuneupHiveCard(null);
+      return;
+    }
+    let active = true;
+    (supabase.from('hive_cards') as any)
+      .select('*')
+      .eq('user_id', profile.id)
+      .eq('community_id', communityId)
+      .maybeSingle()
+      .then(({ data }: { data: Record<string, unknown> | null }) => {
+        if (active) setTuneupHiveCard(data ?? null);
+      });
+    return () => { active = false; };
+  }, [profile?.id, communityId, tuneupCardTravels]);
+
+  // Seed both from whatever the card this HIVE shows already says, so the
+  // quarterly pass opens showing your real answers rather than empty boxes.
   useEffect(() => {
     if (!profile) return;
     setReadingDraft(((profile as any).currently_reading ?? '') as string);
+    const source: Record<string, unknown> = tuneupCardTravels
+      ? (profile as any)
+      : (tuneupHiveCard ?? {});
     setProfileDrafts(
       PROFILE_REVIEW_FIELDS.reduce<Record<string, string>>((drafts, field) => {
-        drafts[field.column] = ((profile as any)[field.column] ?? '') as string;
+        drafts[field.column] = (source[field.column] ?? '') as string;
         return drafts;
       }, {})
     );
-  }, [profile?.id]);
+  }, [profile?.id, tuneupCardTravels, tuneupHiveCard]);
 
   const saveProfileEdits = async () => {
     if (!profile || (!readingDirty && !profileDirty)) return true;
 
-    const updates: Record<string, string | null> = {};
-    if (readingDirty) updates.currently_reading = readingDraft.trim() || null;
+    const cardUpdates: Record<string, string | null> = {};
     if (profileDirty) {
       PROFILE_REVIEW_FIELDS.forEach((field) => {
-        updates[field.column] = (profileDrafts[field.column] ?? '').trim() || null;
+        cardUpdates[field.column] = (profileDrafts[field.column] ?? '').trim() || null;
       });
     }
 
-    const { error } = await (supabase as any)
-      .from('profiles')
-      .update(updates)
-      .eq('id', profile.id);
+    // What you're reading is a fact about the person, not the card — it writes
+    // `profiles` whatever the switch says. The card's words follow the switch.
+    const profileUpdates: Record<string, string | null> = {
+      ...(readingDirty ? { currently_reading: readingDraft.trim() || null } : {}),
+      ...(profileDirty && tuneupCardTravels ? cardUpdates : {}),
+    };
 
-    if (error) {
-      setProfileSaveError('Could not save that to your profile — try again.');
-      return false;
+    if (Object.keys(profileUpdates).length > 0) {
+      const { error } = await (supabase as any)
+        .from('profiles')
+        .update(profileUpdates)
+        .eq('id', profile.id);
+      if (error) {
+        setProfileSaveError('Could not save that to your profile — try again.');
+        return false;
+      }
+    }
+
+    if (profileDirty && !tuneupCardTravels && communityId) {
+      const { error } = await (supabase.from('hive_cards') as any)
+        .upsert(
+          {
+            user_id: profile.id,
+            community_id: communityId,
+            ...cardUpdates,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,community_id' }
+        );
+      if (error) {
+        setProfileSaveError('Could not save that to your profile — try again.');
+        return false;
+      }
+      setTuneupHiveCard((current) => ({ ...(current ?? {}), ...cardUpdates }));
     }
 
     setProfileSaveError(null);

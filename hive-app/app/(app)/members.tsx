@@ -1327,13 +1327,15 @@ function MemberDetailPage({
       const funFacts = [draftFunFact1, draftFunFact2, draftFunFact3]
         .map(fact => fact.trim())
         .filter(Boolean);
-      const updates = {
-        name: cleanName,
-        occupation: draftOccupation.trim() || null,
+      // The card's words follow the owner's switch (migration 194): a
+      // travelling card lives on `profiles`; a stay-home card is this HIVE's
+      // own row. Facts about the person — name, birthday, occupation — write
+      // `profiles` either way. When the switch is unknown (the reach query
+      // failed) everything goes to `profiles`, exactly as it always did.
+      const cardStaysHome =
+        (member as any).reachKnown === true && (member as any).profile_scope !== 'all_hives';
+      const cardUpdates = {
         profile_title: draftProfileTitle.trim() || null,
-        birthday: birthdayIso,
-        birthday_visibility: draftBirthdayVisibility,
-        birthday_invited_scope: draftBirthdayInvitedScope,
         bio: draftBio.trim() || null,
         current_project: draftCurrentProject.trim() || null,
         hometown: draftHometown.trim() || null,
@@ -1345,6 +1347,14 @@ function MemberDetailPage({
         favorite_food: draftFavFood.trim() || null,
         favorite_hobby: draftFavHobby.trim() || null,
         fun_facts: funFacts.length > 0 ? funFacts : null,
+      };
+      const updates = {
+        name: cleanName,
+        occupation: draftOccupation.trim() || null,
+        birthday: birthdayIso,
+        birthday_visibility: draftBirthdayVisibility,
+        birthday_invited_scope: draftBirthdayInvitedScope,
+        ...(cardStaysHome ? {} : cardUpdates),
         updated_at: new Date().toISOString(),
       };
       const { error } = await (supabase as any)
@@ -1353,6 +1363,20 @@ function MemberDetailPage({
         .eq('id', member.id);
 
       if (error) throw error;
+
+      if (cardStaysHome && communityId) {
+        const { error: cardError } = await (supabase.from('hive_cards') as any)
+          .upsert(
+            {
+              user_id: member.id,
+              community_id: communityId,
+              ...cardUpdates,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id,community_id' }
+          );
+        if (cardError) throw cardError;
+      }
 
       // `updates` includes birthday_visibility/birthday_invited_scope
       // (migration 164). `hive.tsx`'s birthday event card and `profile.tsx`
@@ -2810,6 +2834,11 @@ export default function MembersScreen() {
     });
 
     if (details) {
+      // This HIVE's own cards (migration 194), keyed by owner.
+      const hiveCardsByUser = new Map<string, any>();
+      (details.cards ?? []).forEach((row: any) => {
+        if (row?.user_id) hiveCardsByUser.set(row.user_id, row);
+      });
       const skillsByUser = new Map<string, MemberSkill[]>();
       details.skills.forEach((s: any) => {
         if (!skillsByUser.has(s.user_id)) skillsByUser.set(s.user_id, []);
@@ -2909,6 +2938,29 @@ export default function MembersScreen() {
         // switch). A wish decides for itself — the travelling wishes query
         // already asked share_scope, so no gate is needed on that side.
         const gardenTravels = reach?.profile_scope === 'all_hives';
+        // The card itself follows the same switch (migration 194): a member
+        // whose card stays home shows THIS HIVE's card here — honestly blank
+        // when they never wrote one — while a travelling card keeps reading
+        // from the profile row the roster already delivered. Until the reach
+        // question has actually been answered, the screen behaves exactly as
+        // it always has.
+        if (travellingReady && reach && reach.profile_scope !== 'all_hives' && !wholeHive) {
+          const ownCard = hiveCardsByUser.get(m.id) ?? {};
+          (m as any).profile_title = ownCard.profile_title ?? null;
+          (m as any).bio = ownCard.bio ?? null;
+          (m as any).known_for = ownCard.known_for ?? null;
+          (m as any).hometown = ownCard.hometown ?? null;
+          (m as any).current_project = ownCard.current_project ?? null;
+          (m as any).favorite_book = ownCard.favorite_book ?? null;
+          (m as any).favorite_food = ownCard.favorite_food ?? null;
+          (m as any).favorite_hobby = ownCard.favorite_hobby ?? null;
+          (m as any).fun_facts = ownCard.fun_facts ?? null;
+          (m as any).miq_experiences = ownCard.miq_experiences ?? null;
+          (m as any).miq_growth = ownCard.miq_growth ?? null;
+          (m as any).miq_contribution = ownCard.miq_contribution ?? null;
+          // occupation is the legacy title; a stay-home card must not leak it.
+          (m as any).occupation = null;
+        }
         m.skills = travellingReady
           ? mergeById(
               wholeHive ? [] : localSkills,
