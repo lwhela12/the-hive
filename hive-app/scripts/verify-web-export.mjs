@@ -26,7 +26,12 @@ if (webJs.length > 3) {
 const html = fs.readFileSync(indexPath, 'utf8');
 const refs = [...html.matchAll(/(?:src|href)=["']([^"']+)["']/g)].map((match) => match[1]);
 const localRefs = refs.filter((ref) => ref.startsWith('/') && !ref.startsWith('//'));
-const missing = localRefs.filter((ref) => !fs.existsSync(path.join(root, ref.slice(1))));
+// A cache-busting query is part of the address, not part of the filename.
+// `/favicon.ico?v=2` is how the icon links force a browser past its own
+// favicon cache (public/index.html, 2026-08-19), and checking it verbatim
+// reported four perfectly present files as missing.
+const onDisk = (ref) => path.join(root, ref.slice(1).split('?')[0].split('#')[0]);
+const missing = localRefs.filter((ref) => !fs.existsSync(onDisk(ref)));
 
 if (missing.length > 0) {
   console.error('Web export references files that do not exist:');

@@ -28,6 +28,20 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-summary-reads-like-english',
+    date: '2026-08-19',
+    title: 'A meeting summary reads like a summary again',
+    detail: 'Applying notes to a meeting could leave a page of braces and quote marks where the summary should be. It unwraps properly now, and decisions and the wishes people raised show on every meeting instead of only the old ones.',
+    href: { pathname: '/meetings' },
+    action: 'Open Meeting Summaries',
+  },
+  {
+    id: '2026-08-19-hive-has-an-icon',
+    date: '2026-08-19',
+    title: 'HIVE has its own icon on your home screen',
+    detail: 'Adding HIVE to a phone or desktop used to give you a grey placeholder. It is the bee in the gold ring now, and the browser tab matches.',
+  },
+  {
     id: '2026-08-19-everyone-takes-a-job',
     date: '2026-08-19',
     title: 'Everyone can take a job, and everyone sees it happen',

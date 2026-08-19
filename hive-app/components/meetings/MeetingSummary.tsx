@@ -180,6 +180,34 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
 
   useEffect(() => { void loadActionItems(); }, [loadActionItems]);
 
+  /**
+   * A summary whose summary is the whole answer again.
+   *
+   * `apply-meeting-notes` writes the model's parsed reply into this column, and
+   * a reply that puts its entire JSON body inside its own `summary` string
+   * ends up rendered here as source code: Nat, opening August's Production
+   * meeting on 2026-08-19, got a page of braces and quotation marks. *"I hate
+   * the way this looks."*
+   *
+   * Fixed at the source too, but this is the reader, and a record already
+   * written that way is still on somebody's screen — so unwrap one layer here
+   * rather than printing it. The outer object's own fields survive; the inner
+   * one wins wherever both speak.
+   */
+  const unwrapDoubleWrapped = (parsed: Record<string, any>): ParsedSummary => {
+    const inner = typeof parsed.summary === 'string' ? parsed.summary.trim() : '';
+    if (!inner.startsWith('{')) return parsed;
+    try {
+      const nested = JSON.parse(inner);
+      if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+        return { ...parsed, ...nested };
+      }
+    } catch {
+      // It was simply a summary that happened to start with a brace.
+    }
+    return parsed;
+  };
+
   // The summary column holds JSON these days, but older rows are plain text and
   // a few were double-encoded. Fall back rather than showing nothing.
   const parseSummary = (summaryText: string | undefined): ParsedSummary => {
@@ -198,7 +226,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           return { summary: parsed };
         }
       }
-      if (typeof parsed === 'object' && parsed !== null) return parsed;
+      if (typeof parsed === 'object' && parsed !== null) return unwrapDoubleWrapped(parsed);
     } catch {
       // Not JSON — treat the whole thing as the summary text.
     }
@@ -514,7 +542,12 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           </View>
         )}
 
-        {isLegacy && parsedSummary.decisions && parsedSummary.decisions.length > 0 && (
+        {/* Decisions are not a legacy detail. They are the reason anybody
+            opens a summary — Nat, on the Production record: *"there were lots
+            of things that were decided at that meeting."* They were hidden the
+            moment a meeting had sections, which is every meeting sealed from
+            the deck. */}
+        {parsedSummary.decisions && parsedSummary.decisions.length > 0 && (
           <View className="mb-6">
             <Text className="text-lg font-semibold text-gray-700 mb-2">Decisions</Text>
             <View className="bg-gray-50 rounded-xl p-4">
@@ -528,7 +561,9 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           </View>
         )}
 
-        {isLegacy && parsedSummary.wishes_surfaced && parsedSummary.wishes_surfaced.length > 0 && (
+        {/* What people said they need is worth the same on any meeting,
+            sections or not — same reasoning as Decisions above. */}
+        {parsedSummary.wishes_surfaced && parsedSummary.wishes_surfaced.length > 0 && (
           <View className="mb-6">
             <Text className="text-lg font-semibold text-gray-700 mb-2">Wishes Surfaced</Text>
             <View className="bg-honey-50 rounded-xl p-4">
