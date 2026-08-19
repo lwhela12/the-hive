@@ -2553,7 +2553,11 @@ export default function ProfileScreen() {
             {listedHiveWide ? <WorldMark size={20} /> : <Text style={{ fontSize: 15 }}>🔒</Text>}
           </View>
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13 }} className="text-charcoal">
-            {listedHiveWide ? 'Visible HIVE-Wide' : 'Only your HIVEs see you'}
+            {/* Off names the HIVE. "Only your HIVEs see you" is true and
+                useless — it is the plural that does the damage, because the
+                whole question is WHICH ones. Nat, 2026-08-19: *"I think you
+                need to say 'only this HIVE will see you'."* */}
+            {listedHiveWide ? 'Visible HIVE-Wide' : `Only ${hiveWord} sees you`}
           </Text>
           {/* The pill is drawn from `SWITCH_LOOK`, the same numbers
               `components/ui/Switch.tsx` uses, so this reads as the switch from
@@ -2639,16 +2643,9 @@ export default function ProfileScreen() {
               carries its own answer and where that answer is set. Only while
               you are reading the card — inside the editor the pills are right
               there beside every field, and a caption repeating them is noise. */}
-          {!isEditing ? (
-            <View style={{ marginBottom: 10 }}>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: '#9a8060' }}>
-                This card is your {hiveWord} one. The switch above decides whether it travels.
-              </Text>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: '#9a8060' }}>
-                Keep it here and you can write a different one in each HIVE you are in.
-              </Text>
-            </View>
-          ) : null}
+          {/* No caption. The switch above says it in three words and Nat
+              read the paragraph under it as noise: *"this seems new and
+              redundant ... that's going to get rid of all that stuff."* */}
 
           {!isEditing ? (
             <View className="gap-4">
@@ -3143,82 +3140,6 @@ export default function ProfileScreen() {
                 />
 
                 {ceilingNote ? <View style={{ marginTop: 8 }}>{ceilingNote}</View> : null}
-                {/* The goal sits at the top of the wishes, not in a section of
-                    its own. Nat, 2026-08-19, looking at the two of them stacked:
-                    *"I think these production goals should have rolled into
-                    ... where it says 'no wishes yet' ... combine this whole
-                    section."* They are the same conversation — a goal is the
-                    direction, a wish is what you need from the room to get
-                    there — and two headings made them look like two chores. */}
-                {showsHiveGoal ? (
-                  <View style={{ marginTop: 10, marginBottom: 12 }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/70 mb-2">
-                      What are you working toward with this show? 🎬
-                    </Text>
-                    <View className="bg-white rounded-xl shadow-sm p-4">
-                      {editingHiveGoal ? (
-                        <>
-                          <ComposerBar
-                            tone="light"
-                            variant="form"
-                            value={hiveGoalDraft}
-                            onChangeText={setHiveGoalDraft}
-                            placeholder="What are you working toward with this show?"
-                            multiline
-                            submitOnEnterKey={false}
-                          />
-                          <View className="flex-row gap-2 mt-3">
-                            <Pressable
-                              onPress={() => setEditingHiveGoal(false)}
-                              className="flex-1 bg-cream rounded-lg py-2"
-                            >
-                              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/60 text-center">Cancel</Text>
-                            </Pressable>
-                            <Pressable
-                              onPress={() => void saveHiveGoal(hiveGoalDraft)}
-                              disabled={hiveGoalSaving}
-                              className="flex-1 bg-gold rounded-lg py-2"
-                            >
-                              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-center">
-                                {hiveGoalSaving ? 'Saving…' : 'Save'}
-                              </Text>
-                            </Pressable>
-                          </View>
-                        </>
-                      ) : (
-                        <>
-                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
-                            {hiveGoal || "Get clear on it — Clive can help you find the words."}
-                          </Text>
-                          <View className="flex-row gap-4 mt-3">
-                            <Pressable
-                              onPress={() => { setHiveGoalDraft(hiveGoal); setEditingHiveGoal(true); }}
-                            >
-                              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
-                                {hiveGoal ? 'Edit' : 'Write it myself'}
-                              </Text>
-                            </Pressable>
-                            <Pressable
-                              onPress={() => router.push({
-                                pathname: '/(app)',
-                                params: {
-                                  prefill: hiveGoal
-                                    ? `Help me refine my production goal for this HIVE. Here's what I have so far: "${hiveGoal}". Help me make it sharper.`
-                                    : 'Help me get clear on my production goal for this HIVE — what am I working toward with this show?',
-                                },
-                              })}
-                            >
-                              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
-                                {hiveGoal ? 'Refine with Clive ✨' : 'Find with Clive ✨'}
-                              </Text>
-                            </Pressable>
-                          </View>
-                        </>
-                      )}
-                    </View>
-                  </View>
-                ) : null}
-
                 <View style={{
                   backgroundColor: '#fdf3dc',
                   borderRadius: 20,
@@ -3245,6 +3166,81 @@ export default function ProfileScreen() {
                       paddingBottom: 12,
                     }}
                   >
+                    {/* The goal sits at the top of the wishes, not in a section of
+                        its own. Nat, 2026-08-19, looking at the two of them stacked:
+                        *"I think these production goals should have rolled into
+                        ... where it says 'no wishes yet' ... combine this whole
+                        section."* They are the same conversation — a goal is the
+                        direction, a wish is what you need from the room to get
+                        there — and two headings made them look like two chores. */}
+                    {showsHiveGoal ? (
+                      <View style={{ marginBottom: 12 }}>
+                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/70 mb-2">
+                          What are you working toward with this show? 🎬
+                        </Text>
+                        <View className="bg-white rounded-xl shadow-sm p-4">
+                          {editingHiveGoal ? (
+                            <>
+                              <ComposerBar
+                                tone="light"
+                                variant="form"
+                                value={hiveGoalDraft}
+                                onChangeText={setHiveGoalDraft}
+                                placeholder="What are you working toward with this show?"
+                                multiline
+                                submitOnEnterKey={false}
+                              />
+                              <View className="flex-row gap-2 mt-3">
+                                <Pressable
+                                  onPress={() => setEditingHiveGoal(false)}
+                                  className="flex-1 bg-cream rounded-lg py-2"
+                                >
+                                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/60 text-center">Cancel</Text>
+                                </Pressable>
+                                <Pressable
+                                  onPress={() => void saveHiveGoal(hiveGoalDraft)}
+                                  disabled={hiveGoalSaving}
+                                  className="flex-1 bg-gold rounded-lg py-2"
+                                >
+                                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-center">
+                                    {hiveGoalSaving ? 'Saving…' : 'Save'}
+                                  </Text>
+                                </Pressable>
+                              </View>
+                            </>
+                          ) : (
+                            <>
+                              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
+                                {hiveGoal || "Get clear on it — Clive can help you find the words."}
+                              </Text>
+                              <View className="flex-row gap-4 mt-3">
+                                <Pressable
+                                  onPress={() => { setHiveGoalDraft(hiveGoal); setEditingHiveGoal(true); }}
+                                >
+                                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
+                                    {hiveGoal ? 'Edit' : 'Write it myself'}
+                                  </Text>
+                                </Pressable>
+                                <Pressable
+                                  onPress={() => router.push({
+                                    pathname: '/(app)',
+                                    params: {
+                                      prefill: hiveGoal
+                                        ? `Help me refine my production goal for this HIVE. Here's what I have so far: "${hiveGoal}". Help me make it sharper.`
+                                        : 'Help me get clear on my production goal for this HIVE — what am I working toward with this show?',
+                                    },
+                                  })}
+                                >
+                                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
+                                    {hiveGoal ? 'Refine with Clive ✨' : 'Find with Clive ✨'}
+                                  </Text>
+                                </Pressable>
+                              </View>
+                            </>
+                          )}
+                        </View>
+                      </View>
+                    ) : null}
                     {visibleProfileWishes.length === 0 ? (
                       <View style={{ backgroundColor: '#fffdf5', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.32)' }}>
                         <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(45,45,45,0.48)', textAlign: 'center' }}>
