@@ -302,11 +302,20 @@ async function loadMeetingDetails(
 }
 
 /**
- * Nat's note, rendered as she typed it.
+ * Nat's note, rendered so it can be read at a glance.
  *
- * Blank lines make paragraphs, single newlines make line breaks — the same
- * shape the text reads in on the meeting in the app. Escaped on the way in,
- * like every other name and word that reaches an inbox from here.
+ * Nat, 2026-08-20: *"can you make it look prettier? I like it when I can see
+ * things at a glance ... if we can do an emoji or a bold or an underline or
+ * something for Tonight, Joining remotely, August HIVE Help and Welcome, and
+ * Page to Screen."* A wall of even paragraphs makes somebody read all of it to
+ * find the one line they needed, and on a phone, at work, that means they read
+ * none of it.
+ *
+ * ONE RULE, so the note stays plain text she can edit anywhere: blank lines
+ * separate blocks, and **the first line of a block is its heading** when more
+ * lines follow it. A block that is a single line is just a line. That reads
+ * correctly on the meeting in the app too — heading, then the words under it —
+ * so nothing here is markup she has to remember.
  */
 function noteHtml(note: string): string {
   return note
@@ -314,8 +323,17 @@ function noteHtml(note: string): string {
     .map((block) => block.trim())
     .filter(Boolean)
     .map((block) => {
-      const lines = block.split('\n').map((line) => escapeHtml(line.trim())).join('<br />');
-      return `<p style="font-size: 15px; margin: 0 0 14px;">${lines}</p>`;
+      const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
+      // A lone line carries itself — no heading to separate it from.
+      if (lines.length === 1) {
+        return `<p style="font-size: 15px; line-height: 1.55; margin: 0 0 16px;">${escapeHtml(lines[0])}</p>`;
+      }
+      const [heading, ...rest] = lines;
+      return `
+      <div style="margin: 0 0 18px;">
+        <p style="font-size: 15px; font-weight: 700; color: #8a6b30; margin: 0 0 4px;">${escapeHtml(heading)}</p>
+        <p style="font-size: 15px; line-height: 1.55; margin: 0;">${rest.map((line) => escapeHtml(line)).join('<br />')}</p>
+      </div>`;
     })
     .join('');
 }
@@ -375,7 +393,7 @@ function checkInEmailHtml(
       : when;
     const note = meeting?.note ? noteHtml(meeting.note) : '';
     const where = meeting?.location
-      ? `<p style="font-size: 15px; margin: 0 0 14px;">📍 ${escapeHtml(meeting.location)}</p>`
+      ? `<p style="font-size: 15px; color: #6b6b6b; margin: 0 0 18px;">📍 ${escapeHtml(meeting.location)}</p>`
       : '';
     return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
@@ -386,9 +404,9 @@ function checkInEmailHtml(
       <p style="font-size: 15px;">Hi ${name},</p>
       ${note}
       ${where}
-      <div style="height: 1px; background: #f0e3c8; margin: 22px 0;"></div>
-      <p style="font-size: 15px; margin: 0 0 6px;"><strong>Your check-in isn't in yet</strong></p>
-      <p style="font-size: 15px; margin: 0;">It takes about <strong>2 minutes</strong> with the Looks good → buttons, and it lights you up on the Arrival Board.</p>
+      <div style="height: 1px; background: #f0e3c8; margin: 4px 0 20px;"></div>
+      <p style="font-size: 15px; font-weight: 700; color: #8a6b30; margin: 0 0 4px;">✅ Your check-in isn't in yet</p>
+      <p style="font-size: 15px; line-height: 1.55; margin: 0;">It takes about <strong>2 minutes</strong> with the Looks good → buttons, and it lights you up on the Arrival Board.</p>
       <div style="text-align: center; margin: 24px 0 28px;">
         <a href="${tuneupHref()}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Check in before tonight</a>
       </div>

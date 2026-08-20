@@ -512,6 +512,15 @@ export default function AppLayout() {
             href: null,
           }}
         />
+        {/* The short way in — /checkin/og. It only translates a HIVE's name
+            into its id and hands over to the tune-up, so it is never a tab. */}
+        <Tabs.Screen
+          name="checkin/[hive]"
+          options={{
+            title: 'Check in',
+            href: null,
+          }}
+        />
         <Tabs.Screen
           name="monthly-tuneup"
           options={{
