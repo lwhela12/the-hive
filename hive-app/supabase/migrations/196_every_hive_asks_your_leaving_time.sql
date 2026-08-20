@@ -30,7 +30,7 @@ normalized_questions as (
       case
         when question.value ->> 'id' = 'q_hard_out' then
           question.value || jsonb_build_object(
-            'text', 'Do you need to leave before the meeting ends? If so, what time?',
+            'text', 'Do you have a hard out? If so, what time?',
             'type', 'short',
             'required', false
           )
@@ -42,7 +42,7 @@ normalized_questions as (
       else jsonb_build_array(
         jsonb_build_object(
           'id', 'q_hard_out',
-          'text', 'Do you need to leave before the meeting ends? If so, what time?',
+          'text', 'Do you have a hard out? If so, what time?',
           'type', 'short',
           'required', false
         )

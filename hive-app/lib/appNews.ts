@@ -31,7 +31,7 @@ export const APP_NEWS: AppNewsEntry[] = [
     id: '2026-08-20-production-meeting-end-and-personal-hard-outs',
     date: '2026-08-20',
     title: 'Your leaving time stays separate from the meeting clock',
-    detail: 'Every HIVE’s pre-meeting check-in can say if you need to leave early. That never changes the HIVE’s countdown — and Production’s September 10 clock now runs to its scheduled 7:00 PM end.',
+    detail: 'Every HIVE’s pre-meeting check-in can share your personal hard out. That never changes the HIVE’s countdown — and Production’s September 10 clock now runs to its scheduled 7:00 PM end.',
     href: { pathname: '/meeting-helper' },
     action: 'See the meeting clock',
   },

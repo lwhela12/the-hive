@@ -527,7 +527,7 @@ const choice = (id: string, text: string, options: string[]): SurveyQuestion => 
  */
 export const PERSONAL_HARD_OUT_QUESTION: SurveyQuestion = {
   id: PRE_MEETING_QUESTION_IDS.hardOut,
-  text: 'Do you need to leave before the meeting ends? If so, what time?',
+  text: 'Do you have a hard out? If so, what time?',
   type: 'short',
   required: false,
 };
