@@ -150,11 +150,9 @@ export function AddWishModal({
       // on "This HIVE only" every time regardless of the truth, so even after
       // the save above is fixed, re-editing a HIVE-Wide wish would quietly
       // demote it back.
-      const carriedScope = (existingWish as { share_scope?: string }).share_scope as
-        | WishScope
-        | undefined;
+      const carriedScope = (existingWish as { share_scope?: string }).share_scope;
       if (carriedScope) {
-        setWishScope(carriedScope);
+        setWishScope(carriedScope === 'all_hives' || carriedScope === 'public' ? 'all_hives' : 'hive');
         setScopeStatus('known');
       } else {
         // The wish came from a screen that did not fetch this column. Ask the
@@ -168,11 +166,9 @@ export function AddWishModal({
           .maybeSingle()
           .then(({ data, error: scopeError }) => {
             if (stale) return;
-            const found = (data as { share_scope?: string } | null)?.share_scope as
-              | WishScope
-              | undefined;
+            const found = (data as { share_scope?: string } | null)?.share_scope;
             if (!scopeError && found) {
-              setWishScope(found);
+              setWishScope(found === 'all_hives' || found === 'public' ? 'all_hives' : 'hive');
               setScopeStatus('known');
             } else {
               setScopeStatus('unknown');

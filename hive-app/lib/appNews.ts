@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-20-public-is-not-a-member-reach',
+    date: '2026-08-20',
+    title: 'Your sharing choices stop at the HIVE door',
+    detail: 'Your profile, wishes and other member-made things can stay in this HIVE or travel HIVE-Wide — never onto the public site. Public newsletters and open invitations go through a separate owner review.',
+    href: { pathname: '/profile' },
+    action: 'See your choices',
+  },
+  {
     id: '2026-08-20-production-meeting-end-and-personal-hard-outs',
     date: '2026-08-20',
     title: 'Your leaving time stays separate from the meeting clock',

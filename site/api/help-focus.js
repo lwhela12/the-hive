@@ -1,8 +1,7 @@
 // This month's HIVE Help focus, straight from the members' app.
 //
-// A member marks the focus post "on the public site" in the app and it lands
-// here, so a neighbour who isn't in the HIVE can still drop off a donation or
-// turn up on the day (Nat 2026-07-31).
+// An owner reviews the focus for the public site, so a neighbour who isn't in
+// a HIVE can still drop off a donation or turn up on the day.
 //
 // Reads public.public_help_focus, a view that returns at most one row — the
 // newest focus somebody marked public — and only its title, body and date.

@@ -1,6 +1,6 @@
 import { ScopePicker, type ScopeOption } from './ScopePicker';
 
-export type WishScope = 'hive' | 'all_hives' | 'public';
+export type WishScope = 'hive' | 'all_hives';
 
 // The same ladder events use, in wish words. "Anyone know a teacher?" is exactly
 // the kind of ask that travels further than one HIVE (Nat 2026-08-02). A wish is
@@ -8,7 +8,6 @@ export type WishScope = 'hive' | 'all_hives' | 'public';
 const OPTIONS: ScopeOption<WishScope>[] = [
   { key: 'hive', rung: 'hive', label: 'This HIVE only', hint: 'Just the people here.' },
   { key: 'all_hives', rung: 'all_hives', label: 'HIVE-Wide', hint: 'More eyes on it — anyone in any HIVE.' },
-  { key: 'public', rung: 'public', label: 'Public', hint: 'Can be shared beyond the HIVEs.' },
 ];
 
 /**

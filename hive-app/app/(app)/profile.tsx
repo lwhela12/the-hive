@@ -557,9 +557,9 @@ export default function ProfileScreen() {
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editBirthday, setEditBirthday] = useState('');
-  // How far a birthday travels (migration 164 — `profiles.birthday_visibility`
-  // / `birthday_invited_scope`, the same 'members' | 'all_hives' | 'public'
-  // ladder events use). Defaults to 'members' so a birthday never travels past
+  // How far a birthday travels (`profiles.birthday_visibility` /
+  // `birthday_invited_scope`): this HIVE or HIVE-Wide, never public. Defaults
+  // to 'members' so a birthday never travels past
   // your own HIVE until you say so — matching the column's own DB default.
   const [editBirthdayVisibility, setEditBirthdayVisibility] = useState<EventAudience>('members');
   const [editBirthdayInvitedScope, setEditBirthdayInvitedScope] = useState<EventAudience>('members');
@@ -657,7 +657,7 @@ export default function ProfileScreen() {
         .from('wishes')
         .select('*, board_category:board_categories(id,name,topic_kind), granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))')
         .eq('user_id', profile.id)
-        .or(`community_id.eq.${communityId},share_scope.in.(all_hives,public)`)
+        .or(`community_id.eq.${communityId},share_scope.eq.all_hives`)
         .order('created_at', { ascending: false }),
       // Use maybeSingle() to gracefully handle cases where no record exists yet
       supabase
@@ -689,7 +689,7 @@ export default function ProfileScreen() {
         .from('wishes')
         .select('*')
         .eq('user_id', profile.id)
-        .or(`community_id.eq.${communityId},share_scope.in.(all_hives,public)`)
+        .or(`community_id.eq.${communityId},share_scope.eq.all_hives`)
         .order('created_at', { ascending: false });
       wishesData = (fallback.data as unknown as Wish[] | null) ?? null;
       wishesError = fallback.error;

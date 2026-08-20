@@ -309,8 +309,8 @@ export interface Wish extends Record<string, unknown> {
   description: string;
   raw_input?: string;
   status: WishStatus;
-  /** How far this wish travels: hive | all_hives | public (migration 124). */
-  share_scope?: 'hive' | 'all_hives' | 'public';
+  /** Member-chosen reach: this HIVE or HIVE-Wide. Public is editorial only. */
+  share_scope?: 'hive' | 'all_hives';
   is_active: boolean;
   /** Member-chosen "this month's HD". Unset = fall back to newest public. */
   is_spotlight?: boolean | null;

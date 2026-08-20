@@ -58,11 +58,14 @@ export function EventScopeFields({
   onVisibilityChange,
   invited,
   onInvitedChange,
+  allowPublic = false,
 }: {
   visibility: EventAudience;
   onVisibilityChange: (next: EventAudience) => void;
   invited: EventAudience;
   onInvitedChange: (next: EventAudience) => void;
+  /** Public is an owner-reviewed invitation path, never an ordinary reach. */
+  allowPublic?: boolean;
 }) {
   // Narrowing who can see it drags the invitation in with it, rather than
   // leaving a setting on screen that the database will refuse.
@@ -71,7 +74,9 @@ export function EventScopeFields({
     if (RANK[invited] > RANK[next]) onInvitedChange(next);
   };
 
-  const invitedOptions = INVITED.filter((option) => RANK[option.key] <= RANK[visibility]);
+  const visibilityOptions = allowPublic ? VISIBILITY : VISIBILITY.filter((option) => option.key !== 'public');
+  const invitedOptions = (allowPublic ? INVITED : INVITED.filter((option) => option.key !== 'public'))
+    .filter((option) => RANK[option.key] <= RANK[visibility]);
   const differ = RANK[invited] < RANK[visibility];
 
   return (
@@ -80,7 +85,7 @@ export function EventScopeFields({
         value={visibility}
         onChange={setVisibility}
         label="Who can see it?"
-        options={VISIBILITY}
+        options={visibilityOptions}
       />
 
       {invitedOptions.length > 1 ? (
@@ -122,12 +127,16 @@ export function EventAudienceToggle({
   value,
   onChange,
   label = "Who's invited?",
+  allowPublic = false,
 }: {
   value: EventAudience;
   onChange: (next: EventAudience) => void;
   label?: string;
+  /** Used only by the owner-reviewed public-invitation editor. */
+  allowPublic?: boolean;
 }) {
-  return <ScopePicker value={value} onChange={onChange} label={label} options={INVITED} />;
+  const options = allowPublic ? INVITED : INVITED.filter((option) => option.key !== 'public');
+  return <ScopePicker value={value} onChange={onChange} label={label} options={options} />;
 }
 
 /**
@@ -159,11 +168,16 @@ export async function saveBirthdayScope({
   invitedScope: EventAudience;
   communityId?: string | null;
 }): Promise<{ error: { message?: string } | null }> {
+  // Birthdays are part of a member profile. They may stay in one HIVE or
+  // travel HIVE-Wide, but never identify that member to an unauthenticated
+  // visitor. Normalise stale callers as well as hiding the old option.
+  const safeVisibility: EventAudience = visibility === 'public' ? 'all_hives' : visibility;
+  const safeInvitedScope: EventAudience = invitedScope === 'public' ? 'all_hives' : invitedScope;
   const { error } = await supabase
     .from('profiles')
     .update({
-      birthday_visibility: visibility,
-      birthday_invited_scope: invitedScope,
+      birthday_visibility: safeVisibility,
+      birthday_invited_scope: safeInvitedScope,
       updated_at: new Date().toISOString(),
     })
     .eq('id', profileId);

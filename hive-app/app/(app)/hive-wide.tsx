@@ -593,7 +593,7 @@ export default function HiveWideScreen() {
       const { data: wishRows } = await supabase
         .from('wishes')
         .select('id, title, description, user:profiles!user_id(name, avatar_url), community:communities(name, accent_color)')
-        .in('share_scope', ['all_hives', 'public'])
+        .eq('share_scope', 'all_hives')
         .eq('status', 'public')
         .or('is_active.is.true,is_active.is.null')
         .order('created_at', { ascending: false })

@@ -11,7 +11,7 @@ interface CreateEventPayload {
   event_time?: string | null;
   description?: string | null;
   location?: string | null;
-  /** 'members' (HIVErs Only) or 'public' (everyone's invited). */
+  /** Signed-in reach, or an owner-reviewed public invitation. */
   visibility?: string | null;
 }
 
@@ -66,13 +66,25 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
+  const { data: creator } = await supabaseAdmin
+    .from('profiles')
+    .select('is_owner')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (payload.visibility === 'public' && !creator?.is_owner) {
+    return errorResponse('Public invitations are reviewed by the HIVE owner', 403);
+  }
+
   const newEvent: Record<string, string | null> = {
     title,
     event_date: eventDate,
     event_type: 'custom',
-    // Anything but an explicit 'public' stays members-only — a privacy default
-    // has to fail closed.
-    visibility: payload.visibility === 'public' ? 'public' : 'members',
+    // Member-created events have two signed-in reaches. Public is exceptional
+    // and passed only after the owner check above.
+    visibility: payload.visibility === 'public'
+      ? 'public'
+      : payload.visibility === 'all_hives' ? 'all_hives' : 'members',
     created_by: userId,
     community_id: communityId,
   };

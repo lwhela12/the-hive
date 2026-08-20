@@ -290,6 +290,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const boardDraftStorageKey = selectedCategoryId ? `the-hive:board-draft:${selectedCategoryId}` : null;
 
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
+  const isHiveOwner = profile?.is_owner === true;
   const canCreateCategories = !!profile && !!communityId;
   const canManageCategory = useCallback((category: BoardCategory | null) => {
     if (!category || category.is_system) return false;
@@ -1726,7 +1727,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
    * the one the site shows, so marking September's replaces August's by itself.
    */
   const handleToggleHelpFocusPublic = useCallback((post: BoardPost, onDone?: () => void) => {
-    if (!profile || !communityId || !canManageThread(post)) return;
+    if (!profile || !communityId || !isHiveOwner || !canManageThread(post)) return;
 
     const goingPublic = post.visibility !== 'public';
     const message = goingPublic
@@ -1770,7 +1771,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       confirmLabel: goingPublic ? 'Show it' : 'Take it off',
       onConfirm: applyVisibility,
     });
-  }, [canManageThread, communityId, invalidatePosts, profile, refetchPosts, updatePostInCache]);
+  }, [canManageThread, communityId, invalidatePosts, isHiveOwner, profile, refetchPosts, updatePostInCache]);
 
   const handleDeleteThread = useCallback((post: BoardPost, onDone?: () => void) => {
     if (!communityId || !canManageThread(post)) return;
@@ -2401,7 +2402,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         mentionableMembers={topicMembers}
         managementActions={editingPost ? (
           <>
-            {selectedCategory?.topic_kind === 'helper_log' && canManageThread(editingPost) && (
+            {selectedCategory?.topic_kind === 'helper_log' && isHiveOwner && canManageThread(editingPost) && (
               <Pressable
                 onPress={() => handleToggleHelpFocusPublic(editingPost, handleCloseComposer)}
                 className="flex-row items-center rounded-full px-3 py-2 border active:opacity-75"

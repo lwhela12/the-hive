@@ -8,9 +8,9 @@ import { recordAssistantUsage } from '../_shared/metering.ts';
 // The newsletter and the meeting summary are the SAME artifact pointed at
 // different dates, so this returns the same `sections[]` shape seal-meeting
 // produces and the app renders both with SummarySections. Nothing here is
-// written twice: everything is harvested from where members already put it —
-// the Newsletter thread, Compliment Corner, the Helpers log, their to-dos,
-// their check-ins (Nat 2026-07-25).
+// written twice. The facts here are deliberately limited to aggregate counts
+// and owner-reviewed public editorial records. Member posts, wishes, profiles,
+// roles, check-ins and HIVE associations never enter a public draft.
 //
 // Read-only by design. It drafts; Nat writes.
 
@@ -50,10 +50,6 @@ interface DraftRequest {
 
 function pacificToday() {
   return new Date(Date.now() - 7 * 3600_000).toISOString().slice(0, 10);
-}
-
-function firstName(name?: string | null) {
-  return (name ?? '').trim().split(/\s+/)[0] || 'someone';
 }
 
 function prettyDate(value: string) {
@@ -109,21 +105,18 @@ async function writeNewsletter(
     '  2. A member, halfway through the month, who reads it and thinks "oh yeah,',
     '     I said I was going to do that and I haven\'t yet."',
     '',
-    'Neither of them wants a list of who did what. A roster of first names means',
-    'nothing to the first reader and nothing new to the second. Write about what',
-    'the HIVE is doing and becoming; use the specifics as evidence of that, not',
-    'as the point.',
+    'Neither of them gets a list of who did what. Write about what the collective',
+    'is doing and becoming using aggregates and explicitly public invitations.',
     '',
-    'THIS IS PUBLIC. Anyone can read it. Everything you have been given has been',
-    'opted in by the person it belongs to — so use it warmly, and never reach',
-    'past it. Do not describe someone you cannot name, do not hint, do not write',
-    '"one member" or "somebody in the HIVE". If the facts are thin, write a',
-    'shorter, warmer letter. Short and generous beats padded and cagey.',
+    'THIS IS PUBLIC. Anyone can read it. Never name a member, connect a person to',
+    'a HIVE, reveal a profile, role, ownership, wish, post, check-in, project or',
+    'internal decision. Do not hint at an unnamed person either. If the facts are',
+    'thin, write a shorter, warmer letter. Short and generous beats padded and cagey.',
     '',
     'HER VOICE: warm, chatty, a little goofy. Short paragraphs. Exclamation',
     'points and em-dashes. Emoji sprinkled, never wall-to-wall. She says',
     '"Hivers", "the buzz", "keep the HIVE humming". She addresses everyone',
-    'directly as "you". She celebrates people by name.',
+    'directly as "you". She celebrates collective momentum, never people by name.',
     '',
     'HER STRUCTURE — use these headings, in this order, skipping any with',
     'nothing to say:',
@@ -141,6 +134,8 @@ async function writeNewsletter(
     'HARD RULES:',
     '- Use ONLY the facts given. Never invent an event, a name, a date, or a',
     '  detail. If a section has no facts, leave it out entirely.',
+    '- Never output a member name, profile detail, role, specific-HIVE membership,',
+    '  ownership clue, private wish/post/check-in or internal project detail.',
     '- Never write "A Note from Nat" yourself. Output exactly this under that',
     '  heading: [Your note here, Nat 💛]',
     '- Where you need something only Nat knows, write it as a bracket, e.g.',
@@ -280,13 +275,9 @@ serve(async (req) => {
     const [
       nextMeetingRows,
       upcomingRows,
-      threadRows,
-      memberRows,
-      wishRows,
-      grantedRows,
+      publicThreadRows,
       grantedCountRows,
-      todoRows,
-      checkInRows,
+      newMemberCountRows,
       pastEventRows,
     ] = await Promise.all([
       // Meetings are members-only by nature, so the public newsletter never
@@ -299,32 +290,18 @@ serve(async (req) => {
       // "Everyone's invited" only. Anything left HIVErs Only never leaves the
       // members' side — a privacy default has to fail closed.
       supabaseAdmin.from('events')
-        .select('title, event_date, end_date, event_type, related_user_id')
+        .select('title, event_date, end_date, event_type')
         .eq('community_id', communityId)
         .eq('visibility', 'public')
         .gte('event_date', date).order('event_date', { ascending: true }).limit(30),
+      // Only already-editorial public posts. No author, reply, attachment or
+      // member-created private thread is fetched into this public workflow.
       supabaseAdmin.from('board_posts')
-        .select('id, title, content, created_at, author_id, visibility, category:board_categories!category_id(name)')
+        .select('id, title, content, created_at, visibility, category:board_categories!category_id(name, topic_kind)')
         .eq('community_id', communityId)
+        .eq('visibility', 'public')
         .is('archived_at', null)
         .order('created_at', { ascending: false }).limit(60),
-      supabaseAdmin.from('community_memberships')
-        .select('user:profiles!user_id(id, name)')
-        .eq('community_id', communityId),
-      supabaseAdmin.from('wishes')
-        .select('user_id, title, description, is_spotlight, status')
-        .eq('community_id', communityId).neq('status', 'fulfilled'),
-      // Granted wishes carry a name and what that person needed, so they only
-      // travel as far as the wisher chose. All 49 wishes are 'hive' today, which
-      // is why July's letter counts them rather than lists them: momentum is
-      // Nat's to celebrate, the details are each member's to offer.
-      supabaseAdmin.from('wishes')
-        .select('title, description, fulfilled_at, share_scope, user:profiles!user_id(name)')
-        .eq('community_id', communityId)
-        .eq('status', 'fulfilled')
-        .eq('share_scope', 'public')
-        .gte('fulfilled_at', startIso)
-        .order('fulfilled_at', { ascending: false }).limit(20),
       // Counted, never named — how many wishes came true is a fact about the
       // HIVE, not about anybody in it.
       supabaseAdmin.from('wishes')
@@ -332,19 +309,12 @@ serve(async (req) => {
         .eq('community_id', communityId)
         .eq('status', 'fulfilled')
         .gte('fulfilled_at', startIso),
-      supabaseAdmin.from('action_items')
-        .select('description, completed, completed_at, assignee:profiles!assigned_to(name)')
+      // Aggregate growth is safe public evidence; no roster or identity crosses.
+      supabaseAdmin.from('community_memberships')
+        .select('id', { count: 'exact', head: true })
         .eq('community_id', communityId)
-        .eq('completed', true)
-        .gte('completed_at', startIso).limit(60),
-      supabaseAdmin.from('survey_responses')
-        .select('answers, submitted_at, user_id, user:profiles!user_id(name), survey:surveys!survey_id(title)')
-        // Same missing filter as seal-meeting had. This result is unused today,
-        // so it leaked nothing — but the newsletter is PUBLIC, and one edit away
-        // from publishing another HIVE's private check-ins to the website.
-        .eq('community_id', communityId)
-        .gte('submitted_at', new Date(Date.parse(startIso) - 45 * 24 * 3600_000).toISOString())
-        .order('submitted_at', { ascending: false }).limit(40),
+        .gte('created_at', startIso)
+        .lt('created_at', endIso),
       // Hangs that already HAPPENED. Nat's newsletter reports on the month as
       // much as it looks ahead ("Hivers were showing up for each other all
       // over!"), and a draft with only upcoming events can't write that.
@@ -357,8 +327,8 @@ serve(async (req) => {
     ]);
 
     const nextMeeting = ((nextMeetingRows.data ?? []) as any[])[0] ?? null;
-    // Same exclusions the deck's calendar uses: meetings, birthdays, and
-    // out-of-town stretches aren't hangs.
+    // Birthdays are profile data and can never be public. The extra exclusion
+    // is defence in depth for stale rows while the database migration lands.
     const upcoming = (upcomingRows.data ?? []) as any[];
     const upcomingHangs = upcoming.filter((event) => (
       event.event_type !== 'meeting'
@@ -366,101 +336,10 @@ serve(async (req) => {
       && !event.end_date
       && !/\b(out of town|away|trip|travel|galavant)/i.test(event.title ?? '')
     )).slice(0, 8);
-    const birthdays = upcoming.filter((event) => event.event_type === 'birthday').slice(0, 6);
-
-    const posts = (threadRows.data ?? []) as any[];
+    const posts = (publicThreadRows.data ?? []) as any[];
     const helpFocus = posts
       .filter((row) => /helper/i.test(row.category?.name ?? '') && !/ideas/i.test(row.title ?? ''))
       .map((row) => (row.title as string).replace(/^.*HIVE Help(?:ers)?\s*[—–-]+\s*/i, ''))[0] ?? null;
-
-    const memberNames = new Map<string, string>();
-    ((memberRows.data ?? []) as any[]).forEach((row) => {
-      if (row.user?.id) memberNames.set(row.user.id, firstName(row.user.name ?? 'Someone'));
-    });
-
-    // Replies members left this cycle on the threads the midway check-in posts
-    // into. This is the whole point: they answered a friendly prompt, and it
-    // shows up here without anyone re-typing it.
-    // share_scope = 'public' is the whole gate (migration 129). A reply written
-    // for the HIVE stays in the HIVE, however good it is — the newsletter is an
-    // offer, not a levy on everything anyone typed this month.
-    const harvest = async (match: RegExp, limit = 30) => {
-      const thread = posts.find((row) => match.test(row.title ?? ''));
-      if (!thread) return [] as { name: string; content: string }[];
-      // Posting in THIS thread is the consent.
-      //
-      // This asked for `share_scope = 'public'`, and nothing in the app has
-      // ever set that: all 218 replies in the database are 'hive', which is the
-      // column's default and the only value any composer writes. So the harvest
-      // has always come back empty, and the thread that says "drop it in this
-      // thread and it goes straight into the newsletter" has never once been
-      // telling the truth.
-      //
-      // The extra flag was the wrong shape for this. These threads are created
-      // by the app with copy that states exactly where the words are going —
-      // that IS the informed choice, made when you type the reply, not a second
-      // switch nobody was ever shown.
-      const { data } = await supabaseAdmin
-        .from('board_replies')
-        .select('content, created_at, author_id, share_scope')
-        .eq('post_id', thread.id)
-        .gte('created_at', startIso)
-        .order('created_at', { ascending: true })
-        .limit(limit);
-      return ((data ?? []) as any[])
-        .filter((reply) => withinWindow(reply.created_at))
-        .map((reply) => ({
-          name: memberNames.get(reply.author_id) ?? 'Someone',
-          content: String(reply.content ?? '').trim(),
-        }))
-        .filter((reply) => reply.content.length > 0 && !/^\+1\b/.test(reply.content));
-    };
-
-    const [shoutOuts, compliments, helperLogs] = await Promise.all([
-      harvest(/newsletter/i),
-      harvest(/compliment/i),
-      (async () => {
-        const focusThread = posts.find((row) => (
-          /helper/i.test(row.category?.name ?? '') && !/ideas/i.test(row.title ?? '')
-        ));
-        if (!focusThread) return [] as { name: string; content: string }[];
-        // Same as above — the HIVE Helpers board says on its face that what you
-        // log there goes into recaps and newsletters.
-        const { data } = await supabaseAdmin
-          .from('board_replies')
-          .select('content, created_at, author_id, share_scope')
-          .eq('post_id', focusThread.id)
-          .gte('created_at', startIso)
-          .order('created_at', { ascending: true })
-          .limit(30);
-        return ((data ?? []) as any[])
-          .filter((reply) => withinWindow(reply.created_at))
-          .map((reply) => ({
-            name: memberNames.get(reply.author_id) ?? 'Someone',
-            content: String(reply.content ?? '').trim(),
-          }))
-          .filter((reply) => reply.content.length > 0 && !/^\+1\b/.test(reply.content));
-      })(),
-    ]);
-
-    // Same rule the app uses everywhere: your starred wish, else your newest.
-    const hdByUser = new Map<string, string>();
-    ((wishRows.data ?? []) as any[]).forEach((wish) => {
-      const label = (wish.title || wish.description || '').trim();
-      if (!label) return;
-      if (wish.is_spotlight) hdByUser.set(wish.user_id, label);
-      else if (!hdByUser.has(wish.user_id)) hdByUser.set(wish.user_id, label);
-    });
-
-    const doneByUser = new Map<string, string[]>();
-    ((todoRows.data ?? []) as any[]).forEach((todo) => {
-      if (!withinWindow(todo.completed_at)) return;
-      const name = todo.assignee?.name ? firstName(todo.assignee.name) : null;
-      if (!name) return;
-      const list = doneByUser.get(name) ?? [];
-      if (list.length < 4) list.push(String(todo.description ?? '').trim());
-      doneByUser.set(name, list);
-    });
 
     const sections: { title: string; lines: string[] }[] = [];
 
@@ -477,10 +356,6 @@ serve(async (req) => {
     if (upcomingHangs.length > 0) {
       comingUp.push('Upcoming HIVE hangs:');
       upcomingHangs.forEach((hang) => comingUp.push(`    ${hang.title} — ${prettyDate(hang.event_date)}`));
-    }
-    if (birthdays.length > 0) {
-      comingUp.push('Birthdays:');
-      birthdays.forEach((event) => comingUp.push(`    ${event.title} — ${prettyDate(event.event_date)}`));
     }
     if (comingUp.length > 0) sections.push({ title: "What's coming up", lines: comingUp });
 
@@ -530,40 +405,20 @@ serve(async (req) => {
       });
     }
 
-    if (shoutOuts.length > 0) {
+    // Aggregate growth is deliberately safe: it says the collective grew and
+    // never who joined, which HIVE they joined, or anything from their profile.
+    const newMemberTotal = (newMemberCountRows as { count?: number | null }).count ?? 0;
+    if (newMemberTotal > 0) {
       sections.push({
-        title: 'Shout-outs & mentions',
-        lines: shoutOuts.map((item) => `${item.name}: ${item.content}`),
+        title: 'The HIVE is growing',
+        lines: [`We welcomed ${newMemberTotal} new ${newMemberTotal === 1 ? 'member' : 'members'} this month.`],
       });
     }
 
-    if (compliments.length > 0) {
-      sections.push({
-        title: 'Compliment Corner 💐',
-        lines: compliments.map((item) => `${item.name}: ${item.content}`),
-      });
-    }
-
-    if (helperLogs.length > 0) {
-      sections.push({
-        title: helpFocus ? `HIVE Help — ${helpFocus}` : 'HIVE Help',
-        lines: helperLogs.map((item) => `${item.name}: ${item.content}`),
-      });
-    }
-
-    const grantedLines = ((grantedRows.data ?? []) as any[])
-      .filter((wish) => withinWindow(wish.fulfilled_at))
-      .map((wish) => {
-      const owner = wish.user?.name ? firstName(wish.user.name) : 'Someone';
-        return `${owner}: ${(wish.title || wish.description || '').slice(0, 120)}`;
-      });
-    if (grantedLines.length > 0) sections.push({ title: 'Wishes granted 🌟', lines: grantedLines });
-
-    // Nobody has opted a wish into the letter yet, but six of them came true and
-    // that IS the story — "the OG HIVErs are starting to reach critical mass"
-    // (Nat 2026-08-03). So the total goes in even when no detail can.
+    // A count may celebrate momentum. The wish and the person stay inside the
+    // signed-in app regardless of their HIVE-Wide reach.
     const grantedTotal = (grantedCountRows as { count?: number | null }).count ?? 0;
-    if (grantedLines.length === 0 && grantedTotal > 0) {
+    if (grantedTotal > 0) {
       sections.push({
         title: 'Wishes granted 🌟',
         lines: [
@@ -616,10 +471,8 @@ serve(async (req) => {
       cycle_end: cycleEnd,
       sections,
       counts: {
-        shout_outs: shoutOuts.length,
-        compliments: compliments.length,
-        helper_logs: helperLogs.length,
-        granted: grantedLines.length,
+        new_members: newMemberTotal,
+        granted: grantedTotal,
       },
     });
   } catch (error) {

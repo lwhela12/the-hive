@@ -261,7 +261,7 @@ function useTravellingPiecesQuery({ userIds, enabled }: { userIds: string[]; ena
           .from('wishes')
           .select(wishColumns)
           .in('user_id', ids)
-          .in('share_scope', ['all_hives', 'public'])
+          .eq('share_scope', 'all_hives')
           .in('status', ['public', 'fulfilled'])
           .order('created_at', { ascending: false }),
         // No reach filter: whether a garden travels is the owner's one card

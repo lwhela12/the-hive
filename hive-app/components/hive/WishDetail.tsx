@@ -24,7 +24,6 @@ import { notifyWishMentions } from '../../lib/wishMentions';
 import { confirmAction, showAlert } from '../../lib/showAlert';
 import { LinkifiedText } from '../ui/LinkifiedText';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
-import { ScopeBadge } from '../ui/ScopeBadge';
 import { ReachPill } from '../ui/ReachPill';
 import { WishCommentItem, type WishCommentNode } from './WishCommentItem';
 import { getFirstName } from '../../lib/hooks/useArrivalBoard';
@@ -449,9 +448,7 @@ export function WishDetail({
                   The hexagon carries the wish's OWN HIVE colour — `community_id`,
                   not whichever HIVE you happen to be standing in — so opening a
                   wish from HIVE-Wide tells you which HIVE it came from. The
-                  caption names the question the chip answers, the same wording
-                  events use, so a black "Public" pill can't be misread as
-                  "I invited the whole public". */}
+                  caption names the question the chip answers. */}
               <View className="flex-row items-center flex-wrap mt-2" style={{ gap: 8 }}>
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40">
                   {formatDateShort(wish.created_at)}
@@ -459,19 +456,11 @@ export function WishDetail({
                     <Text> · Granted {formatDateShort(wish.fulfilled_at)}</Text>
                   )}
                 </Text>
-                {((wish.share_scope as string) ?? 'hive') === 'public' ? (
-                  <ScopeBadge
-                    scope="public"
-                    communityId={wish.community_id}
-                    caption="Seen by"
-                  />
-                ) : (
-                  <ReachPill
-                    reach={(wish.share_scope as string) === 'all_hives' ? 'all_hives' : 'hive'}
-                    communityId={wish.community_id}
-                    size="sm"
-                  />
-                )}
+                <ReachPill
+                  reach={wish.share_scope === 'all_hives' ? 'all_hives' : 'hive'}
+                  communityId={wish.community_id}
+                  size="sm"
+                />
               </View>
             </View>
           </View>

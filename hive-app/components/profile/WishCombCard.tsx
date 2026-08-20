@@ -5,7 +5,6 @@ import { formatDateShort } from '../../lib/dateUtils';
 import { getHdWishStatusLabel, getWishBodyPreview, getWishQuickTitle, hasSeparateWishTitle } from '../../lib/wishDisplay';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
-import { ScopeBadge } from '../ui/ScopeBadge';
 import { ReachPill } from '../ui/ReachPill';
 import type { Profile, Wish, WishGranter } from '../../types';
 
@@ -218,24 +217,12 @@ export function WishCombCard({
             <Text style={[styles.dateText, isGranted ? styles.dateTextGranted : null]}>
               {dateLabel}
             </Text>
-            {((wish.share_scope as string) ?? 'hive') === 'public' ? (
-              // A wish somebody deliberately sent to the newsletter and
-              // the-hive.app. The two-state pill cannot say "public", so it
-              // does not get to quietly take it away — the editor owns that
-              // rung, and the teal chip stays a label.
-              <ScopeBadge
-                scope="public"
-                communityId={wish.community_id}
-                compact
-              />
-            ) : (
-              <ReachPill
-                reach={(wish.share_scope as string) === 'all_hives' ? 'all_hives' : 'hive'}
-                communityId={wish.community_id}
-                size="sm"
-                onToggle={onToggleScope ? () => onToggleScope(wish) : undefined}
-              />
-            )}
+            <ReachPill
+              reach={wish.share_scope === 'all_hives' ? 'all_hives' : 'hive'}
+              communityId={wish.community_id}
+              size="sm"
+              onToggle={onToggleScope ? () => onToggleScope(wish) : undefined}
+            />
             {showGranters && (
               <View style={styles.granterRow}>
                 <Text style={styles.granterLabel}>by</Text>

@@ -247,7 +247,7 @@ serve(async (req) => {
   // The issue, read from the same row the app and the public site read.
   const { data: post } = await supabase
     .from('board_posts')
-    .select('id, title, content, visibility, status, category:board_categories!category_id(topic_kind)')
+    .select('id, title, content, visibility, status, category:board_categories!category_id(topic_kind), community:communities!community_id(max_share_scope)')
     .eq('id', postId)
     .maybeSingle();
 
@@ -261,6 +261,49 @@ serve(async (req) => {
   }
   if (!String(post.content ?? '').trim()) {
     return errorResponse('That issue is empty — nothing to send', 400);
+  }
+
+  if (mode === 'live') {
+    const community = Array.isArray(post.community)
+      ? (post.community[0] as { max_share_scope?: string } | undefined)
+      : (post.community as { max_share_scope?: string } | null);
+    if (community?.max_share_scope !== 'public') {
+      return errorResponse('This HIVE does not publish to unauthenticated visitors', 403);
+    }
+
+    // A public newsletter is an editorial artifact, not a member reach. Check
+    // the actual saved issue before a single outside address receives it. The
+    // refusal is generic on purpose: the response never reveals who matched.
+    const { data: memberRows, error: memberReadError } = await supabase
+      .from('profiles')
+      .select('name');
+    if (memberReadError) {
+      return errorResponse('The privacy check could not run, so nothing was sent', 503);
+    }
+
+    const issueWords = new Set(
+      `${String(post.title ?? '')} ${String(post.content ?? '')}`
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter(Boolean)
+    );
+    const namesMember = ((memberRows ?? []) as { name?: string | null }[]).some((row) => {
+      const first = String(row.name ?? '')
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase()
+        .split(/\s+/)[0];
+      return first.length >= 3 && issueWords.has(first);
+    });
+    if (namesMember) {
+      return errorResponse(
+        'This public issue names a HIVE member. Remove member names and identity-to-HIVE links, then test again.',
+        400
+      );
+    }
   }
 
   // A live send of an issue that already went is almost always a second

@@ -1941,7 +1941,11 @@ export default function AdminScreen() {
             />
 
             <View className="mb-4">
-              <EventAudienceToggle value={eventAudience} onChange={setEventAudience} />
+              <EventAudienceToggle
+                value={eventAudience}
+                onChange={setEventAudience}
+                allowPublic={profile?.is_owner === true}
+              />
             </View>
 
             <View className="flex-row">

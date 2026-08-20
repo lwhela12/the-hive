@@ -3,7 +3,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { EditButton } from '../ui/EditButton';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
-import { ScopeBadge } from '../ui/ScopeBadge';
 import { ReachPill } from '../ui/ReachPill';
 import { formatDateShort } from '../../lib/dateUtils';
 import { getWishBodyPreview, getWishQuickTitle, hasSeparateWishTitle } from '../../lib/wishDisplay';
@@ -167,18 +166,13 @@ export function WishCard({
             {/* Whose wish it is, and how far it travels — the one pill (Nat
                 2026-08-19: "one toggle, one pill, one shape everywhere"). The
                 shell keeps the HIVE's own colour so the HIVE-Wide wishes box
-                still reads as three HIVEs rather than one long list. Public
-                keeps the teal chip; the pill has no third state. */}
+                still reads as three HIVEs rather than one long list. */}
             <View className="ml-2">
-              {((wish.share_scope as string) ?? 'hive') === 'public' ? (
-                <ScopeBadge scope="public" communityId={wish.community_id} compact />
-              ) : (
-                <ReachPill
-                  reach={(wish.share_scope as string) === 'all_hives' ? 'all_hives' : 'hive'}
-                  communityId={wish.community_id}
-                  size="sm"
-                />
-              )}
+              <ReachPill
+                reach={wish.share_scope === 'all_hives' ? 'all_hives' : 'hive'}
+                communityId={wish.community_id}
+                size="sm"
+              />
             </View>
 
             {/* Granter avatars for granted wishes */}

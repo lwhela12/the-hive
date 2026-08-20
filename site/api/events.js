@@ -1,7 +1,7 @@
 // Upcoming public events, straight from the members' app.
 //
-// A member flips an event to "Everyone's invited" in the app and it appears
-// here — no second place to publish it, no copying by hand (Nat 2026-07-31).
+// An owner reviews an explicit "Everyone's invited" event and it appears here.
+// Public invitation is a separate editorial path, not a member-content reach.
 //
 // This reads public.public_events, a database view that exists only for this
 // page. It exposes seven hand-picked columns over public, upcoming events and

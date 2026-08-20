@@ -838,6 +838,10 @@ export function NewsletterPanel({
                 Goes to <Text style={{ fontFamily: 'Lato_700Bold', color: SPACE_SKIN.gold }}>{recipientCount}</Text> people
                 {' '}— the {active.length} signed up, plus members with it switched on.
               </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, color: SPACE_SKIN.inkSoft, lineHeight: 18 }}>
+                Public privacy check: use collective totals and open invitations only. No member names,
+                profiles, HIVE membership, roles, ownership clues, private wishes/posts, or internal project details.
+              </Text>
               {issues.length === 0 ? (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: SPACE_SKIN.inkSoft, lineHeight: 19 }}>
                   No issues written yet. Write one first, and it will show up here.
