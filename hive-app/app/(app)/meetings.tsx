@@ -1724,8 +1724,12 @@ export default function MeetingsScreen() {
 
             <View className="bg-gray-50 rounded-lg p-4 mt-4">
               <Text className="text-sm text-gray-600">
-                🎞️ This meeting happens in the Meeting Helper — the faces and the
-                deck on one screen. The calendar invite points there.
+                {/* A Meet HIVE's call is on Google Meet; everyone else meets
+                    inside the app. The one-door line was showing on Tech,
+                    whose door is deliberately different (migration 191). */}
+                {hiveOnMeet
+                  ? '📹 This HIVE meets on Google Meet — saving adds the Meet link to the calendar invite if it is missing. The deck still lives in the Meeting Helper.'
+                  : '🎞️ This meeting happens in the Meeting Helper — the faces and the deck on one screen. The calendar invite points there.'}
               </Text>
             </View>
           </BounceScrollView>
