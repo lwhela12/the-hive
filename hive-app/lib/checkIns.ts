@@ -519,86 +519,35 @@ const choice = (id: string, text: string, options: string[]): SurveyQuestion => 
 });
 
 const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
-  // Production HIVE keeps the database slug `show`. Written for the first
-  // meeting — Tuesday 18 August 2026, 4pm — where the group decides how it
-  // wants to run.
+  // Production HIVE keeps the database slug `show`. This is the RECURRING
+  // check-in — the first meeting's one-time questions (cadence, Honey Pot,
+  // who-can-know, walk-away lines) were asked and answered on 2026-08-18; the
+  // full set and its reasoning live in the brain folder's receipts and on the
+  // answered survey row. From here on, Nat's shape (2026-08-19): "did you get
+  // it done, is it on the board, any pictures to upload." The question ids
+  // are load-bearing — the meeting deck reads q_show_progress,
+  // q_biggest_question, q_show_obstacles and q_plate back onto its slides.
   show: {
-    title: 'Before our first meeting',
+    title: 'Before we meet',
     description:
-      'Tuesday at 4 is our first meeting. Answering these beforehand means we can spend the hour deciding together. Short answers are perfect.',
+      'Production HIVE meets soon. A few minutes here means the meeting starts loaded with what everyone found. Short answers are perfect.',
     questions: [
-      q('q_name_today', 'Arrival: what do you want to be called on Tuesday?', 'short'),
-      choice('q_attendance', 'Will we see you Tuesday?', [
+      choice('q_attendance', 'Will we see you at this one?', [
         "🐝 I'll be there in person",
         '💻 Joining remotely',
         "😢 Missing this one, I'm afraid",
       ]),
-      q('q_energy_level', 'Energy: what is your energy level right now?', 'scale'),
-      choice('q_plate', "How much is on your plate at the moment?", [
+      q('q_show_progress', 'Your jobs from last meeting — what got done? Venues seen, calls made, numbers learned.'),
+      q('q_on_board', "Is what you found on the board yet? If it's still in your notes, paste the one thing worth posting."),
+      q('q_pictures', 'Any pictures, quotes or files to bring? Put them on the Pre-Production board, or say here what you have.'),
+      q('q_show_obstacles', 'What is stuck, or waiting on somebody?'),
+      choice('q_plate', 'How much is on your plate right now?', [
         '🍽️ Plenty of room — hand me something',
         "🥄 A bit on there, and I've got room for this",
         "🍲 Pretty full — I'll take one small thing",
         '🫙 Full to the brim — I want to listen this time',
       ]),
-      choice('q_cadence', 'How often should Production HIVE meet?', [
-        'Weekly',
-        'Every two weeks',
-        'Once a month',
-        "A group chat, and we meet when there's something to meet about",
-      ]),
-      q('q_when', 'What day and time actually works for you?', 'short'),
-      // "Honey Pot" is the app's own name for a HIVE's shared money, so the
-      // question says what it is in the same breath — Production is new and
-      // half the room has never seen the screen it lives on.
-      choice('q_honey_pot', 'Should we have a Honey Pot — money we each put in to get this moving?', [
-        "💛 Yes, I'm in",
-        "🤔 Let's talk about it Tuesday",
-        "⏳ I'd rather give time than money",
-      ]),
-      q('q_honey_pot_amount', 'If we do, what feels right for you to put in?', 'short'),
-      choice('q_treasurer', 'Would you want to be treasurer — the one who keeps track of the money?', [
-        "🙋 Yes, I'd like that",
-        "🤝 I'd happily help whoever does it",
-        '🤔 Ask me again Tuesday',
-        "💛 I'm happiest leaving this one to someone else",
-      ]),
-      choice('q_hive_help', 'Do we want a HIVE Help — one small shared kindness each month?', [
-        '💛 Yes, I love that',
-        '🤔 Tell me more Tuesday',
-        "⏳ Let's start it once the show is rolling",
-      ]),
-      // "Which room would you go and look at?" was here and is gone.
-      // Nat, 2026-08-15: *"we don't need to ask 'what room would you go look
-      // at' before the meeting, because they don't know what that means. First
-      // I need to do my presentation, then we'll live-assign people in the
-      // meeting helper."* Asking somebody to pick between four Las Vegas
-      // venues they have never heard of, before the presentation that explains
-      // why any of them matter, gets you a guess — and a guess printed on a
-      // slide looks exactly like an opinion.
-      // WHO IS ALLOWED TO KNOW. Nat, 2026-08-15: *"Charlee said she doesn't
-      // want anyone to know that she's the producer of that show — but what
-      // does she mean by 'no one'? Does she mean her cast? Society? What about
-      // friends, OG HIVE, other HIVEs? Her mom?"*
-      //
-      // "Don't tell anyone" is not a rule anybody can follow, because everyone
-      // draws the circle somewhere different and nobody says where. Five people
-      // about to start making calls to venues WILL say who they are, so the
-      // circle has to be drawn before the first call, not after somebody
-      // crosses a line they were never shown. It is asked of each person about
-      // themselves — Charlee's answer is hers to give, not the group's to guess.
-      choice('q_who_can_know', 'Who can know you are part of this?', [
-        '📣 Anyone — post about it, tag me',
-        "🌍 Public is fine, I'd just like to tell my own people first",
-        '🐝 The HIVEs — OG, Tech and here — nothing public yet',
-        '🤝 Only the people in this room, for now',
-        "🤔 I'm not sure — let's talk about it Tuesday",
-      ]),
-      q('q_who_must_not_hear', 'Anyone in particular who should not hear about this from us — a cast, a company, an employer, family? Name them so nobody trips over it by accident.'),
-      // The two heavy ones, last and framed as care. A first meeting is where
-      // the quiet worries either get said or get carried around for months,
-      // and a survey box is easier to say them into than a room.
-      q('q_biggest_question', "What's your biggest question about making this show real? Ask it here and we'll answer it together on Tuesday."),
-      q('q_walk_away', 'Everyone has a line. What would make you walk away from this? Telling us now, while it costs nothing, is how we build something you stay in.'),
+      q('q_biggest_question', "Your biggest question right now — ask it here and we'll answer it in the room."),
     ],
   },
 };
@@ -808,13 +757,17 @@ export type EndOfMonthCheckIn = {
  * question — you cannot answer a reminder.
  */
 const END_OF_MONTH_BY_SLUG: Record<string, EndOfMonthCheckIn> = {
+  // Production-specific on purpose (Nat, 2026-08-19: "always want to make it
+  // production specific"). One shared goal, so the month closes on the show —
+  // no newsletter ask, that is an OG ritual.
   show: {
-    title: 'Halfway check-in',
+    title: 'Where the show got to this month',
     description:
-      'A gentle one, halfway through. How it is going, and anything you want in the newsletter. Blanks are completely fine.',
+      'The month is closing. Three quick ones so nothing we learned slips between meetings. Blanks are completely fine.',
     questions: [
-      q('q_eom_going', 'How is it going, and is there anything you want a hand with?', 'long'),
-      q('q_eom_newsletter', "Anything for the newsletter? A shout-out, a compliment, something you're teaching that people could come to. No obligation at all.", 'long'),
+      q('q_eom_moved', 'What moved this month — venues seen, calls made, numbers learned?'),
+      q('q_eom_stuck', 'What is stuck, or waiting on somebody?'),
+      q('q_eom_next', 'What has to happen before the next meeting?'),
     ],
   },
 };

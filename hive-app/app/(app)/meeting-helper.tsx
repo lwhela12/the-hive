@@ -435,16 +435,18 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
    *    spends it handing out the work.
    */
   show: {
-    slides: ['room', 'outline', 'rollcall', 'news', 'meetups', 'treasurer', 'assignments', 'wrapup', 'thanks'],
+    slides: ['room', 'outline', 'rollcall', 'news', 'meetups', 'assignments', 'wrapup', 'thanks'],
     agenda: [
       { key: 'rollcall', label: 'Roll call' },
       { key: 'news', label: 'News from Nat' },
       { key: 'meetups', label: 'How we run' },
-      { key: 'treasurer', label: 'Honey Pot' },
       { key: 'assignments', label: 'Who takes what' },
       { key: 'wrapup', label: 'Wrap-Up' },
     ],
-    welcomeNudge: 'grab a seat — this one is different',
+    welcomeNudge: 'grab a seat',
+    // PAUSED, not deleted (Charlee said no in the room, 2026-08-18; Nat:
+    // "pause, don't delete"). The slide is out of `slides` above, so none of
+    // this draws — it waits here for the day Production wants the conversation.
     treasurer: {
       kind: 'duesConversation',
       kicker: 'Ours to decide',
@@ -456,58 +458,27 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
         'Who wants to be treasurer?',
       ],
     },
+    // One card, because Production schedules exactly one thing: the monthly
+    // meeting (decided in the room, 2026-08-18 — second Thursday). HIVE Help
+    // is out (Charlee said no), and venue visits are sorted between the people
+    // going, never as a whole-group scheduling step.
     plan: {
-      kicker: 'How this HIVE runs · ours to set tonight',
+      kicker: 'How this HIVE runs',
       title: 'How we run',
       cards: [
-        { key: 'meeting', title: 'How often we meet', blurb: 'Weekly? Monthly? A group chat and meet when there is something to meet about? Pick it here and schedule the next one.' },
-        { key: 'help', title: 'HIVE Help', blurb: 'A small shared kindness some HIVEs take on each month. Do we want one?' },
-        { key: 'hang', title: 'Go see a venue', blurb: 'Notoriety, The Space, Vegas Theatre, the Henderson tent. Who is going, and when? Schedule it right here.' },
+        { key: 'meeting', title: 'The monthly meeting', blurb: 'Second Thursday, 5–7. Confirm the next one here and it lands on everyone\'s calendar.' },
       ],
       hangCardExpands: false,
-      helpExpansion: {
-        kind: 'conversation',
-        lead: 'Some HIVEs pick one small act of kindness to do together each month.',
-        points: [
-          'Does Production want one? Genuinely a choice — no pressure either way.',
-          "If it's a yes, we pick the first focus together.",
-        ],
-      },
+      // Never drawn — there is no Help card to expand. The type asks for it.
+      helpExpansion: { kind: 'conversation', lead: '', points: [] },
       hasHelpFocusHeader: false,
     },
+    // Read back from the RECURRING pre-meeting check-in ('Before we meet',
+    // lib/checkIns.ts). The first meeting's one-time blocks — cadence, HIVE
+    // Help, Honey Pot, who-can-know — came out with the questions themselves
+    // (2026-08-19): the room decided those, and a slide reading back an
+    // answered question is a rerun.
     checkInSays: [
-      {
-        slide: 'meetups',
-        heading: 'What everyone said before tonight',
-        keys: [
-          { key: 'q_cadence', label: 'How often we should meet' },
-          { key: 'q_when', label: 'What day and time works' },
-          { key: 'q_hive_help', label: 'HIVE Help' },
-          // Who is allowed to know. This sits on "How we run" because it IS a
-          // rule about how this HIVE runs, and it has to be read out before
-          // anybody starts calling venues and saying who they are.
-          { key: 'q_who_can_know', label: 'Who can know they are part of this' },
-          { key: 'q_who_must_not_hear', label: 'Who should not hear it from us' },
-          // The line each person drew before the room existed. Read it here,
-          // where the group is agreeing how it runs, not at the end as a
-          // footnote — it is the most useful thing anybody said.
-          { key: 'q_walk_away', label: 'What would make them walk away' },
-        ],
-      },
-      {
-        slide: 'treasurer',
-        heading: 'What everyone said before tonight',
-        keys: [
-          { key: 'q_honey_pot', label: 'Should we have a Honey Pot' },
-          { key: 'q_honey_pot_amount', label: 'What feels right to put in' },
-          { key: 'q_treasurer', label: 'Who would be treasurer' },
-        ],
-      },
-      // The month's POP, read back on the slides that use it. Nat's rule,
-      // 2026-08-15: *"make sure all the answers go somewhere useful, that we're
-      // never asking someone something for the sake of asking them."* Progress
-      // belongs with the news; what is stuck and what people are taking on
-      // belong on the slide that hands the next month's jobs out.
       // The pre-meeting POP, read back on the slides that use it. What people
       // got done opens the night; what is stuck and how full they are decide
       // who takes what. Nat, 2026-08-15: *"that way at the Pro HIVE meeting,
@@ -517,10 +488,10 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
         heading: 'What everyone got done since we last met',
         keys: [
           { key: 'q_show_progress', label: 'What they got done' },
+          { key: 'q_on_board', label: 'On the board yet' },
           // Asked in the check-in so the presentation can answer them out
           // loud instead of the room guessing what people are wondering.
           { key: 'q_biggest_question', label: 'Their biggest question' },
-          { key: 'q_show_raise', label: 'What they want to talk about' },
         ],
       },
       {

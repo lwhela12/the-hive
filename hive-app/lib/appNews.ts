@@ -28,6 +28,22 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-production-checkins-live',
+    date: '2026-08-19',
+    title: 'Production HIVE has its own check-ins now',
+    detail: 'Before each meeting: what got done, is it on the board, any pictures to bring. At month\'s end: what moved, what\'s stuck, what has to happen next. Both arrive by email a few days before they\'re due.',
+    href: { pathname: '/meetings' },
+    action: 'See Meetings',
+  },
+  {
+    id: '2026-08-19-production-runs-its-own-way',
+    date: '2026-08-19',
+    title: 'Production\'s meeting flow fits Production',
+    detail: 'The deck spends the night on the show: Honey Pot is paused ("not at this time" — the page says so), HIVE Help is out, and venue visits are sorted by the people going, never as a group scheduling step.',
+    href: { pathname: '/meeting-helper' },
+    action: 'See the deck',
+  },
+  {
     id: '2026-08-19-meetings-page-tidy',
     date: '2026-08-19',
     title: 'The Join button sits on the meeting itself',

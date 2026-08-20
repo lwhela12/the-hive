@@ -35,7 +35,10 @@ const IDEAS_BY_SLUG: Record<string, IdeaSet> = {
     ],
   },
   show: {
-    lead: 'In a HIVE built around getting work seen, it tends to go toward reach.',
+    // Production TALKED about it and said not at this time (the room,
+    // 2026-08-18; Nat: "pause, don't delete"). Saying the decision out loud is
+    // what keeps this page from reading like something the HIVE forgot.
+    lead: 'Production talked it over at the first meeting and said: not at this time. The section stays right here for whenever that changes — and when it does, it tends to go toward reach.',
     ideas: [
       'Marketing a show — posters, a boosted post, a photographer for the night',
       'Props, costumes or a rehearsal space nobody wants to fund on their own',

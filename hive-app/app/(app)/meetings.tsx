@@ -20,7 +20,7 @@ import { EventDatePicker } from '../../components/ui/DatePicker';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
 import { confirmAction, showAlert } from '../../lib/showAlert';
-import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns, hasMeetingDeck, getSeasonCheckInKind, isSurveyOnHomeToday, SEASON_CHECK_IN_EMOJI } from '../../lib/checkIns';
+import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns, hasMeetingDeck, hasEndOfMonthCheckIn, getSeasonCheckInKind, isSurveyOnHomeToday, SEASON_CHECK_IN_EMOJI } from '../../lib/checkIns';
 import { useSurveys, isMonthlyCheckInSurvey } from '../../lib/hooks/useSurveys';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
@@ -1234,15 +1234,11 @@ export default function MeetingsScreen() {
             marginBottom: 20,
           }}
         >
-          {nextMeeting ? (
-            <View style={{ marginBottom: 18, gap: 8 }}>
-              {/* `formatTime`, never the raw column — "18:00:00" reads as
-                  military time to everyone but Nat (her own note, 2026-08-19). */}
-              <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.55)', fontSize: 13 }}>
-                Next up: {formatDateLong(nextMeeting.event_date)}{nextMeeting.event_time ? ` · ${formatTime(nextMeeting.event_time)}` : ''}
-              </Text>
-            </View>
-          ) : (
+          {/* No "Next up" line — Upcoming Meetings right below already says
+              it, and saying it twice made the header read as its own broken
+              copy of the list (Nat, 2026-08-19). The empty state stays: with
+              nothing scheduled there is nothing below to point at. */}
+          {!nextMeeting && (
             <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.4)', fontSize: 13, marginBottom: 18 }}>
               No upcoming meetings scheduled
             </Text>
@@ -1298,7 +1294,7 @@ export default function MeetingsScreen() {
                   marginTop: 2,
                 }}
               >
-                {meetingDeck ? (hiveOnMeet ? 'the deck — the call is on Google Meet' : 'the faces and the deck') : 'coming soon'}
+                {meetingDeck ? (hiveOnMeet ? '' : 'the faces and the deck') : 'coming soon'}
               </Text>
             </Pressable>
 
@@ -1429,7 +1425,9 @@ export default function MeetingsScreen() {
                     width: '100%',
                   }}
                 >
-                  {CHECK_INS_COMING_SOON_MESSAGE}
+                  {hasEndOfMonthCheckIn(community)
+                    ? 'Nothing to fill in right now — the check-ins open a few days before they are due.'
+                    : CHECK_INS_COMING_SOON_MESSAGE}
                 </Text>
               )}
             </View>
