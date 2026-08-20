@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-20-meeting-night-email-reads-the-meeting',
+    date: '2026-08-20',
+    title: 'The meeting-night email says what the meeting says',
+    detail: 'The last-call email now reads the meeting itself — the weekday, the time, where it is, and whatever note is written on it — so it can never name a night the calendar disagrees with.',
+    href: { pathname: '/meetings' },
+    action: 'See tonight',
+  },
+  {
     id: '2026-08-19-worth-keeping',
     date: '2026-08-19',
     title: 'The clever thing you said gets offered back to you',

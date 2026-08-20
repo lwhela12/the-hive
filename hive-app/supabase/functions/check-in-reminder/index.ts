@@ -218,6 +218,108 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * What tonight actually is, read off the meeting itself.
+ *
+ * The August last call went out saying "meeting August 19" because the email
+ * took its date from the check-in's due date, and that had been left on the
+ * old night after the meeting moved to the 20th. The calendar entry was right
+ * the whole time. So the day-of email now reads the meeting row — its weekday,
+ * its start time, where it is, and whatever Nat wrote on it — and the check-in
+ * due date only decides WHEN to send, never what the email claims.
+ *
+ * `note` is the event's own description, so the words in the email and the
+ * words on the meeting in the app are the same words, written once.
+ */
+interface MeetingDetails {
+  weekday: string;
+  dateLabel: string;
+  timeLabel: string | null;
+  location: string | null;
+  note: string | null;
+}
+
+const WEEKDAY_NAMES = [
+  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+];
+
+// The weekday of a plain 'YYYY-MM-DD', with no timezone in the way — the date
+// is already a Pacific calendar date by the time it reaches here.
+function weekdayOf(dateOnly: string): string {
+  const [y, m, d] = dateOnly.split('-').map(Number);
+  return WEEKDAY_NAMES[new Date(Date.UTC(y, m - 1, d)).getUTCDay()] ?? '';
+}
+
+// '17:30:00' -> '5:30 PM'. Mirrors the app's formatTime so the email and the
+// Meetings screen say the hour the same way.
+function formatClock(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const [rawH, rawM] = value.split(':');
+  const h = Number(rawH);
+  if (Number.isNaN(h)) return null;
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return `${hour}:${rawM ?? '00'} ${suffix}`;
+}
+
+async function loadMeetingDetails(
+  admin: ReturnType<typeof createClient>,
+  communityId: string,
+  dateOnly: string,
+): Promise<MeetingDetails> {
+  const [, m, d] = dateOnly.split('-').map(Number);
+  const fallback: MeetingDetails = {
+    weekday: weekdayOf(dateOnly),
+    dateLabel: `${MONTH_NAMES[m - 1] ?? ''} ${d}`,
+    timeLabel: null,
+    location: null,
+    note: null,
+  };
+  try {
+    const { data } = await admin
+      .from('events')
+      .select('event_time, location, description')
+      .eq('community_id', communityId)
+      .eq('event_type', 'meeting')
+      .eq('event_date', dateOnly)
+      .limit(1);
+    const row = data?.[0] as
+      | { event_time: string | null; location: string | null; description: string | null }
+      | undefined;
+    if (!row) return fallback;
+    return {
+      ...fallback,
+      timeLabel: formatClock(row.event_time),
+      location: row.location?.trim() || null,
+      note: row.description?.trim() || null,
+    };
+  } catch (err) {
+    // A missing meeting row is not a reason to skip the last call — the email
+    // just goes out with the plain date it always had.
+    console.error('[check-in-reminder] could not read the meeting row:', err);
+    return fallback;
+  }
+}
+
+/**
+ * Nat's note, rendered as she typed it.
+ *
+ * Blank lines make paragraphs, single newlines make line breaks — the same
+ * shape the text reads in on the meeting in the app. Escaped on the way in,
+ * like every other name and word that reaches an inbox from here.
+ */
+function noteHtml(note: string): string {
+  return note
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => {
+      const lines = block.split('\n').map((line) => escapeHtml(line.trim())).join('<br />');
+      return `<p style="font-size: 15px; margin: 0 0 14px;">${lines}</p>`;
+    })
+    .join('');
+}
+
 // Warm honey/gold check-in email — shared by the real send and the test preview.
 function checkInEmailHtml(
   rawName: string,
@@ -243,6 +345,11 @@ function checkInEmailHtml(
    * to be IN that HIVE.
    */
   communityId?: string,
+  /**
+   * Tonight, as the meeting itself describes it — read off the event row, so
+   * the email cannot drift from the calendar the way August's did.
+   */
+  meeting?: MeetingDetails,
 ): string {
   // Escaped once, here, so every path out of this function is safe by default.
   const name = escapeHtml(rawName);
@@ -256,19 +363,37 @@ function checkInEmailHtml(
     return `${APP_URL}/monthly-tuneup${params.length ? `?${params.join('&')}` : ''}`;
   };
   if (kind === 'day_of') {
+    // Everything above the check-in ask comes off the meeting row: the weekday
+    // and date, the hour it starts, where it is, and Nat's own note. The email
+    // used to assert the date from the check-in's due date and got it wrong in
+    // August, so it no longer says anything the calendar has not said first.
+    const when = meeting
+      ? `${meeting.weekday}, ${meeting.dateLabel}`
+      : `${month} ${day}`;
+    const whenLine = meeting?.timeLabel
+      ? `${when} · from ${meeting.timeLabel}`
+      : when;
+    const note = meeting?.note ? noteHtml(meeting.note) : '';
+    const where = meeting?.location
+      ? `<p style="font-size: 15px; margin: 0 0 14px;">📍 ${escapeHtml(meeting.location)}</p>`
+      : '';
     return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
       ${LOGO_BLOCK}
       ${kicker}
       <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Meeting tonight!</h1>
-      <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">Last call to check in before we gather</p>
+      <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">${escapeHtml(whenLine)}</p>
       <p style="font-size: 15px;">Hi ${name},</p>
-      <p style="font-size: 15px;">Tonight's the <strong>${month} ${day} HIVE meeting</strong> and your check-in isn't in yet — no stress, it takes about <strong>2 minutes</strong> with the Looks good → buttons, and it lights you up on the Arrival Board.</p>
-      <div style="text-align: center; margin: 28px 0;">
+      ${note}
+      ${where}
+      <div style="height: 1px; background: #f0e3c8; margin: 22px 0;"></div>
+      <p style="font-size: 15px; margin: 0 0 6px;"><strong>Your check-in isn't in yet</strong></p>
+      <p style="font-size: 15px; margin: 0;">It takes about <strong>2 minutes</strong> with the Looks good → buttons, and it lights you up on the Arrival Board.</p>
+      <div style="text-align: center; margin: 24px 0 28px;">
         <a href="${tuneupHref()}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Check in before tonight</a>
       </div>
       <p style="font-size: 14px; color: #6b6b6b;"><strong>Can't make it tonight?</strong> No worries — HIVE will email you two quick ways to catch up afterward: open the meeting summary or ask Clive what you missed. If you don't want recap emails, turn off <strong>Recap email if I miss a meeting</strong> in Profile → Settings.</p>
-      <p style="font-size: 13px; color: #9a9a9a; text-align: center;">See you at ${month} ${day}. 🍯</p>
+      <p style="font-size: 13px; color: #9a9a9a; text-align: center;">See you tonight. 🍯</p>
     </div>
   `;
   }
@@ -739,8 +864,11 @@ serve(async (req) => {
     if (testSurveyId && !previewCheckIn && !['premeeting', 'endofmonth', 'quarter', 'year'].includes(String(body.test_kind ?? ''))) {
       return errorResponse('That active monthly check-in could not be previewed.', 404);
     }
+    // Kept for the day-of preview, which reads the meeting row for that date.
+    let previewDateOnly: string | null = null;
     if (previewCheckIn?.due_date) {
       const previewDate = toPacificDateOnly(new Date(previewCheckIn.due_date));
+      previewDateOnly = previewDate;
       if (previewDate) ({ month, day } = formatMeetingDate(previewDate));
     }
     // The preview carries the real HIVE, so the pill and the button in it are
@@ -866,6 +994,9 @@ serve(async (req) => {
           typeof body.test_name === 'string' ? body.test_name : 'there',
           month, day, testKind,
           previewHiveName, previewCheckIn?.community_id,
+          testKind === 'day_of' && previewCheckIn?.community_id && previewDateOnly
+            ? await loadMeetingDetails(supabaseAdmin, previewCheckIn.community_id, previewDateOnly)
+            : undefined,
         ),
       }),
     });
@@ -1242,6 +1373,13 @@ serve(async (req) => {
               ? `🍯 ${from}Halfway check-in — the newsletter goes out on the 1st`
               : `🐝 ${from}Your check-in is open — meeting ${month} ${day}`;
 
+        // Tonight as the meeting itself describes it — loaded once, used by
+        // both the preview Nat reads and the copy every member gets, so what
+        // she approves is exactly what goes out.
+        const meetingDetails = kind === 'day_of'
+          ? await loadMeetingDetails(supabaseAdmin, survey.community_id, dueDateOnly)
+          : undefined;
+
         // THE HOLD. Nothing above this line has reached a member.
         if (!mayReachMembers) {
           const existingHold = await findHold(supabaseAdmin, survey.id, period);
@@ -1261,7 +1399,7 @@ serve(async (req) => {
               subject: emailSubject,
               recipients: (members as MemberProfile[]).length,
             },
-            checkInEmailHtml('there', month, day, kind, monthlyHiveName, survey.community_id),
+            checkInEmailHtml('there', month, day, kind, monthlyHiveName, survey.community_id, meetingDetails),
           );
           if (parked) heldForApproval++;
           else errors.push(`hold:${survey.id}:no preview recipient`);
@@ -1300,7 +1438,7 @@ serve(async (req) => {
             if (hasEmail) {
               const emailBody = checkInEmailHtml(
                 member.name ?? 'there', month, day, kind,
-                monthlyHiveName, survey.community_id,
+                monthlyHiveName, survey.community_id, meetingDetails,
               );
 
               try {
