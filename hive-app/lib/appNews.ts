@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-meetings-page-tidy',
+    date: '2026-08-19',
+    title: 'The Join button sits on the meeting itself',
+    detail: 'Join Google Meet lives on the upcoming meeting card now, times read like 6:00 PM instead of 18:00:00, editing a meeting shows the Meet link it carries, and finishing a check-in never locks you out of opening it again.',
+    href: { pathname: '/meetings' },
+    action: 'Open Meetings',
+  },
+  {
     id: '2026-08-19-roll-call',
     date: '2026-08-19',
     title: 'Every meeting opens with a roll call',

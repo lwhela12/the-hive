@@ -21,7 +21,7 @@ import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
 import { confirmAction, showAlert } from '../../lib/showAlert';
 import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns, hasMeetingDeck, getSeasonCheckInKind, isSurveyOnHomeToday, SEASON_CHECK_IN_EMOJI } from '../../lib/checkIns';
-import { useSurveys } from '../../lib/hooks/useSurveys';
+import { useSurveys, isMonthlyCheckInSurvey } from '../../lib/hooks/useSurveys';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import type { Meeting, Event } from '../../types';
@@ -193,7 +193,13 @@ export default function MeetingsScreen() {
    * inboxes said the check-in was open. Nat, 2026-08-15: *"we made those
    * already, so that needs to be fixed."*
    */
-  const openCheckIns = availableSurveys.filter((s) => isSurveyOnHomeToday(s, new Date()));
+  // The monthly check-in is INSIDE the Monthly Tune-up (its check-in step
+  // submits the same survey), so on a HIVE with tailored check-ins it does not
+  // get a chip of its own — two doors to one set of answers read as two chores
+  // (Nat, 2026-08-19: "that seems redundant, right?"). Season check-ins and
+  // anything else keep theirs.
+  const openCheckIns = availableSurveys.filter((s) =>
+    isSurveyOnHomeToday(s, new Date()) && !(hasTailoredCheckIns(community) && isMonthlyCheckInSurvey(s)));
   // The 2026-08-07 decision gated the check-ins in Admin and on the direct
   // tune-up route, but this screen kept offering OG's tune-up pills and the
   // Meeting Helper deck inside Tech and Production as if they were theirs
@@ -1181,16 +1187,16 @@ export default function MeetingsScreen() {
    * are the meeting's own, unchanged, so nothing else moves.
    */
   const hiveOnMeet = !!community?.meets_on_google_meet;
-  const addMeetLink = async () => {
-    if (!nextMeeting || addingMeetLink) return;
+  const addMeetLink = async (target: Event) => {
+    if (addingMeetLink) return;
     setAddingMeetLink(true);
     try {
       const { error } = await supabase.functions.invoke('update-meeting', {
         body: {
-          eventId: nextMeeting.id,
-          title: nextMeeting.title,
-          date: nextMeeting.event_date,
-          time: nextMeeting.event_time || null,
+          eventId: target.id,
+          title: target.title,
+          date: target.event_date,
+          time: target.event_time || null,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
       });
@@ -1230,45 +1236,11 @@ export default function MeetingsScreen() {
         >
           {nextMeeting ? (
             <View style={{ marginBottom: 18, gap: 8 }}>
+              {/* `formatTime`, never the raw column — "18:00:00" reads as
+                  military time to everyone but Nat (her own note, 2026-08-19). */}
               <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.55)', fontSize: 13 }}>
-                Next up: {formatDateLong(nextMeeting.event_date)}{nextMeeting.event_time ? ` · ${nextMeeting.event_time}` : ''}
+                Next up: {formatDateLong(nextMeeting.event_date)}{nextMeeting.event_time ? ` · ${formatTime(nextMeeting.event_time)}` : ''}
               </Text>
-              {nextMeeting.meet_link ? (
-                <Pressable
-                  onPress={() => void Linking.openURL(nextMeeting.meet_link!)}
-                  style={({ pressed }) => ({
-                    alignSelf: 'flex-start',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    backgroundColor: 'rgba(255,255,255,0.1)',
-                    borderRadius: 999,
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                >
-                  <Text style={{ fontSize: 13 }}>📹</Text>
-                  <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 12 }}>Join Google Meet</Text>
-                </Pressable>
-              ) : hiveOnMeet && isAdmin ? (
-                <Pressable
-                  onPress={() => void addMeetLink()}
-                  disabled={addingMeetLink}
-                  style={({ pressed }) => ({
-                    alignSelf: 'flex-start',
-                    backgroundColor: 'rgba(255,255,255,0.1)',
-                    borderRadius: 999,
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                    opacity: pressed || addingMeetLink ? 0.6 : 1,
-                  })}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 12 }}>
-                    {addingMeetLink ? 'Adding the Meet link…' : 'Add the Google Meet link'}
-                  </Text>
-                </Pressable>
-              ) : null}
             </View>
           ) : (
             <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.4)', fontSize: 13, marginBottom: 18 }}>
@@ -1503,12 +1475,36 @@ export default function MeetingsScreen() {
                         {event.description}
                       </Text>
                     )}
+                    {/* A Meet HIVE's way in sits ON the meeting, not floating
+                        in the header (Nat, 2026-08-19: "that button should be
+                        in the upcoming meetings section, not up there in the
+                        corner"). In-app HIVEs still get no Join here — their
+                        door is the Meeting Helper, and old rows' leftover Meet
+                        links stay retired. */}
+                    {hiveOnMeet && event.meet_link ? (
+                      <Pressable
+                        onPress={() => void Linking.openURL(event.meet_link!)}
+                        className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10 mt-3 self-start"
+                      >
+                        <Text className="text-xs mr-1.5">📹</Text>
+                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
+                          Join Google Meet
+                        </Text>
+                      </Pressable>
+                    ) : hiveOnMeet && isAdmin && event.event_type === 'meeting' ? (
+                      <Pressable
+                        onPress={() => void addMeetLink(event)}
+                        disabled={addingMeetLink}
+                        className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full mt-3 self-start"
+                        style={{ opacity: addingMeetLink ? 0.6 : 1 }}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
+                          {addingMeetLink ? 'Adding the Meet link…' : 'Add the Google Meet link'}
+                        </Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                   <View className="flex-row items-center gap-2">
-                    {/* Meetings scheduled before 2026-08-15 still carry a
-                        Google Meet link in the database. It is not offered as a
-                        way in any more — the meeting is in the Meeting Helper,
-                        and a second door leads to an empty room. */}
                     <Pressable
                       onPress={() => handleEditEvent(event)}
                       className="bg-gray-200 px-3 py-2 rounded-lg active:bg-gray-300"
@@ -1731,6 +1727,14 @@ export default function MeetingsScreen() {
                   ? '📹 This HIVE meets on Google Meet — saving adds the Meet link to the calendar invite if it is missing. The deck still lives in the Meeting Helper.'
                   : '🎞️ This meeting happens in the Meeting Helper — the faces and the deck on one screen. The calendar invite points there.'}
               </Text>
+              {/* The receipt. Nat saved twice because nothing in this form
+                  showed the link existed (2026-08-19: "it says it's there and
+                  if I click edit, I still don't see it"). */}
+              {hiveOnMeet && editingEvent?.meet_link ? (
+                <Text className="text-sm text-gray-600 mt-2" selectable>
+                  ✓ On the invite: {editingEvent.meet_link}
+                </Text>
+              ) : null}
             </View>
           </BounceScrollView>
           </KeyboardAvoidingView>

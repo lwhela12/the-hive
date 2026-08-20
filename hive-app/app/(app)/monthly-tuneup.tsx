@@ -10,7 +10,7 @@ import {
   type TextStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
@@ -845,6 +845,27 @@ export default function MonthlyTuneupScreen() {
   const [newsletterEventsLoading, setNewsletterEventsLoading] = useState(false);
   const [showNewsletterEventComposer, setShowNewsletterEventComposer] = useState(false);
   const [finished, setFinished] = useState(false);
+  /**
+   * Coming back in always opens the flow, never last visit's finish screen.
+   *
+   * Expo Router keeps this screen mounted after you leave it, so `finished`
+   * survived navigation: finishing the halfway check-in and tapping its chip
+   * again later greeted Nat with "That's the halfway check-in done!" — which
+   * she read as a lock (2026-08-19: "it should never block me out"). A ref +
+   * focus effect, not a `finished` dependency: setFinished(true) happens while
+   * the screen is already focused, so the fresh finish screen still shows —
+   * only a LATER arrival resets it.
+   */
+  const finishedRef = useRef(false);
+  useEffect(() => { finishedRef.current = finished; }, [finished]);
+  useFocusEffect(
+    useCallback(() => {
+      if (finishedRef.current) {
+        setFinished(false);
+        setStepIndex(0);
+      }
+    }, [])
+  );
 
   // The box itself does its own @ tagging now (it's a ComposerBar). This tracker
   // stays for the FACE BUBBLES: it reads who the text already mentions, and a
