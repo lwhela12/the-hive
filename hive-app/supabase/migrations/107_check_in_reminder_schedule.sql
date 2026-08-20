@@ -14,12 +14,18 @@
 -- using a Supabase Vault secret or a session-local setting for the JWT.
 --
 -- Timing rationale:
---   - Runs daily at 16:00 UTC, which is ~9:00am America/Los_Angeles (Pacific).
+--   - The preview has to reach Nat at 6:00am America/Los_Angeles. Nat, 2026-08-20:
+--     *"I want 6am. Whatever the current 6am is."* — so it must not drift an hour
+--     when daylight saving ends.
+--   - pg_cron evaluates schedules in the database timezone, which is UTC on
+--     Supabase, and has no per-job timezone. So the job wakes TWICE, at 13:00 and
+--     14:00 UTC, and a `where` clause lets exactly one of them through: whichever
+--     one is really 6am in Los Angeles. PDT -> 13:00 UTC. PST -> 14:00 UTC.
 --   - The function itself computes "today" and the meeting day in Pacific time
 --     (due_date is stored as midnight UTC = 5pm Pacific the prior day, i.e. the
---     real meeting day). Evaluating at 9am Pacific lands on the correct calendar
---     day. The function is idempotent (dedups per survey + 'YYYY-MM' period via
---     the notifications.metadata marker), so a repeated run the same day is safe.
+--     real meeting day), so evaluating in the 6am hour lands on the correct
+--     calendar day. It is also idempotent (dedups per survey + period via the
+--     notifications.metadata marker), so a repeated run the same day is safe.
 --
 -- Prerequisites (enable once, in the Supabase dashboard or via SQL):
 --   create extension if not exists pg_cron;
@@ -29,17 +35,18 @@
 --
 --   select cron.schedule(
 --     'check-in-reminder-daily',
---     '0 16 * * *',  -- every day at 16:00 UTC (~9am Pacific)
+--     '0 13,14 * * *',  -- both candidate hours; the where-clause picks the real 6am
 --     $$
 --     select net.http_post(
 --       url := 'https://<PROJECT_REF>.supabase.co/functions/v1/check-in-reminder',
 --       headers := jsonb_build_object(
 --         'Content-Type', 'application/json',
---         -- Use the service-role key (or an anon key; the function is verify_jwt=false).
---         'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
+--         'apikey', (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key'),
+--         'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key')
 --       ),
 --       body := '{}'::jsonb
---     );
+--     )
+--     where extract(hour from (now() at time zone 'America/Los_Angeles')) = 6;
 --     $$
 --   );
 --
