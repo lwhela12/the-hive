@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-19-worth-keeping',
+    date: '2026-08-19',
+    title: 'The clever thing you said gets offered back to you',
+    detail: 'When a meeting\'s notes catch a line worth keeping, the meeting summary now offers it to you — post it to Things We Learned under your own name, or put it away. Nobody posts your words but you.',
+    href: { pathname: '/meetings' },
+    action: 'See a summary',
+  },
+  {
     id: '2026-08-19-production-checkins-live',
     date: '2026-08-19',
     title: 'Production HIVE has its own check-ins now',

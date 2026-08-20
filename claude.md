@@ -387,7 +387,7 @@ because the same thing was hand-written three or four times and drifted.
 | `components/ui/ConfirmDialog.tsx` | the nicer yes/no — a real view, wears the page's colours |
 | `components/ui/SignedImage.tsx` | **any member upload.** A component, not a hook, because attachments render inside `.map()` |
 | `lib/signedAttachment.ts` | signing a stored attachment URL by hand |
-| `components/ui/DictationRow.tsx` | adding a mic to a prose text box |
+| `components/ui/ComposerBar.tsx` | any text box that wants a mic or a clip — its `VoiceMicButton` is the one microphone |
 | `lib/hooks/useDictation.ts` | the append logic behind it — do not re-write it, it has been wrong twice |
 | `components/ui/ThinkingBee.tsx` | a loading state. Spinners stay only inside buttons |
 | `components/ui/HiveReactions.tsx` | emoji reactions, boards and messages alike |

@@ -60,6 +60,10 @@ interface MeetingAnalysis {
     person_name: string;
     description: string;
   }>;
+  insights_caught?: Array<{
+    person_name: string;
+    insight: string;
+  }>;
   hd_boards?: Array<{
     person_name: string;
     goal_title: string;
@@ -160,6 +164,7 @@ function normalizeMeetingAnalysis(raw: Record<string, any>): MeetingAnalysis {
   const actionItems = Array.isArray(value.action_items) ? value.action_items : [];
   const events = Array.isArray(value.events) ? value.events : [];
   const wishesSurfaced = Array.isArray(value.wishes_surfaced) ? value.wishes_surfaced : [];
+  const insightsCaught = Array.isArray(value.insights_caught) ? value.insights_caught : [];
   const hdBoards = Array.isArray(value.hd_boards) ? value.hd_boards : [];
   const boardSuggestions = Array.isArray(value.board_suggestions) ? value.board_suggestions : [];
 
@@ -200,6 +205,13 @@ function normalizeMeetingAnalysis(raw: Record<string, any>): MeetingAnalysis {
         description: wish.description.trim(),
       }))
       .filter((wish) => wish.person_name && wish.description),
+    insights_caught: insightsCaught
+      .filter((item: Record<string, any>) => typeof item?.person_name === 'string' && typeof item?.insight === 'string')
+      .map((item: Record<string, any>) => ({
+        person_name: item.person_name.trim(),
+        insight: item.insight.trim(),
+      }))
+      .filter((item) => item.person_name && item.insight),
     hd_boards: hdBoards
       .filter((board: Record<string, any>) => typeof board?.person_name === 'string' && typeof board?.goal_title === 'string')
       .map((board: Record<string, any>) => ({
@@ -722,6 +734,8 @@ Turn these meeting notes into app-ready structured data. Use only information su
 
 HD boards are member-owned containers for each person's HummDinger/High Definition wishes. Each member should have one active HD board, with individual asks, offers, blockers, and updates living as board_suggestions/posts inside that member board. Use hd_boards only when the notes clearly reveal a member needs an HD board and no matching existing member HD board appears in Existing board topics. For HummDinger or High Definition session resources, asks, offers, and blockers tied to a specific member, create board_suggestions with that member as person_name and the member's exact HD board name as category_hint when it exists. Use shared boards only for explicitly group-wide topics: "15min HIVE Helpers" for quick acts of help people completed or offered, "HIVE Approved" for trusted recommendations, favorite providers, brands, places, and community-approved resources, and "HIVE Hangs" for group social planning. If a resource or recommendation is for one member's HD ask, put it in that member's HD board rather than HIVE Approved.
 
+Insights caught are the worth-keeping lines — something somebody said that another member would be glad to have known yesterday: a lesson learned, a sharp observation, a technique, a number worth remembering. Capture each in insights_caught in the speaker's own words, specific enough to stand alone, and do not post anything — the summary offers each one back to the person who said it, and only they decide whether it goes on a board. A wish is a need; an insight is a lesson — never file the same line as both.
+
 Wishes surfaced are what somebody said they need, written down so the room can see it. Capture the wish or need in wishes_surfaced and do not create a wish record here — the summary offers each one to the person it belongs to, and only they turn it into a real HD wish. So write each one in their own words and specific enough to act on, because what you write is what they will be offered. Use board_suggestions only when the notes support a concrete discussion thread, resource request, or follow-up post for the reviewer to approve.
 
 Return strict JSON only:
@@ -733,6 +747,7 @@ Return strict JSON only:
   "action_items": [{"description": "specific task", "assigned_to_name": "member name, The group, or null", "due_date": "YYYY-MM-DD or null", "about_person_name": "member the task is FOR or ABOUT, distinct from the assignee (e.g. 'give a recommendation to Nat' -> 'Nat'), or null", "related_wish_hint": "a few words naming the specific wish this task concerns, only when the notes make it obvious, or null"}],
   "events": [{"title": "event title", "event_date": "YYYY-MM-DD", "event_time": "HH:MM:SS or null", "event_type": "meeting or custom", "description": "optional", "location": "optional"}],
   "wishes_surfaced": [{"person_name": "member name", "description": "specific wish or need"}],
+  "insights_caught": [{"person_name": "member name", "insight": "the worth-keeping line, in their own words"}],
   "hd_boards": [{"person_name": "member name", "goal_title": "member HD board or short goal label", "description": "why this member needs an HD board"}],
   "board_suggestions": [{"person_name": "member name or null", "title": "suggested board post title", "content": "draft board update/resource note", "category_hint": "existing board name such as Brit's HD Board, 15min HIVE Helpers, HIVE Approved, Announcements, or member/project area"}]
 }`,
@@ -1080,6 +1095,7 @@ serve(async (req) => {
       decisions: analysis.decisions ?? [],
       details: analysis.details ?? [],
       wishes_surfaced: analysis.wishes_surfaced ?? [],
+      insights_caught: analysis.insights_caught ?? [],
       action_items: analysis.action_items ?? [],
       events: analysis.events ?? [],
       hd_boards: analysis.hd_boards ?? [],

@@ -439,7 +439,7 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
     agenda: [
       { key: 'rollcall', label: 'Roll call' },
       { key: 'news', label: 'News from Nat' },
-      { key: 'meetups', label: 'How we run' },
+      { key: 'meetups', label: 'Next meeting' },
       { key: 'assignments', label: 'Who takes what' },
       { key: 'wrapup', label: 'Wrap-Up' },
     ],
@@ -460,11 +460,13 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
     },
     // One card, because Production schedules exactly one thing: the monthly
     // meeting (decided in the room, 2026-08-18 — second Thursday). HIVE Help
-    // is out (Charlee said no), and venue visits are sorted between the people
-    // going, never as a whole-group scheduling step.
+    // is out (Charlee said no), venue visits are sorted between the people
+    // going, and "How we run" was first-meeting framing — the how is decided
+    // (Nat, memo 229: "we don't need a how-we-run, we just need schedule the
+    // next meeting").
     plan: {
-      kicker: 'How this HIVE runs',
-      title: 'How we run',
+      kicker: 'On the calendar',
+      title: 'Schedule the next meeting',
       cards: [
         { key: 'meeting', title: 'The monthly meeting', blurb: 'Second Thursday, 5–7. Confirm the next one here and it lands on everyone\'s calendar.' },
       ],

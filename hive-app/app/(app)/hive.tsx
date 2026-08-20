@@ -771,12 +771,23 @@ const resolveHomeShortcuts = (
     (allowAdmin || !HOME_SHORTCUT_META[key].adminOnly) &&
     (allowSwap || !HOME_SHORTCUT_META[key].multiHiveOnly);
 
-  const picked = [...new Set((saved ?? []).filter(isKnownShortcut))]
-    .filter(isAllowed)
-    .slice(0, DEFAULT_HOME_SHORTCUTS.length);
+  // Three slots is the row's historical size. It must NOT be
+  // DEFAULT_HOME_SHORTCUTS.length: the default went to zero when the combs
+  // moved to the rail (2026-08-03), and slicing saved arrangements to the
+  // DEFAULT's length silently threw every one of them away — the exact
+  // opposite of the "anyone with a saved arrangement keeps it" promise above
+  // (found by the 2026-08-19 standardization pass; zero members had saved one,
+  // so nothing was lost).
+  const HOME_SHORTCUT_SLOTS = 3;
+  const wanted = [...new Set((saved ?? []).filter(isKnownShortcut))];
+  const picked = wanted.filter(isAllowed).slice(0, HOME_SHORTCUT_SLOTS);
+  // Fallbacks only stand in for saved slots that were dropped as unknown or
+  // not allowed — a member who saved nothing gets the default, which is an
+  // empty row that Home simply does not draw.
+  const target = Math.min(wanted.length, HOME_SHORTCUT_SLOTS);
   const fallbacks = [...DEFAULT_HOME_SHORTCUTS.filter(isAllowed), SINGLE_HIVE_FALLBACK];
   for (const fallback of fallbacks) {
-    if (picked.length >= DEFAULT_HOME_SHORTCUTS.length) break;
+    if (picked.length >= target) break;
     if (!picked.includes(fallback)) picked.push(fallback);
   }
   return picked;
@@ -3706,6 +3717,9 @@ export default function HiveScreen() {
                   swap_hives: () => openHivePicker(),
                   admin: () => router.push('/admin' as any),
                 };
+                // An empty row still spent its margin — a phantom gap at the
+                // very top of Home (2026-08-19 standardization pass).
+                if (homeShortcuts.length === 0) return null;
                 return (
                   <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: useMobileLayout ? 20 : 24, paddingHorizontal: 8 }}>
                     {homeShortcuts.map((shortcutKey) => (

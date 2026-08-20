@@ -48,6 +48,22 @@ export function desireIsFor(personName: string, memberName: string | null | unde
 }
 
 /**
+ * An insight a meeting caught — the worth-keeping line somebody said, offered
+ * back to them the way a surfaced desire is (Nat, 2026-08-19: "if you say
+ * something clever... I wonder if those should auto populate in here too").
+ * Same contract as desires: `apply-meeting-notes` writes `insights_caught`
+ * onto the meeting summary, `insights_filed` / `insights_dismissed` are the
+ * ledgers, and the key survives the list being rebuilt.
+ */
+export type CaughtInsight = { person_name: string; insight: string };
+
+export const insightKey = (item: CaughtInsight) => {
+  const flatten = (text: string) =>
+    (text ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  return `${flatten(item.person_name)}::${flatten(item.insight).slice(0, 160)}`;
+};
+
+/**
  * The stored summary as an object, or null when it is plain text. Strips the
  * model's occasional ```json fences — same tolerance `MeetingSummary` has.
  */

@@ -5,7 +5,7 @@ import { showAlert } from '../../lib/showAlert';
 import { formatDateLong, formatDateShort } from '../../lib/dateUtils';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { invalidateWishQueries } from '../../lib/queryClient';
-import { desireKey } from '../../lib/desires';
+import { desireKey, insightKey, type CaughtInsight } from '../../lib/desires';
 import { SummarySections } from './SummarySections';
 import {
   SpeakerNames,
@@ -80,6 +80,11 @@ interface ParsedSummary {
    * the mark survives a re-read of the notes, which renumbers the list.
    */
   desires_added?: Record<string, { wish_id: string; added_at: string; added_for: string }>;
+  /** The worth-keeping lines a meeting caught, offered back to their sayers —
+   *  same contract as desires (lib/desires.ts). */
+  insights_caught?: CaughtInsight[];
+  insights_filed?: Record<string, { post_id: string; filed_at: string; filed_by: string }>;
+  insights_dismissed?: Record<string, { dismissed_at: string }>;
   /** Set only when this meeting came in as notes rather than a live deck. */
   import_status?: 'pending' | 'preview' | 'applied' | 'live';
   preview_generated_at?: string;
@@ -562,6 +567,97 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
     }
   };
 
+  /**
+   * A caught insight lands on the Things We Learned board — pressed by its
+   * sayer, posted under THEIR name (never Nat's, never Clive's), and marked on
+   * the meeting's own summary so this section and any future surface agree.
+   * Mirrors addDesireToWishes above; the destination is a board post instead
+   * of a wish row.
+   */
+  const [filingInsight, setFilingInsight] = useState<string | null>(null);
+  const fileInsightToBoard = async (item: CaughtInsight) => {
+    const key = insightKey(item);
+    if (filingInsight || parsedSummary.insights_filed?.[key] || !profile?.id) return;
+    setFilingInsight(key);
+    try {
+      const { data: boards, error: boardError } = await supabase
+        .from('board_categories')
+        .select('id, name, status')
+        .eq('community_id', meeting.community_id)
+        .ilike('name', '%things we learned%');
+      if (boardError) throw boardError;
+      const board = ((boards ?? []) as { id: string; status?: string | null }[])
+        .find((row) => !row.status || row.status === 'active');
+      if (!board) {
+        showAlert('No board found', 'This HIVE has no Things We Learned board yet — an admin can make one, and this stays offered until then.');
+        return;
+      }
+
+      const insight = item.insight.trim();
+      const title = insight.length > 80 ? `${insight.slice(0, 77)}…` : insight;
+      const { data: post, error } = await (supabase.from('board_posts') as any)
+        .insert({
+          community_id: meeting.community_id,
+          category_id: board.id,
+          author_id: profile.id,
+          title,
+          content: `${insight}\n\n— caught in the ${formatDateLong(meeting.date)} meeting`,
+        })
+        .select('id')
+        .single();
+      if (error) throw error;
+
+      const filed = {
+        ...(parsedSummary.insights_filed ?? {}),
+        [key]: { post_id: (post as { id: string }).id, filed_at: new Date().toISOString(), filed_by: profile.id },
+      };
+      const { data: updated, error: saveError } = await supabase
+        .from('meetings')
+        .update({ summary: JSON.stringify({ ...storedSummaryBase(), insights_filed: filed }) })
+        .eq('id', meeting.id)
+        .select('*')
+        .single();
+      if (saveError) throw saveError;
+      if (updated) {
+        setMeeting(updated as Meeting);
+        onMeetingUpdated?.(updated as Meeting);
+      }
+      showAlert('Posted', 'It is on Things We Learned now, under your name.');
+    } catch (error) {
+      console.error('Error filing an insight to the board:', error);
+      showAlert('Not posted', 'That could not be posted just now. Please try again.');
+    } finally {
+      setFilingInsight(null);
+    }
+  };
+
+  const dismissInsight = async (item: CaughtInsight) => {
+    const key = insightKey(item);
+    if (filingInsight) return;
+    setFilingInsight(key);
+    try {
+      const dismissed = {
+        ...(parsedSummary.insights_dismissed ?? {}),
+        [key]: { dismissed_at: new Date().toISOString() },
+      };
+      const { data: updated, error } = await supabase
+        .from('meetings')
+        .update({ summary: JSON.stringify({ ...storedSummaryBase(), insights_dismissed: dismissed }) })
+        .eq('id', meeting.id)
+        .select('*')
+        .single();
+      if (error) throw error;
+      if (updated) {
+        setMeeting(updated as Meeting);
+        onMeetingUpdated?.(updated as Meeting);
+      }
+    } catch (error) {
+      console.error('Error dismissing an insight:', error);
+    } finally {
+      setFilingInsight(null);
+    }
+  };
+
   const handleSpeakerNamesSaved = (names: SpeakerNameMap) => {
     const updated = { ...meeting, speaker_names: names } as Meeting;
     setMeeting(updated);
@@ -824,6 +920,60 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                               : `Add to ${firstName}'s HD wishes`}
                         </Text>
                       </Pressable>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* Worth keeping — the lines the meeting caught. Same contract as the
+            desires above (lib/desires.ts): the person who said it is the only
+            one who can post it, it lands on Things We Learned under THEIR
+            name, and the mark lives on this meeting's own summary. Nat,
+            2026-08-19: "if you say something clever... those should auto
+            populate" — offered, never auto-posted. */}
+        {parsedSummary.insights_caught && parsedSummary.insights_caught.length > 0 && (
+          <View className="mb-6">
+            <Text className="text-lg font-semibold text-gray-700 mb-2">Worth keeping</Text>
+            <Text className="text-label mb-2">Lines the meeting caught. Each is its sayer's to post, or put away.</Text>
+            <View className="bg-honey-50 rounded-xl p-4">
+              {parsedSummary.insights_caught.map((item, index) => {
+                const key = insightKey(item);
+                const filed = parsedSummary.insights_filed?.[key];
+                const dismissed = parsedSummary.insights_dismissed?.[key];
+                const owner = memberCalled(item.person_name, members);
+                const isMine = !!owner && owner.id === profile?.id;
+                const working = filingInsight === key;
+                if (dismissed && !filed) return null;
+                return (
+                  <View key={index} className={index > 0 ? 'mt-3 pt-3 border-t border-honey-200' : ''}>
+                    <Text className="font-medium text-honey-800">{item.person_name}</Text>
+                    <Text className="text-gray-700 mt-1" style={{ fontStyle: 'italic' }}>“{item.insight}”</Text>
+                    {filed ? (
+                      <Text className="text-honey-700 font-medium mt-2">✓ On Things We Learned</Text>
+                    ) : isMine ? (
+                      <View className="flex-row items-center gap-4 mt-3">
+                        <Pressable
+                          onPress={() => void fileInsightToBoard(item)}
+                          disabled={!!filingInsight}
+                          accessibilityRole="button"
+                          className={`bg-honey-500 px-4 py-2 rounded-lg active:bg-honey-600 ${filingInsight ? 'opacity-60' : ''}`}
+                        >
+                          <Text className="text-white font-semibold">
+                            {working ? 'Posting…' : 'Post to Things We Learned'}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => void dismissInsight(item)}
+                          disabled={!!filingInsight}
+                          accessibilityRole="button"
+                          hitSlop={8}
+                        >
+                          <Text className="text-gray-500 font-semibold">✕ Put it away</Text>
+                        </Pressable>
+                      </View>
                     ) : null}
                   </View>
                 );
