@@ -916,16 +916,16 @@ export default function MeetingHelperScreen() {
   };
 
   /**
-   * Gentle timekeeper: a clock with time-'til-hard-out and a soft
+   * Gentle timekeeper: a clock with time-'til-the-official-meeting-end and a soft
    * per-remaining-slide pace hint — enough to say "peep the time!" without
    * anyone feeling on the clock.
    *
-   * The hard out belongs to the HIVE now (migration 184), not to this render.
+   * The official meeting end belongs to the HIVE (migration 184), not to this
+   * render and not to any member's personal hard-out check-in answer.
    * It used to be React state defaulting to 8pm, so it reset on every page load
    * and anybody who needed a different one set it again every meeting. Nat,
-   * 2026-08-17: *"we have pro HIVE at 4 & density at 5."* Production's first
-   * meeting has a real wall behind it, and a clock counting to 8pm would have
-   * paced her wrong for the whole hour. Set it once; the HIVE remembers.
+   * Production's first meeting ended at 5pm, while its September meeting is
+   * scheduled 5–7pm. Set the official end once; the HIVE remembers it.
    */
   const [hardOutTime, setHardOutTime] = useState(community?.meeting_hard_out || '20:00');
   useEffect(() => {
@@ -5014,7 +5014,8 @@ export default function MeetingHelperScreen() {
           }}
         />
 
-        {/* Hard-out editor — "anyone got a hard out tonight?" */}
+        {/* Official meeting-end editor. Personal hard-outs come from each
+            member's pre-meeting check-in and never write this setting. */}
         <Modal
           visible={showHardOutEditor}
           animationType="fade"
@@ -5039,10 +5040,10 @@ export default function MeetingHelperScreen() {
               }}
             >
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: CHARCOAL }}>
-                Tonight's hard out
+                Official meeting end
               </Text>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: MUTED }}>
-                When should the countdown aim for? No hard stop — people are always welcome to hang after.
+                When should this HIVE's countdown end? Personal leaving times stay on each member's check-in.
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 {/* A clock time, so no microphone — the same plain field as
@@ -5093,14 +5094,15 @@ export default function MeetingHelperScreen() {
                       }
                       const next = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
                       setHardOutTime(next);
-                      // Remembered for the HIVE, so nobody sets it twice.
+                      // Remembered for the HIVE. A member's personal leaving
+                      // time is a separate check-in answer and never lands here.
                       if (communityId) {
                         void supabase
                           .from('communities')
                           .update({ meeting_hard_out: next })
                           .eq('id', communityId)
                           .then(({ error }) => {
-                            if (error) console.warn('Could not remember the hard out', error);
+                            if (error) console.warn('Could not remember the official meeting end', error);
                           });
                       }
                       setShowHardOutEditor(false);

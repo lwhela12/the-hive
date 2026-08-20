@@ -78,9 +78,9 @@ export interface Community extends Record<string, unknown> {
   /** How often this HIVE meets — weekly HIVEs date their meetings rather than month them. */
   meeting_cadence?: 'monthly' | 'weekly';
   /**
-   * When this HIVE's meetings have to be over, as 24-hour HH:MM (migration
-   * 184). Null means the deck's 8pm default. OG finishes when it finishes;
-   * Production has Density waiting behind it at 5.
+   * This HIVE's official meeting end, as 24-hour HH:MM (migration 184).
+   * It drives the Meeting Helper countdown and is separate from each member's
+   * personal leaving time in a pre-meeting check-in. Null keeps the 8pm default.
    */
   meeting_hard_out?: string | null;
   created_by?: string;

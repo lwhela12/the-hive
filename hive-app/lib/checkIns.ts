@@ -485,6 +485,8 @@ export function buildSeasonCheckIn(
 export const PRE_MEETING_QUESTION_IDS = {
   nameToday: 'q_name_today',
   attendance: 'q_attendance',
+  /** A member's own leaving time. It never sets the HIVE's official meeting end. */
+  hardOut: 'q_hard_out',
   energyLevel: 'q_energy_level',
   plate: 'q_plate',
   cadence: 'q_cadence',
@@ -518,6 +520,18 @@ const choice = (id: string, text: string, options: string[]): SurveyQuestion => 
   required: false,
 });
 
+/**
+ * The same optional personal-availability question in every HIVE's
+ * pre-meeting check-in. Its stable id preserves existing answers. It is never
+ * the Meeting Helper's official countdown target; that lives on `communities`.
+ */
+export const PERSONAL_HARD_OUT_QUESTION: SurveyQuestion = {
+  id: PRE_MEETING_QUESTION_IDS.hardOut,
+  text: 'Do you need to leave before the meeting ends? If so, what time?',
+  type: 'short',
+  required: false,
+};
+
 const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
   // Production HIVE keeps the database slug `show`. This is the RECURRING
   // check-in — the first meeting's one-time questions (cadence, Honey Pot,
@@ -537,6 +551,7 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
         '💻 Joining remotely',
         "😢 Missing this one, I'm afraid",
       ]),
+      { ...PERSONAL_HARD_OUT_QUESTION },
       q('q_show_progress', 'Your jobs from last meeting — what got done? Venues seen, calls made, numbers learned.'),
       q('q_on_board', "Is what you found on the board yet? If it's still in your notes, paste the one thing worth posting."),
       q('q_pictures', 'Any pictures, quotes or files to bring? Put them on the Pre-Production board, or say here what you have.'),
@@ -584,6 +599,10 @@ const PRE_MEETING_RECURRING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
         '\u{1F4BB} Joining remotely',
         "\u{1F622} Missing this one, I'm afraid",
       ]),
+      // Personal availability is shown on this member's arrival card. It is
+      // deliberately only a survey answer; the Meeting Helper's countdown
+      // reads the HIVE's separate `communities.meeting_hard_out` setting.
+      { ...PERSONAL_HARD_OUT_QUESTION },
       { id: 'q_energy_level', text: 'Energy: what is your energy level right now?', type: 'scale', required: false },
       // Arrives pre-filled with the to-dos this person ticked off since the
       // last meeting (SurveyModal). The wording says so, because text you did

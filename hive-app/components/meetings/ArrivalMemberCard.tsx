@@ -128,7 +128,7 @@ export function ArrivalMemberCard({
                 marginTop: (isTV ? 8 : 6) * scale,
               }}
             >
-              ⏰ hard out: {hardOut}
+              ⏰ leaving by: {hardOut}
             </Text>
           ) : null}
           {feelingNote ? (
