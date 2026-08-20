@@ -174,9 +174,14 @@ export function memberRosterQueryOptions(scopeIds: string[], wholeHive: boolean)
     queryKey: ['membersRoster', key, wholeHive] as const,
     queryFn: async (): Promise<MemberRosterEntry[]> => {
       const run = async (columns: string) => {
+        // HIVE-Wide may show a profile only because that person opted their
+        // card in. That choice does not publish which HIVE they administer or
+        // whether they are a treasurer, so the shared-directory query does not
+        // fetch membership roles at all.
+        const membershipColumns = wholeHive ? 'community_id' : 'community_id, role';
         let query = supabase
           .from('profiles')
-          .select(`${columns}, community_memberships!inner(community_id, role)`)
+          .select(`${columns}, community_memberships!inner(${membershipColumns})`)
           .in('community_memberships.community_id', scopeIds);
         if (wholeHive) query = query.eq('profile_scope', 'all_hives');
         return query;
@@ -203,15 +208,17 @@ export function memberRosterQueryOptions(scopeIds: string[], wholeHive: boolean)
         // are at their most (Nat 2026-08-03). A role held in a HIVE always beats
         // the one on the profile row; the profile's is what is left when there
         // is no role on the membership at all.
-        let role: UserRole | null = null;
-        for (const held of (heldMemberships ?? []) as any[]) {
-          const heldRole = held?.role as UserRole | undefined;
-          if (!heldRole) continue;
-          if (!role || (ROLE_RANK[heldRole] ?? 0) > (ROLE_RANK[role] ?? 0)) role = heldRole;
+        let role: UserRole | null = wholeHive ? 'member' : null;
+        if (!wholeHive) {
+          for (const held of (heldMemberships ?? []) as any[]) {
+            const heldRole = held?.role as UserRole | undefined;
+            if (!heldRole) continue;
+            if (!role || (ROLE_RANK[heldRole] ?? 0) > (ROLE_RANK[role] ?? 0)) role = heldRole;
+          }
         }
         roster.push({
           userId: row.id,
-          role: role ?? ((memberProfile.role ?? 'member') as UserRole),
+          role: wholeHive ? 'member' : role ?? ((memberProfile.role ?? 'member') as UserRole),
           profile: memberProfile as MemberProfileRow,
         });
       }

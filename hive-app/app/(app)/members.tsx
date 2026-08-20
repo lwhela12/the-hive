@@ -620,7 +620,9 @@ function MemberDetailPage({
   // The panel is now as tall as the wishes in it and starts scrolling inside
   // itself once it passes this, which is roughly four cards.
   const memberWishPanelMaxHeight = isPhoneProfile ? 500 : 520;
-  const roleLabel = ROLE_LABELS[member.role];
+  // A HIVE-Wide profile opt-in shares the card, not an internal admin or
+  // treasurer assignment held in one HIVE.
+  const roleLabel = wholeHive ? undefined : ROLE_LABELS[member.role];
   const { getOrCreateDMRoom } = useChatRooms(communityId ?? undefined, currentAuthId ?? undefined);
   // Garden visits (2026-08-12): the sunflowers on this member's blooms. On
   // somebody else's card the garden also gets the toggle, which is what turns
@@ -3108,7 +3110,7 @@ export default function MembersScreen() {
       return matchesMemberSearchText([
         m.name,
         m.role,
-        ROLE_LABELS[m.role],
+        wholeHive ? null : ROLE_LABELS[m.role],
         readable(PIECE_KEYS.title, m.profile_title),
         readable(PIECE_KEYS.title, m.occupation),
         readable(PIECE_KEYS.bio, m.bio),
