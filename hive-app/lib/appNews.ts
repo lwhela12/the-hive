@@ -28,6 +28,22 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-21-fix-a-to-do-without-losing-it',
+    date: '2026-08-21',
+    title: 'You can fix the wording of a to-do',
+    detail: 'Open a task on Home and correct it. The original wording is kept, so a tidy-up never erases what was actually said in the meeting.',
+    href: { pathname: '/hive' },
+    action: 'See your to-dos',
+  },
+  {
+    id: '2026-08-21-summary-says-where-it-came-from',
+    date: '2026-08-21',
+    title: 'A meeting summary tells you where each part came from',
+    detail: 'Every section names its source, and anything the app worked out on its own is labelled that way instead of reading like a decision the room made.',
+    href: { pathname: '/meetings' },
+    action: 'Open Meetings',
+  },
+  {
     id: '2026-08-20-public-is-not-a-member-reach',
     date: '2026-08-20',
     title: 'Your sharing choices stop at the HIVE door',
