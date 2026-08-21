@@ -19,6 +19,9 @@ interface SealMeetingRequest {
   communityId: string;
   /** Local meeting date (YYYY-MM-DD). Defaults to today in Pacific time. */
   date?: string;
+  /** Re-read the surviving ledger for an existing meeting. Admin-only. */
+  mode?: 'seal' | 'rebuild';
+  meetingId?: string;
   /** Explicit Wrap-Up roll call. Never inferred from q_attendance. */
   confirmed_absentee_ids?: string[];
 }
@@ -62,7 +65,16 @@ function cleanJotText(description: string) {
   if (mentionMatch) text = text.slice(mentionMatch[0].length).trim();
   const reMatch = text.match(/\s*\(re:\s*([^)]+)\)$/i);
   if (reMatch) text = text.slice(0, text.length - reMatch[0].length).trim();
-  return text || description.trim();
+  // A routing token is not a task. Old Meeting Helper capture could save
+  // rows shaped only like "@og (re: Meghan)" or "and @meg and @izzy".
+  // They remain in the audit trail, but must never be presented as work the
+  // room agreed to do.
+  const meaningful = text
+    .replace(/@[\w.-]+/g, ' ')
+    .replace(/\b(?:and|connect|about|with|to|re)\b/gi, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, '')
+    .trim();
+  return meaningful ? text : '';
 }
 
 
@@ -164,6 +176,8 @@ serve(async (req) => {
     const body = (await req.json()) as SealMeetingRequest;
     const communityId = body.communityId;
     if (!communityId) return errorResponse('Missing communityId', 400);
+    const isRebuild = body.mode === 'rebuild';
+    if (isRebuild && !body.date) return errorResponse('A rebuild needs the meeting date.', 400);
     const confirmedAbsenteeIds = Array.isArray(body.confirmed_absentee_ids)
       ? [...new Set(body.confirmed_absentee_ids.filter((id): id is string => typeof id === 'string' && !!id))]
       : [];
@@ -191,6 +205,7 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization') ?? '';
     let sealedBy: string | null = null;
     let mayConfirmAbsence = authHeader === `Bearer ${serviceKey}`;
+    let mayRebuild = authHeader === `Bearer ${serviceKey}`;
     if (authHeader !== `Bearer ${serviceKey}`) {
       const auth = await verifySupabaseJwt(authHeader);
       if (isAuthError(auth)) return errorResponse(auth.error, auth.status);
@@ -203,6 +218,10 @@ serve(async (req) => {
       if (!membership) return errorResponse('Community membership required', 403);
       sealedBy = auth.userId;
       mayConfirmAbsence = membership.role === 'admin' || await isOwner(supabaseAdmin, auth.userId);
+      mayRebuild = mayConfirmAbsence;
+    }
+    if (isRebuild && !mayRebuild) {
+      return errorResponse('Only a HIVE admin can rebuild a meeting summary.', 403);
     }
     if (confirmedAbsenteeIds.length > 0 && !mayConfirmAbsence) {
       return errorResponse('Only a HIVE admin can confirm who missed the meeting.', 403);
@@ -222,6 +241,20 @@ serve(async (req) => {
     const startIso = `${date}T07:00:00Z`;
     const endIso = new Date(Date.parse(startIso) + 24 * 3600_000).toISOString();
 
+    // One meeting record per date. Read it before the ledger so a rebuild can
+    // also include tasks that were explicitly linked after meeting day.
+    const { data: existingRows } = await supabaseAdmin
+      .from('meetings')
+      .select('id, summary, transcript_raw')
+      .eq('community_id', communityId)
+      .eq('date', date)
+      .order('created_at', { ascending: true });
+    const existing = (existingRows ?? []).find((row) => row.transcript_raw) ?? (existingRows ?? [])[0] ?? null;
+    if (isRebuild && !existing) return errorResponse('Meeting not found.', 404);
+    if (body.meetingId && existing?.id !== body.meetingId) {
+      return errorResponse('That meeting does not match this HIVE and date.', 409);
+    }
+
     const [eventsRes, todosRes, notesRes, grantedRes, threadsRes] = await Promise.all([
       supabaseAdmin
         .from('events')
@@ -234,7 +267,7 @@ serve(async (req) => {
         // focus that got replaced — and a summary that lists it is telling
         // people to go and do something nobody is asking them to do.
         .from('action_items')
-        .select('description, assigned_to, assignee:profiles!assigned_to(name), about:profiles!related_user_id(name)')
+        .select('id, description, assigned_to, completed, meeting_id, assignee:profiles!assigned_to(name), about:profiles!related_user_id(name)')
         .eq('community_id', communityId)
         .is('archived_at', null)
         .gte('created_at', startIso).lt('created_at', endIso),
@@ -261,13 +294,26 @@ serve(async (req) => {
         .gte('created_at', startIso).lt('created_at', endIso),
     ]);
 
+    const linkedTodosRes = existing
+      ? await supabaseAdmin
+        .from('action_items')
+        .select('id, description, assigned_to, completed, meeting_id, assignee:profiles!assigned_to(name), about:profiles!related_user_id(name)')
+        .eq('community_id', communityId)
+        .eq('meeting_id', existing.id)
+        .is('archived_at', null)
+      : { data: [] as unknown[] };
+
     const events = (eventsRes.data ?? []) as { title: string; event_date: string }[];
-    const todos = (todosRes.data ?? []) as {
+    const todoRows = [...(todosRes.data ?? []), ...(linkedTodosRes.data ?? [])] as {
+      id: string;
       description: string;
       assigned_to: string | null;
+      completed: boolean | null;
+      meeting_id: string | null;
       assignee?: { name?: string } | null;
       about?: { name?: string } | null;
     }[];
+    const todos = Array.from(new Map(todoRows.map((todo) => [todo.id, todo])).values());
     const notes = (notesRes.data ?? []) as {
       content: string;
       wish?: { title?: string | null; description?: string; user?: { name?: string } | null } | null;
@@ -388,12 +434,22 @@ serve(async (req) => {
       ));
 
     // Fan-outs create one row per member for the same jot — group by clean text.
-    const todoGroups = new Map<string, { names: string[]; about: string | null }>();
-    todos.forEach((todo) => {
+    // Routing-only placeholders are retained in action_items for audit/undo,
+    // but they are not meeting outcomes.
+    const keptTodos = todos.filter((todo) => !!cleanJotText(todo.description));
+    const todoGroups = new Map<string, { names: string[]; about: string | null; open: number; completed: number }>();
+    keptTodos.forEach((todo) => {
       const text = cleanJotText(todo.description);
-      const group = todoGroups.get(text) ?? { names: [], about: todo.about?.name ? firstName(todo.about.name) : null };
+      const group = todoGroups.get(text) ?? {
+        names: [],
+        about: todo.about?.name ? firstName(todo.about.name) : null,
+        open: 0,
+        completed: 0,
+      };
       const name = todo.assignee?.name ? firstName(todo.assignee.name) : null;
       if (name && !group.names.includes(name)) group.names.push(name);
+      if (todo.completed) group.completed += 1;
+      else group.open += 1;
       todoGroups.set(text, group);
     });
 
@@ -422,16 +478,6 @@ serve(async (req) => {
     });
     threads.forEach((title) => details.push(`📌 New thread: ${title}`));
 
-    // One meeting record per date: merge into an existing row (imported
-    // transcript stays as the detail layer) or create a fresh one.
-    const { data: existingRows } = await supabaseAdmin
-      .from('meetings')
-      .select('id, summary, transcript_raw')
-      .eq('community_id', communityId)
-      .eq('date', date)
-      .order('created_at', { ascending: true });
-    const existing = (existingRows ?? []).find((row) => row.transcript_raw) ?? (existingRows ?? [])[0] ?? null;
-
     /**
      * "Nothing happened" has to mean nothing was KEPT — not nothing was
      * clicked.
@@ -459,7 +505,7 @@ serve(async (req) => {
     }
 
     const month = monthName(date);
-    const todoPeople = new Set(todos.map((todo) => todo.assigned_to).filter(Boolean)).size;
+    const todoPeople = new Set(keptTodos.map((todo) => todo.assigned_to).filter(Boolean)).size;
     // The tally is a sentence about what was CLICKED, so a night whose whole
     // record is a recording gets no tally rather than a full stop on its own.
     const tally = [
@@ -469,14 +515,41 @@ serve(async (req) => {
       granted.length ? `${granted.length} wish${granted.length === 1 ? '' : 'es'} granted` : null,
       threads.length ? `${threads.length} thread${threads.length === 1 ? '' : 's'} opened` : null,
     ].filter(Boolean).join(' · ');
+    const recordVerb = isRebuild ? 'Rebuilt activity record' : 'Automatic activity record';
     const summaryText = tally
-      ? `Automatic activity record for the ${month} meeting — assembled from what was saved in the app, not from the transcript. ${tally}.`
-      : `Automatic activity record for the ${month} meeting — assembled from what was saved in the app, not from the transcript.`;
+      ? `${recordVerb} for the ${month} meeting — assembled from the surviving meeting record, not from the transcript. ${tally}.`
+      : `${recordVerb} for the ${month} meeting — assembled from the surviving meeting record, not from the transcript.`;
 
     let previous: Record<string, unknown> = {};
     if (existing?.summary) {
       try { previous = JSON.parse(existing.summary); } catch { previous = {}; }
     }
+    const priorRebuildHistory = Array.isArray(previous.rebuild_history)
+      ? previous.rebuild_history as unknown[]
+      : [];
+    // Keep one non-recursive snapshot of the version this rebuild replaces.
+    // That snapshot includes any human correction, while the newly rebuilt
+    // record becomes the visible version again.
+    const {
+      rebuild_history: _oldRebuildHistory,
+      manual_correction: _oldManualCorrection,
+      manual_correction_history: _oldManualCorrectionHistory,
+      ...previousGeneratedFields
+    } = previous;
+    const previousWithoutNestedHistory = Object.fromEntries(
+      Object.entries(previous).filter(([key]) => key !== 'rebuild_history')
+    );
+    const rebuiltAt = new Date().toISOString();
+    const rebuildHistory = isRebuild
+      ? [
+        ...priorRebuildHistory,
+        {
+          replaced_at: rebuiltAt,
+          replaced_by: sealedBy,
+          summary: previousWithoutNestedHistory,
+        },
+      ].slice(-5)
+      : priorRebuildHistory;
 
     // THE SUMMARY IS THE DECK, IN OUTLINE (Nat 2026-07-25: "we don't need to
     // double up our work"). Same running order as the meeting helper — News,
@@ -566,6 +639,36 @@ serve(async (req) => {
       source_label: 'Calendar + Meeting Helper notes',
     });
 
+    /**
+     * The task ledger is the spine of the recap: what the room actually put in
+     * motion, who took it, and what has already been finished. It comes before
+     * check-in context because an intention brought into the room is not the
+     * same thing as an agreement that came out of it.
+     */
+    const jobLines: string[] = [];
+    todoGroups.forEach((group, text) => {
+      const [headline, ...rest] = text.split('\n');
+      const who = group.names.length > 4
+        ? `OG HIVE (${group.names.length} members)`
+        : group.names.length > 0
+          ? group.names.join(' & ')
+          : 'nobody yet';
+      const about = group.about ? ` (re: ${group.about})` : '';
+      const status = group.open === 0 && group.completed > 0
+        ? '✓ '
+        : group.completed > 0
+          ? `(${group.completed} done) `
+          : '';
+      jobLines.push(`${status}${headline.trim()}${about} — ${who}`);
+      rest.map((line) => line.replace(/^[\s·•-]+/, '').trim()).filter(Boolean)
+        .forEach((line) => jobLines.push(`    ${line}`));
+    });
+    if (jobLines.length > 0) sections.push({
+      title: 'What the meeting put in motion',
+      lines: jobLines,
+      source_label: `${todoGroups.size} surviving meeting to-do${todoGroups.size === 1 ? '' : 's'} · ${keptTodos.length} assignments · open or completed, never archived`,
+    });
+
     // One block per person: their HD, their POP, and what they walked away with.
     const hdLines: string[] = [];
     const people: { name: string; hd: string; progress: string; obstacles: string; priorities: string; took: string[] }[] = [];
@@ -598,50 +701,17 @@ serve(async (req) => {
     const condensed = await condenseHummdingers(people, communityId);
     if (condensed.length > 0) {
       sections.push({
-        title: 'HummDingers',
+        title: 'What people brought into the meeting',
         lines: condensed,
-        source_label: `${responsePeriod} check-ins · ${checkIns.length} current-cycle response${checkIns.length === 1 ? '' : 's'}`,
+        source_label: `Pre-meeting context only · ${responsePeriod} check-ins · ${checkIns.length} current-cycle response${checkIns.length === 1 ? '' : 's'}`,
       });
     } else if (hdLines.length > 0) {
       sections.push({
-        title: "HummDingers — everyone's POP",
+        title: 'What people brought into the meeting',
         lines: hdLines,
-        source_label: `${responsePeriod} check-ins · ${checkIns.length} current-cycle response${checkIns.length === 1 ? '' : 's'}`,
+        source_label: `Pre-meeting context only · ${responsePeriod} check-ins · ${checkIns.length} current-cycle response${checkIns.length === 1 ? '' : 's'}`,
       });
     }
-
-    /**
-     * What was handed out, and to whom.
-     *
-     * The to-dos used to reach the summary ONLY through the HummDingers
-     * section, as a "Took on:" line under a person's check-in — so a HIVE that
-     * does not run check-ins lost every one of them. Production's first meeting
-     * handed out eleven jobs across four lists on 2026-08-18 and its summary
-     * came out as two lines: the Honey Pot balance and the next meeting date.
-     * Nat, opening it: *"if I click on that it is completely blank."*
-     *
-     * This is the authoritative task ledger for the meeting. HummDinger lines
-     * may mention a task while condensing a person's check-in, but they are not
-     * allowed to make the task disappear from "Who takes what" — the August
-     * OG summary lost most assignments that way.
-     */
-    const jobLines: string[] = [];
-    todoGroups.forEach((group, text) => {
-      const [headline, ...rest] = text.split('\n');
-      const who = group.names.length > 0 ? group.names.join(' & ') : 'nobody yet';
-      const about = group.about ? ` (re: ${group.about}'s HD)` : '';
-      jobLines.push(`${headline.trim()}${about} — ${who}`);
-      // The questions travel with the job, because a job without them is the
-      // thing Nat called useless: "and you're like, okay, what do I do with
-      // that?"
-      rest.map((line) => line.replace(/^[\s·•-]+/, '').trim()).filter(Boolean)
-        .forEach((line) => jobLines.push(`    ${line}`));
-    });
-    if (jobLines.length > 0) sections.push({
-      title: 'Who takes what',
-      lines: jobLines,
-      source_label: `All ${todoGroups.size} saved meeting-day to-do${todoGroups.size === 1 ? '' : 's'} (active or completed, not archived)`,
-    });
 
     // Granted wishes are the whole point of the HIVE, so they keep a section of
     // their own rather than being buried in a wrap-up. The rest of the old
@@ -663,7 +733,7 @@ serve(async (req) => {
     const narrative = summaryText;
 
     const summaryPayload = {
-      ...previous,
+      ...(isRebuild ? previousGeneratedFields : previous),
       source: 'live_meeting',
       title: `${month} ${hiveName} Meeting`,
       // Live notes supersede the apply nag; an already-applied import keeps its badge.
@@ -682,22 +752,31 @@ serve(async (req) => {
       // rather than unique task descriptions. Consumers already show it as a
       // count of created action items. The group count is the honest number
       // used by the human-readable "Who takes what" section.
-      action_items_created: todos.length,
+      action_items_created: keptTodos.length,
       action_item_group_count: todoGroups.size,
-      action_item_assignments_seen: todos.length,
+      action_item_assignments_seen: keptTodos.length,
       events_created: events.length,
-      live_sealed_at: new Date().toISOString(),
+      live_sealed_at: rebuiltAt,
+      ...(isRebuild
+        ? {
+          rebuilt_at: rebuiltAt,
+          rebuilt_by: sealedBy,
+          rebuild_history: rebuildHistory,
+        }
+        : {}),
       sections,
       provenance: {
         kind: 'automatic_activity_record',
         meeting_date: date,
         generated_from: [
+          'surviving_meeting_todos',
+          'meeting_day_events',
+          'meeting_day_board_activity',
           'meeting_helper_notes',
-          'meeting_day_app_activity',
-          'current_cycle_check_ins',
-          'saved_meeting_day_todos',
+          'current_cycle_check_ins_context',
         ],
         transcript_used: false,
+        rebuilt: isRebuild,
         // Applying suggested artifacts does not prove a decision was made in
         // the room. A future explicit review action may set this timestamp;
         // until then the UI must keep calling these unverified.
@@ -733,6 +812,18 @@ serve(async (req) => {
       meetingId = inserted.id;
     }
 
+    // Once a surviving meeting-day task has contributed to a recap, attach it
+    // to that meeting. Future repairs can then follow the durable relationship
+    // instead of depending forever on a creation-date window.
+    if (meetingId && keptTodos.length > 0) {
+      const { error: linkError } = await supabaseAdmin
+        .from('action_items')
+        .update({ meeting_id: meetingId })
+        .in('id', keptTodos.map((todo) => todo.id))
+        .is('archived_at', null);
+      if (linkError) throw linkError;
+    }
+
     // Sealing can only create a held Nat preview. The recap function has no
     // member-send path without a separate owner approval request.
     let recapHold: Record<string, unknown> | null = null;
@@ -760,11 +851,14 @@ serve(async (req) => {
     return jsonResponse({
       success: true,
       sealed: true,
+      rebuilt: isRebuild,
       meetingId,
       recapHold,
       counts: {
         events: events.length,
         todos: todoGroups.size,
+        todoAssignments: keptTodos.length,
+        excludedRoutingPlaceholders: todos.length - keptTodos.length,
         wishNotes: notes.length,
         granted: granted.length,
         threads: threads.length,

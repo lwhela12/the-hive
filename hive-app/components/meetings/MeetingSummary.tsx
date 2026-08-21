@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput } from 'react-native';
 import { supabase } from '../../lib/supabase';
-import { showAlert } from '../../lib/showAlert';
+import { confirmAction, showAlert } from '../../lib/showAlert';
 import { formatDateLong, formatDateShort } from '../../lib/dateUtils';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { invalidateWishQueries } from '../../lib/queryClient';
@@ -243,6 +243,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [correctionDraft, setCorrectionDraft] = useState('');
   const [savingCorrection, setSavingCorrection] = useState(false);
+  const [rebuildingSummary, setRebuildingSummary] = useState(false);
 
   const { profile, communityId, communityRole } = useAuth();
 
@@ -617,6 +618,58 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   };
 
   /**
+   * Re-read the durable meeting record instead of asking the transcript to
+   * guess what mattered. The server keeps the version this replaces and links
+   * every retained to-do to this meeting, so the next repair no longer depends
+   * only on a one-day creation window.
+   */
+  const rebuildFromCurrentRecords = async () => {
+    if (rebuildingSummary || !isHiveAdmin) return;
+
+    setRebuildingSummary(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('seal-meeting', {
+        body: {
+          communityId: meeting.community_id,
+          date: meeting.date,
+          meetingId: meeting.id,
+          mode: 'rebuild',
+        },
+      });
+      if (error) throw error;
+      if (!data?.rebuilt) throw new Error(data?.reason ?? 'The meeting summary was not rebuilt.');
+
+      await reloadMeeting();
+      await loadActionItems();
+      setCorrectionOpen(false);
+      showAlert(
+        'Summary rebuilt',
+        `Rebuilt from ${data?.counts?.todos ?? 0} surviving meeting to-do${data?.counts?.todos === 1 ? '' : 's'} and the other saved meeting records. The version it replaced is preserved.`
+      );
+    } catch (error) {
+      console.error('Error rebuilding meeting summary:', error);
+      showAlert('Rebuild failed', 'The current summary is unchanged. Please try again.');
+    } finally {
+      setRebuildingSummary(false);
+    }
+  };
+
+  const confirmRebuild = () => {
+    confirmAction({
+      title: 'Rebuild this summary?',
+      message: [
+        'This uses the surviving meeting to-dos as the main record, plus actual events, board activity, Meeting Helper notes, and current-cycle check-ins for context.',
+        manualCorrection
+          ? 'Your human correction will be preserved in history, then the rebuilt record will become the visible summary.'
+          : 'The current summary will be preserved in history.',
+        'The transcript is not used.',
+      ].join('\n\n'),
+      confirmLabel: 'Rebuild summary',
+      onConfirm: rebuildFromCurrentRecords,
+    });
+  };
+
+  /**
    * A desire from the meeting becomes a real HD wish for the person it belongs
    * to.
    *
@@ -855,6 +908,31 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
             <Text className="font-medium text-red-700">
               Something went wrong writing this summary.
             </Text>
+          </View>
+        )}
+
+        {isHiveAdmin && !correctionOpen && (
+          <View className="mb-6 bg-honey-50 border border-honey-200 rounded-xl p-4">
+            <Text className="text-hive-dark font-semibold">Summary repair</Text>
+            <Text className="text-honey-800 mt-1 leading-5">
+              Rebuild from the to-dos the meeting actually left behind, with saved events, board activity,
+              and Meeting Helper notes as supporting context. The transcript is not used and the current
+              version stays in history.
+            </Text>
+            <Pressable
+              onPress={confirmRebuild}
+              disabled={rebuildingSummary}
+              accessibilityRole="button"
+              accessibilityLabel="Rebuild summary from current meeting records"
+              accessibilityState={{ disabled: rebuildingSummary }}
+              className={`self-start mt-3 px-4 py-3 rounded-lg border border-honey-300 bg-white active:bg-honey-100 ${
+                rebuildingSummary ? 'opacity-60' : ''
+              }`}
+            >
+              <Text className="text-honey-800 font-semibold">
+                {rebuildingSummary ? 'Rebuilding…' : 'Rebuild from current records'}
+              </Text>
+            </Pressable>
           </View>
         )}
 
