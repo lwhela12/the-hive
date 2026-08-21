@@ -25,6 +25,16 @@ const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY')!;
 const WEBHOOK_SECRET = Deno.env.get('ASSEMBLYAI_WEBHOOK_SECRET') ?? '';
 const WEBHOOK_HEADER = 'x-hive-transcribe-secret';
 
+function hasMeaningfulActionItemText(description?: string | null) {
+  const text = (description ?? '')
+    .trim()
+    .replace(/\s*\(re:\s*[^)]+\)\s*$/i, '')
+    .replace(/^(?:@[\w.-]+(?:[\s,]+|$))+/, '')
+    .replace(/^[\s,;:·&/\\|\-_]+|[\s,;:·&/\\|\-_]+$/g, '')
+    .trim();
+  return /[\p{L}\p{N}]/u.test(text);
+}
+
 /** Ask AssemblyAI what actually happened, rather than believing the body. */
 async function fetchTranscript(transcriptId: string) {
   const response = await fetch(
@@ -355,6 +365,7 @@ Format your response as JSON:
       // Create action items
       if (analysis.action_items?.length > 0) {
         for (const item of analysis.action_items) {
+          if (!hasMeaningfulActionItemText(item.description)) continue;
           let assignedTo = null;
           if (item.assigned_to_name && members) {
             const member = members.find(m =>

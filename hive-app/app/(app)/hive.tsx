@@ -24,7 +24,10 @@ import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { invalidateWishQueries } from '../../lib/queryClient';
 import { deleteWishById } from '../../lib/wishMutations';
-import { parseActionItemDescription } from '../../lib/actionItemDisplay';
+import {
+  hasMeaningfulActionItemText,
+  parseActionItemDescription,
+} from '../../lib/actionItemDisplay';
 import { HiveMark } from '../../components/ui/HiveMark';
 import { isInvitedToEvent, getEventEmoji, getEventHiveIcon } from '../../lib/eventDisplay';
 import { HiveIcon, type HiveIconName } from '../../components/ui/HiveIcon';
@@ -1390,6 +1393,10 @@ export default function HiveScreen() {
   const [newTaskText, setNewTaskText] = useState('');
   const [savingTask, setSavingTask] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
+  const [editingActionItemId, setEditingActionItemId] = useState<string | null>(null);
+  const [taskEditText, setTaskEditText] = useState('');
+  const [savingTaskEdit, setSavingTaskEdit] = useState(false);
+  const [taskEditError, setTaskEditError] = useState<string | null>(null);
 
   const triggerCompletion = useCallback(() => {
     setShowConfetti(true);
@@ -1464,7 +1471,11 @@ export default function HiveScreen() {
       rememberDismissedDuesReminder([item]);
       const { error } = await supabase
         .from('action_items')
-        .update({ archived_at: new Date().toISOString() } as any)
+        .update({
+          archived_at: new Date().toISOString(),
+          archived_by: profile?.id ?? null,
+          archive_reason: 'member_archived_from_home',
+        } as any)
         .eq('id', item.id);
 
       if (error) {
@@ -1482,12 +1493,12 @@ export default function HiveScreen() {
 
     confirmAction({
       title: 'Archive Task',
-      message: `Archive this task from your list?\n\n"${item.description}"`,
+      message: `Archive this task from your list? The record is kept for the meeting history; it is not deleted.\n\n"${item.description}"`,
       confirmLabel: 'Archive',
       destructive: true,
       onConfirm: archive,
     });
-  }, [forgetDismissedDuesReminder, rememberDismissedDuesReminder]);
+  }, [forgetDismissedDuesReminder, profile?.id, rememberDismissedDuesReminder]);
 
   const archiveCompletedActionItems = useCallback(() => {
     const completedItems = homeActionItems.filter(item => item.completed);
@@ -1500,7 +1511,11 @@ export default function HiveScreen() {
       rememberDismissedDuesReminder(completedItems);
       const { error } = await supabase
         .from('action_items')
-        .update({ archived_at: new Date().toISOString() } as any)
+        .update({
+          archived_at: new Date().toISOString(),
+          archived_by: profile?.id ?? null,
+          archive_reason: 'member_archived_completed_from_home',
+        } as any)
         .in('id', completedIds);
 
       if (error) {
@@ -1523,15 +1538,20 @@ export default function HiveScreen() {
       destructive: true,
       onConfirm: archive,
     });
-  }, [forgetDismissedDuesReminder, homeActionItems, rememberDismissedDuesReminder]);
+  }, [forgetDismissedDuesReminder, homeActionItems, profile?.id, rememberDismissedDuesReminder]);
 
   const handleAddTask = async () => {
-    if (!newTaskText.trim() || !profile?.id || !communityId) return;
+    const description = newTaskText.trim();
+    if (!profile?.id || !communityId) return;
+    if (!hasMeaningfulActionItemText(description)) {
+      setTaskError('Add a real action, not only punctuation or an @name.');
+      return;
+    }
     setSavingTask(true);
     setTaskError(null);
     const { error } = await supabase.from('action_items').insert({
       meeting_id: null,
-      description: newTaskText.trim(),
+      description,
       assigned_to: profile.id,
       community_id: communityId,
       completed: false,
@@ -1548,6 +1568,66 @@ export default function HiveScreen() {
     setShowAddTaskModal(false);
     fetchMyActionItems();
   };
+
+  const startEditingActionItem = useCallback((item: ActionItem) => {
+    setEditingActionItemId(item.id);
+    setTaskEditText(item.description);
+    setTaskEditError(null);
+  }, []);
+
+  const cancelEditingActionItem = useCallback(() => {
+    setEditingActionItemId(null);
+    setTaskEditText('');
+    setTaskEditError(null);
+  }, []);
+
+  const saveActionItemEdit = useCallback(async (item: ActionItem) => {
+    const description = taskEditText.trim();
+    if (!profile?.id || !communityId || savingTaskEdit) return;
+    if (!hasMeaningfulActionItemText(description)) {
+      setTaskEditError('Add a real action, not only punctuation or an @name.');
+      return;
+    }
+    if (description === item.description.trim()) {
+      cancelEditingActionItem();
+      return;
+    }
+
+    setSavingTaskEdit(true);
+    setTaskEditError(null);
+    const editedAt = new Date().toISOString();
+    const { error } = await supabase
+      .from('action_items')
+      .update({
+        description,
+        original_description: item.original_description ?? item.description,
+        edited_at: editedAt,
+        edited_by: profile.id,
+      } as any)
+      .eq('id', item.id)
+      .eq('community_id', communityId)
+      .eq('assigned_to', profile.id);
+    setSavingTaskEdit(false);
+
+    if (error) {
+      console.warn('Could not edit action item', error);
+      setTaskEditError('That edit did not save. Check your connection and try again.');
+      return;
+    }
+
+    setHomeActionItems((current) => current.map((action) => (
+      action.id === item.id
+        ? {
+            ...action,
+            description,
+            original_description: action.original_description ?? item.description,
+            edited_at: editedAt,
+            edited_by: profile.id,
+          }
+        : action
+    )));
+    cancelEditingActionItem();
+  }, [cancelEditingActionItem, communityId, profile?.id, savingTaskEdit, taskEditText]);
 
   const selectedActionItem = selectedActionItemId
     ? homeActionItems.find(item => item.id === selectedActionItemId) ?? null
@@ -1567,6 +1647,7 @@ export default function HiveScreen() {
     setEventError(null);
     setShowAddTaskModal(false);
     setSelectedActionItemId(null);
+    cancelEditingActionItem();
     setTaskError(null);
     // Home means home — drop any pending retrace instead of bouncing away.
     catchUpReturnRef.current = null;
@@ -1575,7 +1656,7 @@ export default function HiveScreen() {
     setShowAddHomeGuide(false);
     setActiveAnswerPrompt(null);
     homeScrollRef.current?.scrollTo({ y: 0, animated: true });
-  }, [activeSurveyStorageKey, clearSelectedWishResume]);
+  }, [activeSurveyStorageKey, cancelEditingActionItem, clearSelectedWishResume]);
 
   useEffect(() => addHomeResetListener(resetHomeToRoot), [resetHomeToRoot]);
 
@@ -4395,8 +4476,22 @@ export default function HiveScreen() {
       </Modal>
 
       {/* Task Detail Modal */}
-      <Modal visible={!!selectedActionItem} animationType="slide" transparent onRequestClose={() => setSelectedActionItemId(null)}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', justifyContent: 'flex-end' }} onPress={() => setSelectedActionItemId(null)}>
+      <Modal
+        visible={!!selectedActionItem}
+        animationType="slide"
+        transparent
+        onRequestClose={() => {
+          setSelectedActionItemId(null);
+          cancelEditingActionItem();
+        }}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', justifyContent: 'flex-end' }}
+          onPress={() => {
+            setSelectedActionItemId(null);
+            cancelEditingActionItem();
+          }}
+        >
           <Pressable
             onPress={event => event.stopPropagation()}
             style={{
@@ -4421,7 +4516,10 @@ export default function HiveScreen() {
                     </Text>
                   </View>
                   <Pressable
-                    onPress={() => setSelectedActionItemId(null)}
+                    onPress={() => {
+                      setSelectedActionItemId(null);
+                      cancelEditingActionItem();
+                    }}
                     accessibilityRole="button"
                     accessibilityLabel="Close task details"
                     hitSlop={8}
@@ -4440,13 +4538,105 @@ export default function HiveScreen() {
                   </Pressable>
                 </View>
 
-                <BounceScrollView showsVerticalScrollIndicator style={{ maxHeight: useMobileLayout ? 260 : 220, marginBottom: 18 }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', lineHeight: 24 }}>
-                    {selectedActionItem.description}
-                  </Text>
-                </BounceScrollView>
+                {editingActionItemId === selectedActionItem.id ? (
+                  <View style={{ marginBottom: 18 }}>
+                    <ComposerBar
+                      variant="form"
+                      value={taskEditText}
+                      onChangeText={(next) => {
+                        setTaskEditText(next);
+                        if (taskEditError) setTaskEditError(null);
+                      }}
+                      placeholder="What needs doing?"
+                      minHeight={96}
+                      maxLength={1000}
+                      counter="none"
+                      autoFocus
+                      onSubmit={() => saveActionItemEdit(selectedActionItem)}
+                      submitting={savingTaskEdit}
+                    />
+                    {taskEditError ? (
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626', marginTop: 8 }}>
+                        {taskEditError}
+                      </Text>
+                    ) : null}
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 17, color: '#9a8060', marginTop: 8 }}>
+                      The original wording stays in the task history after you save.
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+                      <Pressable
+                        onPress={cancelEditingActionItem}
+                        disabled={savingTaskEdit}
+                        accessibilityRole="button"
+                        accessibilityLabel="Cancel task edit"
+                        style={({ pressed }) => ({
+                          flex: 1,
+                          backgroundColor: pressed ? '#f2e1bd' : '#fff8e8',
+                          borderColor: 'rgba(189,147,72,0.36)',
+                          borderWidth: 1,
+                          borderRadius: 14,
+                          paddingVertical: 12,
+                          alignItems: 'center',
+                        })}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#8e6f35' }}>Cancel</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => saveActionItemEdit(selectedActionItem)}
+                        disabled={savingTaskEdit || !hasMeaningfulActionItemText(taskEditText)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Save task edit"
+                        style={({ pressed }) => ({
+                          flex: 1,
+                          backgroundColor: hasMeaningfulActionItemText(taskEditText) ? '#bd9348' : '#e5e7eb',
+                          borderRadius: 14,
+                          paddingVertical: 12,
+                          alignItems: 'center',
+                          opacity: pressed ? 0.8 : 1,
+                        })}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: hasMeaningfulActionItemText(taskEditText) ? 'white' : '#a09274' }}>
+                          {savingTaskEdit ? 'Saving…' : 'Save Changes'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : (
+                  <BounceScrollView showsVerticalScrollIndicator style={{ maxHeight: useMobileLayout ? 260 : 220, marginBottom: 18 }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', lineHeight: 24 }}>
+                      {selectedActionItem.description}
+                    </Text>
+                    {selectedActionItem.edited_at ? (
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 8 }}>
+                        Edited {formatDateShort(selectedActionItem.edited_at)} · original kept in history
+                      </Text>
+                    ) : null}
+                  </BounceScrollView>
+                )}
 
                 <View style={{ gap: 10 }}>
+                  {editingActionItemId !== selectedActionItem.id ? (
+                    <Pressable
+                      onPress={() => startEditingActionItem(selectedActionItem)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit task"
+                      style={({ pressed }) => ({
+                        backgroundColor: pressed ? '#f2e1bd' : '#fff8e8',
+                        borderColor: 'rgba(189,147,72,0.36)',
+                        borderWidth: 1,
+                        borderRadius: 14,
+                        paddingVertical: 13,
+                        paddingHorizontal: 14,
+                        alignItems: 'center',
+                        flexDirection: 'row',
+                        justifyContent: 'center',
+                        gap: 8,
+                      })}
+                    >
+                      <Ionicons name="create-outline" size={16} color="#8e6f35" />
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#8e6f35' }}>Edit</Text>
+                    </Pressable>
+                  ) : null}
                   {(() => {
                     const deepLink = getActionItemDeepLink(selectedActionItem);
                     if (!deepLink) return null;

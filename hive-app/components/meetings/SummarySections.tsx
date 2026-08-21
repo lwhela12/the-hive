@@ -4,6 +4,8 @@ import { headerForSection } from '../../lib/newsletterHeaders';
 export interface SummarySection {
   title: string;
   lines: string[];
+  /** Where these lines came from. Meeting summaries set it; newsletters omit it. */
+  source_label?: string;
 }
 
 /**
@@ -75,6 +77,20 @@ export function SummarySections({
                 >
                   {section.title}
                 </Text>
+                {section.source_label ? (
+                  <Text
+                    style={{
+                      fontFamily: 'Lato_400Regular',
+                      fontSize: 11,
+                      lineHeight: 16,
+                      color: '#9a8060',
+                      textAlign: 'center',
+                      marginTop: 4,
+                    }}
+                  >
+                    {section.source_label}
+                  </Text>
+                ) : null}
               </View>
             </>
           )}

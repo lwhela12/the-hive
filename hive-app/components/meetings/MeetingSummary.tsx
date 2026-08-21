@@ -68,7 +68,17 @@ interface ParsedSummary {
   summary?: string;
   decisions?: string[];
   /** The meeting deck in outline form — same running order as the helper. */
-  sections?: { title: string; lines: string[] }[];
+  sections?: { title: string; lines: string[]; source_label?: string }[];
+  provenance?: {
+    kind?: 'automatic_activity_record' | 'reviewed_import';
+    meeting_date?: string;
+    generated_from?: string[];
+    transcript_used?: boolean;
+    decisions_verified?: boolean;
+    check_in_period?: string;
+    check_in_response_count?: number;
+    community_member_count?: number;
+  };
   details?: string[];
   wishes_surfaced?: { person_name: string; description: string }[];
   /**
@@ -716,6 +726,24 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           </View>
         )}
 
+        {parsedSummary.provenance?.kind === 'automatic_activity_record' && (
+          <View className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <Text className="text-amber-900 font-semibold">Automatically assembled activity record</Text>
+            <Text className="text-amber-800 mt-1 leading-5">
+              Built from Meeting Helper notes, meeting-day app activity, saved meeting-day to-dos, and{' '}
+              {parsedSummary.provenance.check_in_response_count ?? 0} current-cycle check-in
+              {(parsedSummary.provenance.check_in_response_count ?? 0) === 1 ? '' : 's'}.
+              {' '}The transcript was not used, and automatically derived activity is not a verified in-meeting decision.
+            </Text>
+            {typeof parsedSummary.provenance.community_member_count === 'number' && (
+              <Text className="text-amber-700 mt-2 text-sm">
+                Check-in coverage: {parsedSummary.provenance.check_in_response_count ?? 0} of{' '}
+                {parsedSummary.provenance.community_member_count} current members. Anyone without a current-cycle check-in is left out rather than filled from an older cycle.
+              </Text>
+            )}
+          </View>
+        )}
+
         {/* Imported notes: look them over, then decide what becomes real. */}
         {notesNeedPreview && (
           <View className="mb-6 bg-honey-50 border border-honey-200 rounded-xl p-4">
@@ -854,7 +882,16 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
             the deck. */}
         {parsedSummary.decisions && parsedSummary.decisions.length > 0 && (
           <View className="mb-6">
-            <Text className="text-lg font-semibold text-gray-700 mb-2">Decisions</Text>
+            <Text className="text-lg font-semibold text-gray-700 mb-2">
+              {parsedSummary.provenance?.decisions_verified
+                ? 'Verified in-meeting decisions'
+                : 'Decisions found in notes'}
+            </Text>
+            {!parsedSummary.provenance?.decisions_verified && (
+              <Text className="text-label mb-2">
+                These have not been verified against the meeting record.
+              </Text>
+            )}
             <View className="bg-gray-50 rounded-xl p-4">
               {parsedSummary.decisions.map((decision, index) => (
                 <View key={index} className="flex-row mb-2 last:mb-0">

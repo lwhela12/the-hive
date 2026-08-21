@@ -81,6 +81,16 @@ function isIsoDate(value?: string | null) {
   return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
 }
 
+function hasMeaningfulActionItemText(description?: string | null) {
+  const text = (description ?? '')
+    .trim()
+    .replace(/\s*\(re:\s*[^)]+\)\s*$/i, '')
+    .replace(/^(?:@[\w.-]+(?:[\s,]+|$))+/, '')
+    .replace(/^[\s,;:·&/\\|\-_]+|[\s,;:·&/\\|\-_]+$/g, '')
+    .trim();
+  return /[\p{L}\p{N}]/u.test(text);
+}
+
 function stripCodeFence(text: string) {
   return text
     .trim()
@@ -868,14 +878,22 @@ async function writeApprovedMeetingNotes(
 ) {
   const { meetingId, communityId, userId, members, analysis } = params;
 
+  // Applying a revised proposal used to delete the previous generated rows.
+  // Archive them instead: the active list stays clean, while the audit trail
+  // still shows what the earlier review created and who replaced it.
   await supabaseAdmin
     .from('action_items')
-    .delete()
-    .eq('meeting_id', meetingId);
+    .update({
+      archived_at: new Date().toISOString(),
+      archived_by: userId,
+      archive_reason: 'replaced_by_reviewed_meeting_notes',
+    })
+    .eq('meeting_id', meetingId)
+    .is('archived_at', null);
 
   const actionItems = [];
   for (const item of analysis.action_items ?? []) {
-    if (!item.description?.trim()) continue;
+    if (!hasMeaningfulActionItemText(item.description)) continue;
     const deepLink = await resolveActionItemDeepLink(supabaseAdmin, communityId, item, members);
     actionItems.push({
       meeting_id: meetingId,

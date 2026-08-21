@@ -387,6 +387,11 @@ export interface ActionItem extends Record<string, unknown> {
   completed: boolean;
   completed_at?: string | null;
   archived_at?: string | null;
+  archived_by?: string | null;
+  archive_reason?: string | null;
+  original_description?: string | null;
+  edited_at?: string | null;
+  edited_by?: string | null;
   related_wish_id?: string | null;
   related_board_category_id?: string | null;
   /**

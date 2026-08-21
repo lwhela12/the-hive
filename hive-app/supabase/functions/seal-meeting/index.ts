@@ -4,6 +4,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { recordAssistantUsage } from '../_shared/metering.ts';
+import {
+  MONTHLY_CHECK_IN_PATTERN,
+  PRE_MEETING_CHECK_IN_PATTERN,
+} from '../_shared/checkInPatterns.ts';
 
 // "The meeting notes write themselves": compose everything that happened in
 // the app on meeting day (events penciled in, to-dos fanned out, wish notes,
@@ -19,6 +23,13 @@ interface SealMeetingRequest {
   confirmed_absentee_ids?: string[];
 }
 
+type SummarySection = {
+  title: string;
+  lines: string[];
+  /** Short, user-facing provenance shown directly on the summary card. */
+  source_label: string;
+};
+
 function pacificToday() {
   // The HIVE lives in Pacific time; good enough for a default.
   return new Date(Date.now() - 7 * 3600_000).toISOString().slice(0, 10);
@@ -31,6 +42,17 @@ function monthName(date: string) {
 
 function firstName(name?: string | null) {
   return (name ?? '').trim().split(/\s+/)[0] || 'someone';
+}
+
+function surveyDueDateMatchesMeeting(dueDate: string | null | undefined, meetingDate: string) {
+  if (!dueDate) return false;
+  const dueAt = Date.parse(dueDate);
+  if (Number.isNaN(dueAt)) return false;
+  // Survey due dates have historically used both midnight UTC and the
+  // following midnight UTC to mean the Pacific meeting evening. Accept the
+  // stored UTC date and the local-day interpretation, but no other cycle.
+  return new Date(dueAt).toISOString().slice(0, 10) === meetingDate
+    || new Date(dueAt - 12 * 3600_000).toISOString().slice(0, 10) === meetingDate;
 }
 
 // Same routing-token stripping as lib/actionItemDisplay.ts on the client.
@@ -327,7 +349,7 @@ serve(async (req) => {
 
     const { data: checkInRows } = await supabaseAdmin
       .from('survey_responses')
-      .select('answers, submitted_at, user_id, user:profiles!user_id(name), survey:surveys!survey_id(title)')
+      .select('answers, submitted_at, response_period, user_id, user:profiles!user_id(name), survey:surveys!survey_id(title, due_date)')
       // Scoped, at last. Every other query in this function filters on the
       // community and this one never did — so sealing a Tech HIVE meeting swept
       // in OG members' private check-ins (what they are stuck on, what they
@@ -339,13 +361,29 @@ serve(async (req) => {
       .gte('submitted_at', new Date(Date.parse(startIso) - 45 * 24 * 3600_000).toISOString())
       .order('submitted_at', { ascending: false })
       .limit(40);
+    const responsePeriod = date.slice(0, 7);
     const checkIns = ((checkInRows ?? []) as any[])
-      .filter((row) => /check-in/i.test(row.survey?.title ?? ''))
+      .filter((row) => {
+        const surveyTitle = row.survey?.title ?? '';
+        if (MONTHLY_CHECK_IN_PATTERN.test(surveyTitle)) {
+          return row.response_period === responsePeriod;
+        }
+        if (PRE_MEETING_CHECK_IN_PATTERN.test(surveyTitle)) {
+          return surveyDueDateMatchesMeeting(row.survey?.due_date, date);
+        }
+        return false;
+      })
       .map((row) => ({
         userId: row.user_id as string,
         name: row.user?.name ? firstName(row.user.name) : 'Someone',
         answers: (row.answers ?? {}) as Record<string, unknown>,
-      }));
+        submittedAt: row.submitted_at as string,
+      }))
+      // The query is newest-first. If an old duplicate survey row exists for
+      // the same cycle, keep the latest current-cycle answer for that member.
+      .filter((entry, index, entries) => (
+        entries.findIndex((candidate) => candidate.userId === entry.userId) === index
+      ));
 
     // Fan-outs create one row per member for the same jot — group by clean text.
     const todoGroups = new Map<string, { names: string[]; about: string | null }>();
@@ -430,8 +468,8 @@ serve(async (req) => {
       threads.length ? `${threads.length} thread${threads.length === 1 ? '' : 's'} opened` : null,
     ].filter(Boolean).join(' · ');
     const summaryText = tally
-      ? `Live notes from the ${month} meeting — written in the app as the night unfolded. ${tally}.`
-      : `Live notes from the ${month} meeting.`;
+      ? `Automatic activity record for the ${month} meeting — assembled from what was saved in the app, not from the transcript. ${tally}.`
+      : `Automatic activity record for the ${month} meeting — assembled from what was saved in the app, not from the transcript.`;
 
     let previous: Record<string, unknown> = {};
     if (existing?.summary) {
@@ -451,7 +489,7 @@ serve(async (req) => {
       .map((line) => line.replace(/^[\s•\-*]+/, '').trim())
       .filter(Boolean);
 
-    const sections: { title: string; lines: string[] }[] = [];
+    const sections: SummarySection[] = [];
 
     // News and App updates are separate headers — they're different kinds of
     // announcement and were reading as one long list (Nat 2026-07-25). New
@@ -460,10 +498,18 @@ serve(async (req) => {
       ...bulletsFrom(deckNotes.news),
       ...threadRows.map((row) => (row.board ? `${row.board} → ${row.title}` : `New thread: ${row.title}`)),
     ];
-    if (newsLines.length > 0) sections.push({ title: 'News from Nat', lines: newsLines });
+    if (newsLines.length > 0) sections.push({
+      title: 'News from Nat',
+      lines: newsLines,
+      source_label: 'Meeting Helper notes + meeting-day threads',
+    });
 
     const appLines = bulletsFrom(deckNotes.appnews);
-    if (appLines.length > 0) sections.push({ title: 'App updates', lines: appLines });
+    if (appLines.length > 0) sections.push({
+      title: 'App updates',
+      lines: appLines,
+      source_label: 'Meeting Helper notes',
+    });
 
     // Only a HIVE that runs a Honey Pot has a treasurer to report. Production
     // said no to one at its first meeting and its summary still opened with
@@ -475,6 +521,7 @@ serve(async (req) => {
       sections.push({
         title: 'Treasurer',
         lines: [`Honey Pot balance: $${potBalance.toFixed(2)}`],
+        source_label: 'Automatically read from the Honey Pot ledger',
       });
     }
 
@@ -511,7 +558,11 @@ serve(async (req) => {
       });
     }
     meetupLines.push(...bulletsFrom(deckNotes.meetups));
-    if (meetupLines.length > 0) sections.push({ title: 'Plan the Meet Ups', lines: meetupLines });
+    if (meetupLines.length > 0) sections.push({
+      title: 'Plan the Meet Ups',
+      lines: meetupLines,
+      source_label: 'Calendar + Meeting Helper notes',
+    });
 
     // One block per person: their HD, their POP, and what they walked away with.
     const hdLines: string[] = [];
@@ -544,9 +595,17 @@ serve(async (req) => {
     // genuine condensing (Nat 2026-07-25: "it's a summary, not word for word").
     const condensed = await condenseHummdingers(people, communityId);
     if (condensed.length > 0) {
-      sections.push({ title: 'HummDingers', lines: condensed });
+      sections.push({
+        title: 'HummDingers',
+        lines: condensed,
+        source_label: `${responsePeriod} check-ins · ${checkIns.length} current-cycle response${checkIns.length === 1 ? '' : 's'}`,
+      });
     } else if (hdLines.length > 0) {
-      sections.push({ title: "HummDingers — everyone's POP", lines: hdLines });
+      sections.push({
+        title: "HummDingers — everyone's POP",
+        lines: hdLines,
+        source_label: `${responsePeriod} check-ins · ${checkIns.length} current-cycle response${checkIns.length === 1 ? '' : 's'}`,
+      });
     }
 
     /**
@@ -559,14 +618,13 @@ serve(async (req) => {
      * came out as two lines: the Honey Pot balance and the next meeting date.
      * Nat, opening it: *"if I click on that it is completely blank."*
      *
-     * Only what the check-ins did not already account for lands here, so OG's
-     * summary does not say the same thing twice.
+     * This is the authoritative task ledger for the meeting. HummDinger lines
+     * may mention a task while condensing a person's check-in, but they are not
+     * allowed to make the task disappear from "Who takes what" — the August
+     * OG summary lost most assignments that way.
      */
-    const spokenFor = new Set<string>();
-    people.forEach((person) => person.took.forEach((text) => spokenFor.add(text)));
     const jobLines: string[] = [];
     todoGroups.forEach((group, text) => {
-      if (spokenFor.has(text)) return;
       const [headline, ...rest] = text.split('\n');
       const who = group.names.length > 0 ? group.names.join(' & ') : 'nobody yet';
       const about = group.about ? ` (re: ${group.about}'s HD)` : '';
@@ -577,7 +635,11 @@ serve(async (req) => {
       rest.map((line) => line.replace(/^[\s·•-]+/, '').trim()).filter(Boolean)
         .forEach((line) => jobLines.push(`    ${line}`));
     });
-    if (jobLines.length > 0) sections.push({ title: 'Who takes what', lines: jobLines });
+    if (jobLines.length > 0) sections.push({
+      title: 'Who takes what',
+      lines: jobLines,
+      source_label: `All ${todoGroups.size} saved meeting-day to-do${todoGroups.size === 1 ? '' : 's'} (active or completed, not archived)`,
+    });
 
     // Granted wishes are the whole point of the HIVE, so they keep a section of
     // their own rather than being buried in a wrap-up. The rest of the old
@@ -590,7 +652,11 @@ serve(async (req) => {
         .filter(Boolean);
       return `${owner}: ${(wish.title ?? wish.description).slice(0, 90)}${granters.length ? ` — thanks ${granters.join(', ')}` : ''}`;
     });
-    if (grantedLines.length > 0) sections.push({ title: 'Wishes granted 🌟', lines: grantedLines });
+    if (grantedLines.length > 0) sections.push({
+      title: 'Wishes granted 🌟',
+      lines: grantedLines,
+      source_label: 'Meeting-day wish activity',
+    });
 
     const narrative = summaryText;
 
@@ -601,14 +667,43 @@ serve(async (req) => {
       // Live notes supersede the apply nag; an already-applied import keeps its badge.
       import_status: previous.import_status === 'applied' ? 'applied' : 'live',
       summary: narrative,
-      decisions: (previous.decisions as string[] | undefined) ?? [],
+      // A live seal never upgrades derived activity into a verified decision.
+      // Keep reviewed imported decisions only when notes were explicitly
+      // applied; otherwise start empty instead of carrying an older draft.
+      decisions: previous.import_status === 'applied'
+        ? (previous.decisions as string[] | undefined) ?? []
+        : [],
       details,
       wishes_surfaced: (previous.wishes_surfaced as unknown[] | undefined) ?? [],
       board_posts_created: threads,
+      // Preserve the historical meaning of this counter: assignment rows,
+      // rather than unique task descriptions. Consumers already show it as a
+      // count of created action items. The group count is the honest number
+      // used by the human-readable "Who takes what" section.
       action_items_created: todos.length,
+      action_item_group_count: todoGroups.size,
+      action_item_assignments_seen: todos.length,
       events_created: events.length,
       live_sealed_at: new Date().toISOString(),
       sections,
+      provenance: {
+        kind: 'automatic_activity_record',
+        meeting_date: date,
+        generated_from: [
+          'meeting_helper_notes',
+          'meeting_day_app_activity',
+          'current_cycle_check_ins',
+          'saved_meeting_day_todos',
+        ],
+        transcript_used: false,
+        // Applying suggested artifacts does not prove a decision was made in
+        // the room. A future explicit review action may set this timestamp;
+        // until then the UI must keep calling these unverified.
+        decisions_verified: Boolean(previous.decisions_verified_at),
+        check_in_period: responsePeriod,
+        check_in_response_count: checkIns.length,
+        community_member_count: memberNames.size,
+      },
     };
 
     let meetingId = existing?.id ?? null;
