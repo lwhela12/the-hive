@@ -28,6 +28,22 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-21-nics-mini-workouts',
+    date: '2026-08-21',
+    title: "Nic's Mini Workouts has a board",
+    detail: 'Short workout clips from Nic, a thread each. Try one and tell her how it went.',
+    href: { pathname: '/board' },
+    action: 'Open Boards',
+  },
+  {
+    id: '2026-08-21-project-hail-mary',
+    date: '2026-08-21',
+    title: 'Project Hail Mary joins Page to Screen',
+    detail: 'In the queue with the others. A lighter one than the rest of that board.',
+    href: { pathname: '/board' },
+    action: 'Open Boards',
+  },
+  {
     id: '2026-08-21-a-deleted-wish-can-come-back',
     date: '2026-08-21',
     title: 'Deleting a wish can be undone',
