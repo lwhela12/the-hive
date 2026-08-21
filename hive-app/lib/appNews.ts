@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-21-the-creed-reads-like-a-creed',
+    date: '2026-08-21',
+    title: 'The Creed has three new lines, and reads like a list again',
+    detail: 'Always be curious, lead with love, and don\u2019t take it personally have joined the promises. New members now read the real creed at the door instead of a one-line summary.',
+    href: { pathname: '/board' },
+    action: 'Read the creed',
+  },
+  {
     id: '2026-08-21-nics-mini-workouts',
     date: '2026-08-21',
     title: "Nic's Mini Workouts has a board",

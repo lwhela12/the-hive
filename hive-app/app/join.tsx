@@ -14,9 +14,8 @@ import { ComposerBar } from '../components/ui/ComposerBar';
 import { acceptCommunityInvite } from '../components/ui/PendingInviteDoor';
 import {
   CREED_AGREE_LABEL,
-  CREED_BOARD_NAME,
   CREED_FALLBACK,
-  CREED_POST_TITLE,
+  parseCreed,
 } from '../lib/creed';
 import { startHiveTour } from '../lib/hooks/useTourMarks';
 import { confirmAction, showAlert } from '../lib/showAlert';
@@ -436,22 +435,12 @@ export default function JoinScreen() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data: boards } = await supabase
-        .from('board_categories')
-        .select('id')
-        .eq('name', CREED_BOARD_NAME)
-        .limit(1);
-      const boardId = ((boards ?? []) as { id: string }[])[0]?.id;
-      if (!boardId) return;
-      const { data: page } = await supabase
-        .from('board_posts')
-        .select('content')
-        .eq('category_id', boardId)
-        .eq('title', CREED_POST_TITLE)
-        .is('archived_at', null)
-        .limit(1);
-      const text = ((page ?? []) as { content: string }[])[0]?.content;
-      if (!cancelled && text) setCreed(text);
+      // Through `hive_creed()`, not the boards table. Somebody standing at an
+      // invitation is not a member of anything yet, and board reads want
+      // membership — so the old query here returned nothing every time and
+      // every joiner read the fallback instead of the creed (migration 201).
+      const { data: text } = await (supabase as any).rpc('hive_creed');
+      if (!cancelled && typeof text === 'string' && text.trim()) setCreed(text);
     })().catch(() => { /* the fallback below covers it */ });
     return () => { cancelled = true; };
   }, []);
@@ -657,12 +646,58 @@ export default function JoinScreen() {
               nestedScrollEnabled
               showsVerticalScrollIndicator
             >
-              <Text
-                style={{ fontFamily: 'Lato_400Regular', lineHeight: 22 }}
-                className="text-charcoal text-[15px]"
-              >
-                {(creed ?? CREED_FALLBACK).replace(/\*\*/g, '').replace(/\*/g, '')}
-              </Text>
+              {/* Thirteen promises, drawn as thirteen promises. This printed
+                  the whole page as one block with the asterisks stripped out,
+                  which is why Nat read it as "one long sentence" (2026-08-21). */}
+              {parseCreed(creed ?? CREED_FALLBACK).map((line, index) => {
+                if (line.kind === 'aside') {
+                  return (
+                    <Text
+                      key={index}
+                      style={{ fontFamily: 'Lato_400Regular' }}
+                      className="text-charcoal/50 text-[13px] italic mb-3"
+                    >
+                      {line.text}
+                    </Text>
+                  );
+                }
+
+                if (line.kind === 'note') {
+                  return (
+                    <Text
+                      key={index}
+                      style={{ fontFamily: 'Lato_400Regular', lineHeight: 19 }}
+                      className="text-charcoal/50 text-[12.5px] mt-3"
+                    >
+                      {line.text}
+                    </Text>
+                  );
+                }
+
+                return (
+                  <View key={index} className="flex-row mb-3">
+                    <Text style={{ color: inviteAccent, lineHeight: 22 }} className="text-[15px] mr-2">
+                      •
+                    </Text>
+                    <View className="flex-1">
+                      <Text
+                        style={{ fontFamily: 'Lato_700Bold', lineHeight: 22 }}
+                        className="text-charcoal text-[15px]"
+                      >
+                        {line.title}
+                      </Text>
+                      {line.detail ? (
+                        <Text
+                          style={{ fontFamily: 'Lato_400Regular', lineHeight: 20 }}
+                          className="text-charcoal/70 text-[14px]"
+                        >
+                          {line.detail}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                );
+              })}
             </ScrollView>
 
             {!creedOpen && (
