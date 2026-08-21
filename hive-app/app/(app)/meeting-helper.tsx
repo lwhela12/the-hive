@@ -867,7 +867,7 @@ export default function MeetingHelperScreen() {
     todoPeople: number;
     wishComments: number;
     granted: string[];
-    threads: string[];
+    boardPosts: string[];
   } | null>(null);
   const [deckRefreshing, setDeckRefreshing] = useState(false);
   // Wrap-Up "Seal tonight's notes" — composes the live app activity into a
@@ -1138,7 +1138,7 @@ export default function MeetingHelperScreen() {
         const dayStart = new Date();
         dayStart.setHours(0, 0, 0, 0);
         const sinceToday = dayStart.toISOString();
-        const [eventsRes, todosRes, commentsRes, grantedRes, threadsRes] = await Promise.all([
+        const [eventsRes, todosRes, commentsRes, grantedRes, boardPostsRes] = await Promise.all([
           supabase.from('events').select('title').eq('community_id', communityId).gte('created_at', sinceToday),
           supabase.from('action_items').select('assigned_to').eq('community_id', communityId).gte('created_at', sinceToday),
           (supabase as any).from('wish_comments').select('id').eq('community_id', communityId).is('archived_at', null).gte('created_at', sinceToday),
@@ -1154,7 +1154,7 @@ export default function MeetingHelperScreen() {
           granted: ((grantedRes.data ?? []) as { title: string | null; description: string }[]).map(
             (row) => (row.title ?? row.description).slice(0, 60)
           ),
-          threads: ((threadsRes.data ?? []) as { title: string | null }[]).map((row) => row.title ?? '').filter(Boolean),
+          boardPosts: ((boardPostsRes.data ?? []) as { title: string | null }[]).map((row) => row.title ?? '').filter(Boolean),
         });
       })().catch((error) => console.warn('Could not load tonight recap', error)),
 
@@ -3673,7 +3673,7 @@ export default function MeetingHelperScreen() {
         tonightRecap.todoCount > 0 ||
         tonightRecap.wishComments > 0 ||
         tonightRecap.granted.length > 0 ||
-        tonightRecap.threads.length > 0) ? (
+        tonightRecap.boardPosts.length > 0) ? (
         <View
           style={{
             marginTop: sz(26, 14),
@@ -3709,9 +3709,9 @@ export default function MeetingHelperScreen() {
               🌟 Granted: {tonightRecap.granted.join(' · ')}
             </Text>
           ) : null}
-          {tonightRecap.threads.length > 0 ? (
+          {tonightRecap.boardPosts.length > 0 ? (
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(20, 13), lineHeight: sz(30, 19), color: CHARCOAL }}>
-              📌 New threads: {tonightRecap.threads.join(' · ')}
+              📌 New board posts: {tonightRecap.boardPosts.join(' · ')}
             </Text>
           ) : null}
         </View>

@@ -1,10 +1,11 @@
-import { Image, View, Text, useWindowDimensions } from 'react-native';
+import { useState } from 'react';
+import { Image, Pressable, View, Text, useWindowDimensions } from 'react-native';
 import { headerForSection } from '../../lib/newsletterHeaders';
 
 export interface SummarySection {
   title: string;
   lines: string[];
-  /** Where these lines came from. Meeting summaries set it; newsletters omit it. */
+  /** Stored audit provenance. The meeting reader deliberately keeps it out of the content flow. */
   source_label?: string;
 }
 
@@ -34,7 +35,112 @@ export function SummarySections({
   art?: boolean;
 }) {
   const { width } = useWindowDimensions();
+  const [expandedMeetingSections, setExpandedMeetingSections] = useState<Set<string>>(() => new Set());
   if (!sections || sections.length === 0) return null;
+
+  // A meeting recap is a working read, not a newsletter. Keep it flat and
+  // scannable: no paper cards, decorative diamonds, centered display type, or
+  // implementation-source labels between the reader and the actual meeting.
+  // Check-in context remains available, but starts folded because the work the
+  // meeting put in motion is the reason this page exists.
+  if (!art) {
+    return (
+      <View>
+        {sections.map((section) => {
+          const canCollapse = section.title === 'What people brought into the meeting';
+          const expanded = !canCollapse || expandedMeetingSections.has(section.title);
+          const heading = (
+            <>
+              <Text
+                style={{
+                  fontFamily: 'Lato_700Bold',
+                  fontSize: 18,
+                  lineHeight: 24,
+                  color: '#2d2d2d',
+                  flex: 1,
+                }}
+              >
+                {section.title}
+              </Text>
+              {canCollapse ? (
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6a2f' }}>
+                  {expanded ? 'Hide' : 'Read'}
+                </Text>
+              ) : null}
+            </>
+          );
+
+          return (
+            <View
+              key={section.title}
+              style={{
+                paddingBottom: 18,
+                marginBottom: 20,
+                borderBottomWidth: 1,
+                borderBottomColor: '#e8e1d5',
+              }}
+            >
+              {canCollapse ? (
+                <Pressable
+                  onPress={() => setExpandedMeetingSections((current) => {
+                    const next = new Set(current);
+                    if (next.has(section.title)) next.delete(section.title);
+                    else next.add(section.title);
+                    return next;
+                  })}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded }}
+                  accessibilityLabel={`${expanded ? 'Hide' : 'Read'} ${section.title}`}
+                  className="flex-row items-center gap-4"
+                >
+                  {heading}
+                </Pressable>
+              ) : (
+                <View className="flex-row items-center">{heading}</View>
+              )}
+
+              {expanded ? (
+                <View style={{ marginTop: 10 }}>
+                  {section.lines.map((line, index) => {
+                    const indented = line.startsWith('    ');
+                    const text = line.trim();
+                    const lead = !indented ? text.match(/^([^:]{1,32}):\s+(.+)$/) : null;
+                    return (
+                      <View
+                        key={index}
+                        className="flex-row"
+                        style={{ paddingLeft: indented ? 18 : 0, marginBottom: 7 }}
+                      >
+                        {!indented ? (
+                          <Text style={{ color: '#b58a39', fontSize: 14, lineHeight: 22, marginRight: 9 }}>•</Text>
+                        ) : null}
+                        <Text
+                          style={{
+                            fontFamily: 'Lato_400Regular',
+                            fontSize: indented ? 14 : 15,
+                            lineHeight: 22,
+                            color: indented ? '#6f6559' : '#3f3a33',
+                            flex: 1,
+                          }}
+                        >
+                          {lead ? (
+                            <>
+                              <Text style={{ fontFamily: 'Lato_700Bold', color: '#2d2d2d' }}>{lead[1]}: </Text>
+                              {lead[2]}
+                            </>
+                          ) : text}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+    );
+  }
 
   // The art is a wide band; it has to know how much room it actually has or it
   // either overflows the card or floats in a box three times its height.

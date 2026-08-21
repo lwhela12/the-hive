@@ -244,6 +244,8 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   const [correctionDraft, setCorrectionDraft] = useState('');
   const [savingCorrection, setSavingCorrection] = useState(false);
   const [rebuildingSummary, setRebuildingSummary] = useState(false);
+  const [summaryToolsOpen, setSummaryToolsOpen] = useState(false);
+  const [taskChecklistOpen, setTaskChecklistOpen] = useState(false);
 
   const { profile, communityId, communityRole } = useAuth();
 
@@ -408,6 +410,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
 
   const beginCorrection = () => {
     setCorrectionDraft(manualCorrection?.text ?? automaticSummaryAsText());
+    setSummaryToolsOpen(false);
     setCorrectionOpen(true);
   };
 
@@ -641,6 +644,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
 
       await reloadMeeting();
       await loadActionItems();
+      setSummaryToolsOpen(false);
       setCorrectionOpen(false);
       showAlert(
         'Summary rebuilt',
@@ -890,14 +894,13 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         </View>
         {isHiveAdmin && !correctionOpen && (
           <Pressable
-            onPress={beginCorrection}
+            onPress={() => setSummaryToolsOpen((open) => !open)}
             accessibilityRole="button"
-            accessibilityLabel={manualCorrection ? 'Edit corrected meeting summary' : 'Fix meeting summary'}
-            className="ml-3 px-3 py-2 rounded-lg border border-honey-300 bg-honey-50 active:bg-honey-100"
+            accessibilityLabel="Summary options"
+            accessibilityState={{ expanded: summaryToolsOpen }}
+            className="ml-3 px-3 py-2 rounded-lg active:bg-gray-100"
           >
-            <Text className="text-honey-800 font-semibold text-sm">
-              {manualCorrection ? 'Edit correction' : 'Fix summary'}
-            </Text>
+            <Text className="text-gray-600 font-semibold text-sm">Summary options</Text>
           </Pressable>
         )}
       </View>
@@ -911,28 +914,38 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           </View>
         )}
 
-        {isHiveAdmin && !correctionOpen && (
-          <View className="mb-6 bg-honey-50 border border-honey-200 rounded-xl p-4">
-            <Text className="text-hive-dark font-semibold">Summary repair</Text>
-            <Text className="text-honey-800 mt-1 leading-5">
-              Rebuild from the to-dos the meeting actually left behind, with saved events, board activity,
-              and Meeting Helper notes as supporting context. The transcript is not used and the current
-              version stays in history.
+        {isHiveAdmin && summaryToolsOpen && !correctionOpen && (
+          <View className="mb-5 border border-gray-200 rounded-xl p-3 bg-gray-50">
+            <Text className="text-gray-800 font-semibold">Summary options</Text>
+            <Text className="text-label text-sm mt-1">
+              Nothing is waiting for you to apply. Use these only when the summary needs to change.
             </Text>
-            <Pressable
-              onPress={confirmRebuild}
-              disabled={rebuildingSummary}
-              accessibilityRole="button"
-              accessibilityLabel="Rebuild summary from current meeting records"
-              accessibilityState={{ disabled: rebuildingSummary }}
-              className={`self-start mt-3 px-4 py-3 rounded-lg border border-honey-300 bg-white active:bg-honey-100 ${
-                rebuildingSummary ? 'opacity-60' : ''
-              }`}
-            >
-              <Text className="text-honey-800 font-semibold">
-                {rebuildingSummary ? 'Rebuilding…' : 'Rebuild from current records'}
-              </Text>
-            </Pressable>
+            <View className="flex-row flex-wrap gap-2 mt-3">
+              <Pressable
+                onPress={beginCorrection}
+                accessibilityRole="button"
+                accessibilityLabel={manualCorrection ? 'Edit corrected meeting summary' : 'Edit meeting summary wording'}
+                className="px-3 py-2 rounded-lg border border-gray-300 bg-white active:bg-gray-100"
+              >
+                <Text className="text-gray-700 font-semibold text-sm">
+                  {manualCorrection ? 'Edit correction' : 'Edit wording'}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={confirmRebuild}
+                disabled={rebuildingSummary}
+                accessibilityRole="button"
+                accessibilityLabel="Rebuild summary from current meeting records"
+                accessibilityState={{ disabled: rebuildingSummary }}
+                className={`px-3 py-2 rounded-lg border border-gray-300 bg-white active:bg-gray-100 ${
+                  rebuildingSummary ? 'opacity-60' : ''
+                }`}
+              >
+                <Text className="text-gray-700 font-semibold text-sm">
+                  {rebuildingSummary ? 'Rebuilding…' : 'Rebuild from saved records'}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         )}
 
@@ -1003,24 +1016,6 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
             <View className="bg-gray-50 rounded-xl p-4">
               <Text className="text-gray-800 leading-6">{manualCorrection.text}</Text>
             </View>
-          </View>
-        )}
-
-        {!manualCorrection && parsedSummary.provenance?.kind === 'automatic_activity_record' && (
-          <View className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
-            <Text className="text-amber-900 font-semibold">Automatically assembled activity record</Text>
-            <Text className="text-amber-800 mt-1 leading-5">
-              Built from Meeting Helper notes, meeting-day app activity, saved meeting-day to-dos, and{' '}
-              {parsedSummary.provenance.check_in_response_count ?? 0} current-cycle check-in
-              {(parsedSummary.provenance.check_in_response_count ?? 0) === 1 ? '' : 's'}.
-              {' '}The transcript was not used, and automatically derived activity is not a verified in-meeting decision.
-            </Text>
-            {typeof parsedSummary.provenance.community_member_count === 'number' && (
-              <Text className="text-amber-700 mt-2 text-sm">
-                Check-in coverage: {parsedSummary.provenance.check_in_response_count ?? 0} of{' '}
-                {parsedSummary.provenance.community_member_count} current members. Anyone without a current-cycle check-in is left out rather than filled from an older cycle.
-              </Text>
-            )}
           </View>
         )}
 
@@ -1141,9 +1136,15 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
 
         {/* The deck in outline — same renderer the newsletter draft uses. */}
         {!manualCorrection && parsedSummary.sections && parsedSummary.sections.length > 0 && (
-          <View className="mb-6">
+          <View className="mb-2">
             <SummarySections sections={parsedSummary.sections} />
           </View>
+        )}
+
+        {!manualCorrection && parsedSummary.provenance?.kind === 'automatic_activity_record' && (
+          <Text className="text-label text-xs mb-6">
+            Built from saved Meeting Helper notes and meeting records · Transcript not used
+          </Text>
         )}
 
         {!manualCorrection && isLegacy && parsedSummary.summary && (
@@ -1315,41 +1316,57 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
 
         {actionItems.length > 0 && (
           <View className="mb-6">
-            <Text className="text-lg font-semibold text-gray-700 mb-2">
-              Action Items ({actionItems.filter((i) => !i.completed).length} remaining)
-            </Text>
-            <View className="bg-gray-50 rounded-xl overflow-hidden">
-              {actionItems.map((item) => (
-                <Pressable
-                  key={item.id}
-                  onPress={() => toggleComplete(item)}
-                  className={`flex-row items-center p-4 border-b border-gray-200 last:border-b-0 ${
-                    item.completed ? 'opacity-60' : ''
-                  }`}
-                >
-                  <View
-                    className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center ${
-                      item.completed ? 'bg-honey-500 border-honey-500' : 'border-gray-400'
+            <Pressable
+              onPress={() => setTaskChecklistOpen((open) => !open)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: taskChecklistOpen }}
+              accessibilityLabel={`${taskChecklistOpen ? 'Hide' : 'Review'} individual task assignments`}
+              className="flex-row items-center justify-between py-2"
+            >
+              <View className="flex-1">
+                <Text className="font-semibold text-gray-700">Individual task assignments</Text>
+                <Text className="text-label text-sm mt-1">
+                  {actionItems.filter((i) => !i.completed).length} remaining · already included in the recap above
+                </Text>
+              </View>
+              <Text className="text-honey-700 font-semibold ml-4">
+                {taskChecklistOpen ? 'Hide' : 'Review'}
+              </Text>
+            </Pressable>
+            {taskChecklistOpen ? (
+              <View className="bg-gray-50 rounded-xl overflow-hidden mt-2">
+                {actionItems.map((item) => (
+                  <Pressable
+                    key={item.id}
+                    onPress={() => toggleComplete(item)}
+                    className={`flex-row items-center p-4 border-b border-gray-200 last:border-b-0 ${
+                      item.completed ? 'opacity-60' : ''
                     }`}
                   >
-                    {item.completed && <Text className="text-white text-xs">✓</Text>}
-                  </View>
-                  <View className="flex-1">
-                    <Text className={`text-gray-800 ${item.completed ? 'line-through' : ''}`}>
-                      {item.description}
-                    </Text>
-                    {item.assigned_user && (
-                      <Text className="text-sm text-label mt-1">
-                        Assigned to: {item.assigned_user.name}
+                    <View
+                      className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center ${
+                        item.completed ? 'bg-honey-500 border-honey-500' : 'border-gray-400'
+                      }`}
+                    >
+                      {item.completed && <Text className="text-white text-xs">✓</Text>}
+                    </View>
+                    <View className="flex-1">
+                      <Text className={`text-gray-800 ${item.completed ? 'line-through' : ''}`}>
+                        {item.description}
                       </Text>
-                    )}
-                    {item.due_date && (
-                      <Text className="text-sm text-label">Due: {formatDateShort(item.due_date)}</Text>
-                    )}
-                  </View>
-                </Pressable>
-              ))}
-            </View>
+                      {item.assigned_user && (
+                        <Text className="text-sm text-label mt-1">
+                          Assigned to: {item.assigned_user.name}
+                        </Text>
+                      )}
+                      {item.due_date && (
+                        <Text className="text-sm text-label">Due: {formatDateShort(item.due_date)}</Text>
+                      )}
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
           </View>
         )}
 

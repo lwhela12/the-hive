@@ -11,7 +11,7 @@ import {
 
 // "The meeting notes write themselves": compose everything that happened in
 // the app on meeting day (events penciled in, to-dos fanned out, wish notes,
-// wishes granted, threads opened) into a real meeting record on the Meetings
+// and wishes granted) into a real meeting record on the Meetings
 // tab — no transcription, no Apply Notes required. Called from the Wrap-Up
 // slide's Seal button, or with the service key (daily cron auto-seal).
 
@@ -29,7 +29,7 @@ interface SealMeetingRequest {
 type SummarySection = {
   title: string;
   lines: string[];
-  /** Short, user-facing provenance shown directly on the summary card. */
+  /** Stored audit provenance; the reader keeps this out of the recap itself. */
   source_label: string;
 };
 
@@ -258,7 +258,7 @@ serve(async (req) => {
       return errorResponse('That meeting does not match this HIVE and date.', 409);
     }
 
-    const [eventsRes, todosRes, notesRes, grantedRes, threadsRes] = await Promise.all([
+    const [eventsRes, todosRes, notesRes, grantedRes] = await Promise.all([
       supabaseAdmin
         .from('events')
         .select('title, event_date')
@@ -288,13 +288,6 @@ serve(async (req) => {
         .eq('status', 'fulfilled')
         .gte('fulfilled_at', startIso).lt('fulfilled_at', endIso)
         .is('deleted_at', null),
-      supabaseAdmin
-        .from('board_posts')
-        // The board name comes along: "Comedy" means nothing without
-        // "Favorite Movies" in front of it (Nat 2026-07-25).
-        .select('title, category:board_categories!category_id(name)')
-        .eq('community_id', communityId)
-        .gte('created_at', startIso).lt('created_at', endIso),
     ]);
 
     const linkedTodosRes = existing
@@ -327,11 +320,6 @@ serve(async (req) => {
       user?: { name?: string } | null;
       granters?: { granter?: { name?: string } | null }[];
     }[];
-    const threadRows = ((threadsRes.data ?? []) as any[])
-      .filter((row) => row.title)
-      .map((row) => ({ title: row.title as string, board: (row.category?.name ?? '') as string }));
-    const threads = threadRows.map((row) => row.title);
-
     // The check-ins are the other half of the meeting: what people said they're
     // working on, stuck on, and focused on. They're what makes a recap readable
     // to someone who wasn't there, rather than a list of clicks.
@@ -479,14 +467,13 @@ serve(async (req) => {
       const label = (wish.title ?? wish.description).slice(0, 80);
       details.push(`🌟 Granted: ${label}${granters.length ? ` (thanks ${granters.join(', ')})` : ''}`);
     });
-    threads.forEach((title) => details.push(`📌 New thread: ${title}`));
 
     /**
      * "Nothing happened" has to mean nothing was KEPT — not nothing was
      * clicked.
      *
      * `details` is app activity: an event penciled in, a to-do handed out, a
-     * note on a wish, a thread opened. A meeting can have none of that and
+     * note on a wish. A meeting can have none of that and
      * still be a whole meeting, and on 2026-08-19 one was: Nat recorded the
      * room, the transcript came back from AssemblyAI and landed on the row,
      * and Seal answered "Hmm, try sealing again" forever — because sealing
@@ -516,7 +503,6 @@ serve(async (req) => {
       todoGroups.size ? `${todoGroups.size} to-do${todoGroups.size === 1 ? '' : 's'} handed out across ${todoPeople} list${todoPeople === 1 ? '' : 's'}` : null,
       notes.length ? `${notes.length} wish note${notes.length === 1 ? '' : 's'}` : null,
       granted.length ? `${granted.length} wish${granted.length === 1 ? '' : 'es'} granted` : null,
-      threads.length ? `${threads.length} thread${threads.length === 1 ? '' : 's'} opened` : null,
     ].filter(Boolean).join(' · ');
     const recordVerb = isRebuild ? 'Rebuilt activity record' : 'Automatic activity record';
     const summaryText = tally
@@ -569,17 +555,14 @@ serve(async (req) => {
 
     const sections: SummarySection[] = [];
 
-    // News and App updates are separate headers — they're different kinds of
-    // announcement and were reading as one long list (Nat 2026-07-25). New
-    // board threads join the news: they're things to tell people about.
-    const newsLines = [
-      ...bulletsFrom(deckNotes.news),
-      ...threadRows.map((row) => (row.board ? `${row.board} → ${row.title}` : `New thread: ${row.title}`)),
-    ];
+    // This section is the Meeting Helper's News from Nat field, verbatim in
+    // bullet form. A board post created on the same date is not automatically
+    // news from Nat and must never be merged into her authored agenda.
+    const newsLines = bulletsFrom(deckNotes.news);
     if (newsLines.length > 0) sections.push({
       title: 'News from Nat',
       lines: newsLines,
-      source_label: 'Meeting Helper notes + meeting-day threads',
+      source_label: 'Meeting Helper · News from Nat',
     });
 
     const appLines = bulletsFrom(deckNotes.appnews);
@@ -733,6 +716,20 @@ serve(async (req) => {
       source_label: 'Meeting-day wish activity',
     });
 
+    // Reading order follows the reason somebody opened a recap: what the room
+    // put in motion first, then dates and authored updates, with pre-meeting
+    // check-in context last. This is intentionally not the deck's slide order.
+    const sectionOrder = new Map([
+      ['What the meeting put in motion', 0],
+      ['Plan the Meet Ups', 1],
+      ['News from Nat', 2],
+      ['App updates', 3],
+      ['Treasurer', 4],
+      ['Wishes granted 🌟', 5],
+      ['What people brought into the meeting', 6],
+    ]);
+    sections.sort((a, b) => (sectionOrder.get(a.title) ?? 99) - (sectionOrder.get(b.title) ?? 99));
+
     const narrative = summaryText;
 
     const summaryPayload = {
@@ -750,7 +747,7 @@ serve(async (req) => {
         : [],
       details,
       wishes_surfaced: (previous.wishes_surfaced as unknown[] | undefined) ?? [],
-      board_posts_created: threads,
+      board_posts_created: [],
       // Preserve the historical meaning of this counter: assignment rows,
       // rather than unique task descriptions. Consumers already show it as a
       // count of created action items. The group count is the honest number
@@ -774,7 +771,6 @@ serve(async (req) => {
         generated_from: [
           'surviving_meeting_todos',
           'meeting_day_events',
-          'meeting_day_board_activity',
           'meeting_helper_notes',
           'current_cycle_check_ins_context',
         ],
@@ -864,7 +860,6 @@ serve(async (req) => {
         excludedRoutingPlaceholders: todos.length - keptTodos.length,
         wishNotes: notes.length,
         granted: granted.length,
-        threads: threads.length,
       },
     });
   } catch (error) {
