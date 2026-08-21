@@ -31,7 +31,7 @@ export const CREED_POST_TITLE = 'The HIVE Creed';
  * Somebody who agreed in August agreed to the August words. When the creed is
  * rewritten this moves, and what people accepted stays answerable.
  */
-export const CREED_VERSION = '2026-08-21';
+export const CREED_VERSION = '2026-08-21b';
 
 /**
  * What somebody reads if the creed page will not load.
@@ -51,17 +51,14 @@ export const CREED_FALLBACK = [
   '**Always be curious.**',
   '**Help when you can.**',
   '**Say thank you more than feels necessary.**',
-  '**Welcome the person who brings bad news.**',
   "**Don't take it personally.**",
   "**What's said here stays here.**",
   '**Come as you are.**',
   '**Lead with love.**',
   '**Credit the person.**',
-  '**If it makes you money, share the wealth.**',
+  '**If something here makes you money, share the wealth.**',
   '**Campsite rules.**',
   'Leave this place, and everyone in it, better than you found it.',
-  '',
-  '**Break the creed and you will be asked to leave.**',
 ].join('\n');
 
 /* ----------------------------------------------------------- reading it out */
