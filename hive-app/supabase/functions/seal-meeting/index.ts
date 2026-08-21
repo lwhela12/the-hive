@@ -61,7 +61,10 @@ function surveyDueDateMatchesMeeting(dueDate: string | null | undefined, meeting
 // Same routing-token stripping as lib/actionItemDisplay.ts on the client.
 function cleanJotText(description: string) {
   let text = description.trim();
-  const mentionMatch = text.match(/^((?:@[\w.-]+[,\s]+)+)/);
+  // Meeting Helper fan-outs have used both "@meg @izzy do this" and
+  // "and @meg and @izzy do this". Those tokens decide who receives the row;
+  // they are not part of the task people should read afterward.
+  const mentionMatch = text.match(/^((?:(?:and\s+)?@[\w.-]+(?:[,\s]+|$))+)/i);
   if (mentionMatch) text = text.slice(mentionMatch[0].length).trim();
   const reMatch = text.match(/\s*\(re:\s*([^)]+)\)$/i);
   if (reMatch) text = text.slice(0, text.length - reMatch[0].length).trim();
