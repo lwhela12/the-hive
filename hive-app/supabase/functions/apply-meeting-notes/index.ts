@@ -840,8 +840,8 @@ async function resolveActionItemDeepLink(
         .eq('community_id', communityId)
         .eq('user_id', relatedUserId)
         .eq('status', 'public')
-        .eq('is_active', true
-        .is('deleted_at', null));
+        .eq('is_active', true)
+        .is('deleted_at', null);
 
       if (error) {
         console.error('Failed to load wishes for action item deep link:', error);

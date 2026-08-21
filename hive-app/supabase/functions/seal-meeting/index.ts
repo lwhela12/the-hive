@@ -250,8 +250,8 @@ serve(async (req) => {
         .select('title, description, user:profiles!user_id(name), granters:wish_granters(granter:profiles!granter_id(name))')
         .eq('community_id', communityId)
         .eq('status', 'fulfilled')
-        .gte('fulfilled_at', startIso).lt('fulfilled_at', endIso
-        .is('deleted_at', null)),
+        .gte('fulfilled_at', startIso).lt('fulfilled_at', endIso)
+        .is('deleted_at', null),
       supabaseAdmin
         .from('board_posts')
         // The board name comes along: "Comedy" means nothing without
@@ -293,8 +293,8 @@ serve(async (req) => {
       supabaseAdmin.from('wishes')
         .select('title, description, user_id, is_spotlight, created_at')
         .eq('community_id', communityId).eq('status', 'public')
-        .order('created_at', { ascending: false }
-        .is('deleted_at', null)),
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false }),
     ]);
     const deckNotes = ((notesRow.data as any)?.meeting_helper_notes ?? {}) as Record<string, string>;
     // With three HIVEs, a recap has to say whose meeting it was. Legacy spellings

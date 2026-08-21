@@ -145,8 +145,8 @@ async function fetchUserContext(
       .from('wishes')
       .select('id, description, status, is_active')
       .eq('user_id', userId)
-      .or(`community_id.eq.${communityId},share_scope.in.(all_hives,public)`
-      .is('deleted_at', null)),
+      .or(`community_id.eq.${communityId},share_scope.in.(all_hives,public)`)
+      .is('deleted_at', null),
     supabase
       .from('action_items')
       .select('description, due_date, completed')
@@ -197,8 +197,8 @@ async function fetchCommunityContext(
       .eq('community_id', communityId)
       .eq('status', 'public')
       .eq('is_active', true)
-      .limit(10
-      .is('deleted_at', null)),
+      .is('deleted_at', null)
+      .limit(10),
     supabase
       .from('skills')
       .select('description, user:profiles(name)')

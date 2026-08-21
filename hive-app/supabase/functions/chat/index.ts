@@ -1254,8 +1254,8 @@ async function markWishesFulfilled(
     .select('id, description, status, user:profiles!wishes_user_id_fkey(name)')
     .eq('community_id', communityId)
     .neq('status', 'fulfilled')
-    .limit(100
-    .is('deleted_at', null));
+    .is('deleted_at', null)
+    .limit(100);
 
   const ownerQuery = normalizedNameQuery(action.owner_name);
   const tokens = textQuery.split(' ').filter((token) => token.length > 2);
@@ -1636,8 +1636,8 @@ serve(async (req) => {
               .select('*')
               .eq('user_id', userId)
               .eq('community_id', communityId)
-              .order('created_at', { ascending: false }
-              .is('deleted_at', null));
+              .is('deleted_at', null)
+              .order('created_at', { ascending: false });
             result = JSON.stringify(data || []);
             break;
           }
@@ -1658,8 +1658,8 @@ serve(async (req) => {
               .select('*, user:profiles!wishes_user_id_fkey(name)')
               .eq('status', 'public')
               .eq('is_active', true)
-              .eq('community_id', communityId
-              .is('deleted_at', null));
+              .eq('community_id', communityId)
+              .is('deleted_at', null);
             result = JSON.stringify(data || []);
             break;
           }
@@ -2136,8 +2136,8 @@ serve(async (req) => {
               .eq('community_id', communityId)
               .or(`status.in.(public,fulfilled),user_id.eq.${userId}`)
               .order('created_at', { ascending: false })
-              .limit(wishFetchLimit
-              .is('deleted_at', null));
+              .is('deleted_at', null)
+              .limit(wishFetchLimit);
             if (status) wishQuery = wishQuery.eq('status', status);
 
             const { data: wishes, error: wishesError } = await wishQuery;

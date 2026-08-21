@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { showAlert } from '../../lib/showAlert';
 import { formatDateLong, formatDateShort } from '../../lib/dateUtils';
@@ -101,6 +101,21 @@ interface ParsedSummary {
   action_items?: ProposedActionItem[];
   events?: ProposedEvent[];
   board_suggestions?: ProposedBoardPost[];
+  /**
+   * A human correction wins over the automatic recap everywhere members read
+   * it. The generated fields stay beside it, untouched, so fixing a bad recap
+   * never destroys the source version.
+   */
+  manual_correction?: {
+    text: string;
+    corrected_at: string;
+    corrected_by: string;
+  };
+  manual_correction_history?: {
+    text: string;
+    corrected_at: string;
+    corrected_by: string;
+  }[];
 }
 
 // HD boards used to be proposed here too. They're gone everywhere now
@@ -225,6 +240,9 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [members, setMembers] = useState<SpeakerMember[]>([]);
   const [addingDesire, setAddingDesire] = useState<string | null>(null);
+  const [correctionOpen, setCorrectionOpen] = useState(false);
+  const [correctionDraft, setCorrectionDraft] = useState('');
+  const [savingCorrection, setSavingCorrection] = useState(false);
 
   const { profile, communityId, communityRole } = useAuth();
 
@@ -343,7 +361,54 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   };
 
   const parsedSummary = parseSummary(meeting.summary);
+  const manualCorrection = parsedSummary.manual_correction?.text?.trim()
+    ? parsedSummary.manual_correction
+    : null;
   const isLegacy = !parsedSummary.sections?.length;
+
+  /** Turn every old summary shape into one editable, human-readable draft. */
+  const automaticSummaryAsText = () => {
+    const blocks: string[] = [];
+
+    if (parsedSummary.summary?.trim()) blocks.push(parsedSummary.summary.trim());
+
+    for (const section of parsedSummary.sections ?? []) {
+      const lines = (section.lines ?? [])
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => `• ${line}`);
+      blocks.push([section.title.trim(), ...lines].filter(Boolean).join('\n'));
+    }
+
+    if (parsedSummary.decisions?.length) {
+      blocks.push(['Decisions', ...parsedSummary.decisions.map((line) => `• ${line.trim()}`)].join('\n'));
+    }
+
+    if (parsedSummary.wishes_surfaced?.length) {
+      blocks.push([
+        'Desires identified',
+        ...parsedSummary.wishes_surfaced.map((item) => `• ${item.person_name}: ${item.description}`),
+      ].join('\n'));
+    }
+
+    if (parsedSummary.insights_caught?.length) {
+      blocks.push([
+        'Worth keeping',
+        ...parsedSummary.insights_caught.map((item) => `• ${item.person_name}: ${item.insight}`),
+      ].join('\n'));
+    }
+
+    if (parsedSummary.details?.length) {
+      blocks.push(['Details', ...parsedSummary.details.map((line) => `• ${line.trim()}`)].join('\n'));
+    }
+
+    return blocks.filter(Boolean).join('\n\n');
+  };
+
+  const beginCorrection = () => {
+    setCorrectionDraft(manualCorrection?.text ?? automaticSummaryAsText());
+    setCorrectionOpen(true);
+  };
 
   const importStatus = parsedSummary.import_status;
   // A live deck writes its own record — there is nothing to review.
@@ -495,6 +560,60 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
       // An older meeting kept plain text here. Fall through.
     }
     return { ...parsedSummary };
+  };
+
+  /**
+   * Put a human-reviewed recap in front of the generated one without deleting
+   * either the generated fields or an earlier correction. This is deliberately
+   * an admin action: a shared meeting record should not turn into a wiki edit
+   * that any attendee can rewrite after the fact.
+   */
+  const saveCorrection = async () => {
+    const text = correctionDraft.trim();
+    if (!text || savingCorrection || !profile?.id || !isHiveAdmin) return;
+
+    setSavingCorrection(true);
+    try {
+      const base = storedSummaryBase();
+      const currentCorrection = parsedSummary.manual_correction;
+      const existingHistory = Array.isArray(parsedSummary.manual_correction_history)
+        ? parsedSummary.manual_correction_history
+        : [];
+      const history = currentCorrection?.text?.trim()
+        ? [...existingHistory, currentCorrection].slice(-20)
+        : existingHistory;
+      const correction = {
+        text,
+        corrected_at: new Date().toISOString(),
+        corrected_by: profile.id,
+      };
+
+      const { data: updated, error } = await supabase
+        .from('meetings')
+        .update({
+          summary: JSON.stringify({
+            ...base,
+            manual_correction: correction,
+            manual_correction_history: history,
+          }),
+        })
+        .eq('id', meeting.id)
+        .select('*')
+        .single();
+      if (error) throw error;
+
+      if (updated) {
+        setMeeting(updated as Meeting);
+        onMeetingUpdated?.(updated as Meeting);
+      }
+      setCorrectionOpen(false);
+      showAlert('Summary corrected', 'Members and Clive will now use your corrected recap. The automatic original is still preserved.');
+    } catch (error) {
+      console.error('Error correcting meeting summary:', error);
+      showAlert('Not saved', 'The corrected summary could not be saved just now. Please try again.');
+    } finally {
+      setSavingCorrection(false);
+    }
   };
 
   /**
@@ -694,7 +813,8 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   );
 
   const hasAnything = Boolean(
-    parsedSummary.sections?.length
+    manualCorrection
+    || parsedSummary.sections?.length
     || parsedSummary.summary
     || parsedSummary.decisions?.length
     || parsedSummary.details?.length
@@ -709,12 +829,24 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         <Pressable onPress={onBack} className="mr-4">
           <Text className="text-2xl">←</Text>
         </Pressable>
-        <View>
+        <View className="flex-1">
           <Text className="text-xl font-bold text-hive-dark">
             {normalizeHiveBrandText(parsedSummary.title) || 'Meeting Summary'}
           </Text>
           <Text className="text-label">{formatDateLong(meeting.date)}</Text>
         </View>
+        {isHiveAdmin && !correctionOpen && (
+          <Pressable
+            onPress={beginCorrection}
+            accessibilityRole="button"
+            accessibilityLabel={manualCorrection ? 'Edit corrected meeting summary' : 'Fix meeting summary'}
+            className="ml-3 px-3 py-2 rounded-lg border border-honey-300 bg-honey-50 active:bg-honey-100"
+          >
+            <Text className="text-honey-800 font-semibold text-sm">
+              {manualCorrection ? 'Edit correction' : 'Fix summary'}
+            </Text>
+          </Pressable>
+        )}
       </View>
 
       <ScrollView className="flex-1" contentContainerClassName="p-4">
@@ -726,7 +858,71 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           </View>
         )}
 
-        {parsedSummary.provenance?.kind === 'automatic_activity_record' && (
+        {correctionOpen && (
+          <View className="mb-6 bg-honey-50 border border-honey-200 rounded-xl p-4">
+            <Text className="text-lg font-semibold text-hive-dark">Correct this summary</Text>
+            <Text className="text-honey-800 mt-1 leading-5">
+              Write the recap members should trust. Saving this puts your version in front of the
+              automatic one everywhere in HIVE; the automatic original and transcript stay preserved.
+            </Text>
+            <TextInput
+              value={correctionDraft}
+              onChangeText={setCorrectionDraft}
+              multiline
+              textAlignVertical="top"
+              accessibilityLabel="Corrected meeting summary"
+              placeholder="Write what actually happened, what was decided, and what happens next."
+              className="mt-4 bg-white border border-honey-200 rounded-xl p-4 text-gray-800 leading-6"
+              style={{ minHeight: 280 }}
+            />
+            <View className="flex-row flex-wrap gap-3 mt-4">
+              <Pressable
+                onPress={() => void saveCorrection()}
+                disabled={savingCorrection || !correctionDraft.trim()}
+                className={`bg-honey-500 px-4 py-3 rounded-lg active:bg-honey-600 ${
+                  savingCorrection || !correctionDraft.trim() ? 'opacity-60' : ''
+                }`}
+              >
+                <Text className="text-white font-semibold">
+                  {savingCorrection ? 'Saving…' : 'Save corrected summary'}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setCorrectionOpen(false)}
+                disabled={savingCorrection}
+                className="px-4 py-3 rounded-lg border border-gray-300 bg-white active:bg-gray-50"
+              >
+                <Text className="text-gray-700 font-semibold">Cancel</Text>
+              </Pressable>
+              {manualCorrection && (
+                <Pressable
+                  onPress={() => setCorrectionDraft(automaticSummaryAsText())}
+                  disabled={savingCorrection}
+                  className="px-4 py-3 rounded-lg active:bg-honey-100"
+                >
+                  <Text className="text-honey-800 font-semibold">Start from automatic version</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        )}
+
+        {manualCorrection && !correctionOpen && (
+          <View className="mb-6">
+            <View className="bg-green-50 border border-green-200 rounded-xl p-4 mb-3">
+              <Text className="text-green-900 font-semibold">Human-corrected summary</Text>
+              <Text className="text-green-800 mt-1 text-sm">
+                A HIVE admin corrected the automatic recap on{' '}
+                {formatDateLong(manualCorrection.corrected_at.slice(0, 10))}.
+              </Text>
+            </View>
+            <View className="bg-gray-50 rounded-xl p-4">
+              <Text className="text-gray-800 leading-6">{manualCorrection.text}</Text>
+            </View>
+          </View>
+        )}
+
+        {!manualCorrection && parsedSummary.provenance?.kind === 'automatic_activity_record' && (
           <View className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
             <Text className="text-amber-900 font-semibold">Automatically assembled activity record</Text>
             <Text className="text-amber-800 mt-1 leading-5">
@@ -860,13 +1056,13 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         )}
 
         {/* The deck in outline — same renderer the newsletter draft uses. */}
-        {parsedSummary.sections && parsedSummary.sections.length > 0 && (
+        {!manualCorrection && parsedSummary.sections && parsedSummary.sections.length > 0 && (
           <View className="mb-6">
             <SummarySections sections={parsedSummary.sections} />
           </View>
         )}
 
-        {isLegacy && parsedSummary.summary && (
+        {!manualCorrection && isLegacy && parsedSummary.summary && (
           <View className="mb-6">
             <Text className="text-lg font-semibold text-gray-700 mb-2">Summary</Text>
             <View className="bg-gray-50 rounded-xl p-4">
@@ -880,7 +1076,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
             of things that were decided at that meeting."* They were hidden the
             moment a meeting had sections, which is every meeting sealed from
             the deck. */}
-        {parsedSummary.decisions && parsedSummary.decisions.length > 0 && (
+        {!manualCorrection && parsedSummary.decisions && parsedSummary.decisions.length > 0 && (
           <View className="mb-6">
             <Text className="text-lg font-semibold text-gray-700 mb-2">
               {parsedSummary.provenance?.decisions_verified
@@ -911,7 +1107,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
             was not there. Both halves are fixed: the heading says what the list
             IS, and each line can become a real HD wish for the person it
             belongs to. */}
-        {parsedSummary.wishes_surfaced && parsedSummary.wishes_surfaced.length > 0 && (
+        {!manualCorrection && parsedSummary.wishes_surfaced && parsedSummary.wishes_surfaced.length > 0 && (
           <View className="mb-6">
             <Text className="text-lg font-semibold text-gray-700 mb-2">Desires identified</Text>
             <Text className="text-label mb-1">These came out of the conversation.</Text>
@@ -971,7 +1167,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
             name, and the mark lives on this meeting's own summary. Nat,
             2026-08-19: "if you say something clever... those should auto
             populate" — offered, never auto-posted. */}
-        {parsedSummary.insights_caught && parsedSummary.insights_caught.length > 0 && (
+        {!manualCorrection && parsedSummary.insights_caught && parsedSummary.insights_caught.length > 0 && (
           <View className="mb-6">
             <Text className="text-lg font-semibold text-gray-700 mb-2">Worth keeping</Text>
             <Text className="text-label mb-2">Lines the meeting caught. Each is its sayer's to post, or put away.</Text>
@@ -1019,7 +1215,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           </View>
         )}
 
-        {isLegacy && parsedSummary.details && parsedSummary.details.length > 0 && (
+        {!manualCorrection && isLegacy && parsedSummary.details && parsedSummary.details.length > 0 && (
           <View className="mb-6">
             <Text className="text-lg font-semibold text-gray-700 mb-2">Details</Text>
             <View className="bg-gray-50 rounded-xl p-4">
