@@ -263,6 +263,7 @@ serve(async (req) => {
   // fails or nothing is scheduled, the line just reads without a date rather
   // than holding up the invite.
   let nextMeetingLabel = '';
+  let nextMeetingDate = '';
   let nextMeetingWindow = '';
   let nextMeetingWhere = '';
   /** True only for a HIVE that has genuinely never met. */
@@ -297,6 +298,7 @@ serve(async (req) => {
     const eventDate = row?.event_date;
     if (eventDate) {
       // Noon keeps the date from sliding a day backwards across time zones.
+      nextMeetingDate = eventDate;
       nextMeetingLabel = new Date(`${eventDate}T12:00:00`).toLocaleDateString('en-US', {
         weekday: 'long',
         month: 'long',
@@ -347,13 +349,35 @@ serve(async (req) => {
    * decided. A cadence announced before anybody has turned up is something to
    * walk back later.
    */
+  /**
+   * The rhythm, named rather than pointed at.
+   *
+   * This read "keeping it there every month", and Nat: *"instead it should
+   * say 'we're thinking about keeping on the 1st thurs of the month...'
+   * instead of 'there'."* "There" is only meaningful to somebody already
+   * holding the date; the whole point of the sentence is telling a newcomer
+   * what the pattern will be.
+   *
+   * Worked out from the meeting itself, so a HIVE that lands on the third
+   * Tuesday says third Tuesday without anybody editing this.
+   */
+  const cadencePhrase = (() => {
+    if (!nextMeetingDate) return '';
+    const day = new Date(`${nextMeetingDate}T12:00:00`);
+    const weekday = day.toLocaleDateString('en-US', { weekday: 'long' });
+    const which = Math.ceil(day.getDate() / 7);
+    // A fifth occurrence does not happen every month, so it is "last".
+    const ordinal = ['first', 'second', 'third', 'fourth'][which - 1] ?? 'last';
+    return `the ${ordinal} ${weekday} of every month`;
+  })();
+
   const whenLine = `<strong>${nextMeetingLabel}${nextMeetingWindow ? `, ${nextMeetingWindow}` : ''}</strong>${nextMeetingWhere ? ` ${nextMeetingWhere}` : ''}`;
   const meetingSentence = !nextMeetingLabel
     ? `<p style="font-size: 15px;">We'll let you know when the next meeting lands. \u{1F41D}</p>`
     : hiveHasNeverMet
       ? [
           `<p style="font-size: 15px; margin: 0 0 6px;">First meeting is ${whenLine}. \u{1F41D}</p>`,
-          `<p style="font-size: 14px; color: #6b6b6b; margin: 0;">We're thinking of keeping it there every month. If a different day or time suits more people, we'll sort that out together at the first one.</p>`,
+          `<p style="font-size: 14px; color: #6b6b6b; margin: 0;">We're thinking of keeping it on ${cadencePhrase || 'that day every month'}, same time. If a different day or time suits more people, we'll sort that out together at the first one.</p>`,
         ].join('\n              ')
       // An established HIVE already has its rhythm; offering to move it in a
       // welcome email would be someone else's decision to make.
