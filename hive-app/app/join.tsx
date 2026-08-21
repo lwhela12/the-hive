@@ -637,7 +637,7 @@ export default function JoinScreen() {
               The HIVE Creed
             </Text>
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 text-sm mb-3">
-              Every HIVE runs on the same handful of promises. Have a read.
+              Every HIVE runs on the same handful of promises.
             </Text>
 
             {/* All of it, on the page. It used to be clamped to 190px with a

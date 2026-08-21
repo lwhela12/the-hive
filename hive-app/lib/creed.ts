@@ -31,7 +31,7 @@ export const CREED_POST_TITLE = 'The HIVE Creed';
  * Somebody who agreed in August agreed to the August words. When the creed is
  * rewritten this moves, and what people accepted stays answerable.
  */
-export const CREED_VERSION = '2026-08-21b';
+export const CREED_VERSION = '2026-08-21c';
 
 /**
  * What somebody reads if the creed page will not load.
