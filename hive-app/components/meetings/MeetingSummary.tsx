@@ -68,12 +68,24 @@ interface ParsedSummary {
   summary?: string;
   decisions?: string[];
   /** The meeting deck in outline form — same running order as the helper. */
-  sections?: { title: string; lines: string[]; source_label?: string }[];
+  sections?: {
+    title: string;
+    lines?: string[];
+    intro?: string;
+    groups?: { title: string; lines: string[]; meta?: string }[];
+    tone?: 'default' | 'warm' | 'warning';
+    source_label?: string;
+  }[];
   provenance?: {
-    kind?: 'automatic_activity_record' | 'reviewed_import';
+    kind?: 'automatic_activity_record' | 'reviewed_import' | 'reconciled_helper_record';
     meeting_date?: string;
     generated_from?: string[];
     transcript_used?: boolean;
+    transcript_status?: 'reconciled' | 'not_available_at_seal';
+    transcript_original_line_count?: number;
+    transcript_evidence_line_count?: number;
+    helper_structure_preserved?: boolean;
+    conflicts_need_review?: number;
     decisions_verified?: boolean;
     check_in_period?: string;
     check_in_response_count?: number;
@@ -380,7 +392,11 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         .map((line) => line.trim())
         .filter(Boolean)
         .map((line) => `• ${line}`);
-      blocks.push([section.title.trim(), ...lines].filter(Boolean).join('\n'));
+      const groups = (section.groups ?? []).flatMap((group) => [
+        group.title,
+        ...group.lines.map((line) => `• ${line.trim()}`),
+      ]);
+      blocks.push([section.title.trim(), section.intro?.trim(), ...groups, ...lines].filter(Boolean).join('\n'));
     }
 
     if (parsedSummary.decisions?.length) {
@@ -621,10 +637,8 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   };
 
   /**
-   * Re-read the durable meeting record instead of asking the transcript to
-   * guess what mattered. The server keeps the version this replaces and links
-   * every retained to-do to this meeting, so the next repair no longer depends
-   * only on a one-day creation window.
+   * Re-read the preserved Helper operating record, current duty ledger, and
+   * transcript evidence together. The server keeps the version this replaces.
    */
   const rebuildFromCurrentRecords = async () => {
     if (rebuildingSummary || !isHiveAdmin) return;
@@ -648,7 +662,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
       setCorrectionOpen(false);
       showAlert(
         'Summary rebuilt',
-        `Rebuilt from ${data?.counts?.todos ?? 0} surviving meeting to-do${data?.counts?.todos === 1 ? '' : 's'} and the other saved meeting records. The version it replaced is preserved.`
+        `Rebuilt from the Meeting Helper, ${data?.counts?.todos ?? 0} current meeting dut${data?.counts?.todos === 1 ? 'y' : 'ies'}, and the transcript where available. The version it replaced is preserved.`
       );
     } catch (error) {
       console.error('Error rebuilding meeting summary:', error);
@@ -662,11 +676,11 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
     confirmAction({
       title: 'Rebuild this summary?',
       message: [
-        'This uses the surviving meeting to-dos as the main record, plus actual events, board activity, Meeting Helper notes, and current-cycle check-ins for context.',
+        'This preserves the Meeting Helper as the operating record, reconciles assignments against current to-do lists, and uses the transcript for context, decisions, and discrepancies.',
         manualCorrection
           ? 'Your human correction will be preserved in history, then the rebuilt record will become the visible summary.'
           : 'The current summary will be preserved in history.',
-        'The transcript is not used.',
+        'If sources disagree, the rebuilt summary will show the conflict for review instead of guessing.',
       ].join('\n\n'),
       confirmLabel: 'Rebuild summary',
       onConfirm: rebuildFromCurrentRecords,
@@ -1142,9 +1156,30 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         )}
 
         {!manualCorrection && parsedSummary.provenance?.kind === 'automatic_activity_record' && (
-          <Text className="text-label text-xs mb-6">
-            Built from saved Meeting Helper notes and meeting records · Transcript not used
-          </Text>
+          <View className="mb-6 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <Text className="text-amber-900 font-semibold text-sm">Legacy activity record</Text>
+            <Text className="text-amber-800 text-sm mt-1 leading-5">
+              This older summary was not reconciled against transcript evidence. Its saved sources remain intact for a reviewed rebuild.
+            </Text>
+          </View>
+        )}
+
+        {!manualCorrection && parsedSummary.provenance?.kind === 'reconciled_helper_record' && (
+          <View className="mb-6 bg-honey-50 border border-honey-200 rounded-xl px-4 py-3">
+            <Text className="text-honey-900 font-semibold text-sm">
+              Meeting Helper operating record
+            </Text>
+            <Text className="text-honey-800 text-sm mt-1 leading-5">
+              {parsedSummary.provenance.transcript_used
+                ? 'Reconciled with the current to-do ledger and transcript evidence.'
+                : 'Reconciled with the current to-do ledger. No transcript was available when this record was sealed.'}
+            </Text>
+            {(parsedSummary.provenance.conflicts_need_review ?? 0) > 0 ? (
+              <Text className="text-amber-800 text-sm mt-1">
+                {parsedSummary.provenance.conflicts_need_review} source conflict{parsedSummary.provenance.conflicts_need_review === 1 ? '' : 's'} kept visible for review.
+              </Text>
+            ) : null}
+          </View>
         )}
 
         {!manualCorrection && isLegacy && parsedSummary.summary && (
@@ -1161,7 +1196,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
             of things that were decided at that meeting."* They were hidden the
             moment a meeting had sections, which is every meeting sealed from
             the deck. */}
-        {!manualCorrection && parsedSummary.decisions && parsedSummary.decisions.length > 0 && (
+        {!manualCorrection && !parsedSummary.provenance?.helper_structure_preserved && parsedSummary.decisions && parsedSummary.decisions.length > 0 && (
           <View className="mb-6">
             <Text className="text-lg font-semibold text-gray-700 mb-2">
               {parsedSummary.provenance?.decisions_verified

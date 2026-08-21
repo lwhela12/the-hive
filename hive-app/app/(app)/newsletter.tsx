@@ -431,7 +431,7 @@ export default function NewsletterScreen() {
   const asPlainText = () => sections
     .map((section) => [
       section.title.toUpperCase(),
-      ...section.lines.map((line) => (line.startsWith('    ') ? `    - ${line.trim()}` : `- ${line}`)),
+      ...(section.lines ?? []).map((line) => (line.startsWith('    ') ? `    - ${line.trim()}` : `- ${line}`)),
     ].join('\n'))
     .join('\n\n');
 

@@ -4,10 +4,24 @@ import { headerForSection } from '../../lib/newsletterHeaders';
 
 export interface SummarySection {
   title: string;
-  lines: string[];
-  /** Stored audit provenance. The meeting reader deliberately keeps it out of the content flow. */
+  lines?: string[];
+  intro?: string;
+  groups?: { title: string; lines: string[]; meta?: string }[];
+  tone?: 'default' | 'warm' | 'warning';
+  /** Stored audit provenance, shown quietly at the foot of each working section. */
   source_label?: string;
 }
+
+const MEETING_SECTION_ICONS: Record<string, string> = {
+  'Roll Call': '🐝',
+  'How We Arrived': '⚡',
+  'News from Nat': '📣',
+  Treasurer: '🍯',
+  'Plan the Meet Ups': '🗓️',
+  'HummDinger Sesh': '💛',
+  'Wrap-Up': '✨',
+  'Needs Review': '⚠️',
+};
 
 /**
  * The house style for "here's what you missed" — used by the meeting summary
@@ -38,101 +52,127 @@ export function SummarySections({
   const [expandedMeetingSections, setExpandedMeetingSections] = useState<Set<string>>(() => new Set());
   if (!sections || sections.length === 0) return null;
 
-  // A meeting recap is a working read, not a newsletter. Keep it flat and
-  // scannable: no paper cards, decorative diamonds, centered display type, or
-  // implementation-source labels between the reader and the actual meeting.
-  // Check-in context remains available, but starts folded because the work the
-  // meeting put in motion is the reason this page exists.
+  // The summary follows the Meeting Helper instead of turning every source into
+  // one undifferentiated bullet stream. Slides become warm working cards;
+  // people and decisions retain a second level of hierarchy inside each card.
   if (!art) {
     return (
-      <View>
+      <View style={{ gap: 16 }}>
         {sections.map((section) => {
-          const canCollapse = section.title === 'What people brought into the meeting';
+          const canCollapse = section.title === 'How We Arrived';
           const expanded = !canCollapse || expandedMeetingSections.has(section.title);
-          const heading = (
-            <>
-              <Text
-                style={{
-                  fontFamily: 'Lato_700Bold',
-                  fontSize: 18,
-                  lineHeight: 24,
-                  color: '#2d2d2d',
-                  flex: 1,
-                }}
-              >
-                {section.title}
-              </Text>
-              {canCollapse ? (
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6a2f' }}>
-                  {expanded ? 'Hide' : 'Read'}
-                </Text>
-              ) : null}
-            </>
-          );
-
+          const warning = section.tone === 'warning';
           return (
             <View
               key={section.title}
               style={{
-                paddingBottom: 18,
-                marginBottom: 20,
-                borderBottomWidth: 1,
-                borderBottomColor: '#e8e1d5',
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: warning ? '#efc7a7' : '#eadfcf',
+                backgroundColor: warning ? '#fff8f1' : section.tone === 'warm' ? '#fffaf0' : '#fffdf9',
+                overflow: 'hidden',
               }}
             >
-              {canCollapse ? (
-                <Pressable
-                  onPress={() => setExpandedMeetingSections((current) => {
-                    const next = new Set(current);
-                    if (next.has(section.title)) next.delete(section.title);
-                    else next.add(section.title);
-                    return next;
-                  })}
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded }}
-                  accessibilityLabel={`${expanded ? 'Hide' : 'Read'} ${section.title}`}
-                  className="flex-row items-center gap-4"
-                >
-                  {heading}
-                </Pressable>
-              ) : (
-                <View className="flex-row items-center">{heading}</View>
-              )}
+              <View style={{ paddingHorizontal: 18, paddingTop: 17, paddingBottom: expanded ? 12 : 17 }}>
+                {canCollapse ? (
+                  <Pressable
+                    onPress={() => setExpandedMeetingSections((current) => {
+                      const next = new Set(current);
+                      if (next.has(section.title)) next.delete(section.title);
+                      else next.add(section.title);
+                      return next;
+                    })}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded }}
+                    accessibilityLabel={`${expanded ? 'Hide' : 'Read'} ${section.title}`}
+                    className="flex-row items-center"
+                  >
+                    <Text style={{ fontSize: 22, marginRight: 10 }}>{MEETING_SECTION_ICONS[section.title] ?? '✦'}</Text>
+                    <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 19, lineHeight: 26, color: '#2d2d2d', flex: 1 }}>
+                      {section.title}
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6a2f' }}>
+                      {expanded ? 'Hide' : 'Read'}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <View className="flex-row items-center">
+                    <Text style={{ fontSize: 22, marginRight: 10 }}>{MEETING_SECTION_ICONS[section.title] ?? '✦'}</Text>
+                    <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 19, lineHeight: 26, color: warning ? '#8b4b24' : '#2d2d2d', flex: 1 }}>
+                      {section.title}
+                    </Text>
+                  </View>
+                )}
+                {expanded && section.intro ? (
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14.5, lineHeight: 21, color: '#6f6559', marginTop: 8 }}>
+                    {section.intro}
+                  </Text>
+                ) : null}
+              </View>
 
               {expanded ? (
-                <View style={{ marginTop: 10 }}>
-                  {section.lines.map((line, index) => {
+                <View style={{ paddingHorizontal: 18, paddingBottom: 16, gap: 10 }}>
+                  {(section.groups ?? []).map((group, groupIndex) => (
+                    <View
+                      key={`${section.title}-${group.title}-${groupIndex}`}
+                      style={{
+                        borderRadius: 13,
+                        backgroundColor: warning ? '#fffdf9' : '#ffffff',
+                        borderWidth: 1,
+                        borderColor: warning ? '#f0d7c1' : '#eee6da',
+                        padding: 13,
+                      }}
+                    >
+                      <View className="flex-row items-start">
+                        <View className="flex-1">
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, lineHeight: 21, color: warning ? '#8b4b24' : '#3b342b' }}>
+                            {group.title}
+                          </Text>
+                          {group.meta ? (
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 17, color: '#9a8060', marginTop: 2 }}>
+                              {group.meta}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+                      <View style={{ marginTop: 7, gap: 6 }}>
+                        {group.lines.map((line, lineIndex) => {
+                          const duty = line.startsWith('Confirmed duty:');
+                          const clean = duty ? line.replace(/^Confirmed duty:\s*/, '') : line;
+                          return (
+                            <View key={lineIndex} className="flex-row items-start">
+                              <Text style={{ color: duty ? '#bd9348' : '#c7a76b', fontSize: 13, lineHeight: 21, marginRight: 8 }}>
+                                {duty ? '✓' : '•'}
+                              </Text>
+                              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14.5, lineHeight: 21, color: '#453f37', flex: 1 }}>
+                                {duty ? <Text style={{ fontFamily: 'Lato_700Bold', color: '#6d5427' }}>Confirmed duty: </Text> : null}
+                                {clean}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ))}
+
+                  {(section.lines ?? []).map((line, index) => {
                     const indented = line.startsWith('    ');
                     const text = line.trim();
-                    const lead = !indented ? text.match(/^([^:]{1,32}):\s+(.+)$/) : null;
                     return (
-                      <View
-                        key={index}
-                        className="flex-row"
-                        style={{ paddingLeft: indented ? 18 : 0, marginBottom: 7 }}
-                      >
-                        {!indented ? (
-                          <Text style={{ color: '#b58a39', fontSize: 14, lineHeight: 22, marginRight: 9 }}>•</Text>
-                        ) : null}
-                        <Text
-                          style={{
-                            fontFamily: 'Lato_400Regular',
-                            fontSize: indented ? 14 : 15,
-                            lineHeight: 22,
-                            color: indented ? '#6f6559' : '#3f3a33',
-                            flex: 1,
-                          }}
-                        >
-                          {lead ? (
-                            <>
-                              <Text style={{ fontFamily: 'Lato_700Bold', color: '#2d2d2d' }}>{lead[1]}: </Text>
-                              {lead[2]}
-                            </>
-                          ) : text}
+                      <View key={index} className="flex-row" style={{ paddingLeft: indented ? 18 : 0 }}>
+                        {!indented ? <Text style={{ color: '#b58a39', fontSize: 14, lineHeight: 22, marginRight: 9 }}>•</Text> : null}
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: indented ? 14 : 15, lineHeight: 22, color: '#3f3a33', flex: 1 }}>
+                          {text}
                         </Text>
                       </View>
                     );
                   })}
+
+                  {section.source_label ? (
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, lineHeight: 17, color: '#9a8060', marginTop: 2 }}>
+                      Source: {section.source_label}
+                    </Text>
+                  ) : null}
                 </View>
               ) : null}
             </View>
@@ -208,13 +248,13 @@ export function SummarySections({
               marginBottom: 12,
             }}
           />
-          {section.lines.map((line, index) => {
+          {(section.lines ?? []).map((line, index) => {
             const indented = line.startsWith('    ');
             const text = line.trim();
             // A person's name opens their block — give it air above.
             const startsBlock = !indented
               && index > 0
-              && section.lines[index - 1].startsWith('    ');
+              && (section.lines ?? [])[index - 1]?.startsWith('    ');
             if (indented) {
               const [label, ...rest] = text.split(': ');
               const body = rest.join(': ');

@@ -12,8 +12,9 @@ import {
 // "The meeting notes write themselves": compose everything that happened in
 // the app on meeting day (events penciled in, to-dos fanned out, wish notes,
 // and wishes granted) into a real meeting record on the Meetings
-// tab — no transcription, no Apply Notes required. Called from the Wrap-Up
-// slide's Seal button, or with the service key (daily cron auto-seal).
+// tab. The Helper remains the operating record; when a transcript exists it is
+// reconciled as supporting evidence rather than ignored or treated as the
+// outline. Called from Wrap-Up, or with the service key (daily cron auto-seal).
 
 interface SealMeetingRequest {
   communityId: string;
@@ -28,9 +29,39 @@ interface SealMeetingRequest {
 
 type SummarySection = {
   title: string;
-  lines: string[];
+  lines?: string[];
+  intro?: string;
+  groups?: { title: string; lines: string[]; meta?: string }[];
+  tone?: 'default' | 'warm' | 'warning';
   /** Stored audit provenance; the reader keeps this out of the recap itself. */
   source_label: string;
+};
+
+type TranscriptReconciliation = {
+  overview: string;
+  attendance: {
+    in_person: string[];
+    remote: string[];
+    absent: string[];
+    unclear: string[];
+  };
+  decisions: { section: 'treasurer' | 'meetups' | 'hummdinger' | 'wrapup'; text: string }[];
+  member_context: { person: string; context: string }[];
+  duty_labels: { task: string; label: string }[];
+  conflicts: { topic: string; helper_record: string; transcript_evidence: string }[];
+};
+
+type MeetingHelperSnapshot = {
+  captured_at: string;
+  notes: Record<string, string>;
+  roster: { id: string; name: string }[];
+  check_ins: { user_id: string; name: string; attendance: string; answers: Record<string, unknown> }[];
+  confirmed_absentee_ids: string[];
+  confirmed_absentee_names: string[];
+  honey_pot_balance: number;
+  next_meeting: Record<string, unknown> | null;
+  upcoming_hangs: Record<string, unknown>[];
+  help_focus: string | null;
 };
 
 function pacificToday() {
@@ -167,6 +198,150 @@ async function condenseHummdingers(
   }
 }
 
+function parseModelJson(text: string) {
+  const raw = text.trim()
+    .replace(/^```json\s*\n?/, '')
+    .replace(/\n?```\s*$/, '')
+    .replace(/^```\s*\n?/, '')
+    .replace(/\n?```\s*$/, '');
+  return JSON.parse(raw) as Record<string, unknown>;
+}
+
+/**
+ * Daily can hand us the same room recording more than once. August contained
+ * three near-identical passes: feeding all three to the model makes repetition
+ * look like emphasis and can mint false decisions. The original transcript is
+ * never changed; this evidence copy keeps the first occurrence of each exact
+ * utterance and reports the reduction in provenance.
+ */
+function transcriptEvidenceCopy(transcript: string) {
+  const original = transcript.split('\n').map((line) => line.trim()).filter(Boolean);
+  const seen = new Set<string>();
+  const kept = original.filter((line) => {
+    const key = line.replace(/\s+/g, ' ').toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return {
+    text: kept.join('\n').slice(0, 150_000),
+    originalLineCount: original.length,
+    evidenceLineCount: kept.length,
+    truncated: kept.join('\n').length > 150_000,
+  };
+}
+
+function stringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string' && !!entry.trim()).map((entry) => entry.trim())
+    : [];
+}
+
+async function reconcileTranscript(
+  transcript: string,
+  snapshot: MeetingHelperSnapshot,
+  duties: { task: string; owners: string[]; about: string | null; status: string }[],
+  communityId: string,
+): Promise<{ result: TranscriptReconciliation; evidence: ReturnType<typeof transcriptEvidenceCopy> }> {
+  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
+  if (!apiKey) throw new Error('The transcript is present, but transcript reconciliation is not configured.');
+
+  const evidence = transcriptEvidenceCopy(transcript);
+  const anthropic = new Anthropic({ apiKey });
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-5',
+    max_tokens: 8000,
+    output_config: { effort: 'medium' as const },
+    system: [
+      'You reconcile a HIVE meeting record. The Meeting Helper snapshot is the authoritative operating record.',
+      'Its authored notes, pre-meeting inputs, final absentee selection, flow, and the supplied current duty ledger outrank the transcript.',
+      'The transcript is supporting evidence for what was said, final wording, context, and discrepancies. It may contain transcription errors, shared-microphone misattribution, and duplicated recording passes.',
+      'Never create or reassign a duty. Owners come only from CURRENT_DUTIES. Never turn discussion into a final decision unless the transcript clearly closes it.',
+      'A spoken promise that is missing from CURRENT_DUTIES is a conflict to review, not a confirmed responsibility and not decision wording.',
+      'For dates, event titles, attendance intentions, and money balances, copy the Meeting Helper snapshot exactly. The transcript may explain why, but it must not rename or replace a saved calendar item.',
+      'If confirmed_absentee_names is non-empty, never say everyone or all members attended. Missing pre-meeting input is not itself a conflict.',
+      'If sources disagree, put the discrepancy in conflicts. Do not guess. Use first names from the roster exactly.',
+      'Return only valid JSON with this shape:',
+      '{"overview":"2-4 humane sentences","attendance":{"in_person":[],"remote":[],"absent":[],"unclear":[]},"decisions":[{"section":"treasurer|meetups|hummdinger|wrapup","text":"..."}],"member_context":[{"person":"First","context":"1-2 concise sentences"}],"duty_labels":[{"task":"exact CURRENT_DUTIES task","label":"humane concise wording"}],"conflicts":[{"topic":"...","helper_record":"...","transcript_evidence":"..."}]}',
+      'Attendance rule: confirmed absentees are absent. Pre-meeting attendance is an intention; use explicit transcript statements to resolve remote vs in-person, and leave unclear when unsupported.',
+      'Member context should summarize what each person brought or needed, not repeat their assigned duties.',
+      'For every CURRENT_DUTIES task, return one duty_labels row. The task key must be exact. The label may repair shorthand into humane English but must preserve the same obligation, specificity, and tone; it must not change owners.',
+    ].join('\n'),
+    messages: [{
+      role: 'user',
+      content: [
+        `MEETING_HELPER_SNAPSHOT\n${JSON.stringify(snapshot)}`,
+        `CURRENT_DUTIES\n${JSON.stringify(duties)}`,
+        `TRANSCRIPT_EVIDENCE (${evidence.evidenceLineCount} unique lines from ${evidence.originalLineCount}; original preserved)\n${evidence.text}`,
+      ].join('\n\n'),
+    }],
+  });
+  recordAssistantUsage({ functionName: 'seal-meeting', model: 'claude-sonnet-5', usage: response.usage, communityId });
+  if ((response as { stop_reason?: string }).stop_reason === 'refusal') {
+    throw new Error('The transcript reconciliation was refused; the existing summary was preserved.');
+  }
+  const text = response.content
+    .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+    .map((block) => block.text)
+    .join('');
+  const parsed = parseModelJson(text);
+  const attendance = (parsed.attendance && typeof parsed.attendance === 'object')
+    ? parsed.attendance as Record<string, unknown>
+    : {};
+  const allowedNames = new Set(snapshot.roster.map((person) => firstName(person.name)));
+  const keepNames = (value: unknown) => stringArray(value).filter((name) => allowedNames.has(firstName(name))).map(firstName);
+  const decisions = Array.isArray(parsed.decisions) ? parsed.decisions : [];
+  const memberContext = Array.isArray(parsed.member_context) ? parsed.member_context : [];
+  const dutyLabels = Array.isArray(parsed.duty_labels) ? parsed.duty_labels : [];
+  const conflicts = Array.isArray(parsed.conflicts) ? parsed.conflicts : [];
+  const exactTasks = new Set(duties.map((duty) => duty.task));
+  return {
+    evidence,
+    result: {
+      overview: typeof parsed.overview === 'string' ? parsed.overview.trim() : '',
+      attendance: {
+        in_person: keepNames(attendance.in_person),
+        remote: keepNames(attendance.remote),
+        absent: [...new Set([...keepNames(attendance.absent), ...snapshot.confirmed_absentee_names.map(firstName)])],
+        unclear: keepNames(attendance.unclear),
+      },
+      decisions: decisions.flatMap((entry) => {
+        if (!entry || typeof entry !== 'object') return [];
+        const row = entry as Record<string, unknown>;
+        const section = row.section;
+        const decision = typeof row.text === 'string' ? row.text.trim() : '';
+        return decision && ['treasurer', 'meetups', 'hummdinger', 'wrapup'].includes(String(section))
+          ? [{ section: section as TranscriptReconciliation['decisions'][number]['section'], text: decision }]
+          : [];
+      }),
+      member_context: memberContext.flatMap((entry) => {
+        if (!entry || typeof entry !== 'object') return [];
+        const row = entry as Record<string, unknown>;
+        const person = typeof row.person === 'string' ? firstName(row.person) : '';
+        const context = typeof row.context === 'string' ? row.context.trim() : '';
+        return allowedNames.has(person) && context ? [{ person, context }] : [];
+      }),
+      duty_labels: dutyLabels.flatMap((entry) => {
+        if (!entry || typeof entry !== 'object') return [];
+        const row = entry as Record<string, unknown>;
+        const task = typeof row.task === 'string' ? row.task : '';
+        const label = typeof row.label === 'string' ? row.label.trim() : '';
+        return exactTasks.has(task) && label ? [{ task, label }] : [];
+      }),
+      conflicts: conflicts.flatMap((entry) => {
+        if (!entry || typeof entry !== 'object') return [];
+        const row = entry as Record<string, unknown>;
+        const topic = typeof row.topic === 'string' ? row.topic.trim() : '';
+        const helper = typeof row.helper_record === 'string' ? row.helper_record.trim() : '';
+        const transcriptLine = typeof row.transcript_evidence === 'string' ? row.transcript_evidence.trim() : '';
+        return topic && (helper || transcriptLine)
+          ? [{ topic, helper_record: helper, transcript_evidence: transcriptLine }]
+          : [];
+      }),
+    },
+  };
+}
+
 serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
@@ -181,7 +356,7 @@ serve(async (req) => {
     if (!communityId) return errorResponse('Missing communityId', 400);
     const isRebuild = body.mode === 'rebuild';
     if (isRebuild && !body.date) return errorResponse('A rebuild needs the meeting date.', 400);
-    const confirmedAbsenteeIds = Array.isArray(body.confirmed_absentee_ids)
+    let confirmedAbsenteeIds = Array.isArray(body.confirmed_absentee_ids)
       ? [...new Set(body.confirmed_absentee_ids.filter((id): id is string => typeof id === 'string' && !!id))]
       : [];
     const date = /^\d{4}-\d{2}-\d{2}$/.test(body.date ?? '') ? body.date! : pacificToday();
@@ -256,6 +431,32 @@ serve(async (req) => {
     if (isRebuild && !existing) return errorResponse('Meeting not found.', 404);
     if (body.meetingId && existing?.id !== body.meetingId) {
       return errorResponse('That meeting does not match this HIVE and date.', 409);
+    }
+    let previous: Record<string, unknown> = {};
+    if (existing?.summary) {
+      try { previous = JSON.parse(existing.summary); } catch { previous = {}; }
+    }
+
+    // The Wrap-Up selection was already preserved for August in the held recap
+    // notification, but the old summary writer failed to copy it onto the
+    // meeting. A rebuild recovers that operating record before composing.
+    if (isRebuild && confirmedAbsenteeIds.length === 0 && existing) {
+      const previousSnapshot = previous.meeting_helper_snapshot as MeetingHelperSnapshot | undefined;
+      if (Array.isArray(previousSnapshot?.confirmed_absentee_ids)) {
+        confirmedAbsenteeIds = previousSnapshot.confirmed_absentee_ids;
+      } else {
+        const { data: heldRecaps } = await supabaseAdmin
+          .from('notifications')
+          .select('metadata')
+          .eq('metadata->>post_meeting_recap_meeting_id', existing.id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        const heldIds = (heldRecaps?.[0]?.metadata as { post_meeting_recap_absentee_ids?: unknown } | undefined)
+          ?.post_meeting_recap_absentee_ids;
+        if (Array.isArray(heldIds)) {
+          confirmedAbsenteeIds = heldIds.filter((id): id is string => typeof id === 'string' && !!id);
+        }
+      }
     }
 
     const [eventsRes, todosRes, notesRes, grantedRes] = await Promise.all([
@@ -342,6 +543,8 @@ serve(async (req) => {
       : rawHiveName;
     const potBalance = ((ledgerRows.data ?? []) as { amount: number | string }[])
       .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+    const roster = ((memberRows.data ?? []) as any[])
+      .flatMap((row) => row.user?.id && row.user?.name ? [{ id: row.user.id as string, name: row.user.name as string }] : []);
     const memberNames = new Map<string, string>();
     ((memberRows.data ?? []) as any[]).forEach((row) => {
       if (row.user?.id) memberNames.set(row.user.id, firstName(row.user.name ?? 'Someone'));
@@ -416,6 +619,7 @@ serve(async (req) => {
         userId: row.user_id as string,
         name: row.user?.name ? firstName(row.user.name) : 'Someone',
         answers: (row.answers ?? {}) as Record<string, unknown>,
+        attendance: typeof row.answers?.q_attendance === 'string' ? row.answers.q_attendance.trim() : '',
         submittedAt: row.submitted_at as string,
       }))
       // The query is newest-first. If an old duplicate survey row exists for
@@ -504,15 +708,6 @@ serve(async (req) => {
       notes.length ? `${notes.length} wish note${notes.length === 1 ? '' : 's'}` : null,
       granted.length ? `${granted.length} wish${granted.length === 1 ? '' : 'es'} granted` : null,
     ].filter(Boolean).join(' · ');
-    const recordVerb = isRebuild ? 'Rebuilt activity record' : 'Automatic activity record';
-    const summaryText = tally
-      ? `${recordVerb} for the ${month} meeting — assembled from the surviving meeting record, not from the transcript. ${tally}.`
-      : `${recordVerb} for the ${month} meeting — assembled from the surviving meeting record, not from the transcript.`;
-
-    let previous: Record<string, unknown> = {};
-    if (existing?.summary) {
-      try { previous = JSON.parse(existing.summary); } catch { previous = {}; }
-    }
     const priorRebuildHistory = Array.isArray(previous.rebuild_history)
       ? previous.rebuild_history as unknown[]
       : [];
@@ -540,10 +735,11 @@ serve(async (req) => {
       ].slice(-5)
       : priorRebuildHistory;
 
-    // THE SUMMARY IS THE DECK, IN OUTLINE (Nat 2026-07-25: "we don't need to
-    // double up our work"). Same running order as the meeting helper — News,
-    // Treasurer, Meet-Ups, HummDingers, Wrap-Up — so catching up reads like
-    // walking the slides, and nothing has to be written twice or recorded.
+    // THE SUMMARY IS THE HELPER, PRESERVED. The previous implementation said
+    // that in a comment, then sorted the task ledger to the top and flattened
+    // every slide into identical bullets. Capture the operating record once and
+    // keep its running order: Roll Call, News, Treasurer, Meet-Ups,
+    // HummDingers, Wrap-Up.
     const answerOf = (answers: Record<string, unknown>, key: string) => {
       const value = answers[key];
       return typeof value === 'string' ? value.trim() : '';
@@ -553,41 +749,105 @@ serve(async (req) => {
       .map((line) => line.replace(/^[\s•\-*]+/, '').trim())
       .filter(Boolean);
 
+    const confirmedAbsenteeNames = confirmedAbsenteeIds
+      .map((id) => roster.find((person) => person.id === id)?.name)
+      .filter((name): name is string => !!name);
+    const currentSnapshot: MeetingHelperSnapshot = {
+      captured_at: rebuiltAt,
+      notes: deckNotes,
+      roster,
+      check_ins: checkIns.map((entry) => ({
+        user_id: entry.userId,
+        name: entry.name,
+        attendance: entry.attendance,
+        answers: entry.answers,
+      })),
+      confirmed_absentee_ids: confirmedAbsenteeIds,
+      confirmed_absentee_names: confirmedAbsenteeNames,
+      honey_pot_balance: potBalance,
+      next_meeting: nextMeeting,
+      upcoming_hangs: upcomingHangs,
+      help_focus: helpFocus,
+    };
+    const priorSnapshot = previous.meeting_helper_snapshot as MeetingHelperSnapshot | undefined;
+    const helperSnapshot = isRebuild && priorSnapshot?.captured_at ? priorSnapshot : currentSnapshot;
+    const helperNotes = helperSnapshot.notes ?? {};
+
+    const dutyRows = Array.from(todoGroups, ([task, group]) => ({
+      task,
+      owners: group.names,
+      about: group.about,
+      status: group.open === 0 && group.completed > 0
+        ? 'complete'
+        : group.completed > 0
+          ? `${group.completed} complete, ${group.open} open`
+          : 'open',
+    }));
+    const transcript = (existing?.transcript_raw ?? '').trim();
+    const reconciled = transcript
+      ? await reconcileTranscript(transcript, helperSnapshot, dutyRows, communityId)
+      : null;
+    const transcriptResult = reconciled?.result ?? null;
+
     const sections: SummarySection[] = [];
+    const rosterFirstNames = helperSnapshot.roster.map((person) => firstName(person.name));
+    const absentNames = new Set([
+      ...(transcriptResult?.attendance.absent ?? []),
+      ...helperSnapshot.confirmed_absentee_names.map(firstName),
+    ]);
+    const remoteNames = new Set((transcriptResult?.attendance.remote ?? []).filter((name) => !absentNames.has(name)));
+    const inPersonNames = new Set((transcriptResult?.attendance.in_person ?? []).filter((name) => !absentNames.has(name) && !remoteNames.has(name)));
+    helperSnapshot.check_ins.forEach((entry) => {
+      const name = firstName(entry.name);
+      if (absentNames.has(name) || remoteNames.has(name) || inPersonNames.has(name)) return;
+      const intention = entry.attendance.toLowerCase();
+      if (intention.includes('remote') || intention.includes('joining') || intention.includes('zoom')) remoteNames.add(name);
+      else if (intention && !intention.includes('miss') && !intention.includes("can't")) inPersonNames.add(name);
+    });
+    const unclearNames = rosterFirstNames.filter((name) => !absentNames.has(name) && !remoteNames.has(name) && !inPersonNames.has(name));
+    const rollCallGroups = [
+      { title: 'In the room', lines: [...inPersonNames] },
+      { title: 'Joined remotely', lines: [...remoteNames] },
+      { title: 'Confirmed away at Wrap-Up', lines: [...absentNames] },
+      { title: 'Attendance needs review', lines: unclearNames },
+    ].filter((group) => group.lines.length > 0);
+    if (rollCallGroups.length > 0) sections.push({
+      title: 'Roll Call',
+      intro: 'Who was with us, and how they joined.',
+      groups: rollCallGroups,
+      source_label: 'Meeting Helper check-ins + final Wrap-Up attendance + transcript reconciliation',
+    });
 
-    // This section is the Meeting Helper's News from Nat field, verbatim in
-    // bullet form. A board post created on the same date is not automatically
-    // news from Nat and must never be merged into her authored agenda.
-    const newsLines = bulletsFrom(deckNotes.news);
-    if (newsLines.length > 0) sections.push({
+    const energyGroups = helperSnapshot.check_ins.flatMap((entry) => {
+      const level = entry.answers.q_energy_level;
+      const feeling = typeof entry.answers.q_feeling_today === 'string' ? entry.answers.q_feeling_today.trim() : '';
+      const mode = typeof entry.answers.q_energy_mode === 'string' ? entry.answers.q_energy_mode.trim() : '';
+      const hardOut = typeof entry.answers.q_hard_out === 'string' ? entry.answers.q_hard_out.trim() : '';
+      const lines = [
+        typeof level === 'number' ? `Energy ${level}/10${feeling ? ` · ${feeling}` : ''}` : feeling,
+        mode,
+        hardOut ? `Hard out: ${hardOut}` : '',
+      ].filter(Boolean) as string[];
+      return lines.length > 0 ? [{ title: firstName(entry.name), lines }] : [];
+    });
+    if (energyGroups.length > 0) sections.push({
+      title: 'How We Arrived',
+      intro: 'The energy and capacity people brought into the room.',
+      groups: energyGroups,
+      tone: 'warm',
+      source_label: 'Pre-meeting member inputs shown in the Meeting Helper',
+    });
+
+    const newsGroups = [
+      { title: 'From Nat', lines: bulletsFrom(helperNotes.news) },
+      { title: 'New in the app', lines: bulletsFrom(helperNotes.appnews) },
+    ].filter((group) => group.lines.length > 0);
+    if (newsGroups.length > 0) sections.push({
       title: 'News from Nat',
-      lines: newsLines,
-      source_label: 'Meeting Helper · News from Nat',
+      groups: newsGroups,
+      source_label: 'Meeting Helper authored notes',
     });
 
-    const appLines = bulletsFrom(deckNotes.appnews);
-    if (appLines.length > 0) sections.push({
-      title: 'App updates',
-      lines: appLines,
-      source_label: 'Meeting Helper notes',
-    });
-
-    // Only a HIVE that runs a Honey Pot has a treasurer to report. Production
-    // said no to one at its first meeting and its summary still opened with
-    // "Honey Pot balance: $0.00" — Nat, 2026-08-19: *"you can get rid of the
-    // treasurer in the summary because we're not going to have a treasurer or
-    // a honey pot for right now."* The flag already exists (migration 140);
-    // this section simply never asked.
-    if ((notesRow.data as any)?.honey_pot_enabled) {
-      sections.push({
-        title: 'Treasurer',
-        lines: [`Honey Pot balance: $${potBalance.toFixed(2)}`],
-        source_label: 'Automatically read from the Honey Pot ledger',
-      });
-    }
-
-    // The deck's Plan-the-Meet-Ups slide, in the same order: when we meet next,
-    // what the HIVE Help focus is, and what's already on the calendar.
     const prettyDate = (value: string) => {
       const [year, month, day] = value.split('-').map(Number);
       return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-US', {
@@ -602,107 +862,85 @@ serve(async (req) => {
       const twelve = hour % 12 === 0 ? 12 : hour % 12;
       return `${twelve}:${minute} ${suffix}`;
     };
+    const treasurerDecisions = (transcriptResult?.decisions ?? []).filter((item) => item.section === 'treasurer').map((item) => item.text);
+    if ((notesRow.data as any)?.honey_pot_enabled) {
+      const treasurerGroups = [
+        { title: 'Honey Pot', lines: [`Balance at the meeting: $${helperSnapshot.honey_pot_balance.toFixed(2)}`, ...bulletsFrom(helperNotes.treasurer)] },
+        { title: 'What the room decided', lines: treasurerDecisions },
+      ].filter((group) => group.lines.length > 0);
+      sections.push({
+        title: 'Treasurer',
+        groups: treasurerGroups,
+        source_label: 'Meeting Helper + Honey Pot ledger + transcript reconciliation',
+      });
+    }
+
     const meetupLines: string[] = [];
-    if (nextMeeting) {
-      const where = (nextMeeting as { location?: string | null }).location?.trim();
+    const snapshotNextMeeting = helperSnapshot.next_meeting as any;
+    if (snapshotNextMeeting?.event_date) {
+      const where = snapshotNextMeeting.location?.trim();
       meetupLines.push(
-        `Next HIVE meeting: ${prettyDate(nextMeeting.event_date)}`
-        + `${nextMeeting.event_time ? ` · ${prettyTime(nextMeeting.event_time)}` : ''}`
+        `Next HIVE meeting: ${prettyDate(snapshotNextMeeting.event_date)}`
+        + `${snapshotNextMeeting.event_time ? ` · ${prettyTime(snapshotNextMeeting.event_time)}` : ''}`
         + `${where ? ` · ${where}` : ''}`
       );
     }
-    if (helpFocus) meetupLines.push(`HIVE Help focus: ${helpFocus}`);
-    if (upcomingHangs.length > 0) {
+    if (helperSnapshot.help_focus) meetupLines.push(`HIVE Help focus: ${helperSnapshot.help_focus}`);
+    if (helperSnapshot.upcoming_hangs.length > 0) {
       meetupLines.push('Upcoming HIVE hangs:');
-      upcomingHangs.forEach((hang) => {
+      helperSnapshot.upcoming_hangs.forEach((hang: any) => {
         meetupLines.push(`    ${hang.title} — ${prettyDate(hang.event_date)}`);
       });
     }
-    meetupLines.push(...bulletsFrom(deckNotes.meetups));
+    meetupLines.push(...bulletsFrom(helperNotes.meetups));
+    const meetupDecisions = (transcriptResult?.decisions ?? []).filter((item) => item.section === 'meetups').map((item) => item.text);
     if (meetupLines.length > 0) sections.push({
       title: 'Plan the Meet Ups',
-      lines: meetupLines,
-      source_label: 'Calendar + Meeting Helper notes',
+      groups: [
+        { title: 'On the calendar', lines: meetupLines },
+        { title: 'What the room decided', lines: meetupDecisions },
+      ].filter((group) => group.lines.length > 0),
+      source_label: 'Meeting Helper calendar + authored notes + transcript reconciliation',
     });
 
-    /**
-     * The task ledger is the spine of the recap: what the room actually put in
-     * motion, who took it, and what has already been finished. It comes before
-     * check-in context because an intention brought into the room is not the
-     * same thing as an agreement that came out of it.
-     */
-    const jobLines: string[] = [];
-    todoGroups.forEach((group, text) => {
-      const [headline, ...rest] = text.split('\n');
-      const who = group.names.length > 4
-        ? `OG HIVE (${group.names.length} members)`
-        : group.names.length > 0
-          ? group.names.join(' & ')
-          : 'nobody yet';
-      const about = group.about ? ` (re: ${group.about})` : '';
-      const status = group.open === 0 && group.completed > 0
-        ? '✓ '
-        : group.completed > 0
-          ? `(${group.completed} done) `
-          : '';
-      jobLines.push(`${status}${headline.trim()}${about} — ${who}`);
-      rest.map((line) => line.replace(/^[\s·•-]+/, '').trim()).filter(Boolean)
-        .forEach((line) => jobLines.push(`    ${line}`));
+    const contextByPerson = new Map((transcriptResult?.member_context ?? []).map((item) => [firstName(item.person), item.context]));
+    const dutyLabelByTask = new Map((transcriptResult?.duty_labels ?? []).map((item) => [item.task, item.label]));
+    const helperCheckInByPerson = new Map(helperSnapshot.check_ins.map((entry) => [firstName(entry.name), entry]));
+    const dutyGroupsByPerson = new Map<string, typeof dutyRows>();
+    dutyRows.forEach((duty) => {
+      const about = duty.about ? firstName(duty.about) : 'Shared / not tied to one HummDinger';
+      dutyGroupsByPerson.set(about, [...(dutyGroupsByPerson.get(about) ?? []), duty]);
     });
-    if (jobLines.length > 0) sections.push({
-      title: 'What the meeting put in motion',
-      lines: jobLines,
-      source_label: `${todoGroups.size} surviving meeting to-do${todoGroups.size === 1 ? '' : 's'} · ${keptTodos.length} assignments · open or completed, never archived`,
-    });
-
-    // One block per person: their HD, their POP, and what they walked away with.
-    const hdLines: string[] = [];
-    const people: { name: string; hd: string; progress: string; obstacles: string; priorities: string; took: string[] }[] = [];
-    const seen = new Set<string>();
-    checkIns.forEach((entry) => {
-      if (seen.has(entry.userId)) return;
-      seen.add(entry.userId);
-      const hd = hdByUser.get(entry.userId);
-      const progress = answerOf(entry.answers, 'q_pop_progress');
-      const obstacles = answerOf(entry.answers, 'q_pop_obstacles');
-      const priorities = answerOf(entry.answers, 'q_pop_priorities');
-      const took: string[] = [];
-      todoGroups.forEach((group, text) => {
-        if (group.names.includes(entry.name)) took.push(text);
+    const hummdingerNames = [...new Set([
+      ...helperSnapshot.roster.map((person) => firstName(person.name)),
+      ...dutyGroupsByPerson.keys(),
+    ])];
+    const hummdingerGroups = hummdingerNames.flatMap((name) => {
+      const checkIn = helperCheckInByPerson.get(name);
+      const dutiesForPerson = dutyGroupsByPerson.get(name) ?? [];
+      const context = contextByPerson.get(name);
+      const fallbackContext = checkIn ? [
+        answerOf(checkIn.answers, 'q_pop_progress') ? `Progress: ${answerOf(checkIn.answers, 'q_pop_progress')}` : '',
+        answerOf(checkIn.answers, 'q_pop_obstacles') ? `Needs / obstacles: ${answerOf(checkIn.answers, 'q_pop_obstacles')}` : '',
+        answerOf(checkIn.answers, 'q_pop_priorities') ? `Focus: ${answerOf(checkIn.answers, 'q_pop_priorities')}` : '',
+      ].filter(Boolean) : [];
+      const dutyLines = dutiesForPerson.map((duty) => {
+        const who = duty.owners.length > 4 ? 'OG HIVE' : duty.owners.join(' & ') || 'Owner needs review';
+        return `${duty.status === 'complete' ? '✓ ' : ''}${dutyLabelByTask.get(duty.task) ?? duty.task} — ${who}`;
       });
-      if (!hd && !progress && !obstacles && !priorities && took.length === 0) return;
-
-      people.push({ name: entry.name, hd: hd ?? '', progress, obstacles, priorities, took });
-      hdLines.push(`${entry.name}${hd ? ` — ${hd}` : ''}`);
-      if (progress) hdLines.push(`    Progress: ${progress}`);
-      if (obstacles) hdLines.push(`    Obstacles / how HIVE can help: ${obstacles}`);
-      if (priorities) hdLines.push(`    Priorities: ${priorities}`);
-      if (took.length > 0) hdLines.push(`    Took on: ${took.join(' · ')}`);
+      const lines = [
+        ...(context ? [context] : fallbackContext),
+        ...dutyLines.map((line) => `Confirmed duty: ${line}`),
+      ];
+      return lines.length > 0 ? [{ title: name, lines, meta: hdByUser.get(checkIn?.user_id ?? '') ?? undefined }] : [];
     });
-    // One tight line per person, not their check-in pasted in full. This is the
-    // only place a model earns its keep here: everything else in this summary is
-    // a fact to arrange, but "36 lines of verbatim POP" -> "Sara: Europe trip is
-    // locked in (Aug 6-Sep 8); still hunting for a mental-health person" is
-    // genuine condensing (Nat 2026-07-25: "it's a summary, not word for word").
-    const condensed = await condenseHummdingers(people, communityId);
-    if (condensed.length > 0) {
-      sections.push({
-        title: 'What people brought into the meeting',
-        lines: condensed,
-        source_label: `Pre-meeting context only · ${responsePeriod} check-ins · ${checkIns.length} current-cycle response${checkIns.length === 1 ? '' : 's'}`,
-      });
-    } else if (hdLines.length > 0) {
-      sections.push({
-        title: 'What people brought into the meeting',
-        lines: hdLines,
-        source_label: `Pre-meeting context only · ${responsePeriod} check-ins · ${checkIns.length} current-cycle response${checkIns.length === 1 ? '' : 's'}`,
-      });
-    }
+    if (hummdingerGroups.length > 0) sections.push({
+      title: 'HummDinger Sesh',
+      intro: 'What people brought, what they asked for, and the current duty ledger that came out of the conversation.',
+      groups: hummdingerGroups,
+      source_label: `Meeting Helper member inputs + transcript context + ${todoGroups.size} current, non-archived duties`,
+    });
 
-    // Granted wishes are the whole point of the HIVE, so they keep a section of
-    // their own rather than being buried in a wrap-up. The rest of the old
-    // wrap-up (raw detail dump, board-post list) is gone — the sections above
-    // already say all of it.
     const grantedLines = granted.map((wish) => {
       const owner = wish.user?.name ? firstName(wish.user.name) : 'Someone';
       const granters = (wish.granters ?? [])
@@ -710,27 +948,36 @@ serve(async (req) => {
         .filter(Boolean);
       return `${owner}: ${(wish.title ?? wish.description).slice(0, 90)}${granters.length ? ` — thanks ${granters.join(', ')}` : ''}`;
     });
-    if (grantedLines.length > 0) sections.push({
-      title: 'Wishes granted 🌟',
-      lines: grantedLines,
-      source_label: 'Meeting-day wish activity',
+    const wrapDecisions = (transcriptResult?.decisions ?? [])
+      .filter((item) => item.section === 'hummdinger' || item.section === 'wrapup')
+      .map((item) => item.text);
+    const wrapGroups = [
+      { title: 'Confirmed decisions', lines: wrapDecisions },
+      { title: 'Wishes granted', lines: grantedLines },
+    ].filter((group) => group.lines.length > 0);
+    if (wrapGroups.length > 0 || transcriptResult?.overview) sections.push({
+      title: 'Wrap-Up',
+      intro: transcriptResult?.overview || 'The Helper record is sealed. Transcript reconciliation will appear when a recording is available.',
+      groups: wrapGroups,
+      source_label: transcript ? 'Meeting Helper + current duties + transcript reconciliation' : 'Meeting Helper + current duties; no transcript was available at seal time',
     });
 
-    // Reading order follows the reason somebody opened a recap: what the room
-    // put in motion first, then dates and authored updates, with pre-meeting
-    // check-in context last. This is intentionally not the deck's slide order.
-    const sectionOrder = new Map([
-      ['What the meeting put in motion', 0],
-      ['Plan the Meet Ups', 1],
-      ['News from Nat', 2],
-      ['App updates', 3],
-      ['Treasurer', 4],
-      ['Wishes granted 🌟', 5],
-      ['What people brought into the meeting', 6],
-    ]);
-    sections.sort((a, b) => (sectionOrder.get(a.title) ?? 99) - (sectionOrder.get(b.title) ?? 99));
+    if ((transcriptResult?.conflicts ?? []).length > 0) sections.push({
+      title: 'Needs Review',
+      intro: 'These sources do not fully agree. The record keeps the discrepancy visible instead of choosing a side.',
+      groups: transcriptResult!.conflicts.map((conflict) => ({
+        title: conflict.topic,
+        lines: [
+          conflict.helper_record ? `Helper record: ${conflict.helper_record}` : '',
+          conflict.transcript_evidence ? `Transcript evidence: ${conflict.transcript_evidence}` : '',
+        ].filter(Boolean),
+      })),
+      tone: 'warning',
+      source_label: 'Automatic discrepancy check; human review required',
+    });
 
-    const narrative = summaryText;
+    const narrative = transcriptResult?.overview
+      || `${isRebuild ? 'Rebuilt' : 'Sealed'} from the Meeting Helper and ${todoGroups.size} current dut${todoGroups.size === 1 ? 'y' : 'ies'}.${tally ? ` ${tally}.` : ''}`;
 
     const summaryPayload = {
       ...(isRebuild ? previousGeneratedFields : previous),
@@ -739,12 +986,11 @@ serve(async (req) => {
       // Live notes supersede the apply nag; an already-applied import keeps its badge.
       import_status: previous.import_status === 'applied' ? 'applied' : 'live',
       summary: narrative,
-      // A live seal never upgrades derived activity into a verified decision.
-      // Keep reviewed imported decisions only when notes were explicitly
-      // applied; otherwise start empty instead of carrying an older draft.
-      decisions: previous.import_status === 'applied'
-        ? (previous.decisions as string[] | undefined) ?? []
-        : [],
+      // Machine-readable copy for Clive and older consumers. The humane reader
+      // places these inside their Helper sections instead of printing them a
+      // second time below the outline.
+      decisions: transcriptResult?.decisions.map((item) => item.text)
+        ?? (previous.import_status === 'applied' ? (previous.decisions as string[] | undefined) ?? [] : []),
       details,
       wishes_surfaced: (previous.wishes_surfaced as unknown[] | undefined) ?? [],
       board_posts_created: [],
@@ -757,6 +1003,7 @@ serve(async (req) => {
       action_item_assignments_seen: keptTodos.length,
       events_created: events.length,
       live_sealed_at: rebuiltAt,
+      meeting_helper_snapshot: helperSnapshot,
       ...(isRebuild
         ? {
           rebuilt_at: rebuiltAt,
@@ -766,20 +1013,24 @@ serve(async (req) => {
         : {}),
       sections,
       provenance: {
-        kind: 'automatic_activity_record',
+        kind: 'reconciled_helper_record',
         meeting_date: date,
         generated_from: [
-          'surviving_meeting_todos',
-          'meeting_day_events',
           'meeting_helper_notes',
-          'current_cycle_check_ins_context',
+          'meeting_helper_member_inputs',
+          'meeting_helper_final_attendance',
+          'current_live_todo_ledger',
+          ...(transcript ? ['live_transcript_supporting_evidence'] : []),
         ],
-        transcript_used: false,
+        transcript_used: Boolean(reconciled),
+        transcript_status: reconciled ? 'reconciled' : 'not_available_at_seal',
+        transcript_original_line_count: reconciled?.evidence.originalLineCount ?? 0,
+        transcript_evidence_line_count: reconciled?.evidence.evidenceLineCount ?? 0,
+        transcript_evidence_truncated: reconciled?.evidence.truncated ?? false,
+        helper_structure_preserved: true,
         rebuilt: isRebuild,
-        // Applying suggested artifacts does not prove a decision was made in
-        // the room. A future explicit review action may set this timestamp;
-        // until then the UI must keep calling these unverified.
-        decisions_verified: Boolean(previous.decisions_verified_at),
+        decisions_verified: false,
+        conflicts_need_review: (transcriptResult?.conflicts ?? []).length,
         check_in_period: responsePeriod,
         check_in_response_count: checkIns.length,
         community_member_count: memberNames.size,
