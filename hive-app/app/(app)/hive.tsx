@@ -61,7 +61,7 @@ import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateRangeShort, formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUtils';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { getStoredItem, getStoredItemAsync, removeStoredItem, setStoredItem, setStoredItemAsync } from '../../lib/webStorage';
-import { getAppNewsSeenKey, getUnseenAppNews, type AppNewsEntry } from '../../lib/appNews';
+import { getAppNewsSeenKey, getNewestAppNews, getUnseenAppNews, type AppNewsEntry } from '../../lib/appNews';
 import { loadActivityRead, persistActivityRead, loadAppNewsSeen, persistAppNewsSeen } from '../../lib/readState';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { addHomeResetListener } from '../../lib/homeNavigation';
@@ -2703,11 +2703,15 @@ export default function HiveScreen() {
     // The profile is the truth; the old per-device key is only a fallback for
     // anyone who dismissed this before it moved (Nat 2026-08-02).
     const fromProfile = loadAppNewsSeen(profile);
+    // Someone who has never dismissed the strip gets only what shipped after
+    // they joined. The whole build log is not news to a new member; it is the
+    // app they already walked into (Nat 2026-08-19).
+    const joinedAt = (profile.created_at as string | undefined) ?? null;
     if (fromProfile) {
-      setUnseenNews(getUnseenAppNews(fromProfile));
+      setUnseenNews(getUnseenAppNews(fromProfile, joinedAt));
     } else {
       void getStoredItemAsync(getAppNewsSeenKey(profile.id)).then((lastSeenId) => {
-        if (!cancelled) setUnseenNews(getUnseenAppNews(lastSeenId));
+        if (!cancelled) setUnseenNews(getUnseenAppNews(lastSeenId, joinedAt));
       });
     }
     return () => { cancelled = true; };
@@ -2717,7 +2721,8 @@ export default function HiveScreen() {
     setUnseenNews([]);
     setNewsExpanded(false);
     if (!profile) return;
-    const newest = getUnseenAppNews(null)[0];
+    // Caught up means caught up with everything, not just the five on screen.
+    const newest = getNewestAppNews();
     if (newest) {
       void setStoredItemAsync(getAppNewsSeenKey(profile.id), newest.id);
       void persistAppNewsSeen(profile, newest.id);

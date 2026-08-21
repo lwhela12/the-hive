@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -66,13 +66,15 @@ export function MentionSuggestions({
 
   // Nat: "a little arrow to collapse this whole thing" — the list can run to
   // 240px right above the input, and on a phone that's most of the visible
-  // room. Reopens on its own each time a fresh "@" is typed (`active` going
-  // false-to-true), so collapsing once does not stick for the rest of the
-  // conversation — only for this one lookup (2026-08-08).
-  const [open, setOpen] = useState(true);
-  useEffect(() => {
-    if (active) setOpen(true);
-  }, [active]);
+  // room.
+  //
+  // It starts **shut**, and stays shut until someone opens it (Nat 2026-08-21:
+  // "I already know how to tag people and I have to collapse it every time and
+  // it's annoying"). It used to start open and force itself back open on every
+  // fresh "@", which meant the arrow could not win — one tap closed it and the
+  // next keystroke reopened it. Opening is now the deliberate act, and the
+  // choice lasts for as long as the composer is on screen.
+  const [open, setOpen] = useState(false);
 
   // The group rows are derived here when a composer has told us its reach, so
   // the labels are right even for screens that hand their suggestions in from a
@@ -147,7 +149,9 @@ export function MentionSuggestions({
                 color: skin.dark ? skin.gold : '#8a6b30',
               }}
             >
-              Tag someone, or a whole HIVE
+              {open
+                ? 'Tag someone, or a whole HIVE'
+                : `Tag someone, or a whole HIVE · ${visibleSuggestions.length}`}
             </Text>
             <Ionicons
               name={open ? 'chevron-up' : 'chevron-down'}

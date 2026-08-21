@@ -168,7 +168,7 @@ export function WishManageModal<TWish extends ManagedWish>({
   };
 
   return (
-    <Modal visible={visible && !!wish} animationType="fade" transparent onRequestClose={onClose}>
+    <Modal visible={visible && !!wish} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable
         style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.38)', justifyContent: 'flex-end' }}
         onPress={onClose}

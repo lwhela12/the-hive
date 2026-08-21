@@ -28,6 +28,18 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-21-tag-panel-starts-shut',
+    date: '2026-08-21',
+    title: 'The tag list stays out of your way',
+    detail: 'Typing @ no longer drops a long list over the box you are writing in. The bar says how many people are behind it; tap it open when you want it.',
+  },
+  {
+    id: '2026-08-21-new-members-start-fresh',
+    date: '2026-08-21',
+    title: 'A new member starts with a clean slate',
+    detail: 'What\u2019s new now means new since you joined, so nobody arrives to a hundred announcements about things that were already here.',
+  },
+  {
     id: '2026-08-21-fix-a-to-do-without-losing-it',
     date: '2026-08-21',
     title: 'You can fix the wording of a to-do',
@@ -1272,12 +1284,41 @@ export function getAppNewsSeenKey(profileId: string) {
 }
 
 /** Entries newer than whatever was last acknowledged. */
-export function getUnseenAppNews(lastSeenId: string | null): AppNewsEntry[] {
-  const ordered = getAppNews();
-  if (!lastSeenId) return ordered;
+/**
+ * How much of the build log a first-time visitor is allowed to inherit.
+ *
+ * Somebody who has never dismissed the strip has no `lastSeenId`, and this
+ * used to hand them the entire list — a brand-new member's very first sight
+ * of Home was a hundred and twenty-nine unread announcements about features
+ * that were already there when they arrived (Nat 2026-08-19).
+ *
+ * Nothing that shipped before you joined is news to you. It is just the app.
+ */
+const FIRST_VISIT_LIMIT = 5;
 
-  const seenIndex = ordered.findIndex((entry) => entry.id === lastSeenId);
-  // An id we don't recognise means the entry was removed — treat it as if
-  // nothing had been seen rather than silently hiding everything.
-  return seenIndex === -1 ? ordered : ordered.slice(0, seenIndex);
+export function getUnseenAppNews(
+  lastSeenId: string | null,
+  /** When this person joined, ISO. Anything older than this is not news. */
+  joinedAt?: string | null,
+): AppNewsEntry[] {
+  const ordered = getAppNews();
+
+  if (lastSeenId) {
+    const seenIndex = ordered.findIndex((entry) => entry.id === lastSeenId);
+    // An id we don't recognise means the entry was removed — treat it as if
+    // nothing had been seen rather than silently hiding everything.
+    return seenIndex === -1 ? ordered.slice(0, FIRST_VISIT_LIMIT) : ordered.slice(0, seenIndex);
+  }
+
+  // No join date to reason from — an older account that predates the column.
+  // Show the most recent handful rather than the whole history.
+  if (!joinedAt) return ordered.slice(0, FIRST_VISIT_LIMIT);
+
+  const joinedDay = joinedAt.slice(0, 10);
+  return ordered.filter((entry) => entry.date >= joinedDay).slice(0, FIRST_VISIT_LIMIT);
+}
+
+/** The newest entry there is — what "you are caught up" means. */
+export function getNewestAppNews(): AppNewsEntry | null {
+  return getAppNews()[0] ?? null;
 }
