@@ -14,7 +14,7 @@ import { AppHeader } from '../../components/navigation';
 import { FadeIn } from '../../components/ui/FadeIn';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { UpcomingMeetingsSkeleton, PastRecordingsSkeleton } from '../../components/meetings/MeetingsSkeleton';
-import { formatDateLong, formatTime, parseAmericanDate } from '../../lib/dateUtils';
+import { formatDateLong, formatTimeRange, parseAmericanDate } from '../../lib/dateUtils';
 import { normalizeHiveBrandText } from '../../lib/hiveBrand';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { ComposerBar } from '../../components/ui/ComposerBar';
@@ -80,6 +80,7 @@ type EventEditForm = {
   location: string;
   event_date: string;
   event_time: string;
+  end_time: string;
 };
 
 type MeetingFormDraft<T> = {
@@ -353,6 +354,7 @@ export default function MeetingsScreen() {
     location: '',
     event_date: '',
     event_time: '',
+    end_time: '',
   });
   const [savingEdit, setSavingEdit] = useState(false);
   const [addingMeetLink, setAddingMeetLink] = useState(false);
@@ -542,6 +544,7 @@ export default function MeetingsScreen() {
     description: string;
     date: string;
     time: string;
+    endTime?: string;
     duration: number;
     attendeeIds: string[];
     timezone: string;
@@ -557,6 +560,7 @@ export default function MeetingsScreen() {
         description: data.description,
         date: data.date,
         time: data.time,
+        endTime: data.endTime,
         duration: data.duration,
         communityId,
         attendeeIds: data.attendeeIds,
@@ -652,6 +656,7 @@ export default function MeetingsScreen() {
         return `${m}-${d}-${y}`;
       })(),
       event_time: event.event_time || '',
+      end_time: event.end_time || '',
     });
     setEditingEvent(event);
     if (activeMeetingEditKey) setStoredItem(activeMeetingEditKey, event.id);
@@ -683,6 +688,7 @@ export default function MeetingsScreen() {
           location: editForm.location || null,
           date: parseAmericanDate(editForm.event_date) ?? editForm.event_date,
           time: editForm.event_time || null,
+          endTime: editForm.end_time || null,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
       });
@@ -1457,11 +1463,12 @@ export default function MeetingsScreen() {
                     </Text>
                     <Text className="text-sm text-label mt-1">
                       {formatDateLong(event.event_date)}
-                      {/* `formatTime`, not the raw column — this line was
+                      {/* `formatTimeRange`, not the raw column — this line was
                           printing "September 3, 2026 at 17:30:00" (Nat,
                           2026-08-12). The shared formatter has been in
-                          dateUtils the whole time. */}
-                      {event.event_time ? ` at ${formatTime(event.event_time)}` : ''}
+                          dateUtils the whole time; it now says "5:00 – 7:00 PM"
+                          when the meeting has an end time (migration 202). */}
+                      {event.event_time ? ` at ${formatTimeRange(event.event_time, event.end_time)}` : ''}
                     </Text>
                     {event.location && (
                       <Text className="text-sm text-gray-600 mt-1">
@@ -1710,6 +1717,22 @@ export default function MeetingsScreen() {
                 className="rounded-xl px-4 py-3 text-base bg-white"
                 style={{ fontFamily: 'Lato_400Regular', borderWidth: 1, borderColor: FIELD_BORDER }}
                 placeholder="e.g. 6:00 PM"
+                placeholderTextColor={PLACEHOLDER_INK}
+                returnKeyType="next"
+              />
+            </View>
+
+            {/* This is the box Nat came to when she wanted 5-7 and found only a
+                start: "i just treid to update taht in the app & i couldnt add
+                windo, like 5-7, i could only put in 5pm" (2026-08-21). */}
+            <View className="mb-4">
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className={FIELD_LABEL_CLASS}>Ends (optional)</Text>
+              <TextInput
+                value={editForm.end_time}
+                onChangeText={(text) => setEditForm((f) => ({ ...f, end_time: text }))}
+                className="rounded-xl px-4 py-3 text-base bg-white"
+                style={{ fontFamily: 'Lato_400Regular', borderWidth: 1, borderColor: FIELD_BORDER }}
+                placeholder="e.g. 8:00 PM"
                 placeholderTextColor={PLACEHOLDER_INK}
                 returnKeyType="send"
                 onSubmitEditing={handleSaveEdit}

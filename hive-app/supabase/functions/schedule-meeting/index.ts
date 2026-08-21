@@ -6,7 +6,7 @@
  * Only an admin of the HIVE being scheduled for may call this (owners too).
  *
  * POST /functions/v1/schedule-meeting
- * Body: { title, description?, date, time, duration?, communityId, attendeeIds? }
+ * Body: { title, description?, date, time, duration?, endTime?, communityId, attendeeIds? }
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -50,10 +50,28 @@ interface ScheduleMeetingRequest {
   date: string; // YYYY-MM-DD
   time: string; // HH:MM
   duration?: number; // minutes, defaults to 150 for HIVE meetings
+  /**
+   * When the meeting finishes, given straight rather than worked out from
+   * `duration` — Nat: "i couldnt add window, like 5-7, i could only put in
+   * 5pm" (migration 202). When given, it decides the calendar invite's end
+   * and the stored `end_time` instead of `duration`. Absent, everything
+   * behaves exactly as it always has.
+   */
+  endTime?: string; // HH:MM
   communityId: string;
   attendeeIds?: string[]; // User IDs to invite
   timezone?: string; // User's timezone, e.g., 'America/Los_Angeles'
   location?: string; // Physical address for in-person meetings
+}
+
+/** 'HH:MM' to minutes past midnight, or null if it isn't a time. */
+function timeToMinutes(value: string): number | null {
+  const match = value.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
 }
 
 interface Attendee {
@@ -216,6 +234,7 @@ Deno.serve(async (req) => {
       date,
       time,
       duration = DEFAULT_MEETING_DURATION_MINUTES,
+      endTime,
       communityId,
       attendeeIds,
       timezone,
@@ -246,6 +265,19 @@ Deno.serve(async (req) => {
 
     if (!dateLooksRight || !timeLooksRight) {
       return errorResponse('Please give the date as YYYY-MM-DD and the time as HH:MM.', 400);
+    }
+
+    // Same check for the end, when one was given — a window needs both ends
+    // in order, or a meeting reads as ending before it starts.
+    let endMinutes: number | null = null;
+    if (endTime) {
+      endMinutes = timeToMinutes(String(endTime));
+      if (endMinutes === null) {
+        return errorResponse('Please give the end time as HH:MM.', 400);
+      }
+      if (endMinutes <= startHour * 60 + startMinute) {
+        return errorResponse('End time must be after the start time.', 400);
+      }
     }
 
     // A day is the ceiling because anything longer belongs on the calendar as a
@@ -290,20 +322,31 @@ Deno.serve(async (req) => {
       .padStart(2, '0')}`;
     const startDateTime = `${date}T${startTimeStr}:00`;
 
-    // Calculate end time from the start we already checked above, rather than
-    // splitting the string a second time — one reading of the clock, so the
-    // value that was vetted is the value that gets used.
-    const totalMinutes = startHour * 60 + startMinute + duration;
-    const endHours = Math.floor(totalMinutes / 60) % 24;
-    const endMinutes = totalMinutes % 60;
-    const endTimeStr = `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}:00`;
-
-    // Handle day rollover if meeting goes past midnight
+    // The end the caller actually gave us wins over the guessed duration —
+    // Nat: "i couldnt add window, like 5-7, i could only put in 5pm." An
+    // explicit end time stays on the same calendar day as the start; anyone
+    // scheduling something that runs past midnight is asking for a multi-day
+    // event with an end DATE, not a meeting end time.
     let endDateStr = date;
-    if (totalMinutes >= 24 * 60) {
-      const dateObj = new Date(`${date}T12:00:00`); // Use noon to avoid DST issues
-      dateObj.setDate(dateObj.getDate() + Math.floor(totalMinutes / (24 * 60)));
-      endDateStr = dateObj.toISOString().split('T')[0];
+    let endTimeStr: string;
+    if (endTime && endMinutes !== null) {
+      const [endHour, endMinute] = String(endTime).split(':').map(Number);
+      endTimeStr = `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}:00`;
+    } else {
+      // Calculate end time from the start we already checked above, rather than
+      // splitting the string a second time — one reading of the clock, so the
+      // value that was vetted is the value that gets used.
+      const totalMinutes = startHour * 60 + startMinute + duration;
+      const durationEndHours = Math.floor(totalMinutes / 60) % 24;
+      const durationEndMinutes = totalMinutes % 60;
+      endTimeStr = `${durationEndHours.toString().padStart(2, '0')}:${durationEndMinutes.toString().padStart(2, '0')}:00`;
+
+      // Handle day rollover if meeting goes past midnight
+      if (totalMinutes >= 24 * 60) {
+        const dateObj = new Date(`${date}T12:00:00`); // Use noon to avoid DST issues
+        dateObj.setDate(dateObj.getDate() + Math.floor(totalMinutes / (24 * 60)));
+        endDateStr = dateObj.toISOString().split('T')[0];
+      }
     }
     const endDateTime = `${endDateStr}T${endTimeStr}`;
 
@@ -427,6 +470,7 @@ Deno.serve(async (req) => {
         description,
         event_date: date,
         event_time: startTimeStr,
+        end_time: endTime || null,
         event_type: 'meeting',
         google_event_id: calendarEvent.id,
         meet_link: meetLink,

@@ -235,6 +235,14 @@ interface MeetingDetails {
   weekday: string;
   dateLabel: string;
   timeLabel: string | null;
+  /**
+   * When the meeting finishes, formatted the same way as `timeLabel`. Null
+   * for the great majority of meetings, which have no end time yet — Nat:
+   * "i couldnt add window, like 5-7, i could only put in 5pm" (migration
+   * 202). Kept separate from `timeLabel` rather than folded together here so
+   * the byte-identical no-end-time case never touches this function at all.
+   */
+  endTimeLabel: string | null;
   location: string | null;
   note: string | null;
 }
@@ -272,24 +280,26 @@ async function loadMeetingDetails(
     weekday: weekdayOf(dateOnly),
     dateLabel: `${MONTH_NAMES[m - 1] ?? ''} ${d}`,
     timeLabel: null,
+    endTimeLabel: null,
     location: null,
     note: null,
   };
   try {
     const { data } = await admin
       .from('events')
-      .select('event_time, location, description')
+      .select('event_time, end_time, location, description')
       .eq('community_id', communityId)
       .eq('event_type', 'meeting')
       .eq('event_date', dateOnly)
       .limit(1);
     const row = data?.[0] as
-      | { event_time: string | null; location: string | null; description: string | null }
+      | { event_time: string | null; end_time: string | null; location: string | null; description: string | null }
       | undefined;
     if (!row) return fallback;
     return {
       ...fallback,
       timeLabel: formatClock(row.event_time),
+      endTimeLabel: formatClock(row.end_time),
       location: row.location?.trim() || null,
       note: row.description?.trim() || null,
     };
@@ -388,8 +398,17 @@ function checkInEmailHtml(
     const when = meeting
       ? `${meeting.weekday}, ${meeting.dateLabel}`
       : `${month} ${day}`;
-    const whenLine = meeting?.timeLabel
-      ? `${when} · from ${meeting.timeLabel}`
+    // "from 5:00 – 7:00 PM" when the meeting has an end time, the AM/PM said
+    // once — Nat: "i couldnt add window, like 5-7, i could only put in
+    // 5pm" (migration 202). No end time, no change: the line reads exactly
+    // as it always has.
+    const timeWindow = meeting?.timeLabel && meeting?.endTimeLabel
+      ? (meeting.timeLabel.slice(-2) === meeting.endTimeLabel.slice(-2)
+        ? `${meeting.timeLabel.slice(0, -3)} – ${meeting.endTimeLabel}`
+        : `${meeting.timeLabel} – ${meeting.endTimeLabel}`)
+      : meeting?.timeLabel;
+    const whenLine = timeWindow
+      ? `${when} · from ${timeWindow}`
       : when;
     const note = meeting?.note ? noteHtml(meeting.note) : '';
     const where = meeting?.location

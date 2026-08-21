@@ -24,7 +24,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth, type HiveMembership } from '../../lib/hooks/useAuth';
 import { getAppNews } from '../../lib/appNews';
 import { accentOnDark, accentWash, hiveAccent, hiveDisplayName, normalizeHiveBrandText } from '../../lib/hiveBrand';
-import { formatDateLong, formatTime } from '../../lib/dateUtils';
+import { formatDateLong, formatTimeRange } from '../../lib/dateUtils';
 import { getLocalIsoDate } from '../../lib/hooks/useArrivalBoard';
 import type { Community } from '../../types';
 
@@ -75,6 +75,8 @@ type HiveEvent = {
   title: string;
   event_date: string;
   event_time: string | null;
+  /** When the meeting finishes — migration 202. Null on almost everything today. */
+  end_time: string | null;
   event_type: string;
   community_id: string;
   end_date: string | null;
@@ -576,7 +578,7 @@ export default function HiveWideScreen() {
         const today = getLocalIsoDate(new Date());
         const { data: eventRows } = await supabase
           .from('events')
-          .select('id, title, event_date, event_time, event_type, community_id, end_date, visibility')
+          .select('id, title, event_date, event_time, end_time, event_type, community_id, end_date, visibility')
           .in('community_id', hiveList.map((hive) => hive.id))
           .gte('event_date', today)
           .or('status.is.null,status.eq.scheduled')
@@ -872,7 +874,11 @@ export default function HiveWideScreen() {
                             >
                               {[
                                 formatDateLong(event.event_date),
-                                event.event_time ? formatTime(event.event_time) : null,
+                                // "5:00 – 7:00 PM" once the meeting has an end
+                                // time — Nat: "i couldnt add window, like
+                                // 5-7, i could only put in 5pm" (migration
+                                // 202). Null end time reads exactly as before.
+                                event.event_time ? formatTimeRange(event.event_time, event.end_time) : null,
                                 hive?.name ? hiveDisplayName(hive.name) : null,
                               ].filter(Boolean).join(' · ')}
                             </Text>

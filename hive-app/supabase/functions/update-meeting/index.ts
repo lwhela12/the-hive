@@ -5,7 +5,7 @@
  * You must be signed in AND an admin of the HIVE that owns the meeting.
  *
  * POST /functions/v1/update-meeting
- * Body: { eventId, title?, description?, location?, date?, time? }
+ * Body: { eventId, title?, description?, location?, date?, time?, endTime? }
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -35,7 +35,57 @@ interface UpdateMeetingRequest {
   location?: string;
   date?: string; // YYYY-MM-DD
   time?: string; // HH:MM
+  /**
+   * When the meeting finishes — Nat: "i couldnt add window, like 5-7, i could
+   * only put in 5pm" (migration 202). Optional; a meeting with no end time
+   * behaves exactly as it always has.
+   */
+  endTime?: string; // HH:MM
   timezone?: string;
+}
+
+/** 'HH:MM' or 'HH:MM:SS' to minutes past midnight, or null if it isn't a time. */
+/**
+ * A time, however somebody typed it, as `HH:MM:SS`.
+ *
+ * The edit form's time boxes are plain text — Nat types "6:00 PM", because
+ * that is what a time looks like. Postgres is happy with that, so it stored
+ * fine, but everything downstream here assumed 24-hour input and quietly
+ * produced nonsense: `${date}T${time}:00` turns "6:00 PM" into
+ * `2026-09-03T6:00 PM:00`, and turns a value read back from the database
+ * ("17:00:00") into `2026-09-03T17:00:00:00`. Google Calendar refuses both.
+ *
+ * One reader, used for validating, for storing, and for building the calendar
+ * entry, so the three cannot drift apart again.
+ */
+function normalizeClock(value?: string | null): string | null {
+  const raw = (value ?? '').trim();
+  if (!raw) return null;
+
+  const match = raw.match(/^(\d{1,2})(?::(\d{2}))?(?::(\d{2}))?\s*([AaPp][Mm])?$/);
+  if (!match) return null;
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2] ?? '0');
+  const seconds = Number(match[3] ?? '0');
+  const meridiem = match[4]?.toLowerCase();
+
+  if (meridiem) {
+    if (hours < 1 || hours > 12) return null;
+    if (meridiem === 'pm' && hours !== 12) hours += 12;
+    if (meridiem === 'am' && hours === 12) hours = 0;
+  }
+
+  if (hours > 23 || minutes > 59 || seconds > 59) return null;
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+}
+
+function timeToMinutes(value: string): number | null {
+  const clock = normalizeClock(value);
+  if (!clock) return null;
+  const [hours, minutes] = clock.split(':').map(Number);
+  return hours * 60 + minutes;
 }
 
 /**
@@ -192,7 +242,7 @@ Deno.serve(async (req) => {
   try {
     // Parse request body
     const body: UpdateMeetingRequest = await req.json();
-    const { eventId, title, description, location, date, time, timezone } = body;
+    const { eventId, title, description, location, date, time, timezone, endTime } = body;
 
     if (!eventId) {
       return errorResponse('Missing required field: eventId', 400);
@@ -209,7 +259,7 @@ Deno.serve(async (req) => {
     // allowed anywhere near the rest of it.
     const { data: event, error: fetchError } = await adminSupabase
       .from('events')
-      .select('id, community_id, google_event_id, event_date, event_time, event_type, meet_link')
+      .select('id, community_id, google_event_id, event_date, event_time, end_time, event_type, meet_link')
       .eq('id', eventId)
       .maybeSingle();
 
@@ -285,13 +335,31 @@ Deno.serve(async (req) => {
       }
     }
 
+    // A window needs both ends in order, or a meeting reads as ending before
+    // it starts. Checked against whatever the start is ABOUT to be — the new
+    // time if one was sent, otherwise the meeting's existing one.
+    if (endTime !== undefined && endTime) {
+      const endMinutes = timeToMinutes(endTime);
+      if (endMinutes === null) {
+        return errorResponse('For the end time, use something like 7:00 PM.', 400);
+      }
+      const effectiveStart = time !== undefined ? time : event.event_time;
+      if (effectiveStart) {
+        const startMinutes = timeToMinutes(effectiveStart);
+        if (startMinutes !== null && endMinutes <= startMinutes) {
+          return errorResponse('End time must be after the start time.', 400);
+        }
+      }
+    }
+
     // Build database update
     const dbUpdate: Record<string, unknown> = {};
     if (title !== undefined) dbUpdate.title = title;
     if (description !== undefined) dbUpdate.description = description || null;
     if (location !== undefined) dbUpdate.location = location || null;
     if (date !== undefined) dbUpdate.event_date = date;
-    if (time !== undefined) dbUpdate.event_time = time || null;
+    if (time !== undefined) dbUpdate.event_time = normalizeClock(time);
+    if (endTime !== undefined) dbUpdate.end_time = normalizeClock(endTime);
 
     // Update Google Calendar if we have a google_event_id
     if (event.google_event_id) {
@@ -303,16 +371,23 @@ Deno.serve(async (req) => {
         let endDateTime: string | undefined;
         const timeZone = timezone || 'America/New_York';
 
-        if (date || time) {
+        if (date || time || endTime) {
           const eventDate = date || event.event_date;
-          const eventTime = time || event.event_time || '12:00';
-          startDateTime = `${eventDate}T${eventTime}:00`;
+          const eventTime = normalizeClock(time) || normalizeClock(event.event_time) || '12:00:00';
+          startDateTime = `${eventDate}T${eventTime}`;
 
-          // Calculate end time (assume 1 hour duration)
-          const [hours, minutes] = eventTime.split(':').map(Number);
-          const endHours = (hours + 1) % 24;
-          const endTimeStr = `${endHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
-          endDateTime = `${eventDate}T${endTimeStr}`;
+          const givenEnd = normalizeClock(endTime) || normalizeClock(event.end_time);
+          if (givenEnd) {
+            // The end somebody actually gave us, rather than a guessed hour —
+            // Nat: "i couldnt add window, like 5-7, i could only put in 5pm."
+            endDateTime = `${eventDate}T${givenEnd}`;
+          } else {
+            // Nobody has said when it finishes, so the calendar keeps its old
+            // guess of an hour rather than inventing a longer one.
+            const [hours, minutes] = eventTime.split(':').map(Number);
+            const endHours = (hours + 1) % 24;
+            endDateTime = `${eventDate}T${endHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
+          }
         }
 
         // A HIVE that meets on Meet, on a meeting that has no link yet, gets

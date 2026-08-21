@@ -25,6 +25,8 @@ export type HiveWideMeetingDay = {
   event_date: string;
   /** HH:MM:SS, or null for a meeting with a day but no time yet. */
   event_time: string | null;
+  /** When it finishes, if anybody said (migration 202/203). */
+  end_time?: string | null;
   community_id: string;
 };
 

@@ -110,3 +110,28 @@ export function formatTime(time: string): string {
   const displayHours = hours % 12 || 12;
   return `${displayHours}:${minutes} ${period}`;
 }
+
+/**
+ * When it starts and when it finishes — "5:00 – 7:00 PM".
+ *
+ * Nat, 2026-08-21: *"i couldnt add window, like 5-7, i could only put in
+ * 5pm."* Meetings had a start and nothing else, so members were told when to
+ * arrive and left to guess how long to hold (migration 202).
+ *
+ * The AM/PM is said once when both ends share it, because "5:00 PM – 7:00 PM"
+ * is the same fact written twice. With no end time this is exactly
+ * `formatTime`, so a meeting nobody has given an end to reads as it always did.
+ */
+export function formatTimeRange(start: string, end?: string | null): string {
+  if (!end) return formatTime(start);
+
+  const startText = formatTime(start);
+  const endText = formatTime(end);
+  const startPeriod = startText.slice(-2);
+  const endPeriod = endText.slice(-2);
+
+  if (startPeriod === endPeriod) {
+    return `${startText.slice(0, -3)} – ${endText}`;
+  }
+  return `${startText} – ${endText}`;
+}

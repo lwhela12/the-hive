@@ -23,6 +23,7 @@ export type ArrivalBoardMember = {
 export type ArrivalBoardMeeting = {
   event_date: string;
   event_time: string | null;
+  end_time?: string | null;
   title: string;
 };
 
@@ -58,7 +59,9 @@ export function formatMeetingDate(meeting: ArrivalBoardMeeting | null) {
     month: 'long',
     day: 'numeric',
   });
-  return meeting.event_time ? `${dateLabel} · ${formatEventTime(meeting.event_time)}` : dateLabel;
+  return meeting.event_time
+    ? `${dateLabel} · ${formatEventTimeRange(meeting.event_time, meeting.end_time)}`
+    : dateLabel;
 }
 
 // "17:30:00" reads like a stopwatch — render times as "5:30 PM".
@@ -69,6 +72,18 @@ export function formatEventTime(raw: string) {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+// And when it finishes, if anybody said. The AM/PM is said once when both ends
+// share it (Nat 2026-08-21: "i couldnt add window, like 5-7").
+export function formatEventTimeRange(start: string, end?: string | null) {
+  const startText = formatEventTime(start);
+  if (!end) return startText;
+  const endText = formatEventTime(end);
+  const startPeriod = startText.slice(-2);
+  return startPeriod === endText.slice(-2)
+    ? `${startText.slice(0, -3)}\u2013${endText}`
+    : `${startText}\u2013${endText}`;
 }
 
 // "Will we see you at the meeting?" — parsed loosely so copy tweaks to the
@@ -149,7 +164,7 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
           .eq('community_id', communityId),
         supabase
           .from('events')
-          .select('event_date, event_time, title')
+          .select('event_date, event_time, end_time, title')
           .eq('community_id', communityId)
           .eq('event_type', 'meeting')
           .gte('event_date', today)

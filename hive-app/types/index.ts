@@ -440,6 +440,8 @@ export interface Event extends Record<string, unknown> {
   event_date: string;
   end_date?: string | null;
   event_time?: string;
+  /** When it finishes, same day. Null means only a start time was given. */
+  end_time?: string | null;
   event_type: EventType;
   google_event_id?: string;
   meet_link?: string;

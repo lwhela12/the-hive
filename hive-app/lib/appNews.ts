@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-21-meetings-have-an-end-time',
+    date: '2026-08-21',
+    title: 'A meeting can say when it finishes',
+    detail: 'Events and meetings take an end time now, so you know how long to hold rather than only when to turn up. Everywhere a meeting time is shown reads the whole window.',
+    href: { pathname: '/meetings' },
+    action: 'Open Meetings',
+  },
+  {
     id: '2026-08-21-the-creed-reads-like-a-creed',
     date: '2026-08-21',
     title: 'The Creed has three new lines, and reads like a list again',

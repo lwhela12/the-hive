@@ -59,7 +59,7 @@ import { SignedAvatarImage } from '../../components/ui/Avatar';
 import { DAILY_QUESTIONS, deckForCommunity, getQuestionForDate, getTodayQuestion } from '../../lib/dailyQuestions';
 import type { DailyQuestion } from '../../lib/dailyQuestions';
 import { EventDatePicker } from '../../components/ui/DatePicker';
-import { formatDateRangeShort, formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUtils';
+import { formatDateRangeShort, formatDateShort, formatTime, parseAmericanDate, formatTimeRange } from '../../lib/dateUtils';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { getStoredItem, getStoredItemAsync, removeStoredItem, setStoredItem, setStoredItemAsync } from '../../lib/webStorage';
 import { getAppNewsSeenKey, getNewestAppNews, getUnseenAppNews, type AppNewsEntry } from '../../lib/appNews';
@@ -496,7 +496,7 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
                 </Text>
                 {event.event_time && (
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/60">
-                    {' '}at {formatTime(event.event_time)}
+                    {' '}at {formatTimeRange(event.event_time, event.end_time)}
                   </Text>
                 )}
                 {!event.event_time && !!event.end_date && (
@@ -1189,6 +1189,7 @@ export default function HiveScreen() {
   const [eventEndDate, setEventEndDate] = useState('');
   const [eventAllDay, setEventAllDay] = useState(false);
   const [eventTime, setEventTime] = useState('');
+  const [eventEndTime, setEventEndTime] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [eventLocation, setEventLocation] = useState('');
   // Who's it for? Defaults to HIVErs Only — an event goes public because
@@ -1219,6 +1220,7 @@ export default function HiveScreen() {
     setEventEndDate(event.end_date ? formatDateForInput(event.end_date) : '');
     setEventAllDay(!event.event_time);
     setEventTime(timeForEditing(event.event_time));
+    setEventEndTime(timeForEditing(event.end_time));
     // Without the strip, the box you edit opens already containing the line
     // the app generated last time — which is how it came to hold two of them
     // and none of Nat's own words.
@@ -2405,6 +2407,7 @@ export default function HiveScreen() {
     setEventEndDate('');
     setEventAllDay(false);
     setEventTime('');
+    setEventEndTime('');
     setEventDescription('');
     setEventLocation('');
     setEventAudience('members');
@@ -2422,6 +2425,7 @@ export default function HiveScreen() {
     setEventEndDate('');
     setEventAllDay(false);
     setEventTime('');
+    setEventEndTime('');
     setEventDescription('');
     setEventLocation('');
     setEventAudience('members');
@@ -2469,6 +2473,20 @@ export default function HiveScreen() {
       setEventError('For time, use something like 7:30 PM. Put extra details like doors/showtime in the description.');
       return;
     }
+    // An end time is optional, and only means anything alongside a start.
+    const normalizedEnd = eventAllDay ? { time: null, note: '' } : normalizeEventTimeInput(eventEndTime);
+    if (!eventAllDay && eventEndTime.trim() && !normalizedEnd.time) {
+      setEventError('For the end time, use something like 7:00 PM.');
+      return;
+    }
+    if (normalizedEnd.time && !normalizedTime.time) {
+      setEventError('Add a start time as well, so the two make a window.');
+      return;
+    }
+    if (normalizedEnd.time && normalizedTime.time && normalizedEnd.time <= normalizedTime.time) {
+      setEventError('The end time should be after the start time.');
+      return;
+    }
     const descriptionWithTimeNote = [
       normalizedTime.note ? `Time note: ${normalizedTime.note}` : null,
       // Any note already in there is stripped first — otherwise every save
@@ -2487,6 +2505,7 @@ export default function HiveScreen() {
             event_date: eventDateIso,
             end_date: eventEndDateIso,
             event_time: normalizedTime.time,
+            end_time: normalizedEnd.time,
             description: descriptionWithTimeNote || null,
             location: eventLocation || null,
             visibility: eventVisibility,
@@ -2506,6 +2525,7 @@ export default function HiveScreen() {
         if (descriptionWithTimeNote) newEvent.description = descriptionWithTimeNote;
         if (eventEndDateIso) newEvent.end_date = eventEndDateIso;
         if (normalizedTime.time) newEvent.event_time = normalizedTime.time;
+        if (normalizedEnd.time) newEvent.end_time = normalizedEnd.time;
         if (eventLocation.trim()) newEvent.location = eventLocation.trim();
         newEvent.visibility = eventVisibility;
         (newEvent as Record<string, unknown>).invited_scope = eventAudience;
@@ -4250,6 +4270,29 @@ export default function HiveScreen() {
                               selectionColor={FIELD_LOOK.ink}
                               value={eventTime}
                               onChangeText={setEventTime}
+                              returnKeyType="next"
+                              className="rounded-xl px-4 py-3 text-base text-charcoal"
+                              style={{
+                                fontFamily: FIELD_LOOK.font,
+                                backgroundColor: FIELD_LOOK.fill,
+                                borderWidth: 1,
+                                borderColor: FIELD_LOOK.border,
+                              }}
+                            />
+                          </View>
+                        )}
+                        {/* Nat, 2026-08-21: "i couldnt add window, like 5-7, i
+                            could only put in 5pm." Optional — a meeting with no
+                            end reads exactly as it always did. */}
+                        {!eventAllDay && (
+                          <View style={{ flexGrow: 1, flexBasis: 150 }}>
+                            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Ends (optional)</Text>
+                            <TextInput
+                              placeholder="9:00 PM"
+                              placeholderTextColor={FIELD_LOOK.placeholder}
+                              selectionColor={FIELD_LOOK.ink}
+                              value={eventEndTime}
+                              onChangeText={setEventEndTime}
                               returnKeyType="send"
                               onSubmitEditing={saveEvent}
                               className="rounded-xl px-4 py-3 text-base text-charcoal"

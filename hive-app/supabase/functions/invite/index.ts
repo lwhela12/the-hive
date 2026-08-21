@@ -263,18 +263,38 @@ serve(async (req) => {
   // fails or nothing is scheduled, the line just reads without a date rather
   // than holding up the invite.
   let nextMeetingLabel = '';
+  let nextMeetingWindow = '';
+  let nextMeetingWhere = '';
+  /** True only for a HIVE that has genuinely never met. */
+  let hiveHasNeverMet = false;
   try {
     const today = new Date().toISOString().slice(0, 10);
+    // Whether the rhythm is still being worked out is not a matter of opinion:
+    // a HIVE with meetings behind it has one, and a HIVE with none does not.
+    const { count: pastMeetings } = await supabaseAdmin
+      .from('events')
+      .select('id', { count: 'exact', head: true })
+      .eq('community_id', communityId)
+      .eq('event_type', 'meeting')
+      .lt('event_date', today);
+    hiveHasNeverMet = (pastMeetings ?? 0) === 0;
     const { data: nextMeeting } = await supabaseAdmin
       .from('events')
-      .select('event_date')
+      .select('event_date, event_time, end_time, location, meet_link')
       .eq('community_id', communityId)
       .eq('event_type', 'meeting')
       .gte('event_date', today)
       .order('event_date', { ascending: true })
       .limit(1)
       .maybeSingle();
-    const eventDate = (nextMeeting as { event_date?: string } | null)?.event_date;
+    const row = nextMeeting as {
+      event_date?: string;
+      event_time?: string | null;
+      end_time?: string | null;
+      location?: string | null;
+      meet_link?: string | null;
+    } | null;
+    const eventDate = row?.event_date;
     if (eventDate) {
       // Noon keeps the date from sliding a day backwards across time zones.
       nextMeetingLabel = new Date(`${eventDate}T12:00:00`).toLocaleDateString('en-US', {
@@ -282,10 +302,62 @@ serve(async (req) => {
         month: 'long',
         day: 'numeric',
       });
+
+      // Somebody deciding whether they can make it needs to know how long to
+      // hold, not only when to turn up. Nat, 2026-08-21, putting the Tech HIVE
+      // meeting in as 5-7: "i couldnt add window, like 5-7, i could only put in
+      // 5pm." Meetings carry an `end_time` now (migration 202).
+      const clock = (time?: string | null) => {
+        if (!time) return '';
+        const [h, m = '00'] = time.split(':');
+        const hour = parseInt(h, 10);
+        if (Number.isNaN(hour)) return '';
+        return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
+      };
+      const startText = clock(row?.event_time);
+      const endText = clock(row?.end_time);
+      if (startText && endText) {
+        // "5:00 PM - 7:00 PM" is the same fact written twice.
+        nextMeetingWindow = startText.slice(-2) === endText.slice(-2)
+          ? `${startText.slice(0, -3)}\u2013${endText}`
+          : `${startText}\u2013${endText}`;
+      } else if (startText) {
+        nextMeetingWindow = startText;
+      }
+
+      // Where it happens is part of "can I come?". A Meet HIVE says so rather
+      // than quietly listing somebody's street address.
+      nextMeetingWhere = row?.meet_link
+        ? 'on Google Meet'
+        : (row?.location ?? '').trim()
+          ? `at ${(row?.location ?? '').trim()}`
+          : '';
     }
   } catch (meetingLookupError) {
     console.error('Could not look up the next meeting for the invite email:', meetingLookupError);
   }
+
+  /**
+   * The meeting sentence.
+   *
+   * Nat, 2026-08-21, on whether to call the rhythm settled: *"i think that one
+   * keeps bouncing around a lot... should we say that's always when it is or
+   * just say that's when the first one will be?"* Her own answer, and the
+   * right one — it is the plan, and the first meeting is where it gets
+   * decided. A cadence announced before anybody has turned up is something to
+   * walk back later.
+   */
+  const whenLine = `<strong>${nextMeetingLabel}${nextMeetingWindow ? `, ${nextMeetingWindow}` : ''}</strong>${nextMeetingWhere ? ` ${nextMeetingWhere}` : ''}`;
+  const meetingSentence = !nextMeetingLabel
+    ? `<p style="font-size: 15px;">We'll let you know when the next meeting lands. \u{1F41D}</p>`
+    : hiveHasNeverMet
+      ? [
+          `<p style="font-size: 15px; margin: 0 0 6px;">First meeting is ${whenLine}. \u{1F41D}</p>`,
+          `<p style="font-size: 14px; color: #6b6b6b; margin: 0;">We're thinking of keeping it there every month. If a different day or time suits more people, we'll sort that out together at the first one.</p>`,
+        ].join('\n              ')
+      // An established HIVE already has its rhythm; offering to move it in a
+      // welcome email would be someone else's decision to make.
+      : `<p style="font-size: 15px;">See you at the next meeting, ${whenLine}. \u{1F41D}</p>`;
 
   // Send the email — and tell the truth about whether it went.
   //
@@ -338,8 +410,13 @@ serve(async (req) => {
                      width="96" height="96"
                      style="width:96px;height:96px;display:inline-block;border:0;outline:none;text-decoration:none;background:#ffffff;border-radius:48px;" />
               </div>
-              <h1 style="color: ${headingColour}; font-size: 22px; text-align: center; margin: 8px 0 4px;">Welcome to the HIVE</h1>
-              <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 22px;">${inviterName ? `${inviterName} invited you` : "You've been invited"} to join ${communityName}</p>
+              <!-- The HIVE they were actually invited to is the headline.
+                   Nat, 2026-08-21: "i'm leaning towards making Tech HIVE more
+                   obvious here." It said "Welcome to the HIVE" in large type
+                   with the real name in grey underneath it, so the one fact
+                   the email exists to deliver was the quietest thing on it. -->
+              <h1 style="color: ${headingColour}; font-size: 24px; text-align: center; margin: 8px 0 4px;">Welcome to ${communityName}</h1>
+              <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 22px;">${inviterName ? `${inviterName} invited you to join.` : "You've been invited to join."}</p>
 
               <p style="font-size: 15px;">We're so glad you're here.</p>
 
@@ -357,9 +434,7 @@ serve(async (req) => {
                 <p style="font-size: 14px; margin: 0;"><strong>Finding your way back later:</strong> bookmark <a href="https://app.the-hive.app" style="color: ${headingColour};">app.the-hive.app</a>. No need to dig up this email again.</p>
               </div>
 
-              <p style="font-size: 15px;">${nextMeetingLabel
-                ? `See you at the next meeting on <strong>${nextMeetingLabel}</strong>! 🐝`
-                : `See you at the next meeting! 🐝`}</p>
+              ${meetingSentence}
 
               <div style="text-align: center; margin: 26px 0 8px;">
                 <a href="${inviteUrl}" style="background: ${accent}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Come on in</a>

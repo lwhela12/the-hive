@@ -8,7 +8,7 @@ import {
   hiveDisplayName,
   normalizeHiveBrandText,
 } from '../../lib/hiveBrand';
-import { formatDateShort, formatTime } from '../../lib/dateUtils';
+import { formatDateShort, formatTimeRange } from '../../lib/dateUtils';
 import { getLocalIsoDate } from '../../lib/hooks/useArrivalBoard';
 import { useHiveWideMeetings, type HiveWideMeetingDay } from '../../lib/hooks/useHiveWideMeetings';
 import type { Community } from '../../types';
@@ -266,9 +266,13 @@ export function HiveWideCalendar({
             const hive = hives.find((h) => h.id === meeting.community_id);
             const name = hiveDisplayName(hive?.name);
             const colour = accentOnDark(hiveAccent(hive));
+            // The whole window, not only the start — Nat: "i couldnt add
+            // window, like 5-7, i could only put in 5pm" (migration 202).
+            // `hive_wide_meeting_days` carries the end time as of migration
+            // 203; a meeting nobody gave an end to still reads as one clock.
             const when = [
               formatDateShort(meeting.event_date),
-              meeting.event_time ? formatTime(meeting.event_time) : null,
+              meeting.event_time ? formatTimeRange(meeting.event_time, meeting.end_time) : null,
             ].filter(Boolean).join(', ');
             const mine = myHiveIds.includes(meeting.community_id);
 

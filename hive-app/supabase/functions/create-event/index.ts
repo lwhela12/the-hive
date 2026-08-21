@@ -9,10 +9,26 @@ interface CreateEventPayload {
   event_date: string;
   end_date?: string | null;
   event_time?: string | null;
+  /**
+   * When the meeting finishes, so a member sees a window instead of only an
+   * arrival time — Nat: "i couldnt add window, like 5-7, i could only put in
+   * 5pm" (migration 202).
+   */
+  end_time?: string | null;
   description?: string | null;
   location?: string | null;
   /** Signed-in reach, or an owner-reviewed public invitation. */
   visibility?: string | null;
+}
+
+/** 'HH:MM' or 'HH:MM:SS' to minutes past midnight, or null if it isn't a time. */
+function timeToMinutes(value: string): number | null {
+  const match = value.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
 }
 
 serve(async (req) => {
@@ -35,6 +51,19 @@ serve(async (req) => {
 
   if (!communityId || !title || !eventDate) {
     return errorResponse('Missing title, date, or community', 400);
+  }
+
+  if (payload.end_time) {
+    const endMinutes = timeToMinutes(payload.end_time);
+    if (endMinutes === null) {
+      return errorResponse('Please give the end time as HH:MM.', 400);
+    }
+    if (payload.event_time) {
+      const startMinutes = timeToMinutes(payload.event_time);
+      if (startMinutes !== null && endMinutes <= startMinutes) {
+        return errorResponse('End time must be after the start time.', 400);
+      }
+    }
   }
 
   const supabaseUser = createClient(
@@ -90,6 +119,7 @@ serve(async (req) => {
   };
 
   if (payload.event_time) newEvent.event_time = payload.event_time;
+  if (payload.end_time) newEvent.end_time = payload.end_time;
   // Multi-day range: only keep an end date that lands after the start date.
   if (payload.end_date && payload.end_date > eventDate) newEvent.end_date = payload.end_date;
   if (payload.description?.trim()) newEvent.description = payload.description.trim();

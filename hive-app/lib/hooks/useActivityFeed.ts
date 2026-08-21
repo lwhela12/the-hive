@@ -185,7 +185,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
     // New events added recently
     supabase
       .from('events')
-      .select('id, title, event_date, event_time, created_at, created_by')
+      .select('id, title, event_date, event_time, end_time, created_at, created_by')
       .eq('community_id', communityId)
       .gte('created_at', thirtyDaysAgo)
       .order('created_at', { ascending: false })
@@ -316,7 +316,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
   for (const e of eventsRes.data ?? []) {
     const [, month, day] = e.event_date.split('-');
     const dateStr = `${parseInt(month)}/${parseInt(day)}`;
-    const timeStr = e.event_time ? ` at ${formatTime(e.event_time)}` : '';
+    const timeStr = e.event_time ? ` at ${formatTimeRange(e.event_time, e.end_time)}` : '';
     items.push({
       id: `event_${e.id}`,
       type: 'event_added',
@@ -472,6 +472,18 @@ function formatTime(timeStr: string): string {
   const ampm = hour >= 12 ? 'pm' : 'am';
   const h = hour % 12 || 12;
   return min === '00' ? `${h}${ampm}` : `${h}:${min}${ampm}`;
+}
+
+// The feed's own short style — "5-7pm" rather than "5:00 PM – 7:00 PM", which
+// is what everything else on this line looks like.
+function formatTimeRange(start: string, end?: string | null): string {
+  const startText = formatTime(start);
+  if (!end) return startText;
+  const endText = formatTime(end);
+  const startSuffix = startText.slice(-2);
+  return startSuffix === endText.slice(-2)
+    ? `${startText.slice(0, -2)}-${endText}`
+    : `${startText}-${endText}`;
 }
 
 /**

@@ -35,6 +35,10 @@ interface ScheduleMeetingModalProps {
     description: string;
     date: string;
     time: string;
+    // Optional — a meeting scheduled with no end reads exactly as it always
+    // did (Nat, 2026-08-21: "i couldnt add window, like 5-7, i could only put
+    // in 5pm," migration 202).
+    endTime?: string;
     duration: number;
     attendeeIds: string[];
     timezone: string;
@@ -82,6 +86,8 @@ export function ScheduleMeetingModal({
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [date, setDate] = useState(new Date());
+  // No end time until someone picks one — this is what makes it optional.
+  const [endTime, setEndTime] = useState<Date | null>(null);
   const [duration, setDuration] = useState(DEFAULT_MEETING_DURATION_MINUTES);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -94,6 +100,7 @@ export function ScheduleMeetingModal({
   // For iOS date/time pickers
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
   // Fetch community members when modal opens
   useEffect(() => {
@@ -177,6 +184,17 @@ export function ScheduleMeetingModal({
       return;
     }
 
+    // Same check hive.tsx's event form makes on its own end time — a window
+    // that runs backwards isn't a window.
+    if (endTime) {
+      const startMinutes = date.getHours() * 60 + date.getMinutes();
+      const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
+      if (endMinutes <= startMinutes) {
+        setError('The end time should be after the start time.');
+        return;
+      }
+    }
+
     setLoading(true);
     setError('');
 
@@ -191,6 +209,10 @@ export function ScheduleMeetingModal({
       const minutes = date.getMinutes().toString().padStart(2, '0');
       const timeStr = `${hours}:${minutes}`; // HH:MM
 
+      const endTimeStr = endTime
+        ? `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`
+        : undefined;
+
       // Get the user's timezone
       const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -199,6 +221,7 @@ export function ScheduleMeetingModal({
         description: description.trim(),
         date: dateStr,
         time: timeStr,
+        endTime: endTimeStr,
         duration: parseInt(duration) || Number(DEFAULT_MEETING_DURATION_MINUTES),
         attendeeIds: Array.from(selectedMembers),
         timezone: userTimezone,
@@ -212,6 +235,7 @@ export function ScheduleMeetingModal({
       setDescription('');
       setLocation('');
       setDate(new Date());
+      setEndTime(null);
       setDuration(DEFAULT_MEETING_DURATION_MINUTES);
       setSelectedMembers(new Set());
       onClose();
@@ -242,6 +266,15 @@ export function ScheduleMeetingModal({
     }
   };
 
+  const onEndTimeChange = (_event: unknown, selectedTime?: Date) => {
+    setShowEndTimePicker(false);
+    if (selectedTime) {
+      const newEndTime = new Date(date);
+      newEndTime.setHours(selectedTime.getHours(), selectedTime.getMinutes());
+      setEndTime(newEndTime);
+    }
+  };
+
   // Web-specific handlers
   const handleWebDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDateStr = e.target.value;
@@ -261,6 +294,18 @@ export function ScheduleMeetingModal({
       newDate.setHours(hours, minutes);
       setDate(newDate);
     }
+  };
+
+  const handleWebEndTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTimeStr = e.target.value;
+    if (!newTimeStr) {
+      setEndTime(null);
+      return;
+    }
+    const [hours, minutes] = newTimeStr.split(':').map(Number);
+    const newEndTime = new Date(date);
+    newEndTime.setHours(hours, minutes);
+    setEndTime(newEndTime);
   };
 
   const formatDate = (d: Date) => {
@@ -291,6 +336,13 @@ export function ScheduleMeetingModal({
   const getTimeInputValue = () => {
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
+  const getEndTimeInputValue = () => {
+    if (!endTime) return '';
+    const hours = endTime.getHours().toString().padStart(2, '0');
+    const minutes = endTime.getMinutes().toString().padStart(2, '0');
     return `${hours}:${minutes}`;
   };
 
@@ -426,6 +478,43 @@ export function ScheduleMeetingModal({
               )}
             </View>
 
+            {/* End Time — optional, same control as Time above. Nat,
+                2026-08-21: "i couldnt add window, like 5-7, i could only put
+                in 5pm." Leave it unset and a meeting reads exactly as it
+                always did (migration 202). */}
+            <View className="mb-4">
+              <View className="flex-row justify-between items-center mb-2">
+                <Text className="text-gray-700 font-medium">End Time (optional)</Text>
+                {endTime && (
+                  <Pressable onPress={() => setEndTime(null)}>
+                    <Text className="text-blue-500 text-sm">Clear</Text>
+                  </Pressable>
+                )}
+              </View>
+              {Platform.OS === 'web' ? (
+                <input
+                  type="time"
+                  value={getEndTimeInputValue()}
+                  onChange={handleWebEndTimeChange}
+                  style={{
+                    width: '100%',
+                    padding: 16,
+                    fontSize: 16,
+                    borderRadius: 12,
+                    border: '1px solid #d1d5db',
+                    backgroundColor: 'white',
+                  }}
+                />
+              ) : (
+                <Pressable
+                  onPress={() => setShowEndTimePicker(true)}
+                  className="bg-white border border-gray-300 rounded-xl p-4"
+                >
+                  <Text className="text-base text-gray-800">{endTime ? formatTime(endTime) : 'Not set'}</Text>
+                </Pressable>
+              )}
+            </View>
+
             {/* Duration */}
             <View className="mb-4">
               <Text className="text-gray-700 font-medium mb-2">Duration</Text>
@@ -551,6 +640,16 @@ export function ScheduleMeetingModal({
             mode="time"
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             onChange={onTimeChange}
+            minuteInterval={5}
+          />
+        )}
+
+        {Platform.OS !== 'web' && showEndTimePicker && DateTimePicker && (
+          <DateTimePicker
+            value={endTime ?? date}
+            mode="time"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={onEndTimeChange}
             minuteInterval={5}
           />
         )}

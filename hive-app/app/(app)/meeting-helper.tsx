@@ -1395,6 +1395,7 @@ export default function MeetingHelperScreen() {
     description: string;
     date: string;
     time: string;
+    endTime?: string;
     duration: number;
     attendeeIds: string[];
     timezone: string;
