@@ -11,6 +11,7 @@ import { formatDateMedium } from '../../lib/dateUtils';
 // here take the space skin's ink rather than asking `usePageSkin()`.
 import { SPACE_SKIN } from '../../lib/pageSkin';
 import { showAlert } from '../../lib/showAlert';
+import { listDeletedWishes, restoreWishById, type DeletedWish } from '../../lib/wishMutations';
 import {
   CHECK_INS_COMING_SOON_MESSAGE,
   buildSeasonCheckIn,
@@ -1195,6 +1196,45 @@ export function HiveMemberPanels({
    * than leaving them in two lists to be chased twice.
    */
   const [waitingByHive, setWaitingByHive] = useState<Record<string, WaitlistRow[]>>({});
+  /**
+   * The bin, per HIVE.
+   *
+   * Removing a wish stopped destroying it in migration 200 — the row, its
+   * comments and its granters all stay, hidden by a restrictive read policy.
+   * The Undo bar on the screen that removed it is the fast way back, and it
+   * lasts fifteen seconds. This is the slow way back, for the case that
+   * actually happened: Lucas removed one by accident and nobody noticed until
+   * later (Nat, 2026-08-21).
+   *
+   * A removed wish is invisible to an ordinary query on purpose, so this asks
+   * the database directly through `deleted_wishes`, which decides for itself
+   * who is allowed to see what.
+   */
+  const [removedByHive, setRemovedByHive] = useState<Record<string, DeletedWish[]>>({});
+  const [removedLoading, setRemovedLoading] = useState<Record<string, boolean>>({});
+  const [restoringWishId, setRestoringWishId] = useState<string | null>(null);
+
+  const loadRemovedWishes = useCallback(async (targetId: string) => {
+    setRemovedLoading((prev) => ({ ...prev, [targetId]: true }));
+    const { wishes, error } = await listDeletedWishes(targetId);
+    setRemovedLoading((prev) => ({ ...prev, [targetId]: false }));
+    if (error) {
+      console.warn('Could not load removed wishes', error);
+      return;
+    }
+    setRemovedByHive((prev) => ({ ...prev, [targetId]: wishes }));
+  }, []);
+
+  const restoreRemovedWish = useCallback(async (targetId: string, wishId: string) => {
+    setRestoringWishId(wishId);
+    const { error } = await restoreWishById(wishId);
+    setRestoringWishId(null);
+    if (error) {
+      showAlert('That wish did not come back', 'It is still safe. Check your connection and try again.');
+      return;
+    }
+    await loadRemovedWishes(targetId);
+  }, [loadRemovedWishes]);
   const isOwner = !!profile?.is_owner;
   const [confirmRevoke, setConfirmRevoke] = useState<{ invite: PendingInvite; hiveName: string } | null>(null);
   const [revoking, setRevoking] = useState(false);
@@ -1750,10 +1790,16 @@ export function HiveMemberPanels({
                   ? [{ key: 'waiting', label: `Waiting (${waitingCount})` }]
                   : m.role === 'admin' ? [{ key: 'waiting', label: 'Waiting' }] : []),
                 { key: 'checkins', label: 'Check-ins' },
+                // Only a HIVE's admin can put a wish back, so only an admin is
+                // shown the shelf it sits on.
+                ...(m.role === 'admin' ? [{ key: 'removed', label: 'Removed' }] : []),
               ]}
               activeTab={tab}
               onTabChange={(key: string) => {
                 setTabFor((prev) => ({ ...prev, [m.community_id]: key }));
+                // Fetched when it is asked for. Nobody opens Admin to look at
+                // an empty bin, and it is one round trip per HIVE otherwise.
+                if (key === 'removed') void loadRemovedWishes(m.community_id);
                 // Walking to another tab closes the invite form by itself.
                 // Nat, 2026-08-11: "If i clicked 'add new member' and now i
                 // want to do something else, i cant until i click 'close
@@ -2188,6 +2234,77 @@ export function HiveMemberPanels({
 
                     Moved onto the Waiting tab 2026-08-12, next to the people
                     who have not been invited yet — the two are one pipeline. */}
+                {tab === 'removed' && m.role === 'admin' ? (
+                  /* WHAT WAS TAKEN OFF THE LISTS.
+
+                     Nothing here was destroyed. The wish, everything said
+                     underneath it and everyone who offered to help are all
+                     still in the database — a restrictive read policy simply
+                     stops an ordinary query from seeing them (migration 200).
+                     Putting one back is one press and it comes back whole. */
+                  <View style={{ borderTopWidth: 1, borderTopColor: skin.border, marginTop: 4 }}>
+                    <Text
+                      style={{
+                        fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 1,
+                        textTransform: 'uppercase', color: 'rgba(246,244,229,0.65)',
+                        paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4,
+                      }}
+                    >
+                      Removed wishes{(removedByHive[m.community_id] ?? []).length > 0 ? ` (${(removedByHive[m.community_id] ?? []).length})` : ''}
+                    </Text>
+
+                    {removedLoading[m.community_id] ? (
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: 'rgba(246,244,229,0.5)', paddingHorizontal: 14, paddingBottom: 14 }}>
+                        Looking…
+                      </Text>
+                    ) : (removedByHive[m.community_id] ?? []).length === 0 ? (
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: 'rgba(246,244,229,0.5)', paddingHorizontal: 14, paddingBottom: 14 }}>
+                        Nothing has been removed in {name}. If a wish ever goes by accident, it lands here and one press puts it back.
+                      </Text>
+                    ) : (removedByHive[m.community_id] ?? []).map((removed) => (
+                      <View
+                        key={removed.id}
+                        style={{
+                          flexDirection: 'row', alignItems: 'center', gap: 10,
+                          paddingHorizontal: 14, paddingVertical: 10,
+                          borderTopWidth: 1, borderTopColor: skin.hairline,
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text numberOfLines={2} style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#F6F4E5' }}>
+                            {removed.title || removed.description}
+                          </Text>
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(246,244,229,0.55)' }}>
+                            {removed.owner_name ?? 'Someone'}
+                            {removed.deleted_by_name ? ` · removed by ${removed.deleted_by_name}` : ''}
+                            {removed.comment_count > 0
+                              ? ` · ${removed.comment_count} repl${removed.comment_count === 1 ? 'y' : 'ies'} kept`
+                              : ''}
+                          </Text>
+                        </View>
+
+                        <Pressable
+                          onPress={() => { void restoreRemovedWish(m.community_id, removed.id); }}
+                          disabled={restoringWishId === removed.id}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Put back ${removed.title || removed.description}`}
+                          hitSlop={6}
+                          style={({ pressed }) => ({
+                            paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
+                            borderWidth: 1, borderColor: 'rgba(246,244,229,0.32)',
+                            backgroundColor: pressed ? 'rgba(246,244,229,0.14)' : 'transparent',
+                            opacity: restoringWishId === removed.id ? 0.5 : 1,
+                          })}
+                        >
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#F6F4E5' }}>
+                            {restoringWishId === removed.id ? 'Putting back…' : 'Put it back'}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+
                 {tab === 'waiting' && m.role === 'admin' && !loading ? (
                   <View style={{ borderTopWidth: 1, borderTopColor: skin.border, marginTop: 4 }}>
                     <Text

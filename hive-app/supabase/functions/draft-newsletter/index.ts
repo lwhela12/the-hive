@@ -308,7 +308,8 @@ serve(async (req) => {
         .select('id', { count: 'exact', head: true })
         .eq('community_id', communityId)
         .eq('status', 'fulfilled')
-        .gte('fulfilled_at', startIso),
+        .gte('fulfilled_at', startIso
+        .is('deleted_at', null)),
       // Aggregate growth is safe public evidence; no roster or identity crosses.
       supabaseAdmin.from('community_memberships')
         .select('id', { count: 'exact', head: true })

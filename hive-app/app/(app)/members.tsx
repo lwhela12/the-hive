@@ -10,7 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Profile, Skill, UserRole, Wish, WishGranter } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { invalidateWishQueries } from '../../lib/queryClient';
-import { deleteWishById } from '../../lib/wishMutations';
+import { deleteWishById, restoreWishById } from '../../lib/wishMutations';
+import { UndoBar, useUndoOffer } from '../../components/ui/UndoBar';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { usePageSkin } from '../../lib/pageSkin';
 import { hiveDisplayName } from '../../lib/hiveBrand';
@@ -1148,6 +1149,7 @@ function MemberDetailPage({
       await refreshManagedWishes();
       setManagingWish(null);
       if (selectedWish?.id === wish.id) setSelectedWish(null);
+      offerUndo({ id: wish.id, message: 'Wish removed.' });
     };
 
     const message = `Archive this HD wish from Wishes?\n\n"${wish.description}"`;
@@ -1164,6 +1166,24 @@ function MemberDetailPage({
       { text: 'Archive', onPress: archiveWish },
     ]);
   };
+
+
+  // Removing a wish is recoverable now (migration 200), so the screen that
+  // removed it offers it straight back rather than leaving the safety net
+  // somewhere nobody thinks to look.
+  const { offer: undoOffer, busy: undoBusy, setBusy: setUndoBusy, offerUndo, dismissUndo } = useUndoOffer();
+  const handleUndoWish = useCallback(async (target: { id: string }) => {
+    setUndoBusy(true);
+    const { error } = await restoreWishById(target.id);
+    setUndoBusy(false);
+    if (error) {
+      showAlert('That wish did not come back', 'It is still safe. Check your connection and try again.');
+      return;
+    }
+    dismissUndo();
+    await invalidateWishQueries(communityId ?? '', member.id);
+    await refreshManagedWishes();
+  }, [dismissUndo, setUndoBusy]);
 
   const handleDeleteWish = (wish: MemberWish) => {
     if (!communityId || !canDeleteWish(wish)) return;
@@ -1184,7 +1204,7 @@ function MemberDetailPage({
       if (selectedWish?.id === wish.id) setSelectedWish(null);
     };
 
-    const message = `Delete this wish?\n\n"${wish.description}"`;
+    const message = `Delete this wish?\n\n"${wish.description}"\n\nYou can undo this.`;
 
     if (typeof window !== 'undefined' && window.confirm) {
       if (window.confirm(message)) {
@@ -2579,6 +2599,12 @@ function MemberDetailPage({
             </Pressable>
           )}
         </View>
+      <UndoBar
+        offer={undoOffer}
+        busy={undoBusy}
+        onUndo={handleUndoWish}
+        onDismiss={dismissUndo}
+      />
     </View>
   );
 }

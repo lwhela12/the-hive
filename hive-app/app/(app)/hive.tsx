@@ -23,7 +23,8 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { invalidateWishQueries } from '../../lib/queryClient';
-import { deleteWishById } from '../../lib/wishMutations';
+import { deleteWishById, restoreWishById } from '../../lib/wishMutations';
+import { UndoBar, useUndoOffer } from '../../components/ui/UndoBar';
 import {
   hasMeaningfulActionItemText,
   parseActionItemDescription,
@@ -2639,6 +2640,7 @@ export default function HiveScreen() {
       if (managingWish?.id === wish.id) {
         setManagingWish(null);
       }
+      offerUndo({ id: wish.id, message: 'Wish removed.' });
     };
 
     confirmAction({
@@ -2648,6 +2650,24 @@ export default function HiveScreen() {
       onConfirm: archiveWish,
     });
   }, [canArchiveWish, closeWishDetail, communityId, isAdmin, managingWish?.id, profile, refetch, selectedWish?.id]);
+
+
+  // Removing a wish is recoverable now (migration 200), so the screen that
+  // removed it offers it straight back rather than leaving the safety net
+  // somewhere nobody thinks to look.
+  const { offer: undoOffer, busy: undoBusy, setBusy: setUndoBusy, offerUndo, dismissUndo } = useUndoOffer();
+  const handleUndoWish = useCallback(async (target: { id: string }) => {
+    setUndoBusy(true);
+    const { error } = await restoreWishById(target.id);
+    setUndoBusy(false);
+    if (error) {
+      showAlert('That wish did not come back', 'It is still safe. Check your connection and try again.');
+      return;
+    }
+    dismissUndo();
+    await invalidateWishQueries(communityId ?? '', null);
+    await refetch();
+  }, [dismissUndo, setUndoBusy]);
 
   const handleDeleteWish = (wish: Wish) => {
     if (!profile || !communityId) return;
@@ -2681,7 +2701,7 @@ export default function HiveScreen() {
 
     confirmAction({
       title: 'Delete Wish',
-      message: `Delete this wish?\n\n"${wish.description}"`,
+      message: `Delete this wish?\n\n"${wish.description}"\n\nYou can undo this.`,
       confirmLabel: 'Delete',
       destructive: true,
       onConfirm: deleteWish,
@@ -4996,6 +5016,12 @@ export default function HiveScreen() {
           onClose={closeSurvey}
         />
       )}
+      <UndoBar
+        offer={undoOffer}
+        busy={undoBusy}
+        onUndo={handleUndoWish}
+        onDismiss={dismissUndo}
+      />
     </SafeAreaView>
   );
 }

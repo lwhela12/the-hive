@@ -121,6 +121,7 @@ serve(async (req) => {
         .select('id, share_scope')
         .eq('id', wish_id)
         .eq('community_id', community_id)
+        .is('deleted_at', null)
         .single();
 
       if (wishError || !wish) {
@@ -316,6 +317,7 @@ serve(async (req) => {
       .select('id')
       .eq('id', wish_id)
       .eq('community_id', community_id)
+      .is('deleted_at', null)
       .single();
 
     if (wishError || !wish) {

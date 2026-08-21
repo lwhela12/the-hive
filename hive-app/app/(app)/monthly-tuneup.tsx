@@ -20,7 +20,8 @@ import {
   removeStoredItemAsync,
   setStoredItemAsync,
 } from '../../lib/webStorage';
-import { deleteWishById } from '../../lib/wishMutations';
+import { deleteWishById, restoreWishById } from '../../lib/wishMutations';
+import { UndoBar, useUndoOffer } from '../../components/ui/UndoBar';
 import { getCycleStart, getHalfwayDoneKey } from '../../lib/meetingCycle';
 import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { sendMentionNotifications } from '../../lib/mentionableMembers';
@@ -1967,6 +1968,7 @@ export default function MonthlyTuneupScreen() {
       await invalidateWishQueries(communityId, wish.user_id);
       await refreshWishes();
       setManagingWish(null);
+      offerUndo({ id: wish.id, message: 'Wish removed.' });
     };
 
     // The same WishManageModal is hosted by five screens; Archive worked on
@@ -1979,6 +1981,24 @@ export default function MonthlyTuneupScreen() {
       onConfirm: archiveWish,
     });
   };
+
+
+  // Removing a wish is recoverable now (migration 200), so the screen that
+  // removed it offers it straight back rather than leaving the safety net
+  // somewhere nobody thinks to look.
+  const { offer: undoOffer, busy: undoBusy, setBusy: setUndoBusy, offerUndo, dismissUndo } = useUndoOffer();
+  const handleUndoWish = useCallback(async (target: { id: string }) => {
+    setUndoBusy(true);
+    const { error } = await restoreWishById(target.id);
+    setUndoBusy(false);
+    if (error) {
+      showAlert('That wish did not come back', 'It is still safe. Check your connection and try again.');
+      return;
+    }
+    dismissUndo();
+    await invalidateWishQueries(communityId ?? '', profile?.id ?? null);
+    await refreshWishes();
+  }, [dismissUndo, setUndoBusy]);
 
   const handleDeleteWish = (wish: Wish) => {
     if (!profile || !communityId) return;
@@ -2005,7 +2025,7 @@ export default function MonthlyTuneupScreen() {
     // all in a browser.
     confirmAction({
       title: 'Delete wish',
-      message: `Delete this wish?\n\n"${wish.description}"`,
+      message: `Delete this wish?\n\n"${wish.description}"\n\nYou can undo this.`,
       confirmLabel: 'Delete',
       destructive: true,
       onConfirm: deleteWish,
@@ -4295,6 +4315,12 @@ export default function MonthlyTuneupScreen() {
         wishOwnerName={editingWish?.user?.name}
       />
 
+      <UndoBar
+        offer={undoOffer}
+        busy={undoBusy}
+        onUndo={handleUndoWish}
+        onDismiss={dismissUndo}
+      />
     </SafeAreaView>
   );
 }

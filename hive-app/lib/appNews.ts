@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-21-a-deleted-wish-can-come-back',
+    date: '2026-08-21',
+    title: 'Deleting a wish can be undone',
+    detail: 'Remove one by mistake and an Undo button appears straight away. Nothing is thrown away either \u2014 the wish, everything said underneath it and everyone who offered to help all stay, and your HIVE admin can put it back later.',
+    href: { pathname: '/hive' },
+    action: 'Open Home',
+  },
+  {
     id: '2026-08-21-tag-panel-starts-shut',
     date: '2026-08-21',
     title: 'The tag list stays out of your way',

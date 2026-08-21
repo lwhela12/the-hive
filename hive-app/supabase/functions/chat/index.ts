@@ -1254,7 +1254,8 @@ async function markWishesFulfilled(
     .select('id, description, status, user:profiles!wishes_user_id_fkey(name)')
     .eq('community_id', communityId)
     .neq('status', 'fulfilled')
-    .limit(100);
+    .limit(100
+    .is('deleted_at', null));
 
   const ownerQuery = normalizedNameQuery(action.owner_name);
   const tokens = textQuery.split(' ').filter((token) => token.length > 2);
@@ -1280,7 +1281,8 @@ async function markWishesFulfilled(
       thank_you_message: action.completion_note || null,
     })
     .in('id', ids)
-    .eq('community_id', communityId);
+    .eq('community_id', communityId)
+    .is('deleted_at', null);
 
   if (error) {
     return { action_type: action.action_type, ok: false, message: `Could not mark wishes fulfilled: ${error.message}` };
@@ -1622,7 +1624,8 @@ serve(async (req) => {
               .update({ status: 'public', is_active: true })
               .eq('id', wish_id)
               .eq('user_id', userId)
-              .eq('community_id', communityId);
+              .eq('community_id', communityId)
+              .is('deleted_at', null);
             result = error ? `Error: ${error.message}` : 'Wish published to HIVE';
             break;
           }
@@ -1633,7 +1636,8 @@ serve(async (req) => {
               .select('*')
               .eq('user_id', userId)
               .eq('community_id', communityId)
-              .order('created_at', { ascending: false });
+              .order('created_at', { ascending: false }
+              .is('deleted_at', null));
             result = JSON.stringify(data || []);
             break;
           }
@@ -1654,7 +1658,8 @@ serve(async (req) => {
               .select('*, user:profiles!wishes_user_id_fkey(name)')
               .eq('status', 'public')
               .eq('is_active', true)
-              .eq('community_id', communityId);
+              .eq('community_id', communityId
+              .is('deleted_at', null));
             result = JSON.stringify(data || []);
             break;
           }
@@ -1702,13 +1707,38 @@ serve(async (req) => {
               try {
                 parsedSummary = JSON.parse(meeting.summary ?? '');
               } catch { /* plain-text summary */ }
-              const transcript = includeTranscript && index === 0
+              const summaryObject = parsedSummary && typeof parsedSummary === 'object' && !Array.isArray(parsedSummary)
+                ? parsedSummary as Record<string, unknown>
+                : null;
+              const manualCorrection = summaryObject?.manual_correction
+                && typeof summaryObject.manual_correction === 'object'
+                && !Array.isArray(summaryObject.manual_correction)
+                ? summaryObject.manual_correction as Record<string, unknown>
+                : null;
+              const correctedText = typeof manualCorrection?.text === 'string'
+                ? manualCorrection.text.trim()
+                : '';
+              // Once a HIVE admin has supplied the recap members should trust,
+              // Clive gets that version alone. Do not let the superseded
+              // generated fields — or an overlong/pre-meeting transcript —
+              // talk it back out of the human correction.
+              const summaryForClive = correctedText
+                ? {
+                    title: typeof summaryObject?.title === 'string' ? summaryObject.title : 'Meeting Summary',
+                    summary: correctedText,
+                    provenance: {
+                      kind: 'human_correction',
+                      corrected_at: manualCorrection?.corrected_at,
+                    },
+                  }
+                : parsedSummary;
+              const transcript = includeTranscript && index === 0 && !correctedText
                 ? (meeting.transcript_attributed || meeting.transcript_raw || '').slice(0, 12000)
                 : undefined;
               return {
                 date: meeting.date,
                 processing_status: meeting.processing_status,
-                summary: parsedSummary,
+                summary: summaryForClive,
                 notes: transcript,
               };
             });
@@ -1728,7 +1758,8 @@ serve(async (req) => {
               })
               .eq('id', wish_id)
               .eq('user_id', userId)
-              .eq('community_id', communityId);
+              .eq('community_id', communityId)
+              .is('deleted_at', null);
             result = error ? `Error: ${error.message}` : 'Wish marked as fulfilled!';
             break;
           }
@@ -2105,7 +2136,8 @@ serve(async (req) => {
               .eq('community_id', communityId)
               .or(`status.in.(public,fulfilled),user_id.eq.${userId}`)
               .order('created_at', { ascending: false })
-              .limit(wishFetchLimit);
+              .limit(wishFetchLimit
+              .is('deleted_at', null));
             if (status) wishQuery = wishQuery.eq('status', status);
 
             const { data: wishes, error: wishesError } = await wishQuery;

@@ -6,7 +6,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { requestMediaLibraryPermission } from '../../lib/imagePicker';
 import { supabase } from '../../lib/supabase';
 import { invalidateWishQueries } from '../../lib/queryClient';
-import { deleteWishById } from '../../lib/wishMutations';
+import { deleteWishById, restoreWishById } from '../../lib/wishMutations';
+import { UndoBar, useUndoOffer } from '../../components/ui/UndoBar';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
@@ -1363,6 +1364,7 @@ export default function ProfileScreen() {
       await invalidateWishQueries(wishHome, wish.user_id);
       await fetchData();
       setManagingWish(null);
+      offerUndo({ id: wish.id, message: 'Wish removed.' });
     };
 
     // The same WishManageModal is hosted by five screens; Archive worked on
@@ -1788,6 +1790,24 @@ export default function ProfileScreen() {
     deleteSkill();
   };
 
+
+  // Removing a wish is recoverable now (migration 200), so the screen that
+  // removed it offers it straight back rather than leaving the safety net
+  // somewhere nobody thinks to look.
+  const { offer: undoOffer, busy: undoBusy, setBusy: setUndoBusy, offerUndo, dismissUndo } = useUndoOffer();
+  const handleUndoWish = useCallback(async (target: { id: string }) => {
+    setUndoBusy(true);
+    const { error } = await restoreWishById(target.id);
+    setUndoBusy(false);
+    if (error) {
+      showAlert('That wish did not come back', 'It is still safe. Check your connection and try again.');
+      return;
+    }
+    dismissUndo();
+    await invalidateWishQueries(communityId ?? '', profile?.id ?? null);
+    await fetchData();
+  }, [dismissUndo, setUndoBusy]);
+
   const handleDeleteWish = (wish: Wish) => {
     if (!profile || !communityId || !canDeleteWish(wish)) return;
 
@@ -1815,7 +1835,7 @@ export default function ProfileScreen() {
     // half a few lines above Archive, which had none at all.
     confirmAction({
       title: 'Delete wish',
-      message: `Delete this wish?\n\n"${wish.description}"`,
+      message: `Delete this wish?\n\n"${wish.description}"\n\nYou can undo this.`,
       confirmLabel: 'Delete',
       destructive: true,
       onConfirm: deleteWish,
@@ -3864,6 +3884,12 @@ export default function ProfileScreen() {
           void performSignOut();
         }}
         onCancel={() => setConfirmingSignOut(false)}
+      />
+      <UndoBar
+        offer={undoOffer}
+        busy={undoBusy}
+        onUndo={handleUndoWish}
+        onDismiss={dismissUndo}
       />
     </SafeAreaView>
   );

@@ -30,7 +30,8 @@ import { BOARD_HOME_EVENT } from '../../lib/boardNavigation';
 // uses for which HIVE you're in, and for the same reason (Nat 2026-08-08).
 import { getSessionItem as getStoredItem, removeSessionItem as removeStoredItem, setSessionItem as setStoredItem } from '../../lib/webStorage';
 import { linkThreadToCommunityWish, unlinkWishFromBoard } from '../../lib/wishBoardLinking';
-import { deleteWishById } from '../../lib/wishMutations';
+import { deleteWishById, restoreWishById } from '../../lib/wishMutations';
+import { UndoBar, useUndoOffer } from '../../components/ui/UndoBar';
 import { matchesMemberSearchText } from '../../lib/memberAliases';
 import { confirmAction, showAlert } from '../../lib/showAlert';
 import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types';
@@ -1553,6 +1554,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         await refetchLinkedWishes();
         setManagingLinkedWish(null);
         setSelectedLinkedWish(null);
+        offerUndo({ id: wish.id, message: 'Wish removed.' });
       } catch (error: unknown) {
         showAlert('That wish was not archived', `${getBoardErrorMessage(error)}\n\nIt is still on the board — try again in a moment.`);
       }
@@ -1565,6 +1567,24 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       onConfirm: archive,
     });
   }, [canModerateLinkedWish, communityId, invalidateLinkedWishes, refetchLinkedWishes]);
+
+
+  // Removing a wish is recoverable now (migration 200), so the screen that
+  // removed it offers it straight back rather than leaving the safety net
+  // somewhere nobody thinks to look.
+  const { offer: undoOffer, busy: undoBusy, setBusy: setUndoBusy, offerUndo, dismissUndo } = useUndoOffer();
+  const handleUndoWish = useCallback(async (target: { id: string }) => {
+    setUndoBusy(true);
+    const { error } = await restoreWishById(target.id);
+    setUndoBusy(false);
+    if (error) {
+      showAlert('That wish did not come back', 'It is still safe. Check your connection and try again.');
+      return;
+    }
+    dismissUndo();
+    invalidateLinkedWishes();
+    await refetchLinkedWishes();
+  }, [dismissUndo, setUndoBusy]);
 
   const handleDeleteLinkedWish = useCallback((wish: LinkedWish) => {
     if (!communityId || !canModerateLinkedWish(wish)) return;
@@ -1589,7 +1609,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
 
     confirmAction({
       title: 'Delete this wish?',
-      message: `This cannot be undone.\n\n"${wish.description}"`,
+      message: `"${wish.description}"\n\nYou can undo this.`,
       confirmLabel: 'Delete',
       destructive: true,
       onConfirm: deleteWish,
@@ -2518,6 +2538,12 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         existingCategory={editingTopic}
         members={topicMembers}
         managementActions={topicManagementActions}
+      />
+      <UndoBar
+        offer={undoOffer}
+        busy={undoBusy}
+        onUndo={handleUndoWish}
+        onDismiss={dismissUndo}
       />
     </SafeAreaView>
   );
