@@ -262,6 +262,50 @@ export function visibleDestinations(opts: {
  * Longest match wins, so /board/thread-id lights up Boards rather than falling
  * through to Clive at '/', which matches everything.
  */
+/**
+ * Is this page allowed to be open while somebody is standing at HIVE-Wide?
+ *
+ * `atWholeHive` used to be read by exactly one thing: the rail, when deciding
+ * which rows to draw. Hiding a row is not the same as closing a door, and on
+ * 2026-08-21 Nat opened a link and landed on Meetings with HIVE-WIDE written
+ * across the top of it: *"it looks like i'm in HIVE wide & in a meeting,
+ * thats not good."* Every route around it had the same hole — Meeting Helper,
+ * Honey Pot, Profile, Settings, Admin, Clive — because none of them was ever
+ * asked. A link, a bookmark, the back button and a deep link with a `?code=`
+ * on it all walk straight past a menu.
+ *
+ * So the question is asked here, once, by route rather than by row, and the
+ * layout asks it on every navigation.
+ *
+ * It is an ALLOW-list on purpose. A page added next month is HIVE-only until
+ * somebody says otherwise, which is the safe way round: the cost of being
+ * wrong is a reader quietly stepping into their own HIVE, rather than a page
+ * about one HIVE wearing another one's name.
+ */
+export function routeLivesAtWholeHive(pathname: string | null | undefined): boolean {
+  const path = (pathname ?? '').split('?')[0].replace(/\/+$/, '') || '/';
+
+  // The HIVE-Wide pages themselves, and any 'wide' destination's wide twin.
+  if (path === HIVE_WIDE_ROUTE) return true;
+  if (NAV_DESTINATIONS.some((d) => d.wideRoute && d.wideRoute === path)) return true;
+
+  // 'same' means the same thing wherever you stand; 'only' lives up here.
+  const dest = NAV_DESTINATIONS.find((d) => d.route === path);
+  if (dest && (dest.atWholeHive === 'same' || dest.atWholeHive === 'only')) return true;
+
+  // A 'wide' page with no `wideRoute` is one page serving both places — the
+  // Members list is the same screen whether you are looking at one HIVE or
+  // all of them. One WITH a wideRoute has a twin up here, so its own route
+  // belongs to a single HIVE and steps you back down into one.
+  if (dest && dest.atWholeHive === 'wide' && !dest.wideRoute) return true;
+
+  // The short check-in links pick their own HIVE and hand over — they are a
+  // door rather than a page, so they are left to do their job.
+  if (path.startsWith('/checkin')) return true;
+
+  return false;
+}
+
 export function activeKeyForPath(pathname: string | null | undefined): string | null {
   if (!pathname) return null;
   // The shared boards are Boards — they just happen to live at a wide door, so

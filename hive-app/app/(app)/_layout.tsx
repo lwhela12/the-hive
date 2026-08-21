@@ -14,6 +14,7 @@ import { CelebrationOverlay } from '../../components/ui/CelebrationOverlay';
 import { HivePicker } from '../../components/hive/HivePicker';
 import { SideRail } from '../../components/navigation';
 import { getLastAppPathAsync, getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
+import { routeLivesAtWholeHive } from '../../lib/navigation';
 import { currentReturnTo } from '../../lib/authReturnTo';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
@@ -96,7 +97,7 @@ function TabIcon({
 }
 
 export default function AppLayout() {
-  const { session, communityId, communityRole, profile, loading, hivePickerOpen } = useAuth();
+  const { session, communityId, communityRole, profile, loading, hivePickerOpen, wholeHive, switchCommunity, openHivePicker } = useAuth();
   // The colour of wherever this reader is standing. The layout needs it as much
   // as the pages do — see the note on `sceneStyle` further down.
   const skin = usePageSkin();
@@ -107,6 +108,38 @@ export default function AppLayout() {
   const signedOwnAvatar = useSignedAvatar(profile?.avatar_url);
   const router = useRouter();
   const pathname = usePathname();
+  /**
+   * You cannot be at HIVE-Wide and inside one HIVE's meeting at the same time.
+   *
+   * Nat, 2026-08-21, having opened a link: *"it look slike i'm in HIVE wide &
+   * in a meeting, thats not good"* — and then the same again one screen
+   * deeper, an OG meeting summary with HIVE-Wide written across the top of it
+   * and in the breadcrumb underneath.
+   *
+   * `atWholeHive: 'hidden'` was only ever read by the rail, when choosing
+   * which rows to draw. Hiding a row is not closing a door: a link, a
+   * bookmark, the back button and this exact deep link with a `?code=` on it
+   * all arrive without passing a menu. Every HIVE-only page had the hole, not
+   * just this one.
+   *
+   * Standing DOWN is the right answer rather than bouncing her out. The page
+   * was already showing the right HIVE's data — `communityId` never stopped
+   * pointing at OG — so the only thing that was wrong was the frame around it.
+   * Stepping into that HIVE keeps her where she meant to be and makes the
+   * heading tell the truth. With no HIVE underneath, the picker asks.
+   */
+  useEffect(() => {
+    if (loading || !session) return;
+    if (!wholeHive) return;
+    if (routeLivesAtWholeHive(pathname)) return;
+
+    if (communityId) {
+      void switchCommunity(communityId);
+    } else {
+      openHivePicker();
+    }
+  }, [loading, session, wholeHive, pathname, communityId, switchCommunity, openHivePicker]);
+
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const { width, height } = useWindowDimensions();
   // Use mobile layout for narrow screens (< 768px) regardless of platform

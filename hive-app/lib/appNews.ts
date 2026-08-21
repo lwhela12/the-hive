@@ -28,6 +28,12 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-21-one-place-at-a-time',
+    date: '2026-08-21',
+    title: 'You are only ever standing in one place',
+    detail: 'A link could drop you onto a page that belongs to one HIVE while the top of the screen still said HIVE-Wide. Those pages step you into the HIVE you were in, so the heading always matches what you are reading.',
+  },
+  {
     id: '2026-08-21-meetings-have-an-end-time',
     date: '2026-08-21',
     title: 'A meeting can say when it finishes',
