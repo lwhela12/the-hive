@@ -220,6 +220,7 @@ serve(async (req) => {
         .from('wish_comments')
         .select('content, wish:wishes!wish_id(title, description, user:profiles!user_id(name))')
         .eq('community_id', communityId)
+        .is('archived_at', null)
         .like('content', '📝 From the%')
         .gte('created_at', startIso).lt('created_at', endIso),
       supabaseAdmin

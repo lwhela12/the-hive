@@ -25,7 +25,11 @@ import { getCycleStart } from '../../lib/meetingCycle';
 import { EditButton } from '../../components/ui/EditButton';
 import { getWishQuickTitle, pickSpotlightWish } from '../../lib/wishDisplay';
 import { getAppNews, getAppNewsSince } from '../../lib/appNews';
-import { parseActionItemDescription } from '../../lib/actionItemDisplay';
+import {
+  hasMeaningfulActionItemText,
+  parseActionItemDescription,
+} from '../../lib/actionItemDisplay';
+import { NEW_MEETING_WISH_ID, meetingWishCopy } from '../../lib/meetingWishCapture';
 import { parseFocusAnswer, focusAnswerDidIt, focusAnswerScore } from '../../components/surveys/SurveyQuestionField';
 import { Avatar } from '../../components/ui/Avatar';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
@@ -793,6 +797,14 @@ export default function MeetingHelperScreen() {
   // wherever OG's reads gold. The papers (PAPER/CARD/MUTED/CHARCOAL) stay
   // shared: they are the deck's stationery, and only the accent changes hands.
   const deckIsOg = deckSlug === 'default';
+  // OG trusts its meeting secretary to capture the asks people discover while
+  // talking. Other HIVEs keep the reviewed/suggested path. The database owns
+  // the policy; the slug fallback keeps OG usable during the deploy between
+  // the client bundle and migration 199.
+  const meetingWishesAreAutomatic = isAdmin && (
+    (community as any)?.meeting_wish_capture_mode === 'automatic'
+    || (community?.slug === 'default' && !(community as any)?.meeting_wish_capture_mode)
+  );
   const accent = hiveAccent(community);
   const GOLD = deckIsOg ? OG_GOLD : accent;
   const GOLD_DEEP = deckIsOg ? OG_GOLD_DEEP : `rgb(${mixToward(accent, 0, 0.3).join(',')})`;
@@ -896,22 +908,58 @@ export default function MeetingHelperScreen() {
   // Everything jotted this session stays visible on the card it was taken on,
   // with an ✕ that pulls it back off every list it landed on (oops insurance).
   const [liveNotesTaken, setLiveNotesTaken] = useState<
-    { id: string; aboutId: string; text: string; assignees: string; actionItemIds: string[] }[]
+    {
+      id: string;
+      aboutId: string;
+      text: string;
+      assignees: string;
+      actionItemIds: string[];
+      createdWishId?: string | null;
+      commentId?: string | null;
+    }[]
   >([]);
 
   const handleUndoLiveNote = async (noteId: string) => {
     const note = liveNotesTaken.find((candidate) => candidate.id === noteId);
     if (!note) return;
+    const archivedAt = new Date().toISOString();
+    const [tasksResult, wishResult, commentResult] = await Promise.all([
+      note.actionItemIds.length > 0
+        ? (supabase as any)
+          .from('action_items')
+          .update({
+            archived_at: archivedAt,
+            archived_by: profile?.id ?? null,
+            archive_reason: 'meeting_helper_undo',
+          })
+          .in('id', note.actionItemIds)
+        : Promise.resolve({ error: null }),
+      note.createdWishId
+        ? (supabase as any)
+          .from('wishes')
+          .update({ status: 'replaced', is_active: false, replaced_at: archivedAt })
+          .eq('id', note.createdWishId)
+        : Promise.resolve({ error: null }),
+      note.commentId
+        ? (supabase as any)
+          .from('wish_comments')
+          .update({
+            archived_at: archivedAt,
+            archived_by: profile?.id ?? null,
+            archive_reason: 'meeting_helper_undo',
+          })
+          .eq('id', note.commentId)
+        : Promise.resolve({ error: null }),
+    ]);
+    const error = tasksResult.error || wishResult.error || commentResult.error;
+    if (error) {
+      console.error('Live note undo failed:', error);
+      showAlert('Hmm', "Couldn't archive that whole jot just now. It is still visible so you can try again.");
+      return;
+    }
     setLiveNotesTaken((notes) => notes.filter((candidate) => candidate.id !== noteId));
-    if (note.actionItemIds.length > 0) {
-      const { error } = await (supabase as any)
-        .from('action_items')
-        .delete()
-        .in('id', note.actionItemIds);
-      if (error) {
-        console.error('Live note undo failed:', error);
-        showAlert('Hmm', "Couldn't remove that one — it may need archiving from the to-do list.");
-      }
+    if (note.createdWishId) {
+      setWishes((current) => current.filter((wish) => wish.id !== note.createdWishId));
     }
   };
 
@@ -1093,7 +1141,7 @@ export default function MeetingHelperScreen() {
         const [eventsRes, todosRes, commentsRes, grantedRes, threadsRes] = await Promise.all([
           supabase.from('events').select('title').eq('community_id', communityId).gte('created_at', sinceToday),
           supabase.from('action_items').select('assigned_to').eq('community_id', communityId).gte('created_at', sinceToday),
-          (supabase as any).from('wish_comments').select('id').eq('community_id', communityId).gte('created_at', sinceToday),
+          (supabase as any).from('wish_comments').select('id').eq('community_id', communityId).is('archived_at', null).gte('created_at', sinceToday),
           (supabase as any).from('wishes').select('title, description').eq('community_id', communityId).eq('status', 'fulfilled').gte('fulfilled_at', sinceToday),
           (supabase as any).from('board_posts').select('title').eq('community_id', communityId).gte('created_at', sinceToday),
         ]);
@@ -1289,8 +1337,12 @@ export default function MeetingHelperScreen() {
     if (liveNoteSubjectMemberRef.current === expandedHummdingerId) return;
     liveNoteSubjectMemberRef.current = expandedHummdingerId;
     const memberWishes = wishesByUserId.get(expandedHummdingerId) ?? [];
-    setLiveNoteWishId((pickSpotlightWish(memberWishes) ?? memberWishes[0])?.id ?? null);
-  }, [expandedHummdingerId, wishesByUserId]);
+    setLiveNoteWishId(
+      meetingWishesAreAutomatic
+        ? NEW_MEETING_WISH_ID
+        : (pickSpotlightWish(memberWishes) ?? memberWishes[0])?.id ?? null
+    );
+  }, [expandedHummdingerId, meetingWishesAreAutomatic, wishesByUserId]);
 
   // Pencil in a hang straight from the Plan the Meet Ups calendar — same
   // create path as the tune-up and Home (the create-event edge function).
@@ -1602,10 +1654,18 @@ export default function MeetingHelperScreen() {
   // out to everyone, no @ lands on whoever's card is open.
   const handleSaveLiveNote = async (
     aboutMember: { id: string; name: string },
-    aboutWishId?: string | null
+    wishSelection?: string | null
   ) => {
     const text = liveNoteDraft.trim();
     if (!text || !communityId || liveNoteSaving) return;
+
+    if (!hasMeaningfulActionItemText(text)) {
+      showAlert(
+        'What needs doing?',
+        'Add the action after the @name. A name by itself chooses a list, but it does not make a useful to-do.',
+      );
+      return;
+    }
 
     // "@all" from someone's card = the note is about helping THEM, so it
     // lands on everyone else's list — not the subject's own.
@@ -1617,52 +1677,41 @@ export default function MeetingHelperScreen() {
       : members.filter((member) => member.id === aboutMember.id);
     if (assignees.length === 0) return;
 
+    const createNewWish = wishSelection === NEW_MEETING_WISH_ID;
+    const aboutWishId = createNewWish ? null : wishSelection ?? null;
+    const wishCopy = createNewWish ? meetingWishCopy(text) : null;
+
     setLiveNoteSaving(true);
     try {
-      const { data: inserted, error } = await (supabase as any)
-        .from('action_items')
-        .insert(
-          assignees.map((member) => ({
-            // "re: X's HummDinger" is a claim, so only make it when the note is
-            // actually pinned to one of X's HDs. Otherwise it's still about X —
-            // just not about a wish — and the suffix says only that.
-            description:
-              member.id === aboutMember.id
-                ? text
-                : aboutWishId
-                  ? `${text} (re: ${getFirstName(aboutMember.name)}'s HummDinger)`
-                  : `${text} (re: ${getFirstName(aboutMember.name)})`,
-            assigned_to: member.id,
-            community_id: communityId,
-            related_user_id: aboutMember.id,
-            // Deep link: tapping the to-do soft-opens the wish it's about —
-            // the visual thread from someone's list back to the HD it serves.
-            related_wish_id: aboutWishId ?? null,
-          }))
-        )
-        .select('id');
+      // One database transaction creates/reuses the wish, fans out the to-dos,
+      // and (for an existing wish) leaves the meeting note there. If any piece
+      // fails, none of it lands — no orphan wish and no dead deep link.
+      const { data, error } = await (supabase as any).rpc('capture_meeting_jot', {
+        p_community_id: communityId,
+        p_about_user_id: aboutMember.id,
+        p_description: text,
+        p_assignee_ids: assignees.map((member) => member.id),
+        p_related_wish_id: aboutWishId,
+        p_create_wish: createNewWish,
+        p_wish_title: wishCopy?.title ?? null,
+        p_wish_description: wishCopy?.description ?? null,
+      });
       if (error) throw error;
-      // The note is really a comment on the wish — leave it there too, so
-      // tapping any of the to-dos lands on the wish with the note in context
-      // and people can reply right on it.
-      if (aboutWishId && profile) {
-        // Jots are written live during the meeting, so "the meeting" is
-        // whichever month it is right now (not the survey period, which
-        // already points at the NEXT meeting).
-        const meetingMonth = new Date().toLocaleString('en-US', { month: 'long' });
-        const { error: commentError } = await (supabase as any).from('wish_comments').insert({
-          wish_id: aboutWishId,
-          user_id: profile.id,
-          community_id: communityId,
-          content: `📝 From the ${meetingMonth} meeting: ${text}`,
-        });
-        if (commentError) console.warn('Wish comment skipped (non-blocking):', commentError);
-      }
+      const captured = (data ?? {}) as {
+        wish_id?: string | null;
+        created_wish_id?: string | null;
+        comment_id?: string | null;
+        action_item_ids?: string[];
+      };
 
       const assigneesLabel = assignees.length > 3
         ? `everyone (${assignees.length})`
         : assignees.map((member) => getFirstName(member.name)).join(' & ');
-      setLiveNoteConfirmation(`On ${assigneesLabel}'s list ✓`);
+      setLiveNoteConfirmation(
+        createNewWish
+          ? `New wish captured + on ${assigneesLabel}'s list ✓`
+          : `On ${assigneesLabel}'s list ✓`
+      );
       // Same key the reload builds, so a note doesn't double up when the deck
       // refreshes underneath you.
       const noteKey = `${aboutMember.id}::${text}`;
@@ -1673,10 +1722,27 @@ export default function MeetingHelperScreen() {
           aboutId: aboutMember.id,
           text,
           assignees: assigneesLabel,
-          actionItemIds: ((inserted ?? []) as { id: string }[]).map((row) => row.id),
+          actionItemIds: captured.action_item_ids ?? [],
+          createdWishId: captured.created_wish_id ?? null,
+          commentId: captured.comment_id ?? null,
         },
       ]);
       setLiveNoteDraft('');
+      if (createNewWish && captured.created_wish_id && wishCopy) {
+        setWishes((current) => [
+          ...current,
+          {
+            id: captured.created_wish_id as string,
+            title: wishCopy.title,
+            description: wishCopy.description,
+            user_id: aboutMember.id,
+            memberName: aboutMember.name,
+            status: 'public',
+            is_active: true,
+            is_spotlight: false,
+          },
+        ].sort((a, b) => a.memberName.localeCompare(b.memberName)));
+      }
     } catch (error) {
       console.error('Live note save failed:', error);
       setLiveNoteConfirmation('Could not save that note — try again.');
@@ -3460,17 +3526,21 @@ export default function MeetingHelperScreen() {
                 </View>
               ) : null}
               <View style={{ borderTopWidth: 1, borderColor: GOLD_SOFT, paddingTop: sz(14, 9), gap: sz(8, 6) }}>
-                <Text style={sectionLabel}>Live note → to-do list</Text>
-                {/* What the note is ABOUT, which is not always the card it's
-                    taken on. Picking an HD links the to-do to that wish and
-                    leaves the note as a comment there; "Not about an HD" files
-                    a plain to-do about the member and touches no wish. */}
-                {memberWishList.length > 0 ? (
+                <Text style={sectionLabel}>
+                  {meetingWishesAreAutomatic ? 'Catch a wish → connected to-do' : 'Live note → to-do list'}
+                </Text>
+                {/* What the jot means. OG starts at one new atomic wish; an
+                    existing wish is an explicit update and gets the comment;
+                    Just a to-do touches no wish at all. */}
+                {memberWishList.length > 0 || meetingWishesAreAutomatic ? (
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: sz(6, 4) }}>
                     <Text style={{ ...sectionContext, marginRight: sz(2, 1) }}>About:</Text>
                     {[
+                      ...(meetingWishesAreAutomatic
+                        ? [{ id: NEW_MEETING_WISH_ID, label: '✨ New wish' }]
+                        : []),
                       ...memberWishList.map((wish) => ({ id: wish.id, label: getWishQuickTitle(wish, 30) })),
-                      { id: null, label: 'Not about an HD' },
+                      { id: null, label: 'Just a to-do' },
                     ].map((option) => {
                       const selected = liveNoteWishId === option.id;
                       return (
@@ -3501,6 +3571,11 @@ export default function MeetingHelperScreen() {
                     })}
                   </View>
                 ) : null}
+                {meetingWishesAreAutomatic ? (
+                  <Text style={sectionContext}>
+                    New wish is the OG default. Pick an existing wish only when this is truly an update to that same ask; pick Just a to-do when no wish surfaced.
+                  </Text>
+                ) : null}
                 {/* The jot box. Mentions, the "@" suggestions list and the
                     microphone all come from the shared composer now, so the
                     suggestion list this screen used to draw by hand is gone.
@@ -3515,7 +3590,9 @@ export default function MeetingHelperScreen() {
                     setLiveNoteDraft((previous) => (typeof next === 'function' ? next(previous) : next));
                     if (liveNoteConfirmation) setLiveNoteConfirmation(null);
                   }}
-                  placeholder={`Jot a to-do — it lands on ${getFirstName(member.name)}'s list. Start a word with @ (like @Charlee, or @all) to send it to them instead.`}
+                  placeholder={meetingWishesAreAutomatic
+                    ? `Write the wish that surfaced. Start with @ (like @Charlee or @all) to choose who will help; no @ puts the next step on ${getFirstName(member.name)}'s list.`
+                    : `Jot a to-do — it lands on ${getFirstName(member.name)}'s list. Start a word with @ (like @Charlee, or @all) to send it to them instead.`}
                   onSubmit={() => handleSaveLiveNote(member, liveNoteWishId)}
                   // Deliberately not `submitting`: a jot saves in a blink and
                   // the room keeps talking, so the box must stay typeable the
@@ -3541,7 +3618,11 @@ export default function MeetingHelperScreen() {
                     })}
                   >
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), color: 'white' }}>
-                      {liveNoteSaving ? 'Saving…' : 'Add to list'}
+                      {liveNoteSaving
+                        ? 'Saving…'
+                        : liveNoteWishId === NEW_MEETING_WISH_ID
+                          ? 'Capture wish'
+                          : 'Add to list'}
                     </Text>
                   </Pressable>
                   {liveNoteConfirmation ? (

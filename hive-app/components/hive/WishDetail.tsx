@@ -95,7 +95,7 @@ export function WishDetail({
 
   const fetchComments = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('wish_comments')
         // Comment author only ever renders as an avatar + name here and in
         // WishCommentItem (id/name/avatar_url) — narrowed 2026-08-11, same
@@ -103,6 +103,7 @@ export function WishDetail({
         // this shape.
         .select('*, user:profiles!user_id(id, name, avatar_url), reactions:wish_comment_reactions(*, user:profiles!user_id(id, name, avatar_url))')
         .eq('wish_id', wish.id)
+        .is('archived_at', null)
         .order('created_at', { ascending: true });
 
       if (error) throw error;

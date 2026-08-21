@@ -17,6 +17,27 @@ export interface ParsedActionItemDescription {
   context: string | null;
 }
 
+/**
+ * The part of a to-do that describes an actual action.
+ *
+ * Meeting Helper jots often start with routing tokens ("@nat", "@og") and
+ * end with context ("re: someone's HummDinger"). Those pieces decide where a
+ * row goes, but they are not a task by themselves. Keeping this test next to
+ * the display parser means every composer can reject the same accidental
+ * "@name"-only save before it becomes a blank-looking row on Home.
+ */
+export function getMeaningfulActionItemText(description: string): string {
+  let text = description.trim();
+  text = text.replace(/\s*\(re:\s*[^)]+\)\s*$/i, '').trim();
+  text = text.replace(/^(?:@[\w.-]+(?:[\s,]+|$))+/, '').trim();
+  text = text.replace(/^[\s,;:·&/\\|\-_]+|[\s,;:·&/\\|\-_]+$/g, '').trim();
+  return text;
+}
+
+export function hasMeaningfulActionItemText(description: string): boolean {
+  return /[\p{L}\p{N}]/u.test(getMeaningfulActionItemText(description));
+}
+
 export function parseActionItemDescription(description: string): ParsedActionItemDescription {
   let text = description.trim();
 
