@@ -64,7 +64,6 @@ export default function JoinScreen() {
    */
   const [creed, setCreed] = useState<string | null>(null);
   const [agreedToCreed, setAgreedToCreed] = useState(false);
-  const [creedOpen, setCreedOpen] = useState(false);
   const [waitlistName, setWaitlistName] = useState('');
   const [waitlistMessage, setWaitlistMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -641,11 +640,12 @@ export default function JoinScreen() {
               Every HIVE runs on the same handful of promises. Have a read.
             </Text>
 
-            <ScrollView
-              style={{ maxHeight: creedOpen ? undefined : 190 }}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator
-            >
+            {/* All of it, on the page. It used to be clamped to 190px with a
+                "Read all of it" link underneath, which meant the thing you are
+                agreeing to was three promises and a scroll bar. Nat, 2026-08-21:
+                *"i want the whole thing visible."* The page scrolls; this does
+                not need to scroll inside it as well. */}
+            <View>
               {/* Thirteen promises, drawn as thirteen promises. This printed
                   the whole page as one block with the asterisks stripped out,
                   which is why Nat read it as "one long sentence" (2026-08-21). */}
@@ -698,15 +698,7 @@ export default function JoinScreen() {
                   </View>
                 );
               })}
-            </ScrollView>
-
-            {!creedOpen && (
-              <Pressable onPress={() => setCreedOpen(true)} className="pt-2">
-                <Text style={{ fontFamily: 'Lato_700Bold', color: inviteAccent }} className="text-sm">
-                  Read all of it
-                </Text>
-              </Pressable>
-            )}
+            </View>
 
             <Pressable
               onPress={() => setAgreedToCreed((yes) => !yes)}
