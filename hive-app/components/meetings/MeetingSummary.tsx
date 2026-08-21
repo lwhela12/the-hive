@@ -879,6 +879,8 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
               <Pressable
                 onPress={() => void saveCorrection()}
                 disabled={savingCorrection || !correctionDraft.trim()}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: savingCorrection || !correctionDraft.trim() }}
                 className={`bg-honey-500 px-4 py-3 rounded-lg active:bg-honey-600 ${
                   savingCorrection || !correctionDraft.trim() ? 'opacity-60' : ''
                 }`}
@@ -890,6 +892,8 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
               <Pressable
                 onPress={() => setCorrectionOpen(false)}
                 disabled={savingCorrection}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: savingCorrection }}
                 className="px-4 py-3 rounded-lg border border-gray-300 bg-white active:bg-gray-50"
               >
                 <Text className="text-gray-700 font-semibold">Cancel</Text>
@@ -898,6 +902,8 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                 <Pressable
                   onPress={() => setCorrectionDraft(automaticSummaryAsText())}
                   disabled={savingCorrection}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: savingCorrection }}
                   className="px-4 py-3 rounded-lg active:bg-honey-100"
                 >
                   <Text className="text-honey-800 font-semibold">Start from automatic version</Text>
