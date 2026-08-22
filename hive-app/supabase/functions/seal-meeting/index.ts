@@ -31,7 +31,20 @@ type SummarySection = {
   title: string;
   lines?: string[];
   intro?: string;
-  groups?: { title: string; lines: string[]; meta?: string }[];
+  groups?: {
+    title: string;
+    lines: string[];
+    meta?: string;
+    review?: {
+      kind: 'action_item_owner' | 'record_correction';
+      conflict_id: string;
+      action_item_id?: string;
+      task_description?: string;
+      current_owner_id?: string;
+      current_owner_name?: string;
+      summary_line?: string;
+    };
+  }[];
   tone?: 'default' | 'warm' | 'warning';
   /** Stored audit provenance; the reader keeps this out of the recap itself. */
   source_label: string;
@@ -48,7 +61,7 @@ type TranscriptReconciliation = {
   decisions: { section: 'treasurer' | 'meetups' | 'hummdinger' | 'wrapup'; text: string }[];
   member_context: { person: string; context: string }[];
   duty_labels: { task: string; label: string }[];
-  conflicts: { topic: string; helper_record: string; transcript_evidence: string }[];
+  conflicts: { topic: string; helper_record: string; transcript_evidence: string; action_item_id?: string }[];
 };
 
 type MeetingHelperSnapshot = {
@@ -240,7 +253,7 @@ function stringArray(value: unknown) {
 async function reconcileTranscript(
   transcript: string,
   snapshot: MeetingHelperSnapshot,
-  duties: { task: string; owners: string[]; about: string | null; status: string }[],
+  duties: { task: string; owners: string[]; about: string | null; status: string; action_item_ids: string[] }[],
   communityId: string,
 ): Promise<{ result: TranscriptReconciliation; evidence: ReturnType<typeof transcriptEvidenceCopy> }> {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
@@ -262,7 +275,7 @@ async function reconcileTranscript(
       'If confirmed_absentee_names is non-empty, never say everyone or all members attended. Missing pre-meeting input is not itself a conflict.',
       'If sources disagree, put the discrepancy in conflicts. Do not guess. Use first names from the roster exactly.',
       'Return only valid JSON with this shape:',
-      '{"overview":"2-4 humane sentences","attendance":{"in_person":[],"remote":[],"absent":[],"unclear":[]},"decisions":[{"section":"treasurer|meetups|hummdinger|wrapup","text":"..."}],"member_context":[{"person":"First","context":"1-2 concise sentences"}],"duty_labels":[{"task":"exact CURRENT_DUTIES task","label":"humane concise wording"}],"conflicts":[{"topic":"...","helper_record":"...","transcript_evidence":"..."}]}',
+      '{"overview":"2-4 humane sentences","attendance":{"in_person":[],"remote":[],"absent":[],"unclear":[]},"decisions":[{"section":"treasurer|meetups|hummdinger|wrapup","text":"..."}],"member_context":[{"person":"First","context":"1-2 concise sentences"}],"duty_labels":[{"task":"exact CURRENT_DUTIES task","label":"humane concise wording"}],"conflicts":[{"topic":"...","helper_record":"...","transcript_evidence":"...","action_item_id":"exact id when this conflict concerns a current duty, otherwise empty"}]}',
       'Attendance rule: confirmed absentees are absent. Pre-meeting attendance is an intention; use explicit transcript statements to resolve remote vs in-person, and leave unclear when unsupported.',
       'Member context should summarize what each person brought or needed, not repeat their assigned duties.',
       'For every CURRENT_DUTIES task, return one duty_labels row. The task key must be exact. The label may repair shorthand into humane English but must preserve the same obligation, specificity, and tone; it must not change owners.',
@@ -295,6 +308,7 @@ async function reconcileTranscript(
   const dutyLabels = Array.isArray(parsed.duty_labels) ? parsed.duty_labels : [];
   const conflicts = Array.isArray(parsed.conflicts) ? parsed.conflicts : [];
   const exactTasks = new Set(duties.map((duty) => duty.task));
+  const exactActionItemIds = new Set(duties.flatMap((duty) => duty.action_item_ids));
   return {
     evidence,
     result: {
@@ -334,8 +348,11 @@ async function reconcileTranscript(
         const topic = typeof row.topic === 'string' ? row.topic.trim() : '';
         const helper = typeof row.helper_record === 'string' ? row.helper_record.trim() : '';
         const transcriptLine = typeof row.transcript_evidence === 'string' ? row.transcript_evidence.trim() : '';
+        const actionItemId = typeof row.action_item_id === 'string' && exactActionItemIds.has(row.action_item_id)
+          ? row.action_item_id
+          : undefined;
         return topic && (helper || transcriptLine)
-          ? [{ topic, helper_record: helper, transcript_evidence: transcriptLine }]
+          ? [{ topic, helper_record: helper, transcript_evidence: transcriptLine, action_item_id: actionItemId }]
           : [];
       }),
     },
@@ -632,15 +649,26 @@ serve(async (req) => {
     // Routing-only placeholders are retained in action_items for audit/undo,
     // but they are not meeting outcomes.
     const keptTodos = todos.filter((todo) => !!cleanJotText(todo.description));
-    const todoGroups = new Map<string, { names: string[]; about: string | null; open: number; completed: number }>();
+    const todoGroups = new Map<string, {
+      ids: string[];
+      ownerIds: string[];
+      names: string[];
+      about: string | null;
+      open: number;
+      completed: number;
+    }>();
     keptTodos.forEach((todo) => {
       const text = cleanJotText(todo.description);
       const group = todoGroups.get(text) ?? {
+        ids: [],
+        ownerIds: [],
         names: [],
         about: todo.about?.name ? firstName(todo.about.name) : null,
         open: 0,
         completed: 0,
       };
+      if (!group.ids.includes(todo.id)) group.ids.push(todo.id);
+      if (todo.assigned_to && !group.ownerIds.includes(todo.assigned_to)) group.ownerIds.push(todo.assigned_to);
       const name = todo.assignee?.name ? firstName(todo.assignee.name) : null;
       if (name && !group.names.includes(name)) group.names.push(name);
       if (todo.completed) group.completed += 1;
@@ -776,7 +804,9 @@ serve(async (req) => {
     const dutyRows = Array.from(todoGroups, ([task, group]) => ({
       task,
       owners: group.names,
+      owner_ids: group.ownerIds,
       about: group.about,
+      action_item_ids: group.ids,
       status: group.open === 0 && group.completed > 0
         ? 'complete'
         : group.completed > 0
@@ -788,6 +818,21 @@ serve(async (req) => {
       ? await reconcileTranscript(transcript, helperSnapshot, dutyRows, communityId)
       : null;
     const transcriptResult = reconciled?.result ?? null;
+    const resolvedConflictIds = new Set(
+      (Array.isArray(previous.conflict_resolutions) ? previous.conflict_resolutions : [])
+        .flatMap((entry) => (
+          entry && typeof entry === 'object' && typeof (entry as Record<string, unknown>).conflict_id === 'string'
+            ? [(entry as Record<string, string>).conflict_id]
+            : []
+        )),
+    );
+    const unresolvedConflicts = (transcriptResult?.conflicts ?? []).flatMap((conflict) => {
+      const topicSlug = conflict.topic.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
+      const conflictId = conflict.action_item_id
+        ? `action-item-owner:${conflict.action_item_id}`
+        : `source-record:${topicSlug || 'discrepancy'}`;
+      return resolvedConflictIds.has(conflictId) ? [] : [{ ...conflict, conflictId }];
+    });
 
     const sections: SummarySection[] = [];
     const rosterFirstNames = helperSnapshot.roster.map((person) => firstName(person.name));
@@ -905,6 +950,10 @@ serve(async (req) => {
 
     const contextByPerson = new Map((transcriptResult?.member_context ?? []).map((item) => [firstName(item.person), item.context]));
     const dutyLabelByTask = new Map((transcriptResult?.duty_labels ?? []).map((item) => [item.task, item.label]));
+    const dutySummaryLine = (duty: typeof dutyRows[number]) => {
+      const who = duty.owners.length > 4 ? 'OG HIVE' : duty.owners.join(' & ') || 'Owner needs review';
+      return `Confirmed duty: ${duty.status === 'complete' ? '✓ ' : ''}${dutyLabelByTask.get(duty.task) ?? duty.task} — ${who}`;
+    };
     const helperCheckInByPerson = new Map(helperSnapshot.check_ins.map((entry) => [firstName(entry.name), entry]));
     const dutyGroupsByPerson = new Map<string, typeof dutyRows>();
     dutyRows.forEach((duty) => {
@@ -924,13 +973,10 @@ serve(async (req) => {
         answerOf(checkIn.answers, 'q_pop_obstacles') ? `Needs / obstacles: ${answerOf(checkIn.answers, 'q_pop_obstacles')}` : '',
         answerOf(checkIn.answers, 'q_pop_priorities') ? `Focus: ${answerOf(checkIn.answers, 'q_pop_priorities')}` : '',
       ].filter(Boolean) : [];
-      const dutyLines = dutiesForPerson.map((duty) => {
-        const who = duty.owners.length > 4 ? 'OG HIVE' : duty.owners.join(' & ') || 'Owner needs review';
-        return `${duty.status === 'complete' ? '✓ ' : ''}${dutyLabelByTask.get(duty.task) ?? duty.task} — ${who}`;
-      });
+      const dutyLines = dutiesForPerson.map(dutySummaryLine);
       const lines = [
         ...(context ? [context] : fallbackContext),
-        ...dutyLines.map((line) => `Confirmed duty: ${line}`),
+        ...dutyLines,
       ];
       return lines.length > 0 ? [{ title: name, lines, meta: hdByUser.get(checkIn?.user_id ?? '') ?? undefined }] : [];
     });
@@ -962,16 +1008,38 @@ serve(async (req) => {
       source_label: transcript ? 'Meeting Helper + current duties + transcript reconciliation' : 'Meeting Helper + current duties; no transcript was available at seal time',
     });
 
-    if ((transcriptResult?.conflicts ?? []).length > 0) sections.push({
+    if (unresolvedConflicts.length > 0) sections.push({
       title: 'Needs Review',
       intro: 'These sources do not fully agree. The record keeps the discrepancy visible instead of choosing a side.',
-      groups: transcriptResult!.conflicts.map((conflict) => ({
-        title: conflict.topic,
-        lines: [
-          conflict.helper_record ? `Helper record: ${conflict.helper_record}` : '',
-          conflict.transcript_evidence ? `Transcript evidence: ${conflict.transcript_evidence}` : '',
-        ].filter(Boolean),
-      })),
+      groups: unresolvedConflicts.map((conflict) => {
+        const actionItem = conflict.action_item_id
+          ? keptTodos.find((todo) => todo.id === conflict.action_item_id)
+          : null;
+        const duty = conflict.action_item_id
+          ? dutyRows.find((row) => row.action_item_ids.includes(conflict.action_item_id!))
+          : null;
+        return {
+          title: conflict.topic,
+          lines: [
+            conflict.helper_record ? `Helper record: ${conflict.helper_record}` : '',
+            conflict.transcript_evidence ? `Transcript evidence: ${conflict.transcript_evidence}` : '',
+          ].filter(Boolean),
+          review: conflict.action_item_id && actionItem
+            ? {
+              kind: 'action_item_owner' as const,
+              conflict_id: conflict.conflictId,
+              action_item_id: conflict.action_item_id,
+              task_description: duty?.task ?? cleanJotText(actionItem.description),
+              current_owner_id: actionItem.assigned_to ?? undefined,
+              current_owner_name: actionItem.assignee?.name ? firstName(actionItem.assignee.name) : undefined,
+              summary_line: duty ? dutySummaryLine(duty) : undefined,
+            }
+            : {
+              kind: 'record_correction' as const,
+              conflict_id: conflict.conflictId,
+            },
+        };
+      }),
       tone: 'warning',
       source_label: 'Automatic discrepancy check; human review required',
     });
@@ -1030,7 +1098,7 @@ serve(async (req) => {
         helper_structure_preserved: true,
         rebuilt: isRebuild,
         decisions_verified: false,
-        conflicts_need_review: (transcriptResult?.conflicts ?? []).length,
+        conflicts_need_review: unresolvedConflicts.length,
         check_in_period: responsePeriod,
         check_in_response_count: checkIns.length,
         community_member_count: memberNames.size,

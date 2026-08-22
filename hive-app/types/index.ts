@@ -1128,6 +1128,17 @@ export interface Database {
     };
     Views: {};
     Functions: {
+      resolve_meeting_summary_conflict: {
+        Args: {
+          p_meeting_id: string;
+          p_conflict_id: string;
+          p_resolution: 'keep_owner' | 'reassign' | 'remove' | 'clarify';
+          p_new_owner_id?: string | null;
+          p_note?: string | null;
+          p_next_summary?: Record<string, unknown> | null;
+        };
+        Returns: Record<string, unknown>;
+      };
       is_genesis_state: {
         Args: Record<string, never>;
         Returns: boolean;

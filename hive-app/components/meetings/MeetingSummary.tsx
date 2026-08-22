@@ -6,7 +6,16 @@ import { formatDateLong, formatDateShort } from '../../lib/dateUtils';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { invalidateWishQueries } from '../../lib/queryClient';
 import { desireKey, insightKey, type CaughtInsight } from '../../lib/desires';
-import { SummarySections } from './SummarySections';
+import {
+  SummarySections,
+  type MeetingConflictReview,
+  type SummaryGroup,
+  type SummarySection,
+} from './SummarySections';
+import {
+  MeetingConflictResolver,
+  type ConflictResolutionInput,
+} from './MeetingConflictResolver';
 import {
   SpeakerNames,
   transcriptLineWithNames,
@@ -68,14 +77,7 @@ interface ParsedSummary {
   summary?: string;
   decisions?: string[];
   /** The meeting deck in outline form — same running order as the helper. */
-  sections?: {
-    title: string;
-    lines?: string[];
-    intro?: string;
-    groups?: { title: string; lines: string[]; meta?: string }[];
-    tone?: 'default' | 'warm' | 'warning';
-    source_label?: string;
-  }[];
+  sections?: SummarySection[];
   provenance?: {
     kind?: 'automatic_activity_record' | 'reviewed_import' | 'reconciled_helper_record';
     meeting_date?: string;
@@ -128,6 +130,15 @@ interface ParsedSummary {
     corrected_at: string;
     corrected_by: string;
   }[];
+  conflict_resolutions?: {
+    conflict_id: string;
+    topic: string;
+    resolution: 'keep_owner' | 'reassign' | 'remove' | 'clarify';
+    resolved_by: string;
+    resolved_at: string;
+    new_owner_name?: string;
+    note?: string;
+  }[];
 }
 
 // HD boards used to be proposed here too. They're gone everywhere now
@@ -160,6 +171,54 @@ const countProposals = (summary: ParsedSummary) =>
   + (summary.board_suggestions?.length ?? 0);
 
 const joinMeta = (parts: (string | null | undefined)[]) => parts.filter(Boolean).join(' · ');
+
+const firstName = (name?: string | null) => (name ?? '').trim().split(/\s+/)[0] || 'Someone';
+
+/**
+ * Remove one resolved warning and update only the exact duty line it pointed
+ * at. The database applies this reviewed JSON and the real to-do atomically.
+ */
+const summaryAfterConflictResolution = (
+  summary: ParsedSummary,
+  review: MeetingConflictReview,
+  input: ConflictResolutionInput,
+  members: SpeakerMember[],
+) => {
+  const next = JSON.parse(JSON.stringify(summary)) as ParsedSummary;
+  const newOwnerName = input.newOwnerId
+    ? firstName(members.find((member) => member.id === input.newOwnerId)?.name)
+    : null;
+
+  const rewriteGroup = (group: SummaryGroup): SummaryGroup => {
+    if (!review.summary_line || !group.lines.includes(review.summary_line)) return group;
+    const lines = group.lines.flatMap((line) => {
+      if (line !== review.summary_line) return [line];
+      if (input.resolution === 'remove') return [];
+      if (input.resolution !== 'reassign' || !newOwnerName) return [line];
+      const divider = line.lastIndexOf(' — ');
+      return [divider >= 0 ? `${line.slice(0, divider)} — ${newOwnerName}` : `${line} — ${newOwnerName}`];
+    });
+    return { ...group, lines };
+  };
+
+  next.sections = (next.sections ?? []).flatMap((section) => {
+    if (section.title !== 'Needs Review') {
+      const groups = (section.groups ?? []).map(rewriteGroup).filter((group) => group.lines.length > 0);
+      if (input.resolution === 'clarify' && input.note?.trim() && section.title === 'Wrap-Up') {
+        groups.push({ title: 'Reviewed correction', lines: [input.note.trim()] });
+      }
+      return [{ ...section, groups }];
+    }
+
+    const groups = (section.groups ?? []).filter((group) => group.review?.conflict_id !== review.conflict_id);
+    return groups.length > 0 ? [{ ...section, groups }] : [];
+  });
+
+  const unresolvedCount = (next.sections ?? [])
+    .find((section) => section.title === 'Needs Review')?.groups?.length ?? 0;
+  if (next.provenance) next.provenance.conflicts_need_review = unresolvedCount;
+  return next;
+};
 
 // One desire's stable name lives in `lib/desires.ts`, shared with the
 // profile's wishes panel — the two screens offer the same desire and must
@@ -258,6 +317,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   const [rebuildingSummary, setRebuildingSummary] = useState(false);
   const [summaryToolsOpen, setSummaryToolsOpen] = useState(false);
   const [taskChecklistOpen, setTaskChecklistOpen] = useState(false);
+  const [resolvingConflictId, setResolvingConflictId] = useState<string | null>(null);
 
   const { profile, communityId, communityRole } = useAuth();
 
@@ -633,6 +693,41 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
       showAlert('Not saved', 'The corrected summary could not be saved just now. Please try again.');
     } finally {
       setSavingCorrection(false);
+    }
+  };
+
+  const resolveSummaryConflict = async (
+    review: MeetingConflictReview,
+    input: ConflictResolutionInput,
+  ) => {
+    if (resolvingConflictId || !isHiveAdmin) return;
+
+    setResolvingConflictId(review.conflict_id);
+    try {
+      const nextSummary = summaryAfterConflictResolution(parsedSummary, review, input, members);
+      const { data, error } = await supabase.rpc('resolve_meeting_summary_conflict', {
+        p_meeting_id: meeting.id,
+        p_conflict_id: review.conflict_id,
+        p_resolution: input.resolution,
+        p_new_owner_id: input.newOwnerId ?? null,
+        p_note: input.note ?? null,
+        p_next_summary: nextSummary as Record<string, unknown>,
+      });
+      if (error) throw error;
+
+      await Promise.all([reloadMeeting(), loadActionItems()]);
+      const result = data as { new_owner_name?: string; resolution?: string } | null;
+      const outcome = result?.resolution === 'reassign' && result.new_owner_name
+        ? `The duty now belongs to ${firstName(result.new_owner_name)}.`
+        : result?.resolution === 'remove'
+          ? 'The stale duty was retired without deleting its history.'
+          : 'Your reviewed decision is now part of the trusted meeting record.';
+      showAlert('Review resolved', outcome);
+    } catch (error) {
+      console.error('Error resolving meeting summary conflict:', error);
+      showAlert('Review not saved', 'Nothing changed. Please reload the summary and try again.');
+    } finally {
+      setResolvingConflictId(null);
     }
   };
 
@@ -1151,7 +1246,23 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         {/* The deck in outline — same renderer the newsletter draft uses. */}
         {!manualCorrection && parsedSummary.sections && parsedSummary.sections.length > 0 && (
           <View className="mb-2">
-            <SummarySections sections={parsedSummary.sections} />
+            <SummarySections
+              sections={parsedSummary.sections}
+              renderReview={(review) => (
+                isHiveAdmin ? (
+                  <MeetingConflictResolver
+                    review={review}
+                    members={members}
+                    saving={resolvingConflictId === review.conflict_id}
+                    onResolve={(input) => resolveSummaryConflict(review, input)}
+                  />
+                ) : (
+                  <Text className="mt-4 text-sm text-amber-800">
+                    A HIVE admin can correct this record here.
+                  </Text>
+                )
+              )}
+            />
           </View>
         )}
 
@@ -1177,6 +1288,11 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
             {(parsedSummary.provenance.conflicts_need_review ?? 0) > 0 ? (
               <Text className="text-amber-800 text-sm mt-1">
                 {parsedSummary.provenance.conflicts_need_review} source conflict{parsedSummary.provenance.conflicts_need_review === 1 ? '' : 's'} kept visible for review.
+              </Text>
+            ) : null}
+            {(parsedSummary.conflict_resolutions?.length ?? 0) > 0 ? (
+              <Text className="text-green-800 text-sm mt-1">
+                {parsedSummary.conflict_resolutions?.length} review{parsedSummary.conflict_resolutions?.length === 1 ? '' : 's'} resolved by a HIVE admin and preserved in this record.
               </Text>
             ) : null}
           </View>

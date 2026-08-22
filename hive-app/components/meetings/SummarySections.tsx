@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Image, Pressable, View, Text, useWindowDimensions } from 'react-native';
 import { headerForSection } from '../../lib/newsletterHeaders';
 
@@ -6,10 +6,28 @@ export interface SummarySection {
   title: string;
   lines?: string[];
   intro?: string;
-  groups?: { title: string; lines: string[]; meta?: string }[];
+  groups?: SummaryGroup[];
   tone?: 'default' | 'warm' | 'warning';
   /** Stored audit provenance, shown quietly at the foot of each working section. */
   source_label?: string;
+}
+
+export interface MeetingConflictReview {
+  kind: 'action_item_owner' | 'record_correction';
+  conflict_id: string;
+  action_item_id?: string;
+  task_description?: string;
+  current_owner_id?: string;
+  current_owner_name?: string;
+  /** Exact generated duty line, used to update only that line after review. */
+  summary_line?: string;
+}
+
+export interface SummaryGroup {
+  title: string;
+  lines: string[];
+  meta?: string;
+  review?: MeetingConflictReview;
 }
 
 const MEETING_SECTION_ICONS: Record<string, string> = {
@@ -43,10 +61,13 @@ const MEETING_SECTION_ICONS: Record<string, string> = {
 export function SummarySections({
   sections,
   art = false,
+  renderReview,
 }: {
   sections: SummarySection[];
   /** Use the drawn headers. Newsletter yes, meeting summary no. */
   art?: boolean;
+  /** Meeting summaries may resolve a source conflict inside its own card. */
+  renderReview?: (review: MeetingConflictReview, group: SummaryGroup) => ReactNode;
 }) {
   const { width } = useWindowDimensions();
   const [expandedMeetingSections, setExpandedMeetingSections] = useState<Set<string>>(() => new Set());
@@ -152,6 +173,7 @@ export function SummarySections({
                           );
                         })}
                       </View>
+                      {group.review && renderReview ? renderReview(group.review, group) : null}
                     </View>
                   ))}
 
