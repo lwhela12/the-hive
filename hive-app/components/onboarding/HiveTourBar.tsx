@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View, useWindowDimensions } from 'react-native';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useTourMarks } from '../../lib/hooks/useTourMarks';
 import { accentOnDark, accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
@@ -74,15 +74,34 @@ export function HiveTourBar() {
   const { memberships, community } = useAuth();
   const skin = usePageSkin();
   const router = useRouter();
+  const pathname = usePathname();
   const { width } = useWindowDimensions();
   const [stepIndex, setStepIndex] = useState(0);
+  // The words do not advance until the requested page is genuinely on screen.
+  // Nat found Step 2 / Profile talking over Home because the old handler moved
+  // this number before Expo Router had actually moved the page.
+  const [requestedStepIndex, setRequestedStepIndex] = useState<number | null>(null);
 
-  // A new tour starts at the beginning. Keyed on the HIVE rather than reset on
-  // unmount, because the bar stays mounted across every navigation — that is
-  // the whole point of it living in the shell.
+  // A new tour starts on the real Home page. The bar lives outside Tabs, so it
+  // can survive the route change, but its sentence must always describe the
+  // page underneath it.
   useEffect(() => {
+    if (!tourCommunityId) return;
     setStepIndex(0);
+    setRequestedStepIndex(null);
+    if (pathname !== TOUR_STEPS[0].route) router.replace(TOUR_STEPS[0].route as never);
   }, [tourCommunityId]);
+
+  // Navigation is the proof that a step happened. Only after the URL matches
+  // the requested stop do the number and sentence move forward. A route that
+  // stalls therefore leaves the current, truthful step in place instead of
+  // describing Profile over Home (or any later mismatch).
+  useEffect(() => {
+    if (requestedStepIndex === null) return;
+    if (pathname !== TOUR_STEPS[requestedStepIndex].route) return;
+    setStepIndex(requestedStepIndex);
+    setRequestedStepIndex(null);
+  }, [pathname, requestedStepIndex]);
 
   if (!tourCommunityId) return null;
 
@@ -112,10 +131,10 @@ export function HiveTourBar() {
       return;
     }
     const next = stepIndex + 1;
-    setStepIndex(next);
-    // The navigation IS the tour: Next takes you to the place the sentence is
-    // about, with the bar riding along underneath.
-    router.push(TOUR_STEPS[next].route as never);
+    setRequestedStepIndex(next);
+    // Replace rather than stack the five tour stops behind the Back button.
+    // The effect above advances the words only after this route is visible.
+    router.replace(TOUR_STEPS[next].route as never);
   };
 
   return (
@@ -198,7 +217,13 @@ export function HiveTourBar() {
         <Pressable
           onPress={handleNext}
           accessibilityRole="button"
-          accessibilityLabel={isLastStep ? 'Finish the tour' : `Next: ${TOUR_STEPS[stepIndex + 1].title}`}
+          accessibilityLabel={
+            isLastStep
+              ? 'Finish the tour'
+              : requestedStepIndex !== null
+                ? `Opening ${TOUR_STEPS[requestedStepIndex].title}`
+                : `Next: ${TOUR_STEPS[stepIndex + 1].title}`
+          }
           style={({ pressed }) => ({
             paddingVertical: 9,
             paddingHorizontal: 18,
@@ -207,7 +232,11 @@ export function HiveTourBar() {
           })}
         >
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#ffffff' }}>
-            {isLastStep ? "You're all set 🐝" : 'Next'}
+            {isLastStep
+              ? "You're all set 🐝"
+              : requestedStepIndex !== null
+                ? `Opening ${TOUR_STEPS[requestedStepIndex].title}…`
+                : 'Next'}
           </Text>
         </Pressable>
       </View>
