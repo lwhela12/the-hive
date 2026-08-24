@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SelectedImage, pickMultipleImages, takePhoto } from '../../lib/imagePicker';
 import { SelectedFile, pickMultipleFiles } from '../../lib/filePicker';
 import { pickMultipleVideos, takeVideo } from '../../lib/videoPicker';
-import { fileToSelectedFile, fileToSelectedImage, isImageFile, isTouchWebDevice } from '../../lib/webFileAttachments';
+import { fileToSelectedFile, fileToSelectedImage, isTouchWebDevice, partitionWebAttachments } from '../../lib/webFileAttachments';
 import { getShortVideoLimitLabel, partitionAllowedShortVideos } from '../../lib/mediaAttachments';
 import { SelectedFilePreview } from './SelectedFilePreview';
 
@@ -18,6 +18,7 @@ interface AttachmentPickerProps {
   onFilesChange?: (files: SelectedFile[]) => void;
   maxImages?: number;
   maxFiles?: number;
+  maxAttachments?: number;
   disabled?: boolean;
   compact?: boolean;
 }
@@ -29,14 +30,16 @@ export function AttachmentPicker({
   onFilesChange,
   maxImages = MAX_IMAGES,
   maxFiles = MAX_FILES,
+  maxAttachments,
   disabled = false,
   compact = false,
 }: AttachmentPickerProps) {
   const [showCompactMenu, setShowCompactMenu] = useState(false);
   const webAttachmentInputRef = useRef<HTMLInputElement | null>(null);
-  const remainingSlots = maxImages - selectedImages.length;
+  const remainingTotalSlots = Math.max(0, (maxAttachments ?? Number.POSITIVE_INFINITY) - selectedImages.length - selectedFiles.length);
+  const remainingSlots = Math.min(maxImages - selectedImages.length, remainingTotalSlots);
   const canAddMore = remainingSlots > 0 && !disabled;
-  const remainingFileSlots = maxFiles - selectedFiles.length;
+  const remainingFileSlots = Math.min(maxFiles - selectedFiles.length, remainingTotalSlots);
   const canAddFiles = remainingFileSlots > 0 && !disabled && !!onFilesChange;
   const useNativeWebAttachmentPicker = compact && isTouchWebDevice();
 
@@ -114,12 +117,14 @@ export function AttachmentPicker({
 
     if (files.length === 0 || disabled) return;
 
-    const imageSlots = Math.max(0, maxImages - selectedImages.length);
-    const fileSlots = Math.max(0, maxFiles - selectedFiles.length);
-    const imageFiles = files.filter(isImageFile).slice(0, imageSlots);
-    const documentFiles = onFilesChange
-      ? files.filter((file) => !isImageFile(file)).slice(0, fileSlots)
-      : [];
+    const imageSlots = Math.max(0, Math.min(maxImages - selectedImages.length, remainingTotalSlots));
+    const fileSlots = onFilesChange ? Math.max(0, maxFiles - selectedFiles.length) : 0;
+    const { imageFiles, documentFiles } = partitionWebAttachments(
+      files,
+      imageSlots,
+      fileSlots,
+      remainingTotalSlots,
+    );
 
     if (imageFiles.length > 0) {
       const images = await Promise.all(imageFiles.map(fileToSelectedImage));

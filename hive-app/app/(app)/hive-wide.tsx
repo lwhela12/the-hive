@@ -26,6 +26,7 @@ import { useAppNews } from '../../lib/hooks/useAppNews';
 import { accentOnDark, accentWash, hiveAccent, hiveDisplayName, normalizeHiveBrandText } from '../../lib/hiveBrand';
 import { formatDateLong, formatTimeRange } from '../../lib/dateUtils';
 import { getLocalIsoDate } from '../../lib/hooks/useArrivalBoard';
+import { useOpenFeedback } from '../../lib/openFeedback';
 import type { Community } from '../../types';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -497,6 +498,7 @@ function WayIntoYourHive({
 
 export default function HiveWideScreen() {
   const router = useRouter();
+  const openFeedback = useOpenFeedback();
   const { communityId, community, communityRole, profile, refreshProfile, memberships, switchCommunity, wholeHive, enterWholeHive } = useAuth();
   const { appNews: allAppNews } = useAppNews();
   // The same audience as the existing Admin rail door: HIVE admins and
@@ -1066,7 +1068,14 @@ export default function HiveWideScreen() {
                     <Pressable
                       key={entry.id}
                       disabled={!entry.href}
-                      onPress={() => entry.href && router.push(entry.href as never)}
+                      onPress={() => {
+                        if (!entry.href) return;
+                        if (entry.href.pathname === '/app-feedback') {
+                          openFeedback({ pathname: '/hive-wide', captureRequested: true });
+                        } else {
+                          router.push(entry.href as never);
+                        }
+                      }}
                       style={{
                         paddingVertical: 10, paddingHorizontal: 12,
                         borderRadius: 12, borderWidth: 1,

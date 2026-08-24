@@ -69,6 +69,7 @@ import { createCalendarEvent } from '../../lib/eventMutations';
 import { loadActivityRead, persistActivityRead, loadAppNewsSeen, persistAppNewsSeen } from '../../lib/readState';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { addHomeResetListener } from '../../lib/homeNavigation';
+import { useOpenFeedback } from '../../lib/openFeedback';
 import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
 import {
   QUARTERLY_DUES_AMOUNT,
@@ -833,6 +834,7 @@ export default function HiveScreen() {
   const { profile, communityId, communityRole, session, refreshProfile, community, memberships, openHivePicker, wholeHive, switchCommunity } = useAuth();
   const { appNews } = useAppNews();
   const router = useRouter();
+  const openFeedback = useOpenFeedback();
 
   const { openWishId, openSurveyId, hive: linkedHiveId, catchup, from } = useLocalSearchParams<{
     openWishId?: string;
@@ -3215,10 +3217,14 @@ export default function HiveScreen() {
                       accessibilityLabel={`${entry.title}. ${entry.action ?? 'Take a look'}`}
                       onPress={() => {
                         dismissAppNews();
-                        router.push({
-                          pathname: entry.href!.pathname as any,
-                          params: { from: 'hive', ...(entry.href!.params ?? {}) },
-                        });
+                        if (entry.href!.pathname === '/app-feedback') {
+                          openFeedback({ pathname: '/hive', captureRequested: true });
+                        } else {
+                          router.push({
+                            pathname: entry.href!.pathname as any,
+                            params: { from: 'hive', ...(entry.href!.params ?? {}) },
+                          });
+                        }
                       }}
                       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
                     >
@@ -3839,7 +3845,7 @@ export default function HiveScreen() {
                   meetings: () => router.push('/meetings' as any),
                   profile: () => router.push('/profile' as any),
                   clive: () => router.push('/' as any),
-                  feedback: () => router.push('/app-feedback' as any),
+                  feedback: () => openFeedback({ pathname: '/hive', captureRequested: true }),
                   swap_hives: () => openHivePicker(),
                   admin: () => router.push('/admin' as any),
                 };

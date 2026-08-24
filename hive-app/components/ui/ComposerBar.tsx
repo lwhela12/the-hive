@@ -128,6 +128,8 @@ export interface ComposerBarProps {
   onFilesChange?: (files: SelectedFile[]) => void;
   maxImages?: number;
   maxFiles?: number;
+  /** Combined image + file cap. */
+  maxAttachments?: number;
   /** Let a drop anywhere on the page land in this composer. */
   captureDocumentDrops?: boolean;
 
@@ -187,6 +189,7 @@ export function ComposerBar({
   onFilesChange,
   maxImages = 5,
   maxFiles = 5,
+  maxAttachments,
   captureDocumentDrops = false,
   mentionMembers = NO_MEMBERS,
   mentionsLoading = false,
@@ -224,6 +227,7 @@ export function ComposerBar({
     onFilesChange,
     maxImages,
     maxFiles,
+    maxAttachments,
     captureDocumentDrops: showAttach && captureDocumentDrops,
     disabled: !showAttach || submitting || !editable,
   });
@@ -437,6 +441,7 @@ export function ComposerBar({
               onFilesChange={onFilesChange}
               maxImages={maxImages}
               maxFiles={maxFiles}
+              maxAttachments={maxAttachments}
               disabled={submitting || !editable}
             />
           )}
@@ -522,6 +527,7 @@ export function ComposerBar({
                 onFilesChange={onFilesChange}
                 maxImages={maxImages}
                 maxFiles={maxFiles}
+                maxAttachments={maxAttachments}
                 disabled={submitting || !editable}
               />
             )}

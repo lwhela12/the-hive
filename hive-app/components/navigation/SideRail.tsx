@@ -16,6 +16,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Avatar } from '../ui/Avatar';
 import { BounceScrollView } from '../ui/BounceScrollView';
 import { QuickAdd } from './QuickAdd';
+import { useOpenFeedback } from '../../lib/openFeedback';
 
 /**
  * The side rail, borrowed from Jammin' Sprouts at Nat's request 2026-08-03.
@@ -255,6 +256,7 @@ export const SideRail = memo(function SideRail({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const openFeedback = useOpenFeedback();
   const { profile, community, communityId, communityRole, memberships, switchCommunity, wholeHive, enterWholeHive } = useAuth();
   const { width } = useWindowDimensions();
   /**
@@ -918,7 +920,14 @@ export const SideRail = memo(function SideRail({
               active={activeKey === item.key}
               badge={item.badge === 'dms' ? unreadDMCount : 0}
               bounceKey={item.key}
-              onPress={() => go(item.route, item.key)}
+              onPress={() => {
+                if (item.key === 'feedback') {
+                  openFeedback({ pathname, captureRequested: true });
+                  foldAwayOnPhone();
+                } else {
+                  go(item.route, item.key);
+                }
+              }}
             />
           ))}
           {/* "Swap HIVEs" is gone (Nat 2026-08-03). Your HIVEs are already listed

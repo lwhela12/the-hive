@@ -215,6 +215,11 @@ export interface AppFeedback extends Record<string, unknown> {
   where_in_app: string | null;
   platform: string | null;
   status: 'new' | 'read' | 'done';
+  attachments: Attachment[] | null;
+  reply: string | null;
+  replied_at: string | null;
+  replied_by: string | null;
+  replied_by_name: string | null;
   created_at: string;
 }
 

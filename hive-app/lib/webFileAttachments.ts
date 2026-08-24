@@ -8,6 +8,26 @@ export const isImageFile = (file: File) =>
 export const isVideoFile = (file: File) =>
   file.type.startsWith('video/') || /\.(avi|m4v|mkv|mov|mp4|mpeg|mpg|webm)$/i.test(file.name);
 
+/** Fill category and combined caps without early invalid files hiding later valid ones. */
+export function partitionWebAttachments(
+  files: File[],
+  imageSlots: number,
+  fileSlots: number,
+  totalSlots: number,
+): { imageFiles: File[]; documentFiles: File[] } {
+  const imageFiles: File[] = [];
+  const documentFiles: File[] = [];
+  for (const file of files) {
+    if (imageFiles.length + documentFiles.length >= totalSlots) break;
+    if (isImageFile(file)) {
+      if (imageFiles.length < imageSlots) imageFiles.push(file);
+    } else if (documentFiles.length < fileSlots) {
+      documentFiles.push(file);
+    }
+  }
+  return { imageFiles, documentFiles };
+}
+
 const getFallbackImageMimeType = (file: File) => {
   if (file.type) return file.type;
   if (/\.png$/i.test(file.name)) return 'image/png';

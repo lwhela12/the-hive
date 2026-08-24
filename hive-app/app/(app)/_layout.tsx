@@ -18,6 +18,7 @@ import { routeLivesAtWholeHive } from '../../lib/navigation';
 import { currentReturnTo } from '../../lib/authReturnTo';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
+import { registerFeedbackCaptureTarget } from '../../lib/feedbackCapture';
 
 import { ArrivalScreen, markAppArrived } from '../../components/ui/ThinkingBee';
 import { HiveTourBar } from '../../components/onboarding/HiveTourBar';
@@ -154,6 +155,12 @@ export default function AppLayout() {
   const tabIconSize = useMobileLayout ? (useBrowserCompactTabs ? 20 : 22) : 26;
   const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const restoredNativePathRef = useRef(false);
+  const feedbackCaptureTargetRef = useRef<View>(null);
+
+  useEffect(() => {
+    registerFeedbackCaptureTarget(feedbackCaptureTargetRef);
+    return () => registerFeedbackCaptureTarget(null);
+  }, []);
 
   // Where the rail STARTS on a device that has never picked a size.
   //
@@ -296,6 +303,9 @@ export default function AppLayout() {
           is not mid-tour (almost everybody, almost always) it renders
           nothing. See lib/hooks/useTourMarks.ts for when it starts. */}
       <HiveTourBar />
+      {/* Only routed page content is capturable. The rail, update banner, tour,
+          footer, permission UI, and overlays stay outside this explicit ref. */}
+      <View ref={feedbackCaptureTargetRef} collapsable={false} style={{ flex: 1 }}>
       <Tabs
         initialRouteName={getLastAppTabName()}
         screenOptions={{
@@ -607,6 +617,7 @@ export default function AppLayout() {
           }}
         />
       </Tabs>
+      </View>
       {/* Finder's status bar, for the app. It belongs to the shell rather than
           to any page, so it is the same height everywhere, appears on screens
           nobody thought to add it to, and gives the composer at the bottom of

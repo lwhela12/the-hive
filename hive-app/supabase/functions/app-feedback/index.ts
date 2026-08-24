@@ -2,6 +2,15 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
+import { encode as encodeBase64 } from 'https://deno.land/std@0.168.0/encoding/base64.ts';
+import {
+  addFeedbackAttachmentBytes,
+  FeedbackAttachmentValidationError,
+  feedbackAttachmentsHtml,
+  feedbackAttachmentStoragePath,
+  validateFeedbackAttachmentList,
+  type FeedbackAttachment as Attachment,
+} from '../_shared/feedbackAttachments.ts';
 
 /**
  * App Feedback — files it, then tells Nat.
@@ -25,25 +34,13 @@ const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'H.I.V.E. <hive@yourdomain.com>
 const APP_URL = Deno.env.get('EXPO_PUBLIC_APP_URL') || 'https://app.the-hive.app';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 
-const MAX_ATTACHMENTS = 6;
-
-type Attachment = {
-  id: string;
-  url: string;
-  filename: string;
-  size: number;
-  mime_type: string;
-  width?: number;
-  height?: number;
-};
-
 /**
  * Only files this caller uploaded, and only from our own bucket.
  *
- * The screen uploads to `attachments/<uid>/…` first and posts the resulting
- * public URLs here, because that is how every other attachment in the app
- * already works. What it means is that the URL arrives from the client, and a
- * URL from the client is a claim, not a fact.
+ * The screen uploads to the private `attachments/<uid>/…` folder first. The
+ * stored URL still has Supabase's old `/object/public/` shape for compatibility
+ * with the rest of the app, but the bucket itself is private (migration 146).
+ * Either way, a URL arriving from the client is a claim, not a fact.
  *
  * Two things go wrong if we believe it. A stranger's URL under somebody else's
  * folder would file their screenshot under this person's name. And any URL at
@@ -53,31 +50,55 @@ type Attachment = {
  * to open.
  *
  * Storage already enforces that a member can only write inside their own folder
- * (`(storage.foldername(name))[1] = auth.uid()`), so a URL matching this prefix
- * is provably theirs. Anything else is dropped silently rather than refused:
- * the words are the point, and losing a report over a bad file path would be
- * the wrong trade.
+ * (`(storage.foldername(name))[1] = auth.uid()`). This function also derives the
+ * object key, checks that first folder segment, and downloads with the service
+ * client. Invalid, missing, or oversized claims are refused before the row is
+ * stored.
  */
-function ownedAttachments(raw: unknown, userId: string): Attachment[] {
-  if (!Array.isArray(raw)) return [];
-  const prefix = `${SUPABASE_URL}/storage/v1/object/public/attachments/${userId}/`;
+type EmailAttachment = { filename: string; content: string };
 
-  return raw
-    .filter((item): item is Attachment => {
-      if (!item || typeof item !== 'object') return false;
-      const url = (item as Attachment).url;
-      return typeof url === 'string' && url.startsWith(prefix);
-    })
-    .slice(0, MAX_ATTACHMENTS)
-    .map((item) => ({
+async function ownedAttachments(raw: unknown, userId: string, supabaseAdmin: any): Promise<{
+  attachments: Attachment[];
+  emailAttachments: EmailAttachment[];
+}> {
+  const requested = validateFeedbackAttachmentList(raw);
+
+  const attachments: Attachment[] = [];
+  const emailAttachments: EmailAttachment[] = [];
+  let totalBytes = 0;
+
+  for (let index = 0; index < requested.length; index += 1) {
+    const item = requested[index] as Partial<Attachment> | null;
+    const path = feedbackAttachmentStoragePath(item?.url, userId, SUPABASE_URL);
+    if (!item || !path) throw new FeedbackAttachmentValidationError('An attachment is not owned by this member');
+
+    // Download is both the existence/ownership proof and the durable email copy.
+    const { data: blob, error } = await supabaseAdmin.storage.from('attachments').download(path);
+    if (error || !blob) throw new FeedbackAttachmentValidationError('An attachment could not be found');
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    totalBytes = addFeedbackAttachmentBytes(bytes.byteLength, totalBytes);
+
+    const mimeType = (blob.type || 'application/octet-stream').slice(0, 100);
+    const filename = String(item.filename || path.split('/').pop() || 'attachment')
+      .replace(/[\r\n]/g, ' ')
+      .slice(0, 200);
+    const canonicalUrl = supabaseAdmin.storage.from('attachments').getPublicUrl(path).data.publicUrl;
+    attachments.push({
       id: String(item.id ?? ''),
-      url: item.url,
-      filename: String(item.filename ?? 'attachment').slice(0, 200),
-      size: Number(item.size) || 0,
-      mime_type: String(item.mime_type ?? 'application/octet-stream').slice(0, 100),
+      url: canonicalUrl,
+      filename,
+      size: bytes.byteLength,
+      mime_type: mimeType,
       ...(Number(item.width) ? { width: Number(item.width) } : {}),
       ...(Number(item.height) ? { height: Number(item.height) } : {}),
-    }));
+    });
+    emailAttachments.push({
+      filename,
+      content: encodeBase64(bytes),
+    });
+  }
+
+  return { attachments, emailAttachments };
 }
 
 const KINDS = ['bug', 'idea', 'confusing', 'love'] as const;
@@ -111,51 +132,6 @@ function escapeHtml(value: unknown): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-}
-
-/**
- * The screenshots, in the email itself.
- *
- * The whole reason to ask for a picture is that looking at it is faster than
- * reading a description of it — so it has to arrive already looking at you, not
- * as a link to click after you have opened the app on a laptop. Images render
- * inline; anything else (a video, a log file) gets a plain link, because an
- * <img> tag pointed at a 40MB clip is a broken box in an inbox.
- *
- * Every URL here has already been proved to live in this caller's own folder in
- * our bucket (see `ownedAttachments`), which is what makes it safe to let an
- * email client fetch it.
- */
-function attachmentsHtml(attachments: Attachment[]): string {
-  if (attachments.length === 0) return '';
-
-  const images = attachments.filter((a) => a.mime_type.startsWith('image/'));
-  const others = attachments.filter((a) => !a.mime_type.startsWith('image/'));
-
-  const imageBlocks = images
-    .map(
-      (a) => `
-      <a href="${escapeHtml(a.url)}" style="display:block;margin-top:12px;">
-        <img src="${escapeHtml(a.url)}" alt="${escapeHtml(a.filename)}"
-             style="max-width:100%;border-radius:12px;border:1px solid rgba(189,147,72,0.3);" />
-      </a>`
-    )
-    .join('');
-
-  const otherBlocks = others
-    .map(
-      (a) => `
-      <p style="margin:8px 0 0;font-size:13px;">
-        <a href="${escapeHtml(a.url)}" style="color:#bd9348;">${escapeHtml(a.filename)}</a>
-      </p>`
-    )
-    .join('');
-
-  return `
-    <p style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#8e7a5e;margin:20px 0 0;">
-      ${images.length > 0 ? 'What they saw' : 'Attached'}
-    </p>
-    ${imageBlocks}${otherBlocks}`;
 }
 
 /** Newlines survive into the email; they are usually the shape of the report. */
@@ -335,7 +311,15 @@ serve(async (req) => {
 
   const whereInApp = (payload.where_in_app ?? '').trim().slice(0, 300) || null;
   const platform = (payload.platform ?? '').trim().slice(0, 40) || null;
-  const attachments = ownedAttachments(payload.attachments, auth.userId);
+  let attachments: Attachment[];
+  let emailAttachments: EmailAttachment[];
+  try {
+    ({ attachments, emailAttachments } = await ownedAttachments(payload.attachments, auth.userId, supabaseAdmin));
+  } catch (error) {
+    if (error instanceof FeedbackAttachmentValidationError) return errorResponse(error.message, 400);
+    console.error('Could not inspect feedback attachments:', error);
+    return errorResponse('Could not inspect the attachments', 500);
+  }
 
   // Words or a picture. A screenshot with a red circle on it is a complete bug
   // report; an empty form is not.
@@ -415,9 +399,9 @@ serve(async (req) => {
             <p style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#8e7a5e;margin:0 0 4px;">App Feedback</p>
             <h1 style="font-size:20px;margin:0 0 16px;color:#313130;">${escapeHtml(KIND_LABEL[kind])}</h1>
             <div style="background:#fffdf5;border:1px solid rgba(189,147,72,0.3);border-radius:14px;padding:18px;">
-              ${message ? paragraphs(message) : '<p style="margin:0;color:#8e7a5e;font-style:italic;">No words — see the picture below.</p>'}
+              ${message ? paragraphs(message) : '<p style="margin:0;color:#8e7a5e;font-style:italic;">No words — see the attached screenshot or file.</p>'}
             </div>
-            ${attachmentsHtml(attachments)}
+            ${feedbackAttachmentsHtml(attachments)}
             <table style="margin-top:16px;font-size:13px;color:#8e7a5e;">
               <tr><td style="padding-right:12px;">From</td><td style="color:#313130;">${escapeHtml(authorName)}</td></tr>
               <tr><td style="padding-right:12px;">Standing in</td><td style="color:#313130;">${escapeHtml(communityName)}</td></tr>
@@ -441,6 +425,7 @@ serve(async (req) => {
             to: recipients,
             subject,
             html,
+            attachments: emailAttachments,
             // So a reply goes to the person who wrote it rather than into the
             // sending domain, where nobody is reading.
             ...(author?.email ? { reply_to: author.email } : {}),

@@ -3,7 +3,7 @@ import { Alert, Platform } from 'react-native';
 import type { SelectedFile } from '../filePicker';
 import type { SelectedImage } from '../imagePicker';
 import { getShortVideoLimitLabel, partitionAllowedShortVideos } from '../mediaAttachments';
-import { fileToSelectedFile, fileToSelectedImage, isImageFile } from '../webFileAttachments';
+import { fileToSelectedFile, fileToSelectedImage, partitionWebAttachments } from '../webFileAttachments';
 
 const DEFAULT_MAX_IMAGES = 5;
 const DEFAULT_MAX_FILES = 5;
@@ -15,6 +15,7 @@ interface UseWebAttachmentDropZoneOptions {
   onFilesChange?: (files: SelectedFile[]) => void;
   maxImages?: number;
   maxFiles?: number;
+  maxAttachments?: number;
   captureDocumentDrops?: boolean;
   disabled?: boolean;
 }
@@ -37,6 +38,7 @@ export function useWebAttachmentDropZone({
   onFilesChange,
   maxImages = DEFAULT_MAX_IMAGES,
   maxFiles = DEFAULT_MAX_FILES,
+  maxAttachments,
   captureDocumentDrops = false,
   disabled = false,
 }: UseWebAttachmentDropZoneOptions) {
@@ -46,12 +48,15 @@ export function useWebAttachmentDropZone({
   const attachDroppedFiles = useCallback(async (files: File[]) => {
     if (disabled || files.length === 0) return;
 
-    const imageSlots = Math.max(0, maxImages - selectedImages.length);
-    const fileSlots = Math.max(0, maxFiles - selectedFiles.length);
-    const droppedImages = files.filter(isImageFile).slice(0, imageSlots);
-    const droppedFiles = onFilesChange
-      ? files.filter((file) => !isImageFile(file)).slice(0, fileSlots)
-      : [];
+    const totalSlots = Math.max(0, (maxAttachments ?? Number.POSITIVE_INFINITY) - selectedImages.length - selectedFiles.length);
+    const imageSlots = Math.max(0, Math.min(maxImages - selectedImages.length, totalSlots));
+    const fileSlots = onFilesChange ? Math.max(0, maxFiles - selectedFiles.length) : 0;
+    const { imageFiles: droppedImages, documentFiles: droppedFiles } = partitionWebAttachments(
+      files,
+      imageSlots,
+      fileSlots,
+      totalSlots,
+    );
 
     if (droppedImages.length > 0) {
       const images = await Promise.all(droppedImages.map(fileToSelectedImage));
@@ -72,6 +77,7 @@ export function useWebAttachmentDropZone({
     disabled,
     maxFiles,
     maxImages,
+    maxAttachments,
     onFilesChange,
     onImagesChange,
     selectedFiles,

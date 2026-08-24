@@ -8,6 +8,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
+import { useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { usePageSkin } from '../../lib/pageSkin';
@@ -18,7 +20,9 @@ import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { uploadMultipleImages, uploadMultipleFiles } from '../../lib/attachmentUpload';
-import type { Attachment } from '../../types';
+import type { AppFeedback, Attachment } from '../../types';
+import { consumeFeedbackDraft, validFeedbackCaptureNotice } from '../../lib/feedbackDraft';
+import { FEEDBACK_WHERE_OPTIONS, validFeedbackOriginLabel } from '../../lib/feedbackOrigin';
 
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { SignedImage } from '../../components/ui/SignedImage';
@@ -89,20 +93,7 @@ const KIND_BY_KEY = Object.fromEntries(KINDS.map((k) => [k.key, k])) as Record<
   (typeof KINDS)[number]
 >;
 
-type SentItem = {
-  id: string;
-  kind: Kind;
-  message: string;
-  created_at: string;
-  status: string;
-  attachments: Attachment[] | null;
-  reply: string | null;
-  replied_at: string | null;
-  replied_by_name: string | null;
-  author_name?: string | null;
-  where_in_app?: string | null;
-  platform?: string | null;
-};
+type SentItem = AppFeedback;
 
 function timeAgo(iso: string): string {
   const then = new Date(iso).getTime();
@@ -127,15 +118,11 @@ const MAX_FEEDBACK_ATTACHMENTS = 6;
  * says "Boards" and not "the threads bit" — which matters once there are enough
  * reports to sort.
  */
-const WHERE_OPTIONS = [
-  'Home', 'Clive', 'Members', 'Boards', 'Messages', 'Meetings',
-  'Honey Pot', 'The Buzz', 'Profile', 'Settings', 'HIVE-Wide',
-  'Signing in', 'The whole app', 'Somewhere else',
-];
+const WHERE_OPTIONS = FEEDBACK_WHERE_OPTIONS;
 
 /** Everything the list needs, in one place, so the two tabs cannot drift apart. */
 const FEEDBACK_COLUMNS =
-  'id, kind, message, created_at, status, attachments, reply, replied_at, replied_by_name, author_name, where_in_app, platform';
+  'id, author_id, author_name, community_id, kind, message, created_at, status, attachments, reply, replied_at, replied_by, replied_by_name, where_in_app, platform';
 
 /**
  * The tab row, and an arrow when there is more of it than the screen.
@@ -210,6 +197,13 @@ export default function AppFeedbackScreen() {
   // The app's own phone line, the one the layout and the side rail already use.
   const { width } = useWindowDimensions();
   const narrow = width < 768;
+  const params = useLocalSearchParams<{ originLabel?: string | string[]; captureNotice?: string | string[] }>();
+  const routeOriginLabel = validFeedbackOriginLabel(
+    Array.isArray(params.originLabel) ? params.originLabel[0] : params.originLabel
+  );
+  const captureNotice = validFeedbackCaptureNotice(Array.isArray(params.captureNotice)
+    ? params.captureNotice[0]
+    : params.captureNotice);
 
   const [tab, setTab] = useState<'say' | 'sent' | 'all'>('say');
   const [kind, setKind] = useState<Kind>('bug');
@@ -223,6 +217,30 @@ export default function AppFeedbackScreen() {
 
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
+  const capturedDraftRef = useRef<ReturnType<typeof consumeFeedbackDraft>>(null);
+
+  useEffect(() => {
+    const draft = consumeFeedbackDraft();
+    capturedDraftRef.current = draft;
+    const origin = draft?.originLabel ?? routeOriginLabel;
+    if (origin) setWhereInApp(origin);
+    if (draft?.screenshot) setSelectedImages([draft.screenshot]);
+    return () => {
+      capturedDraftRef.current?.dispose?.();
+      capturedDraftRef.current = null;
+    };
+    // The private handoff is intentionally consumed only once on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onImagesChange = useCallback((next: SelectedImage[]) => {
+    const captured = capturedDraftRef.current;
+    if (captured && !next.some((image) => image.uri === captured.screenshot.uri)) {
+      captured.dispose?.();
+      capturedDraftRef.current = null;
+    }
+    setSelectedImages(next);
+  }, []);
 
   // The "what was in the box before the mic opened" bookkeeping used to live
   // here, hand-written. It lives in ComposerBar now, through the shared
@@ -278,6 +296,7 @@ export default function AppFeedbackScreen() {
   }, [tab, loadAll]);
 
   const hasAttachments = selectedImages.length > 0 || selectedFiles.length > 0;
+  const capturedScreenshot = capturedDraftRef.current?.screenshot ?? null;
   const canSend = (message.trim().length > 0 || hasAttachments) && !sending;
 
   const send = useCallback(async () => {
@@ -285,11 +304,14 @@ export default function AppFeedbackScreen() {
     inFlightRef.current = true;
     setSending(true);
     setResult(null);
+    const uploaded: Attachment[] = [];
     try {
+      if (selectedImages.length + selectedFiles.length > MAX_FEEDBACK_ATTACHMENTS) {
+        throw new Error('Too many attachments');
+      }
       // Uploaded from here, straight into this member's own folder — the same
       // path boards and messages use. The function checks the URLs come back
       // from that folder before it believes them.
-      const uploaded: Attachment[] = [];
       let failedUploads = 0;
       if (selectedImages.length > 0) {
         const images = await uploadMultipleImages(profile.id, selectedImages);
@@ -327,6 +349,8 @@ export default function AppFeedbackScreen() {
       setWhereOpen(false);
       setSelectedImages([]);
       setSelectedFiles([]);
+      capturedDraftRef.current?.dispose?.();
+      capturedDraftRef.current = null;
       // Told the truth about which half worked. The note is safe either way —
       // the function stores before it emails — so a failed email is a smaller
       // sentence, not an error.
@@ -344,6 +368,8 @@ export default function AppFeedbackScreen() {
       });
       void loadSent();
     } catch (error: any) {
+      // The function stores before it emails. A network error is therefore
+      // ambiguous, so never delete uploads here and risk breaking a saved row.
       console.warn('Could not send feedback', error);
       setResult({
         ok: false,
@@ -843,6 +869,35 @@ export default function AppFeedbackScreen() {
               {active.prompt}
             </Text>
 
+            {capturedScreenshot ? (
+              <View style={{ borderWidth: 1, borderColor: skin.border, borderRadius: 14, padding: 10, marginBottom: 12 }}>
+                <Text style={{ ...styles.caption, marginBottom: 8 }}>Screenshot to include</Text>
+                <Image
+                  source={{ uri: capturedScreenshot.uri }}
+                  style={{ width: '100%', aspectRatio: 16 / 9, borderRadius: 10, backgroundColor: skin.field }}
+                  contentFit="contain"
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove captured screenshot"
+                  onPress={() => onImagesChange(selectedImages.filter((image) => image.uri !== capturedScreenshot.uri))}
+                  style={{ alignSelf: 'flex-start', marginTop: 9, paddingVertical: 7, paddingHorizontal: 10 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', color: skin.gold }}>Remove screenshot</Text>
+                </Pressable>
+              </View>
+            ) : captureNotice ? (
+              <View style={{ borderWidth: 1, borderColor: skin.border, borderRadius: 12, padding: 11, marginBottom: 12 }}>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: skin.inkBody }}>
+                  {captureNotice === 'unsupported'
+                    ? 'This device cannot capture the app screen here. You can still add a screenshot with the clip below.'
+                    : captureNotice === 'declined'
+                      ? 'No screen was shared. Nothing was captured; you can still add a screenshot with the clip below.'
+                      : 'The screenshot could not be made. Nothing was captured; you can still add one with the clip below.'}
+                </Text>
+              </View>
+            ) : null}
+
             {/* The whole report, in one box: the words, the clip and the mic,
                 all inside the same border. It used to be a bare field with the
                 clip and the mic on a strip underneath, which is the wrong axis
@@ -864,11 +919,12 @@ export default function AppFeedbackScreen() {
               submitting={sending}
               attachments="compact"
               selectedImages={selectedImages}
-              onImagesChange={setSelectedImages}
+              onImagesChange={onImagesChange}
               selectedFiles={selectedFiles}
               onFilesChange={setSelectedFiles}
               maxImages={MAX_FEEDBACK_ATTACHMENTS}
               maxFiles={MAX_FEEDBACK_ATTACHMENTS}
+              maxAttachments={MAX_FEEDBACK_ATTACHMENTS}
               captureDocumentDrops
             />
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: skin.inkFaint, marginTop: 8 }}>
