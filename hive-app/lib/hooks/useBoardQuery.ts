@@ -79,7 +79,7 @@ interface CategoryStats {
   recentThreads?: { id: string; title: string }[];
 }
 
-async function fetchPostCounts(communityId: string): Promise<Record<string, CategoryStats>> {
+async function fetchPostCounts(_communityId: string): Promise<Record<string, CategoryStats>> {
   const { data, error } = await supabase
     .from('board_posts')
     // `archived_at`, and only `archived_at`.
@@ -94,8 +94,10 @@ async function fetchPostCounts(communityId: string): Promise<Record<string, Cate
     // only ever holds 'active' or 'completed', so that test could never be
     // true. `buzz.tsx` had the identical bug and it is written up in
     // CLAUDE.md; this is the second place it was hiding.
+    // A visible board may be owned by another HIVE when its reach is
+    // `all_hives`. Query every thread RLS says this member may read, then key
+    // the result by category id; the screen only renders visible category ids.
     .select('id, category_id, title, status, created_at, last_reply_at')
-    .eq('community_id', communityId)
     .is('archived_at', null);
 
   if (error) {
@@ -130,8 +132,7 @@ async function fetchPostCounts(communityId: string): Promise<Record<string, Cate
 
   const { data: replies, error: repliesError } = await supabase
     .from('board_replies')
-    .select('post_id, created_at')
-    .eq('community_id', communityId);
+    .select('post_id, created_at');
 
   if (repliesError) {
     console.warn('Error fetching board reply activity:', repliesError);
@@ -151,11 +152,10 @@ async function fetchPostCounts(communityId: string): Promise<Record<string, Cate
   return stats;
 }
 
-async function fetchBoardSearchIndex(communityId: string): Promise<BoardSearchIndex> {
+async function fetchBoardSearchIndex(_communityId: string): Promise<BoardSearchIndex> {
   const { data, error } = await supabase
     .from('board_posts')
     .select('id, category_id, title, content, archived_at, created_at, last_reply_at, author:profiles!board_posts_author_id_fkey(name)')
-    .eq('community_id', communityId)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -171,7 +171,6 @@ async function fetchBoardSearchIndex(communityId: string): Promise<BoardSearchIn
     const { data: replies, error: repliesError } = await supabase
       .from('board_replies')
       .select('id, post_id, content, created_at, author:profiles!board_replies_author_id_fkey(name)')
-      .eq('community_id', communityId)
       .in('post_id', postIds)
       .order('created_at', { ascending: false });
 
@@ -199,7 +198,7 @@ async function fetchBoardSearchIndex(communityId: string): Promise<BoardSearchIn
 }
 
 async function fetchPosts(
-  communityId: string,
+  _communityId: string,
   categoryId: string
 ): Promise<PostWithAuthor[]> {
   // Join reactions in the same query to avoid a sequential round-trip
@@ -208,7 +207,8 @@ async function fetchPosts(
   const { data, error } = await supabase
     .from('board_posts')
     .select('*, author:profiles!board_posts_author_id_fkey(id, name, avatar_url), reactions:board_reactions(*)')
-    .eq('community_id', communityId)
+    // Category id is the board identity. An all-HIVE board keeps its canonical
+    // threads under the HIVE that created it, wherever the board is opened.
     .eq('category_id', categoryId)
     .limit(50);
 

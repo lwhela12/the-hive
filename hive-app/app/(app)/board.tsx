@@ -294,6 +294,10 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const selectedCategory = selectedCategoryId
     ? categories.find((c) => c.id === selectedCategoryId) || null
     : null;
+  // Shared boards carry the HIVE that owns their canonical data. When one is
+  // opened from another HIVE, reads and writes follow the board—not the room
+  // the member happened to enter it from.
+  const selectedBoardCommunityId = selectedCategory?.community_id ?? communityId;
 
   // A newsletter board is deliberately left out of `categories` (Nat,
   // 2026-08-03: "it just stops being a board you browse. The Buzz has its
@@ -440,7 +444,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     refetch: refetchPosts,
     updatePostInCache,
     invalidatePosts,
-  } = useBoardPostsQuery(communityId ?? undefined, selectedCategory?.id);
+  } = useBoardPostsQuery(selectedBoardCommunityId ?? undefined, selectedCategory?.id);
   const activePosts = posts.filter((post) => !post.archived_at);
   const archivedPosts = posts.filter((post) => !!post.archived_at);
   const listSourcePosts = threadListView === 'archive' ? archivedPosts : activePosts;
@@ -903,14 +907,14 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   }, [boardPostStorageKey, invalidatePosts, refetchPostCounts, returnHomeFromRouteTarget, shouldReturnHomeFromRoute]);
 
   const handleCreatePost = async (title: string, content: string, attachments?: Attachment[]) => {
-    if (!profile || !communityId || !selectedCategory) {
+    if (!profile || !selectedBoardCommunityId || !selectedCategory) {
       showAlert('Give it a second', 'Your profile is still loading. What you wrote is still here — try posting again in a moment.');
       return false;
     }
 
     try {
       const { data, error } = await (supabase as any).from('board_posts').insert({
-        community_id: communityId,
+        community_id: selectedBoardCommunityId,
         category_id: selectedCategory.id,
         author_id: profile.id,
         title,
@@ -935,7 +939,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       await Promise.all([refetchPosts(), refetchPostCounts()]);
       const mentionableMembers = topicMembers.length > 0
         ? topicMembers
-        : await fetchCommunityMentionableMembers(communityId);
+        : await fetchCommunityMentionableMembers(selectedBoardCommunityId);
       // One call delivers every kind of tag: people named by hand get their
       // own call each, and a whole HIVE (or everyone HIVE-Wide) goes to the
       // server as one group call — the sender may not be able to see that
@@ -943,7 +947,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       sendMentionNotifications({
         target: { kind: 'board', postId: data.id, boardName: selectedCategory.name },
         senderId: profile.id,
-        communityId,
+        communityId: selectedBoardCommunityId,
         content: `${title} ${content}`,
         preview: content,
         members: mentionableMembers,
@@ -957,7 +961,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   };
 
   const handleUpdatePost = async (title: string, content: string, attachments?: Attachment[]) => {
-    if (!profile || !communityId || !editingPost || !canManageThread(editingPost)) {
+    if (!profile || !selectedBoardCommunityId || !editingPost || !canManageThread(editingPost)) {
       showAlert('This thread cannot be edited right now', 'Either it is still loading or it is not yours to change. Close this and open it again.');
       return false;
     }
@@ -972,7 +976,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           ...(attachments && attachments.length > 0 ? { attachments } : {}),
         })
         .eq('id', editingPost.id)
-        .eq('community_id', communityId);
+        .eq('community_id', selectedBoardCommunityId);
 
       if (error) {
         showAlert('Your edit did not save', userFacingError(error, 'Your changes are still here — try saving again.'));
@@ -990,7 +994,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   };
 
   const canPost = () => {
-    if (!selectedCategory || !profile || !communityId) return false;
+    if (!selectedCategory || !profile || !selectedBoardCommunityId) return false;
     if (selectedCategory.requires_admin && !isAdmin) return false;
     return true;
   };
