@@ -22,7 +22,7 @@ import { HIVE_WIDE_WELCOME_VERSION } from '../../lib/hiveWide';
 import { loadHiveWideWelcomeSeen, persistHiveWideWelcomeSeen } from '../../lib/readState';
 import { supabase } from '../../lib/supabase';
 import { useAuth, type HiveMembership } from '../../lib/hooks/useAuth';
-import { getAppNews } from '../../lib/appNews';
+import { useAppNews } from '../../lib/hooks/useAppNews';
 import { accentOnDark, accentWash, hiveAccent, hiveDisplayName, normalizeHiveBrandText } from '../../lib/hiveBrand';
 import { formatDateLong, formatTimeRange } from '../../lib/dateUtils';
 import { getLocalIsoDate } from '../../lib/hooks/useArrivalBoard';
@@ -498,6 +498,7 @@ function WayIntoYourHive({
 export default function HiveWideScreen() {
   const router = useRouter();
   const { communityId, community, communityRole, profile, refreshProfile, memberships, switchCommunity, wholeHive, enterWholeHive } = useAuth();
+  const { appNews: allAppNews } = useAppNews();
   // The same audience as the existing Admin rail door: HIVE admins and
   // treasurers, plus the owners who work across every HIVE.
   const canSeeAdmin = communityRole === 'admin'
@@ -534,8 +535,6 @@ export default function HiveWideScreen() {
   // `components/ui/HiveWideWelcome.tsx`.)
   const firstVisit = loadHiveWideWelcomeSeen(profile) !== HIVE_WIDE_WELCOME_VERSION;
 
-  // Read once rather than on every render — it is a constant in a file.
-  const allAppNews = useMemo(() => getAppNews(), []);
 
   /**
    * The record, in days.

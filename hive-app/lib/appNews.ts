@@ -1,11 +1,9 @@
 // What's new in the app.
 //
-// One list, read by three surfaces (Nat 2026-07-26): a dismissible strip on
-// Home, the newsletter draft, and the meeting deck's News from Nat slide.
-//
-// It lives in code rather than in a table on purpose — the person who ships a
-// feature is the person who knows it shipped, so adding the entry is part of
-// making the change. No admin screen to remember to go and fill in.
+// One shared shape, read by Home, HIVE-Wide, the newsletter draft, and the
+// meeting deck's News from Nat slide. The array below is the frozen historical
+// record. New entries live in `app_news` and are merged with it by useAppNews;
+// never add another current entry to this file.
 //
 // HOUSE RULES for entries:
 //  - Say what a member can now DO, not what was built. "You can tap outside a
@@ -24,8 +22,11 @@ export type AppNewsEntry = {
   href?: { pathname: string; params?: Record<string, string> };
   /** What the tap says it will do, e.g. "Open your emails". */
   action?: string;
+  /** Database rows use this to make same-day ordering deterministic. */
+  createdAt?: string;
 };
 
+/** Frozen legacy baseline. Preserve every id: profiles remember the last one seen. */
 export const APP_NEWS: AppNewsEntry[] = [
   {
     id: '2026-08-24-second-doors',
@@ -1307,10 +1308,57 @@ export const APP_NEWS: AppNewsEntry[] = [
   },
 ];
 
+export type StoredAppNewsRow = {
+  id: number;
+  occurred_on: string;
+  title: string;
+  detail: string | null;
+  created_at: string;
+};
+
+/** Turn database identity into a namespace that can never collide with legacy ids. */
+export function appNewsFromRow(row: StoredAppNewsRow): AppNewsEntry {
+  return {
+    id: `db:${row.id}`,
+    date: row.occurred_on,
+    title: row.title.trim(),
+    detail: row.detail?.trim() || undefined,
+    createdAt: row.created_at,
+  };
+}
+
+const newsFingerprint = (entry: AppNewsEntry) =>
+  `${entry.date}\u0000${entry.title.trim().toLocaleLowerCase()}\u0000${entry.detail?.trim().toLocaleLowerCase() ?? ''}`;
+
+/** Merge future database rows into the frozen baseline without repeating copy. */
+export function mergeAppNews(rows: readonly StoredAppNewsRow[]): AppNewsEntry[] {
+  const byId = new Set<string>();
+  const byCopy = new Set<string>();
+  const merged: AppNewsEntry[] = [];
+
+  // Legacy wins an exact-copy collision so old app_news_seen_id values remain valid.
+  for (const entry of [...APP_NEWS, ...rows.map(appNewsFromRow)]) {
+    const fingerprint = newsFingerprint(entry);
+    if (byId.has(entry.id) || byCopy.has(fingerprint)) continue;
+    byId.add(entry.id);
+    byCopy.add(fingerprint);
+    merged.push(entry);
+  }
+
+  return getAppNews(merged.length, merged);
+}
+
 /** Most recent first, which is also the order they should be shown in. */
-export function getAppNews(limit = APP_NEWS.length): AppNewsEntry[] {
-  return [...APP_NEWS]
-    .sort((left, right) => right.date.localeCompare(left.date) || right.id.localeCompare(left.id))
+export function getAppNews(
+  limit = APP_NEWS.length,
+  entries: readonly AppNewsEntry[] = APP_NEWS,
+): AppNewsEntry[] {
+  return [...entries]
+    .sort((left, right) =>
+      right.date.localeCompare(left.date)
+      || (right.createdAt ?? '').localeCompare(left.createdAt ?? '')
+      || right.id.localeCompare(left.id)
+    )
     .slice(0, limit);
 }
 
@@ -1327,9 +1375,20 @@ export function getAppNews(limit = APP_NEWS.length): AppNewsEntry[] {
  * belonging to the cycle that follows it — the meeting happens in the
  * evening, so anything shipped that day was news at the meeting, not after.
  */
-export function getAppNewsSince(since: Date): AppNewsEntry[] {
+export function getAppNewsSince(
+  since: Date,
+  entries: readonly AppNewsEntry[] = APP_NEWS,
+): AppNewsEntry[] {
   const sinceIso = `${since.getFullYear()}-${String(since.getMonth() + 1).padStart(2, '0')}-${String(since.getDate()).padStart(2, '0')}`;
-  return getAppNews().filter((entry) => entry.date > sinceIso);
+  return getAppNews(entries.length, entries).filter((entry) => entry.date > sinceIso);
+}
+
+/** Entries attributed to exactly one YYYY-MM newsletter recap. */
+export function getAppNewsForMonth(
+  month: string,
+  entries: readonly AppNewsEntry[] = APP_NEWS,
+): AppNewsEntry[] {
+  return getAppNews(entries.length, entries).filter((entry) => entry.date.slice(0, 7) === month);
 }
 
 /** Per-member key for the newest entry they've acknowledged. */
@@ -1354,8 +1413,9 @@ export function getUnseenAppNews(
   lastSeenId: string | null,
   /** When this person joined, ISO. Anything older than this is not news. */
   joinedAt?: string | null,
+  entries: readonly AppNewsEntry[] = APP_NEWS,
 ): AppNewsEntry[] {
-  const ordered = getAppNews();
+  const ordered = getAppNews(entries.length, entries);
 
   if (lastSeenId) {
     const seenIndex = ordered.findIndex((entry) => entry.id === lastSeenId);
@@ -1373,6 +1433,6 @@ export function getUnseenAppNews(
 }
 
 /** The newest entry there is — what "you are caught up" means. */
-export function getNewestAppNews(): AppNewsEntry | null {
-  return getAppNews()[0] ?? null;
+export function getNewestAppNews(entries: readonly AppNewsEntry[] = APP_NEWS): AppNewsEntry | null {
+  return getAppNews(entries.length, entries)[0] ?? null;
 }

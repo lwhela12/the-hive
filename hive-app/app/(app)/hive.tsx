@@ -64,6 +64,8 @@ import { formatDateRangeShort, formatDateShort, formatTime, parseAmericanDate, f
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { getStoredItem, getStoredItemAsync, removeStoredItem, setStoredItem, setStoredItemAsync } from '../../lib/webStorage';
 import { getAppNewsSeenKey, getNewestAppNews, getUnseenAppNews, type AppNewsEntry } from '../../lib/appNews';
+import { useAppNews } from '../../lib/hooks/useAppNews';
+import { createCalendarEvent } from '../../lib/eventMutations';
 import { loadActivityRead, persistActivityRead, loadAppNewsSeen, persistAppNewsSeen } from '../../lib/readState';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { addHomeResetListener } from '../../lib/homeNavigation';
@@ -829,6 +831,7 @@ function SectionMoveButton({ direction, disabled, onPress }: {
 
 export default function HiveScreen() {
   const { profile, communityId, communityRole, session, refreshProfile, community, memberships, openHivePicker, wholeHive, switchCommunity } = useAuth();
+  const { appNews } = useAppNews();
   const router = useRouter();
 
   const { openWishId, openSurveyId, hive: linkedHiveId, catchup, from } = useLocalSearchParams<{
@@ -2531,11 +2534,7 @@ export default function HiveScreen() {
         newEvent.visibility = eventVisibility;
         (newEvent as Record<string, unknown>).invited_scope = eventAudience;
 
-        const { error } = await supabase.functions.invoke('create-event', {
-          body: newEvent,
-        });
-
-        if (error) throw error;
+        await createCalendarEvent(newEvent);
       }
 
       closeEventModal();
@@ -2749,26 +2748,26 @@ export default function HiveScreen() {
     // app they already walked into (Nat 2026-08-19).
     const joinedAt = (profile.created_at as string | undefined) ?? null;
     if (fromProfile) {
-      setUnseenNews(getUnseenAppNews(fromProfile, joinedAt));
+      setUnseenNews(getUnseenAppNews(fromProfile, joinedAt, appNews));
     } else {
       void getStoredItemAsync(getAppNewsSeenKey(profile.id)).then((lastSeenId) => {
-        if (!cancelled) setUnseenNews(getUnseenAppNews(lastSeenId, joinedAt));
+        if (!cancelled) setUnseenNews(getUnseenAppNews(lastSeenId, joinedAt, appNews));
       });
     }
     return () => { cancelled = true; };
-  }, [profile?.id]);
+  }, [appNews, profile?.id]);
 
   const dismissAppNews = useCallback(() => {
     setUnseenNews([]);
     setNewsExpanded(false);
     if (!profile) return;
     // Caught up means caught up with everything, not just the five on screen.
-    const newest = getNewestAppNews();
+    const newest = getNewestAppNews(appNews);
     if (newest) {
       void setStoredItemAsync(getAppNewsSeenKey(profile.id), newest.id);
       void persistAppNewsSeen(profile, newest.id);
     }
-  }, [profile]);
+  }, [appNews, profile]);
 
   const [halfwayDone, setHalfwayDone] = useState(false);
   useEffect(() => {

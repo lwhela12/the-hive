@@ -62,6 +62,7 @@ import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { parseAmericanDate } from '../../lib/dateUtils';
+import { createCalendarEvent } from '../../lib/eventMutations';
 import type { Profile, Wish } from '../../types';
 import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns } from '../../lib/checkIns';
 
@@ -1917,10 +1918,7 @@ export default function MonthlyTuneupScreen() {
       if (eventLocation.trim()) newEvent.location = eventLocation.trim();
 
       newEvent.visibility = eventAudience;
-      const { error } = await supabase.functions.invoke('create-event', {
-        body: newEvent,
-      });
-      if (error) throw error;
+      await createCalendarEvent(newEvent);
 
       const createdEventLabel = `${eventTitle.trim()} — ${eventDate}${eventEndDateIso ? ` → ${eventEndDate}` : ''}`;
       setEventsAdded((prev) => [...prev, createdEventLabel]);

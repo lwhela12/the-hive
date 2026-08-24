@@ -127,6 +127,19 @@ export interface NewsletterSubscriber extends Record<string, unknown> {
   created_at: string;
 }
 
+/** Owner-written additions to the frozen app-news history (migration 207). */
+export interface AppNews extends Record<string, unknown> {
+  id: number;
+  /** The day this became true for members, YYYY-MM-DD. */
+  occurred_on: string;
+  title: string;
+  detail: string | null;
+  created_by: string;
+  created_at: string;
+  /** News is preserved forever; archiving is the only removal path. */
+  archived_at: string | null;
+}
+
 export interface Waitlist extends Record<string, unknown> {
   id: string;
   email: string;
@@ -1090,6 +1103,15 @@ export interface Database {
         Row: NewsletterSubscriber;
         Insert: Omit<NewsletterSubscriber, 'id' | 'created_at' | 'token'>;
         Update: Partial<Omit<NewsletterSubscriber, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      app_news: {
+        Row: AppNews;
+        Insert: Omit<AppNews, 'id' | 'created_at' | 'created_by' | 'archived_at'> & {
+          created_by?: string;
+          archived_at?: string | null;
+        };
+        Update: Partial<Pick<AppNews, 'occurred_on' | 'title' | 'detail' | 'archived_at'>>;
         Relationships: [];
       };
       // Insert is deliberately `never`: only the send-newsletter function

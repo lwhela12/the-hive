@@ -8,7 +8,8 @@ import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../../lib/supabase';
 import { userFacingError } from '../../lib/userFacingError';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { APP_NEWS } from '../../lib/appNews';
+import { getAppNewsForMonth } from '../../lib/appNews';
+import { useAppNews } from '../../lib/hooks/useAppNews';
 import { PARDON_OUR_DUST } from '../../lib/hiveWide';
 import { SummarySections, type SummarySection } from '../../components/meetings/SummarySections';
 import { readLetter } from '../../lib/newsletterHeaders';
@@ -290,6 +291,7 @@ export default function NewsletterScreen() {
   const { width } = useWindowDimensions();
   const { from } = useLocalSearchParams<{ from?: string }>();
   const { communityId, profile } = useAuth();
+  const { appNews: mergedAppNews } = useAppNews();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -332,8 +334,7 @@ export default function NewsletterScreen() {
     // Home. This used to come off the meeting deck's frozen copy, so a recap
     // written after the meeting missed everything shipped since it.
     const month = lastMonth();
-    const appNews = APP_NEWS
-      .filter((entry) => entry.date.startsWith(month))
+    const appNews = getAppNewsForMonth(month, mergedAppNews)
       .map((entry) => (entry.detail ? `${entry.title} — ${entry.detail}` : entry.title));
 
     // "Pardon our dust, we're in the process of expanding — what does that mean
@@ -422,7 +423,7 @@ export default function NewsletterScreen() {
       setProse(typeof written.prose === 'string' && written.prose.trim() ? written.prose : null);
     }
     setWriting(false);
-  }, [communityId]);
+  }, [communityId, mergedAppNews]);
 
   useEffect(() => {
     void loadDraft();

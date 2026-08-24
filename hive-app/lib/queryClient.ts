@@ -17,6 +17,9 @@ export const queryClient = new QueryClient({
 
 // Query key factories for consistent cache management
 export const queryKeys = {
+  // Frozen legacy app news plus owner-written database entries.
+  appNews: ['appNews'] as const,
+
   // Chat rooms
   chatRooms: (communityId: string) => ['chatRooms', communityId] as const,
   chatRoom: (roomId: string) => ['chatRoom', roomId] as const,

@@ -15,6 +15,7 @@ import { resetHomeNavigationState } from '../../lib/homeNavigation';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Avatar } from '../ui/Avatar';
 import { BounceScrollView } from '../ui/BounceScrollView';
+import { QuickAdd } from './QuickAdd';
 
 /**
  * The side rail, borrowed from Jammin' Sprouts at Nat's request 2026-08-03.
@@ -275,6 +276,7 @@ export const SideRail = memo(function SideRail({
   const insets = useSafeAreaInsets();
 
   const [confirmingLogOut, setConfirmingLogOut] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   /**
    * Which of the three sizes the rail is at.
@@ -784,6 +786,20 @@ export const SideRail = memo(function SideRail({
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 14 }}
         >
+          {canSeeAdmin ? (
+            <>
+              <Row
+                emoji="＋"
+                label="Quick Add"
+                shortLabel="Add"
+                onPress={() => {
+                  setQuickAddOpen(true);
+                  foldAwayOnPhone();
+                }}
+              />
+              {divider}
+            </>
+          ) : null}
           {/* "My HIVEs" is Home, and HIVE-Wide is the first thing under it —
               not a second section with its own children.
 
@@ -956,6 +972,11 @@ export const SideRail = memo(function SideRail({
             void supabase.auth.signOut({ scope: 'local' });
           }}
           onCancel={() => setConfirmingLogOut(false)}
+        />
+        <QuickAdd
+          visible={quickAddOpen}
+          onClose={() => setQuickAddOpen(false)}
+          onSaved={() => router.replace(pathname as never)}
         />
       </View>
     </>

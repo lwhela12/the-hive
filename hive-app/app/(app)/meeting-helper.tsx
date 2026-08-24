@@ -26,6 +26,8 @@ import { getCycleStart } from '../../lib/meetingCycle';
 import { EditButton } from '../../components/ui/EditButton';
 import { getWishQuickTitle, pickSpotlightWish } from '../../lib/wishDisplay';
 import { getAppNews, getAppNewsSince } from '../../lib/appNews';
+import { useAppNews } from '../../lib/hooks/useAppNews';
+import { createCalendarEvent } from '../../lib/eventMutations';
 import {
   hasMeaningfulActionItemText,
   parseActionItemDescription,
@@ -714,6 +716,7 @@ export default function MeetingHelperScreen() {
     else router.replace('/meetings');
   };
   const { communityId, communityRole, profile, session, community } = useAuth();
+  const { appNews } = useAppNews();
   const { width, height } = useWindowDimensions();
 
 
@@ -888,8 +891,8 @@ export default function MeetingHelperScreen() {
   // to the newest six only while the cycle start is still loading.
   const [cycleStart, setCycleStart] = useState<Date | null>(null);
   const recentAppNews = useMemo(
-    () => (cycleStart ? getAppNewsSince(cycleStart) : getAppNews(6)),
-    [cycleStart]
+    () => (cycleStart ? getAppNewsSince(cycleStart, appNews) : getAppNews(6, appNews)),
+    [appNews, cycleStart]
   );
 
   const [expandedHummdingerId, setExpandedHummdingerId] = useState<string | null>(null);
@@ -1380,8 +1383,7 @@ export default function MeetingHelperScreen() {
       // One question here, so it answers both — see admin.tsx and migration 148.
       (newEvent as Record<string, unknown>).invited_scope = quickAddAudience;
 
-      const { error } = await supabase.functions.invoke('create-event', { body: newEvent });
-      if (error) throw error;
+      await createCalendarEvent(newEvent);
 
       setQuickAddDate(null);
       setQuickAddTitle('');
