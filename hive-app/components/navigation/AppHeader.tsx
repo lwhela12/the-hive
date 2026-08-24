@@ -15,11 +15,9 @@ interface AppHeaderProps {
    * Which world this page belongs to.
    *
    * 'hive'  the HIVE you're in — its colour, its name above the title.
-   * 'wide'  HIVE-Wide — space black, and NO HIVE name, because the page isn't
-   *         in a HIVE. The first pass said "OG HIVE / HIVE-Wide" stacked, which
-   *         is two contradictory answers to "where am I" (Nat 2026-08-03).
-   * 'god'   Admin. Not OG HIVE's admin — the whole operation's, so it wears
-   *         neither a HIVE's colour nor a HIVE's name.
+   * 'wide'  HIVE-Wide — space black, with HIVE-WIDE as the location line.
+   * 'god'   Admin. Not OG HIVE's admin — the whole operation's, so its location
+   *         is HIVE-WIDE and its colour is neutral slate.
    *
    * You rarely need to pass this. A page left on the default follows wherever
    * the reader is standing, which is the behaviour you almost always want —
@@ -46,10 +44,8 @@ const TONE_COLOURS = { wide: '#0B0B12', god: '#40403C' } as const;
 // Keeping the prop out of this interface makes the rule compile-time enforced.
 // Every tab screen should use this instead of hand-rolling a header.
 //
-// The bar takes its colour from the HIVE you're in, and its name rides above
-// every page title so you always know where you are. Home is the exception: it
-// puts the name in the title itself, big — so the name is said once there
-// rather than twice in two sizes.
+// The bar takes its colour from where you are. The tiny line is WHERE. The
+// large line is WHAT, matching the selected side-rail destination. No exceptions.
 export const AppHeader = memo(function AppHeader({
   title,
   onBackPress,
@@ -75,22 +71,16 @@ export const AppHeader = memo(function AppHeader({
   const resolvedTone = tone === 'hive' && wholeHive ? 'wide' : tone;
   const accent = resolvedTone === 'hive' ? hiveAccent(community) : TONE_COLOURS[resolvedTone];
   const hiveName = hiveDisplayName(community?.name);
-  // Any page whose title is already the HIVE's name says it big and skips the
-  // small line — that's Home, and anywhere else that chooses to do the same.
-  // Only a page that lives INSIDE a HIVE says which one. HIVE-Wide and Admin sit
-  // above the HIVEs, so naming one there answers "where am I" twice, differently.
-  // The line above the title, saying where you are.
+  // The line above the title says WHERE. It never disappears: Home is still a
+  // page inside OG HIVE / Tech HIVE / Production HIVE, and Admin is a page at
+  // HIVE-Wide. The large title says WHAT and matches the side rail.
   //
   // HIVE-Wide used to say nothing here, on the reasoning that it sits above the
   // HIVEs and so has no HIVE to name. That was wrong in practice: it left the
   // most easily-confused place as the only one that never said its own name.
   // Nat 2026-08-03: "when you're in HIVE-Wide it needs to say that on all the
   // headers... we want to make sure you know which one you're in."
-  const eyebrow =
-    resolvedTone === 'wide' ? 'HIVE-WIDE'
-      : resolvedTone === 'hive' && title.trim().toUpperCase() !== hiveName.toUpperCase()
-        ? hiveName
-        : null;
+  const eyebrow = resolvedTone === 'hive' ? hiveName : 'HIVE-WIDE';
   const showHiveName = !!eyebrow;
 
   return (

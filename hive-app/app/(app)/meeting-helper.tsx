@@ -42,6 +42,7 @@ import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
+import { AppHeader } from '../../components/navigation';
 import { showAlert } from '../../lib/showAlert';
 import { getMentionedMembers, hasBroadcastMention } from '../../lib/mentions';
 import { useMentionReach } from '../../lib/hooks/useMentionableMembers';
@@ -4645,6 +4646,7 @@ export default function MeetingHelperScreen() {
   if (!hasMeetingDeck(community)) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: PAPER }} edges={['top']}>
+        <AppHeader title="Meeting Helper" />
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
           <Ionicons name="time-outline" size={34} color={GOLD_DEEP} style={{ marginBottom: 14 }} />
           <Text
@@ -4696,6 +4698,7 @@ export default function MeetingHelperScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: PAPER }} edges={['top']}>
+      <AppHeader title="Meeting Helper" />
       <View style={{ flex: 1, flexDirection: stackVideo ? 'column' : 'row' }}>
       {/* Faces first, then the slide, then the outline — the shape Nat drew
           from Jasmine's classroom on 2026-08-15: "the open the classroom,

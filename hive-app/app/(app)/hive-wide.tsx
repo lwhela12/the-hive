@@ -708,7 +708,7 @@ export default function HiveWideScreen() {
             textTransform: 'uppercase', color: 'rgba(255,248,233,0.55)', textAlign: 'center',
           }}
         >
-          See what&rsquo;s happening
+          HIVE-Wide
         </Text>
         {/* One line, always. The tracking rides the size so a phone's smaller
             title has the same letter rhythm as a laptop's. */}
@@ -720,7 +720,7 @@ export default function HiveWideScreen() {
             color: INK, textAlign: 'center', marginTop: 4,
           }}
         >
-          HIVE-Wide
+          Home
         </Text>
       </View>
       {/* The title lives in the sky rather than in a bar. There is no header on

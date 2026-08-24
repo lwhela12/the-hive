@@ -61,6 +61,38 @@ const headerSource = fs.readFileSync(headerFile, 'utf8');
 if (/\bsubtitle\??\s*:/.test(headerSource) || /\{\s*subtitle\s*\?/.test(headerSource)) {
   failures.push('components/navigation/AppHeader.tsx restores the forbidden subtitle API');
 }
+if (!headerSource.includes("const eyebrow = resolvedTone === 'hive' ? hiveName : 'HIVE-WIDE';")) {
+  failures.push('components/navigation/AppHeader.tsx must always render the WHERE line');
+}
+
+const destinationHeaders = [
+  ['app/(app)/hive.tsx', 'Home'],
+  ['app/(app)/index.tsx', 'Clive'],
+  ['app/(app)/members.tsx', 'Members'],
+  ['app/(app)/board.tsx', 'Boards'],
+  ['app/(app)/messages.tsx', 'Messages'],
+  ['app/(app)/meetings.tsx', 'Meetings'],
+  ['app/(app)/meeting-helper.tsx', 'Meeting Helper'],
+  ['app/(app)/honey-pot.tsx', 'Honey Pot'],
+  ['app/(app)/buzz.tsx', 'The Buzz'],
+  ['app/(app)/profile.tsx', 'Profile'],
+  ['app/(app)/settings.tsx', 'Settings'],
+  ['app/(app)/app-feedback.tsx', 'App Feedback'],
+  ['app/(app)/admin.tsx', 'Admin'],
+];
+for (const [relative, title] of destinationHeaders) {
+  const source = fs.readFileSync(path.join(root, relative), 'utf8');
+  const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const hasTitle = appHeaderOpeningTags(source).some((tag) => (
+    new RegExp(`\\btitle\\s*=\\s*["']${escaped}["']`).test(tag.text)
+  ));
+  if (!hasTitle) failures.push(`${relative} must carry the side-rail title “${title}” in AppHeader`);
+}
+
+const wideHome = fs.readFileSync(path.join(root, 'app/(app)/hive-wide.tsx'), 'utf8');
+if (!/HIVE-Wide\s*<\/Text>[\s\S]{0,700}>\s*Home\s*<\/Text>/.test(wideHome)) {
+  failures.push('app/(app)/hive-wide.tsx must show tiny HIVE-Wide above large Home');
+}
 
 const customClarifiers = [
   ['app/(app)/hive-wide.tsx', 'Have a look around and see what'],
@@ -77,4 +109,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('Page headers: WHERE + WHAT only.');
+console.log('Page headers: tiny WHERE + large WHAT, matching the side rail.');

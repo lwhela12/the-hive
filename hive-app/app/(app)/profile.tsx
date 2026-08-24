@@ -2375,15 +2375,13 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-cream" edges={immersiveSkillsGarden ? [] : ['top']}>
-      {!compactProfileLandscape && (
-        <AppHeader
-          title="Profile"
-          rightElement={(
-            <CloseButton onPress={closeProfile} accessibilityLabel="Close profile" color="white" />
-          )}
-        />
-      )}
+    <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+      <AppHeader
+        title="Profile"
+        rightElement={(
+          <CloseButton onPress={closeProfile} accessibilityLabel="Close profile" color="white" />
+        )}
+      />
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
       <BounceScrollView

@@ -599,21 +599,10 @@ export default function MessagesScreen() {
     return (
       <SafeAreaView className="flex-1" edges={['top']} style={{ backgroundColor: skin.page }}>
         <SpaceBackdrop />
-        <View
-          className="flex-row items-center justify-between px-5 pt-2 pb-3"
-          style={{ backgroundColor: skin.page }}
-        >
-          <Text
-            style={{ fontFamily: 'LibreBaskerville_700Bold', color: skin.ink }}
-            className="text-3xl"
-          >
-            Messages
-          </Text>
-          {/* Starting a new message means picking a HIVE's members, and there is
-              no one HIVE to ask up here — so the door to start one closes at
-              HIVE-Wide, the same call already made for the room list and the
-              face rail below (Nat's reversal, 2026-08-11). */}
-          {!wholeHive && (
+        <AppHeader
+          title="Messages"
+          tone={wholeHive ? 'wide' : 'hive'}
+          rightElement={!wholeHive ? (
             <Pressable
               onPress={() => setShowMemberPicker(true)}
               className="w-10 h-10 rounded-full items-center justify-center active:opacity-80"
@@ -622,8 +611,8 @@ export default function MessagesScreen() {
             >
               <Ionicons name="add" size={25} color="white" />
             </Pressable>
-          )}
-        </View>
+          ) : undefined}
+        />
         {roomList}
         {memberPicker}
       </SafeAreaView>

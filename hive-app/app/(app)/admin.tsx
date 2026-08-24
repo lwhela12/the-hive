@@ -784,6 +784,7 @@ function LockedAdminScreen({
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
       <SpaceGlobe />
+      <AppHeader title="Admin" tone="god" />
       <BounceScrollView
         className="flex-1"
         contentContainerStyle={{

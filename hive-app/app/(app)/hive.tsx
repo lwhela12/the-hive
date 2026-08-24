@@ -55,7 +55,7 @@ import {
 } from '../../components/hive/skeletons';
 import { AppHeader } from '../../components/navigation';
 import { userFacingError } from '../../lib/userFacingError';
-import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { hiveAccent } from '../../lib/hiveBrand';
 import { ScopeBadge } from '../../components/ui/ScopeBadge';
 import { EventScopeFields, saveBirthdayScope, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { SignedAvatarImage } from '../../components/ui/Avatar';
@@ -3155,7 +3155,7 @@ export default function HiveScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
-      <AppHeader title={hiveDisplayName(community?.name)} />
+      <AppHeader title="Home" />
 
       <BounceScrollView
         ref={homeScrollRef}
