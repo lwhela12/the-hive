@@ -1337,6 +1337,35 @@ export default function MeetingsScreen() {
             </Pressable>
           </View>
 
+          {/* A visible second door to the same Arrival Board the Meeting Helper
+              long-press sheet opens. It keeps that expert path, and keeps both
+              paths behind the exact same deck + admin gate because the board
+              shows member check-in answers. */}
+          {meetingDeck && isAdmin ? (
+            <Pressable
+              onPress={() => router.push({ pathname: '/arrival-board', params: { from: 'meetings' } })}
+              accessibilityRole="button"
+              style={({ pressed }) => ({
+                alignSelf: 'flex-start',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                marginTop: 12,
+                paddingHorizontal: 13,
+                paddingVertical: 8,
+                borderRadius: 999,
+                backgroundColor: pressed ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.08)',
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.18)',
+              })}
+            >
+              <Text style={{ fontSize: 13 }}>📺</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold', color: 'rgba(255,255,255,0.88)', fontSize: 12 }}>
+                Arrival Board
+              </Text>
+            </Pressable>
+          ) : null}
+
           {/* The two things a member fills in before a meeting.
               These sat in Admin, which is the wrong room: they're what you
               reach for on meeting day, not settings.
@@ -1438,9 +1467,6 @@ export default function MeetingsScreen() {
               )}
             </View>
           )}
-
-          {/* Arrival Board pill removed — the deck's Room slide covers it and
-              the /arrival-board route still exists for direct links. */}
         </View>
 
         {/* Upcoming Meetings */}

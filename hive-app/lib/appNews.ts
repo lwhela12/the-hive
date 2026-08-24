@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-24-second-doors',
+    date: '2026-08-24',
+    title: 'The Buzz, Admin and Arrival Board are easier to find',
+    detail: 'HIVE-Wide points to The Buzz and Admin, and meeting runners can open the Arrival Board right from Meetings.',
+    href: { pathname: '/hive-wide' },
+    action: 'Open HIVE-Wide',
+  },
+  {
     id: '2026-08-21-one-place-at-a-time',
     date: '2026-08-21',
     title: 'You are only ever standing in one place',

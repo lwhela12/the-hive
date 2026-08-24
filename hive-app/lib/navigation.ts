@@ -242,6 +242,9 @@ export function destinationsForPlace(opts: {
 export const ADMIN_DESTINATION: NavDestination = {
   // The keys to the place, now that Settings has the gear.
   key: 'admin', label: 'Admin', emoji: '🔑', route: '/admin', gate: 'admin',
+  // The rail deliberately steps into HIVE-Wide before opening Admin: the
+  // screen manages individual HIVEs, but it is seen from the space above them.
+  atWholeHive: 'only',
 };
 
 /** What this person is actually allowed to see. */
@@ -290,7 +293,9 @@ export function routeLivesAtWholeHive(pathname: string | null | undefined): bool
   if (NAV_DESTINATIONS.some((d) => d.wideRoute && d.wideRoute === path)) return true;
 
   // 'same' means the same thing wherever you stand; 'only' lives up here.
-  const dest = NAV_DESTINATIONS.find((d) => d.route === path);
+  // Admin is maintained outside the ordinary rail list, but follows the same
+  // route-truth contract.
+  const dest = [...NAV_DESTINATIONS, ADMIN_DESTINATION].find((d) => d.route === path);
   if (dest && (dest.atWholeHive === 'same' || dest.atWholeHive === 'only')) return true;
 
   // A 'wide' page with no `wideRoute` is one page serving both places — the
@@ -322,7 +327,7 @@ export function activeKeyForPath(pathname: string | null | undefined): string | 
   // as of 2026-08-19, so it lights up as itself and names itself in the footer,
   // exactly like every other page — and `meeting-helper.tsx` dropped the deep
   // crumb it used to add, which would now say its own name twice.
-  if (pathname.startsWith('/monthly-tuneup')) return 'meetings';
+  if (pathname.startsWith('/monthly-tuneup') || pathname.startsWith('/arrival-board')) return 'meetings';
   if (pathname.startsWith(HIVE_WIDE_ROUTE)) return 'hive-wide';
   let best: NavDestination | null = null;
   for (const d of [...NAV_DESTINATIONS, ADMIN_DESTINATION]) {

@@ -232,6 +232,32 @@ function TopBox({ label, wide, children }: { label: string; wide: boolean; child
   );
 }
 
+/** A second door, kept small so it points at a destination instead of becoming another panel. */
+function CompactDoor({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="link"
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: CARD_EDGE,
+        backgroundColor: pressed ? PANEL_COLOURS.pressed : CARD_FILL,
+      })}
+    >
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: GOLD_ON_SPACE }}>
+        {label}
+      </Text>
+      <Ionicons name="arrow-forward" size={13} color={GOLD_ON_SPACE} />
+    </Pressable>
+  );
+}
+
 /** Air either side of the title, the same on both edges. */
 const HERO_PADDING = 20;
 /**
@@ -471,7 +497,12 @@ function WayIntoYourHive({
 
 export default function HiveWideScreen() {
   const router = useRouter();
-  const { communityId, community, profile, refreshProfile, memberships, switchCommunity, wholeHive, enterWholeHive } = useAuth();
+  const { communityId, community, communityRole, profile, refreshProfile, memberships, switchCommunity, wholeHive, enterWholeHive } = useAuth();
+  // The same audience as the existing Admin rail door: HIVE admins and
+  // treasurers, plus the owners who work across every HIVE.
+  const canSeeAdmin = communityRole === 'admin'
+    || communityRole === 'treasurer'
+    || profile?.is_owner === true;
 
   // The address is the truth: standing on /hive-wide means standing above the
   // HIVEs, so the mode follows the route. A "fresh honey" reload could land
@@ -996,6 +1027,12 @@ export default function HiveWideScreen() {
                   and it opens with the count, because the count is the part that
                   answers her question. */}
               <TopBox label="What We've Been Building" wide={wide}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                  <CompactDoor label="Read The Buzz" onPress={() => router.push('/buzz' as never)} />
+                  {canSeeAdmin ? (
+                    <CompactDoor label="Admin" onPress={() => router.push('/admin' as never)} />
+                  ) : null}
+                </View>
                 <Text
                   style={{
                     fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 12.5,
