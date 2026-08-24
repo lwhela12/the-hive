@@ -15,7 +15,6 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { HoneyPotNotSetUp } from '../../components/hive/HoneyPotNotSetUp';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
 
-const HONEY_POT_SUBTITLE = 'See the shared balance and every recorded entry.';
 
 export default function HoneyPotScreen() {
   const { communityId, communityRole, profile, community } = useAuth();
@@ -99,7 +98,7 @@ export default function HoneyPotScreen() {
   if (community && community.honey_pot_enabled === false) {
     return (
       <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-        <AppHeader title="Honey Pot" subtitle={HONEY_POT_SUBTITLE} />
+        <AppHeader title="Honey Pot" />
         <HoneyPotNotSetUp community={community} />
       </SafeAreaView>
     );
@@ -112,7 +111,7 @@ export default function HoneyPotScreen() {
           arrow too: this was the one header in the app carrying one, and the
           strip along the bottom already says where you are and gets you back
           (Nat 2026-08-06: "lets ditch it"). */}
-      <AppHeader title="Honey Pot" subtitle={HONEY_POT_SUBTITLE} />
+      <AppHeader title="Honey Pot" />
       <BounceScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}

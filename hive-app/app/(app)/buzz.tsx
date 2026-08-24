@@ -385,7 +385,7 @@ export default function BuzzScreen() {
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: skin.page }} edges={['top']}>
       <SpaceBackdrop />
-      <AppHeader title="The Buzz" subtitle="Catch up on news from every HIVE." tone="wide" />
+      <AppHeader title="The Buzz" tone="wide" />
       <BounceScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}

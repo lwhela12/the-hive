@@ -1486,7 +1486,6 @@ export default function AdminScreen() {
       <SpaceGlobe />
       <AppHeader
         title="Admin"
-        subtitle="Invite members and keep each HIVE running."
         tone="god"
       />
 

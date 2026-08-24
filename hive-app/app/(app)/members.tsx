@@ -3344,7 +3344,7 @@ export default function MembersScreen() {
       <SpaceBackdrop />
       {/* Header — just the name; the search bar below carries the detail.
           The tone follows the reader on its own now, so nothing is passed. */}
-      <AppHeader title="Members" subtitle="Find people, skills, wishes, and common ground." />
+      <AppHeader title="Members" />
 
       {/* One page, two things it can be showing: the directory, or one member's
           card. The card takes the whole column rather than floating over it, so

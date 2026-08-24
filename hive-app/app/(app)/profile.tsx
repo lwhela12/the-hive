@@ -2379,7 +2379,6 @@ export default function ProfileScreen() {
       {!compactProfileLandscape && (
         <AppHeader
           title="Profile"
-          subtitle="Share what you are building and how others can help."
           rightElement={(
             <CloseButton onPress={closeProfile} accessibilityLabel="Close profile" color="white" />
           )}

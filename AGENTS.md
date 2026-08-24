@@ -28,6 +28,7 @@ Run commands from `hive-app/` unless noted otherwise.
 
 ```bash
 npm run typecheck
+npm run lint:page-headers
 npm run doctor
 npm run export:ios
 ```
@@ -66,6 +67,13 @@ tasks that still need doing; how-to-work lives with the repo.
 - Keep the repo clean. Do not leave untracked files or uncommitted changes without deciding whether to commit, remove, or intentionally ignore them.
 - Do not commit `.env`, credentials, tokens, local build artifacts, or generated caches.
 - Prefer shared components for repeated interaction patterns.
+- **Page headers are WHERE + WHAT only.** `AppHeader` says where the member is
+  (HIVE-Wide / OG HIVE / Tech HIVE / Production HIVE) and what page this is
+  (Members / Boards / Clive / etc.), then stops. Never add explanatory copy
+  beneath a top-level page title or restore an `AppHeader` subtitle prop. Keep
+  useful guidance beside the control or content it explains — cards, tabs,
+  forms, empty states, and wizard steps still get the words they need. Every
+  top-level page uses `AppHeader`; do not hand-roll a second masthead.
 - Before changing deployed/live behavior, inspect existing data flow and similar working code.
 - For HIVE web/mobile testing, remember that in-app refresh updates app data; code changes require a deployed bundle / browser hard refresh / app reload.
 

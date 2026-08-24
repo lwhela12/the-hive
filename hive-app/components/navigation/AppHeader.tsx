@@ -10,8 +10,6 @@ interface AppHeaderProps {
   onBackPress?: () => void;
   /** Small mark rendered just before the title (e.g. Clive's crest). */
   titleIcon?: React.ReactNode;
-  /** Muted one-liner under the title (e.g. Members' count + search hint). */
-  subtitle?: string;
   rightElement?: React.ReactNode;
   /**
    * Which world this page belongs to.
@@ -39,8 +37,14 @@ interface AppHeaderProps {
  */
 const TONE_COLOURS = { wide: '#0B0B12', god: '#40403C' } as const;
 
-// The one page-title treatment for the whole app: gold bar, spaced serif.
-// Every tab screen should use this instead of hand-rolling a gold header.
+// The one page-title treatment for the whole app: WHERE above WHAT, and stop.
+//
+// Nat's HIVE-wide decree, 2026-08-24: page headers keep the place (HIVE-Wide,
+// OG HIVE, Tech HIVE, Production HIVE) and the destination (Members, Boards,
+// Clive, etc.), with no explanatory sentence underneath. Functional guidance
+// belongs beside the control or content it explains, never in this masthead.
+// Keeping the prop out of this interface makes the rule compile-time enforced.
+// Every tab screen should use this instead of hand-rolling a header.
 //
 // The bar takes its colour from the HIVE you're in, and its name rides above
 // every page title so you always know where you are. Home is the exception: it
@@ -50,7 +54,6 @@ export const AppHeader = memo(function AppHeader({
   title,
   onBackPress,
   titleIcon,
-  subtitle,
   rightElement,
   tone = 'hive',
 }: AppHeaderProps) {
@@ -130,20 +133,6 @@ export const AppHeader = memo(function AppHeader({
             {title}
           </Text>
         </View>
-        {subtitle ? (
-          <Text
-            style={{
-              fontFamily: 'Lato_400Regular',
-              fontSize: 12,
-              lineHeight: 16,
-              color: 'rgba(255,255,255,0.78)',
-              marginTop: 2,
-              textAlign: 'center',
-            }}
-          >
-            {subtitle}
-          </Text>
-        ) : null}
       </View>
 
       {/* Right Element (or placeholder for alignment) */}

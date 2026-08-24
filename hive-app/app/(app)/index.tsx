@@ -246,7 +246,6 @@ export default function ChatScreen() {
           <View>
             <AppHeader
               title="Clive"
-              subtitle="Talk through an idea or ask for a hand."
               /* Back to the front page. It shows once you are inside a
                  conversation, which is the only time it has anywhere to take
                  you — a button that is there and does nothing is the thing Nat

@@ -46,12 +46,7 @@ export function HivePicker() {
           >
             Which HIVE today?
           </Text>
-          <Text
-            style={{ fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 22 }}
-            className="text-charcoal/60 text-center mb-8"
-          >
-            You can move between them any time from the menu.
-          </Text>
+          <View className="mb-8" />
 
           {memberships.map((m) => {
             const accent = hiveAccent(m.community);

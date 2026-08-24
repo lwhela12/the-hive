@@ -722,14 +722,6 @@ export default function HiveWideScreen() {
         >
           HIVE-Wide
         </Text>
-        <Text
-          style={{
-            fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 14.5,
-            color: 'rgba(255,248,233,0.6)', textAlign: 'center', marginTop: 6,
-          }}
-        >
-          Have a look around and see what&rsquo;s happening across all the HIVEs.
-        </Text>
       </View>
       {/* The title lives in the sky rather than in a bar. There is no header on
           HIVE-Wide on purpose — "it's just part of outer space" (Nat 2026-08-03),
@@ -748,7 +740,7 @@ export default function HiveWideScreen() {
           paddingBottom: 44,
           // The air under the title. The page has no header bar — the title
           // floats in the sky — so this number plus the hero's own 4 points is
-          // the whole gap between the subtitle and the first panel.
+          // the whole gap between the title and the first panel.
           //
           // It has come down twice, each time because a panel that opens with a
           // title of its own needs less air under the headline than the row of
@@ -757,9 +749,8 @@ export default function HiveWideScreen() {
           // 2026-08-06: "I think we can scoot this up a teeensy bit. We want
           // some space, but we don't need that much space").
           //
-          // 38 leaves a 42-point gap under a 14.5pt subtitle on a 375-point
-          // phone — about two lines of that type, which reads as deliberate
-          // room. 66 was reading as a hole in the page.
+          // 38 leaves deliberate room without turning the first panel into a
+          // second screen. 66 was reading as a hole in the page.
           paddingTop: 38,
           width: '100%',
           maxWidth: 1240,

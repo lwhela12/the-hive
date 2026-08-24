@@ -45,7 +45,6 @@ import { EditButton } from '../../components/ui/EditButton';
 // Archived boards are no longer browsable (Nat 2026-07-24) — the boards-home
 // "Archive" pill is gone, so the list always shows active topics. Threads keep
 // an archive view only as a landing spot when search finds archived matches.
-const BOARDS_SUBTITLE = 'Choose a board to read, post, or reply.';
 
 type BoardThreadListView = 'active' | 'archive';
 type BoardCategoryStats = { count: number; latestActivity: string | null };
@@ -2030,7 +2029,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         {/* A link opened from HIVE-Wide is still at HIVE-Wide until it has
             found its HIVE, so the header says so rather than putting one
             HIVE's gold over a page that has not chosen one yet. */}
-        <AppHeader title="Boards" subtitle={BOARDS_SUBTITLE} tone={isWide || wholeHive ? 'wide' : 'hive'} />
+        <AppHeader title="Boards" tone={isWide || wholeHive ? 'wide' : 'hive'} />
         {landedHere?.state !== 'unreachable' ? (
           <View style={{ flex: 1, justifyContent: 'center' }}>
             <ThinkingBee />
@@ -2177,7 +2176,6 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
             colour and name like every other page (Nat 2026-07-31). */}
         <AppHeader
           title="Boards"
-          subtitle={BOARDS_SUBTITLE}
           // Green and nameless on HIVE-Wide. Wearing OG's gold there would say
           // you are in OG, which is the opposite of what this screen is.
           tone={isWide ? 'wide' : 'hive'}
@@ -2243,7 +2241,6 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           40pt side slots plus the header's horizontal padding. */}
       <AppHeader
         title={useMobileLayout ? stackHeaderTitle(selectedCategory.name, width - 112) : selectedCategory.name}
-        subtitle={selectedCategory.description || 'Read the conversation and add your voice.'}
         onBackPress={handleBack}
         tone={isWide ? 'wide' : 'hive'}
         rightElement={

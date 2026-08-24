@@ -1236,7 +1236,7 @@ export default function MeetingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <AppHeader title="Meetings" subtitle="Plan meetings and revisit what the HIVE decided." />
+      <AppHeader title="Meetings" />
 
       <BounceScrollView
         className="flex-1"

@@ -653,7 +653,7 @@ export default function AppFeedbackScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: skin.page }} edges={['bottom']}>
       <SpaceBackdrop />
-      <AppHeader title="App Feedback" subtitle="Tell us what is working and what would help." />
+      <AppHeader title="App Feedback" />
       <BounceScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: 48, maxWidth: 760, width: '100%', alignSelf: 'center' }}
         keyboardShouldPersistTaps="handled"

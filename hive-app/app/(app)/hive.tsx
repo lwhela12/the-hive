@@ -3155,7 +3155,7 @@ export default function HiveScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
-      <AppHeader title={hiveDisplayName(community?.name)} subtitle="See what is happening and what needs you." />
+      <AppHeader title={hiveDisplayName(community?.name)} />
 
       <BounceScrollView
         ref={homeScrollRef}
