@@ -158,7 +158,7 @@ export function QuickAdd({
     }
 
     if (!isOwner) {
-      setError('Only the HIVE owner can add News from Nat.');
+      setError('Only the HIVE owner can add app-wide news.');
       return;
     }
     const title = newsTitle.trim();
@@ -216,16 +216,16 @@ export function QuickAdd({
             {!destination ? (
               <View style={{ gap: 10 }}>
                 <DestinationButton
-                  icon="people-outline"
-                  title="Meeting thought"
-                  detail={wholeHive ? 'Choose the HIVE next.' : 'Adds it to this HIVE’s existing meeting-helper notes.'}
+                  icon="newspaper-outline"
+                  title="News from Nat"
+                  detail={wholeHive ? 'Choose the HIVE next.' : 'Goes on this HIVE’s own News from Nat slide in the meeting deck.'}
                   onPress={() => setDestination('meeting')}
                 />
                 {isOwner ? (
                   <DestinationButton
-                    icon="newspaper-outline"
-                    title="News from Nat"
-                    detail="Member-visible, and available when you deliberately write the newsletter."
+                    icon="sparkles-outline"
+                    title="New in the app"
+                    detail="App-wide, not per-HIVE — shows in every HIVE’s deck and is eligible for newsletter facts."
                     onPress={() => setDestination('news')}
                   />
                 ) : null}
@@ -248,7 +248,7 @@ export function QuickAdd({
                   <ComposerBar
                     variant="form"
                     tone="light"
-                    label="What should the meeting bring up?"
+                    label="What's the news?"
                     value={meetingThought}
                     onChangeText={setMeetingThought}
                     placeholder="One thought"
@@ -262,7 +262,7 @@ export function QuickAdd({
                 ) : destination === 'news' ? (
                   <View style={{ gap: 10 }}>
                     <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 17, color: QUIET }}>
-                      Visible to members and eligible for newsletter facts. Saving never drafts, previews, publishes or sends.
+                      Visible to every HIVE, not just this one — and eligible for newsletter facts. Saving never drafts, previews, publishes or sends.
                     </Text>
                     <Input label="Date · YYYY-MM-DD" value={newsDate} onChangeText={setNewsDate} maxLength={10} autoCapitalize="none" autoCorrect={false} style={{ marginBottom: -16 }} />
                     <ComposerBar variant="form" tone="light" label="Title" value={newsTitle} onChangeText={setNewsTitle} placeholder="What can members do now?" multiline={false} minHeight={44} maxLength={140} counter="none" attachments="none" autoFocus />
