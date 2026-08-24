@@ -28,9 +28,7 @@ function americanDate(date = new Date()) {
 }
 
 function defaultNewsDate() {
-  const lastDay = new Date();
-  lastDay.setDate(0);
-  return localIsoDate(lastDay);
+  return localIsoDate();
 }
 
 function isRealIsoDate(value: string) {
