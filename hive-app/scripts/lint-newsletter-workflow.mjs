@@ -31,6 +31,9 @@ if (!buzz.includes('currentNewsletterDraft(candidates)') || !buzz.includes('news
 if (buzz.includes("filter((row) => row.visibility === 'public' || sent.has(row.id) || isOwner)")) {
   failures.push('The Buzz must not relabel imported history as owner-only drafts');
 }
+if (!buzz.includes('subtitle={formatDateLong(item.created_at)}') || buzz.includes(' · from ${hiveDisplayName')) {
+  failures.push('Buzz cards must show the date only, with no source-HIVE delineation');
+}
 if (!buzzArchiveMigration.includes('HIVE members locate the Buzz archive')
   || !buzzArchiveMigration.includes('HIVE members read the completed Buzz archive')) {
   failures.push('Every HIVE member must be able to locate and read the completed Buzz archive');

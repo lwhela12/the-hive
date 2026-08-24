@@ -139,7 +139,7 @@ const letterTrailLabel = (item: Buzz): string => {
 };
 
 export default function BuzzScreen() {
-  const { profile, communityId, memberships } = useAuth();
+  const { profile, memberships } = useAuth();
   const isOwner = !!profile?.is_owner;
   // The Buzz lives at HIVE-Wide and nowhere else (Nat 2026-08-03), so it is
   // always dressed for space rather than following whoever opened it.
@@ -301,15 +301,13 @@ export default function BuzzScreen() {
     }
   }, [memberships, profile?.id, isOwner]);
 
-  useEffect(() => { void load(); }, [load, communityId]);
+  useEffect(() => { void load(); }, [load]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     await load();
     setRefreshing(false);
   };
-
-  const showWhichHive = memberships.length > 1;
 
   /**
    * Adding a shout-out, without leaving The Buzz.
@@ -577,7 +575,6 @@ export default function BuzzScreen() {
           ) : items.map((item) => {
             const open = openId === item.id;
             const accent = hiveAccent(item.community as Community | null);
-            const fromElsewhere = item.community_id !== communityId;
 
             return (
               <CollapsiblePanel
@@ -593,15 +590,7 @@ export default function BuzzScreen() {
                 // liked that."* The words say it; the border says it from
                 // across the room.
                 dashed={item.unsent}
-                subtitle={
-                  formatDateLong(item.created_at)
-                  + (showWhichHive && fromElsewhere
-                    ? ` · from ${hiveDisplayName(item.community?.name)}`
-                    : '')
-                  + (item.unsent
-                    ? ' · not sent yet'
-                    : item.visibility === 'public' ? ' · on the website' : '')
-                }
+                subtitle={formatDateLong(item.created_at)}
                 // One at a time — opening a letter shuts the one you were
                 // reading, which is what "expand the one you want to read"
                 // means when each of these is two thousand words.
