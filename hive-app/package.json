@@ -8,11 +8,12 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint:page-headers": "node scripts/lint-page-headers.mjs",
-    "typecheck": "npm run lint:page-headers && tsc --noEmit",
+    "lint:feedback-door": "node scripts/lint-feedback-door.mjs",
+    "typecheck": "npm run lint:page-headers && npm run lint:feedback-door && tsc --noEmit",
     "doctor": "npx expo-doctor",
     "export:ios": "expo export --platform ios --output-dir .expo-export/ios",
     "verify:web-export": "node scripts/verify-web-export.mjs dist",
-    "build:web": "npm run lint:page-headers && expo export --platform web && npm run verify:web-export && node scripts/write-web-version.mjs",
+    "build:web": "npm run lint:page-headers && npm run lint:feedback-door && expo export --platform web && npm run verify:web-export && node scripts/write-web-version.mjs",
     "release:check": "npm run typecheck && npm run doctor"
   },
   "dependencies": {

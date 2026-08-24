@@ -3226,7 +3226,7 @@ export default function HiveScreen() {
                       onPress={() => {
                         dismissAppNews();
                         if (entry.href!.pathname === '/app-feedback') {
-                          openFeedback({ pathname: '/hive', captureRequested: true });
+                          openFeedback({ pathname: '/hive' });
                         } else {
                           router.push({
                             pathname: entry.href!.pathname as any,
@@ -3853,7 +3853,7 @@ export default function HiveScreen() {
                   meetings: () => router.push('/meetings' as any),
                   profile: () => router.push('/profile' as any),
                   clive: () => router.push('/' as any),
-                  feedback: () => openFeedback({ pathname: '/hive', captureRequested: true }),
+                  feedback: () => openFeedback({ pathname: '/hive' }),
                   swap_hives: () => openHivePicker(),
                   admin: () => router.push('/admin' as any),
                 };

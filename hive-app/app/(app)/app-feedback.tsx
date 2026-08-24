@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { usePageSkin } from '../../lib/pageSkin';
@@ -22,7 +22,12 @@ import { SelectedFile } from '../../lib/filePicker';
 import { uploadMultipleImages, uploadMultipleFiles } from '../../lib/attachmentUpload';
 import type { AppFeedback, Attachment } from '../../types';
 import { consumeFeedbackDraft, validFeedbackCaptureNotice } from '../../lib/feedbackDraft';
-import { FEEDBACK_WHERE_OPTIONS, validFeedbackOriginLabel } from '../../lib/feedbackOrigin';
+import {
+  FEEDBACK_WHERE_OPTIONS,
+  feedbackReturnPathForLabel,
+  validFeedbackOriginLabel,
+  validFeedbackOriginPath,
+} from '../../lib/feedbackOrigin';
 
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { SignedImage } from '../../components/ui/SignedImage';
@@ -193,14 +198,22 @@ function TabStrip({ children }: { children: ReactNode }) {
 export default function AppFeedbackScreen() {
   const { profile, communityId } = useAuth();
   const skin = usePageSkin();
+  const router = useRouter();
   const isOwner = profile?.is_owner === true;
   // The app's own phone line, the one the layout and the side rail already use.
   const { width } = useWindowDimensions();
   const narrow = width < 768;
-  const params = useLocalSearchParams<{ originLabel?: string | string[]; captureNotice?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    originLabel?: string | string[];
+    originPath?: string | string[];
+    captureNotice?: string | string[];
+  }>();
   const routeOriginLabel = validFeedbackOriginLabel(
     Array.isArray(params.originLabel) ? params.originLabel[0] : params.originLabel
   );
+  const originPath = validFeedbackOriginPath(
+    Array.isArray(params.originPath) ? params.originPath[0] : params.originPath
+  ) ?? feedbackReturnPathForLabel(routeOriginLabel);
   const captureNotice = validFeedbackCaptureNotice(Array.isArray(params.captureNotice)
     ? params.captureNotice[0]
     : params.captureNotice);
@@ -653,7 +666,10 @@ export default function AppFeedbackScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: skin.page }} edges={['bottom']}>
       <SpaceBackdrop />
-      <AppHeader title="App Feedback" />
+      <AppHeader
+        title="App Feedback"
+        onBackPress={originPath ? () => router.replace(originPath as never) : undefined}
+      />
       <BounceScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: 48, maxWidth: 760, width: '100%', alignSelf: 'center' }}
         keyboardShouldPersistTaps="handled"

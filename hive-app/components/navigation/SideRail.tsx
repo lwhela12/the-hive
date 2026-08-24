@@ -926,7 +926,7 @@ export const SideRail = memo(function SideRail({
               bounceKey={item.key}
               onPress={() => {
                 if (item.key === 'feedback') {
-                  openFeedback({ pathname, captureRequested: true });
+                  openFeedback({ pathname });
                   foldAwayOnPhone();
                 } else {
                   go(item.route, item.key);

@@ -76,6 +76,9 @@ tasks that still need doing; how-to-work lives with the repo.
   top-level page uses `AppHeader`; do not hand-roll a second masthead. HIVE-Wide
   has one black space header on every HIVE-Wide page, including Admin — no
   one-off “god”/slate exception.
+- **App Feedback opens directly.** Never interrupt the door with a screenshot
+  or attachment prompt; those controls live inside the form. Carry the page it
+  came from and show a back arrow that returns there.
 - Before changing deployed/live behavior, inspect existing data flow and similar working code.
 - For HIVE web/mobile testing, remember that in-app refresh updates app data; code changes require a deployed bundle / browser hard refresh / app reload.
 

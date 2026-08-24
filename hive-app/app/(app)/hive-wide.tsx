@@ -1062,7 +1062,7 @@ export default function HiveWideScreen() {
                       onPress={() => {
                         if (!entry.href) return;
                         if (entry.href.pathname === '/app-feedback') {
-                          openFeedback({ pathname: '/hive-wide', captureRequested: true });
+                          openFeedback({ pathname: '/hive-wide' });
                         } else {
                           router.push(entry.href as never);
                         }
