@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AppHeader } from '../../components/navigation';
 import { userFacingError } from '../../lib/userFacingError';
+import { currentNewsletterDraft, newsletterIssueHistory } from '../../lib/newsletterIssues';
 import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
 import { CollapsiblePanel } from '../../components/ui/CollapsiblePanel';
 import { ComposerBar } from '../../components/ui/ComposerBar';
@@ -254,17 +255,25 @@ export default function BuzzScreen() {
      */
     const { data: sends } = await supabase
       .from('newsletter_sends')
-      .select('post_id')
+      .select('post_id, created_at')
       .eq('mode', 'live');
-    const sent = new Set(((sends ?? []) as { post_id: string }[]).map((s) => s.post_id));
-
-    const archive = rows
+    const sentAtById = new Map(
+      ((sends ?? []) as { post_id: string; created_at: string }[]).map((send) => [send.post_id, send.created_at])
+    );
+    const candidates = rows
       .filter((row) => !brewingIds.has(row.id))
-      .filter((row) => row.visibility === 'public' || sent.has(row.id) || isOwner)
-      .map((row) => ({
-        ...row,
-        unsent: !(row.visibility === 'public' || sent.has(row.id)),
-      }));
+      .map((row) => ({ ...row, sentAt: sentAtById.get(row.id) ?? null }));
+    const draft = currentNewsletterDraft(candidates);
+    const history = newsletterIssueHistory(candidates, draft);
+
+    // One policy across Admin, the writer, and this archive. Only a genuinely
+    // current draft is private to an owner; imported pre-send issues are past
+    // newsletters, not six forever-drafts. Once the real draft is sent it moves
+    // into history immediately.
+    const archive = [
+      ...(isOwner && draft ? [{ ...draft, unsent: true }] : []),
+      ...history.map((row) => ({ ...row, unsent: false })),
+    ];
     setItems(archive);
     // Nothing is opened for you. Nat, 2026-08-06: *"I think the first view of
     // the newsletter page should always start out with them all collapsed & you
