@@ -32,6 +32,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { FIELD_LOOK } from '../ui/Input';
 import { ThinkingBee } from '../ui/ThinkingBee';
 import { SurveyModal } from '../surveys/SurveyModal';
+import { QuickAdd } from '../navigation/QuickAdd';
 /**
  * Everyone, everywhere, in one room.
  *
@@ -55,6 +56,12 @@ type NewsletterIssue = {
   created_at: string;
   sentAt: string | null;
   sentCount: number;
+};
+
+type NewsletterThought = {
+  id: number;
+  content: string;
+  created_at: string;
 };
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -467,6 +474,8 @@ export function NewsletterPanel({
   const [shoutOuts, setShoutOuts] = useState<
     { id: string; content: string; created_at: string; author: string }[]
   >([]);
+  const [newsletterThoughts, setNewsletterThoughts] = useState<NewsletterThought[]>([]);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [issues, setIssues] = useState<NewsletterIssue[]>([]);
   const [memberEmails, setMemberEmails] = useState<string[]>([]);
   const [sending, setSending] = useState<string | null>(null);
@@ -481,6 +490,18 @@ export function NewsletterPanel({
     // it is thrown away -- that silence is what hid this bug for months.
     if (error) console.error('newsletter_subscribers load failed', error);
     setSubs((data ?? []) as Subscriber[]);
+
+    if (profile?.is_owner) {
+      const { data: thoughts, error: thoughtsError } = await supabase
+        .from('newsletter_thoughts')
+        .select('id, content, created_at')
+        .is('archived_at', null)
+        .order('created_at', { ascending: false });
+      if (thoughtsError) console.error('newsletter_thoughts load failed', thoughtsError);
+      setNewsletterThoughts((thoughts ?? []) as NewsletterThought[]);
+    } else {
+      setNewsletterThoughts([]);
+    }
 
     // What members have actually asked to have mentioned — the replies on the
     // newsletter thread, the same ones the draft harvests.
@@ -634,7 +655,7 @@ export function NewsletterPanel({
         (a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''))
       )
     );
-  }, []);
+  }, [profile?.is_owner]);
 
   // A plain `useEffect` only fires once, on mount — so if this box was
   // already open in a tab when somebody subscribed from the public site, it
@@ -757,7 +778,7 @@ export function NewsletterPanel({
         // month's newsletter, then we test it, and that's the order that it
         // goes in."* Signed-up is a list you consult, so it stays last.
         tabs={[
-          { key: 'shoutouts', label: `Shout-outs (${shoutOuts.length})` },
+          { key: 'shoutouts', label: `Ideas & shout-outs (${shoutOuts.length + newsletterThoughts.length})` },
           // The draft quotes members before Nat has chosen what stays in, so
           // the tab itself is hers alone. Anyone else never sees the door.
           ...(profile?.is_owner ? [{ key: 'write', label: 'Write this month’s' }] : []),
@@ -935,10 +956,48 @@ export function NewsletterPanel({
 
           {tab === 'shoutouts' ? (
             <View style={{ padding: 12, gap: 8 }}>
-              {shoutOuts.length === 0 ? (
+              {profile?.is_owner ? (
+                <Pressable
+                  onPress={() => setQuickAddOpen(true)}
+                  style={({ pressed }) => ({
+                    alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6,
+                    borderWidth: 1, borderColor: SPACE_SKIN.border, borderRadius: 999,
+                    paddingHorizontal: 11, paddingVertical: 7,
+                    backgroundColor: pressed ? SPACE_SKIN.card : 'transparent',
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Ionicons name="add" size={16} color={SPACE_SKIN.gold} />
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.ink }}>
+                    Quick add a newsletter thought
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              {newsletterThoughts.map((thought) => (
+                <View
+                  key={`thought-${thought.id}`}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: SPACE_SKIN.border,
+                    backgroundColor: SPACE_SKIN.card,
+                    borderRadius: 12,
+                    padding: 11,
+                    gap: 3,
+                  }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.gold }}>
+                    Your newsletter thought · private
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13.5, color: SPACE_SKIN.inkBody, lineHeight: 20 }}>
+                    {thought.content}
+                  </Text>
+                </View>
+              ))}
+
+              {newsletterThoughts.length === 0 && shoutOuts.length === 0 ? (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: SPACE_SKIN.inkSoft, lineHeight: 19 }}>
-                  Nobody has asked for a mention yet. What members add to the
-                  newsletter thread lands here, and goes into the draft.
+                  Nothing collected yet. Your private thoughts and anything members ask to have mentioned will wait here.
                 </Text>
               ) : shoutOuts.map((item) => (
                 <View
@@ -1049,6 +1108,12 @@ export function NewsletterPanel({
         destructive
         onConfirm={() => { void removeSubscriber(); }}
         onCancel={() => { if (!removingSub) setConfirmRemoveSub(null); }}
+      />
+      <QuickAdd
+        visible={quickAddOpen}
+        initialDestination="newsletter"
+        onClose={() => setQuickAddOpen(false)}
+        onSaved={() => { void load(); }}
       />
     </View>
   );

@@ -5,27 +5,21 @@ import { useAuth, type HiveMembership } from '../../lib/hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 import { queryClient, queryKeys } from '../../lib/queryClient';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
-import { parseAmericanDate } from '../../lib/dateUtils';
-import { createCalendarEvent } from '../../lib/eventMutations';
 import { ComposerBar } from '../ui/ComposerBar';
 import { Input } from '../ui/Input';
-import { EventDatePicker } from '../ui/DatePicker';
 
 const INK = '#313130';
 const GOLD = '#bd9348';
 const QUIET = '#756b5d';
 const BORDER = 'rgba(189,147,72,0.28)';
 
-type Destination = 'meeting' | 'news' | 'unavailable' | null;
+export type QuickAddDestination = 'meeting' | 'news' | 'newsletter' | null;
 type MeetingHelperNotes = Record<string, unknown> & { news?: string };
 
 function localIsoDate(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-function americanDate(date = new Date()) {
-  return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}-${date.getFullYear()}`;
-}
 
 function defaultNewsDate() {
   return localIsoDate();
@@ -51,7 +45,7 @@ export function QuickAdd({
   visible: boolean;
   onClose: () => void;
   onSaved?: () => void;
-  initialDestination?: Destination;
+  initialDestination?: QuickAddDestination;
 }) {
   const { profile, communityId, communityRole, wholeHive, memberships } = useAuth();
   const isOwner = profile?.is_owner === true;
@@ -62,27 +56,25 @@ export function QuickAdd({
     [isOwner, memberships],
   );
 
-  const [destination, setDestination] = useState<Destination>(null);
+  const [destination, setDestination] = useState<QuickAddDestination>(null);
   const [targetHiveId, setTargetHiveId] = useState<string | null>(null);
   const [meetingThought, setMeetingThought] = useState('');
   const [newsDate, setNewsDate] = useState(defaultNewsDate);
   const [newsTitle, setNewsTitle] = useState('');
   const [newsDetail, setNewsDetail] = useState('');
-  const [unavailableStart, setUnavailableStart] = useState(americanDate);
-  const [unavailableEnd, setUnavailableEnd] = useState(americanDate);
+  const [newsletterThought, setNewsletterThought] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
-    setDestination(initialDestination === 'news' && !isOwner ? null : initialDestination);
+    setDestination((initialDestination === 'news' || initialDestination === 'newsletter') && !isOwner ? null : initialDestination);
     setTargetHiveId(wholeHive ? null : communityId ?? null);
     setMeetingThought('');
     setNewsDate(defaultNewsDate());
     setNewsTitle('');
     setNewsDetail('');
-    setUnavailableStart(americanDate());
-    setUnavailableEnd(americanDate());
+    setNewsletterThought('');
     setSaving(false);
     setError(null);
   }, [communityId, initialDestination, isOwner, visible, wholeHive]);
@@ -141,35 +133,27 @@ export function QuickAdd({
       return;
     }
 
-    if (destination === 'unavailable') {
-      const target = requireTargetHive();
-      const start = parseAmericanDate(unavailableStart);
-      const selectedEnd = parseAmericanDate(unavailableEnd);
-      if (!target) return;
-      if (!start || !selectedEnd) {
-        setError('Choose a start and end date.');
+    if (destination === 'newsletter') {
+      if (!isOwner) {
+        setError('Only the HIVE owner can add a newsletter thought.');
         return;
       }
-      if (selectedEnd < start) {
-        setError('The end date should be on or after the start date.');
+      const content = newsletterThought.trim();
+      if (!content) {
+        setError('Write the thought you want to keep.');
         return;
       }
-
       setSaving(true);
-      try {
-        await createCalendarEvent({
-          community_id: target,
-          title: `${(profile.name ?? 'Nat').split(/\s+/)[0]} unavailable`,
-          event_date: start,
-          end_date: selectedEnd === start ? null : selectedEnd,
-          visibility: 'members',
-          invited_scope: 'members',
-        });
-        finish();
-      } catch {
+      const { error: writeError } = await supabase.from('newsletter_thoughts').insert({
+        content,
+        created_by: profile.id,
+      });
+      if (writeError) {
         setSaving(false);
         setError('That did not save. Check your connection and try again.');
+        return;
       }
+      finish();
       return;
     }
 
@@ -204,7 +188,7 @@ export function QuickAdd({
     finish();
   };
 
-  const needsHivePicker = wholeHive && (destination === 'meeting' || destination === 'unavailable');
+  const needsHivePicker = wholeHive && destination === 'meeting';
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -245,12 +229,14 @@ export function QuickAdd({
                     onPress={() => setDestination('news')}
                   />
                 ) : null}
-                <DestinationButton
-                  icon="airplane-outline"
-                  title="Vacation, travel or unavailable"
-                  detail={wholeHive ? 'Choose the HIVE and date range next.' : 'Adds an all-day date range to this HIVE’s calendar.'}
-                  onPress={() => setDestination('unavailable')}
-                />
+                {isOwner ? (
+                  <DestinationButton
+                    icon="bulb-outline"
+                    title="Newsletter thought"
+                    detail="Private note for you. It waits in the Newsletter box until you are ready to write."
+                    onPress={() => setDestination('newsletter')}
+                  />
+                ) : null}
               </View>
             ) : (
               <View style={{ gap: 12 }}>
@@ -285,12 +271,22 @@ export function QuickAdd({
                 ) : (
                   <View style={{ gap: 10 }}>
                     <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 17, color: QUIET }}>
-                      Saves “{(profile.name ?? 'Nat').split(/\s+/)[0]} unavailable” as an all-day calendar range for HIVErs only.
+                      Just for you. Saving keeps the thought in the Newsletter box. It never drafts, previews, publishes or sends anything.
                     </Text>
-                    <View style={{ gap: 10 }}>
-                      <EventDatePicker value={unavailableStart} onChange={setUnavailableStart} label="First day" />
-                      <EventDatePicker value={unavailableEnd} onChange={setUnavailableEnd} label="Last unavailable day" />
-                    </View>
+                    <ComposerBar
+                      variant="form"
+                      tone="light"
+                      label="What do you want to remember?"
+                      value={newsletterThought}
+                      onChangeText={setNewsletterThought}
+                      placeholder="One quick thought"
+                      minHeight={76}
+                      maxHeight={150}
+                      maxLength={1000}
+                      counter="none"
+                      attachments="none"
+                      autoFocus
+                    />
                   </View>
                 )}
               </View>

@@ -140,6 +140,16 @@ export interface AppNews extends Record<string, unknown> {
   archived_at: string | null;
 }
 
+/** Nat's private raw material for a future newsletter (migration 208). */
+export interface NewsletterThought extends Record<string, unknown> {
+  id: number;
+  content: string;
+  created_by: string;
+  created_at: string;
+  /** Used thoughts stay as receipts; archiving is the only removal path. */
+  archived_at: string | null;
+}
+
 export interface Waitlist extends Record<string, unknown> {
   id: string;
   email: string;
@@ -1117,6 +1127,12 @@ export interface Database {
           archived_at?: string | null;
         };
         Update: Partial<Pick<AppNews, 'occurred_on' | 'title' | 'detail' | 'archived_at'>>;
+        Relationships: [];
+      };
+      newsletter_thoughts: {
+        Row: NewsletterThought;
+        Insert: Pick<NewsletterThought, 'content' | 'created_by'>;
+        Update: Partial<Pick<NewsletterThought, 'content' | 'archived_at'>>;
         Relationships: [];
       };
       // Insert is deliberately `never`: only the send-newsletter function
