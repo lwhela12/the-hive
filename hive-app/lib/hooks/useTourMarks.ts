@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
+import { membershipStillNeedsTour } from '../tourPolicy';
 import { useAuth } from './useAuth';
 
 /**
@@ -11,21 +11,20 @@ import { useAuth } from './useAuth';
  *
  * Two rules live here, and they are deliberately strict:
  *
- * 1. **The tour starts ONLY when a join says so.** Both accept paths — the
- *    email link (app/join.tsx) and the in-app invitation card
- *    (components/ui/PendingInviteDoor.tsx) — call `startHiveTour()` the moment
- *    the membership is real. Nothing else ever starts it. The alternative —
- *    "no tour_marks row yet? show the tour" — would greet every existing
- *    member of every HIVE with a walkthrough of an app they already live in,
- *    which is noise, not a welcome. Absence of a mark means "never toured",
- *    and for everyone who joined before the tour existed that is the correct,
- *    permanent answer.
+ * 1. **Every membership created after the tour launched gets one.** Both
+ *    accept paths still call `startHiveTour()` for an immediate hand-off, but
+ *    the signed-in shell also recovers any new membership whose tour has not
+ *    been finished or skipped. That database-backed recovery is the rule; the
+ *    in-memory signal is only the fast path. Existing members from before the
+ *    tour launched stay undisturbed.
  *
- * 2. **Any exit writes the mark, and the mark is forever.** Finishing and
- *    skipping both insert a row into `tour_marks` (migration 167) — different
- *    `outcome`, same effect: this HIVE never shows this member the tour again,
- *    on any device. The row lives in the database rather than localStorage
- *    because "never comes back" has to survive a new browser, a phone, and a
+ * 2. **Any exit marks this membership cycle complete.** Finishing and
+ *    skipping both upsert `tour_marks` (migration 167) — different `outcome`,
+ *    same effect: this HIVE does not show this member the tour again while that
+ *    membership remains current. If a membership is later removed and a fresh
+ *    invitation creates a newer one, the old mark predates it and no longer
+ *    suppresses the new welcome. The row lives in the database rather than
+ *    localStorage so the promise survives a new browser, a phone, and a
  *    cleared cache.
  *
  * The start signal itself is a module-level variable plus a listener — the
@@ -42,12 +41,30 @@ export type TourOutcome = 'finished' | 'skipped';
 type TourMarkRow = {
   user_id: string;
   community_id: string;
+  completed_at: string;
   outcome: TourOutcome;
 };
 
 // `tour_marks` is in types/index.ts's Database map (added 2026-08-11, same
 // session the table was born), so the client reaches it directly.
 const tourMarksTable = () => supabase.from('tour_marks');
+
+/**
+ * Existing members must never be retro-toured. This is the instant the tour
+ * shipped (commit dfbfd33 / migration 167); memberships created from here on
+ * are the product's "new member" boundary.
+ */
+const TOUR_LAUNCHED_AT = '2026-08-11T22:55:21.000Z';
+
+type MembershipTourState = {
+  community_id: string;
+  created_at: string;
+};
+
+type CompletedTourState = {
+  community_id: string;
+  completed_at: string;
+};
 
 /** A tour asked for before the bar mounted, waiting to be picked up. */
 let pendingTourCommunityId: string | null = null;
@@ -83,10 +100,12 @@ export function useTourMarks(): {
   const { session } = useAuth();
   const userId = session?.user?.id ?? null;
 
-  // A tour that has been ASKED for, before the once-only check has answered.
+  // A tour that has been ASKED for, before the membership-cycle check answers.
   const [candidateId, setCandidateId] = useState<string | null>(null);
   // The tour that is actually allowed on screen.
   const [tourCommunityId, setTourCommunityId] = useState<string | null>(null);
+  // After one tour closes, look for another outstanding new membership.
+  const [discoveryTick, setDiscoveryTick] = useState(0);
 
   // Listen for startHiveTour(), and collect any signal that fired before this
   // hook existed — the email-link join happens outside the signed-in shell,
@@ -102,29 +121,98 @@ export function useTourMarks(): {
     };
   }, []);
 
-  // The once-only check. A candidate only becomes the live tour if the
-  // database has no mark for this member and this HIVE. On any doubt — the
-  // check itself failing included — no tour: a member who never sees it loses
-  // five sentences, a member who sees it twice loses trust in "never comes
-  // back".
+  // Recover the rule from durable data, not from the hand-off signal. The
+  // original implementation relied only on a module variable surviving the
+  // join -> signed-in-shell transition. Real joins proved that transition can
+  // remount/reload the bundle, losing the signal and dumping the member on
+  // Home. Every post-launch membership without a completion from its own
+  // membership cycle becomes a candidate here, in every HIVE and on every
+  // device. Pre-launch memberships are excluded at the query boundary.
+  useEffect(() => {
+    if (!userId || candidateId || tourCommunityId) return;
+    let cancelled = false;
+
+    (async () => {
+      const [{ data: membershipRows, error: membershipError }, { data: markRows, error: markError }] =
+        await Promise.all([
+          supabase
+            .from('community_memberships')
+            .select('community_id, created_at')
+            .eq('user_id', userId)
+            .gte('created_at', TOUR_LAUNCHED_AT)
+            .order('created_at', { ascending: true }),
+          tourMarksTable()
+            .select('community_id, completed_at')
+            .eq('user_id', userId),
+        ]);
+
+      if (cancelled) return;
+      if (membershipError || markError) {
+        console.warn(
+          '[Tour] Could not recover an outstanding welcome tour:',
+          membershipError?.message || markError?.message,
+        );
+        return;
+      }
+
+      const marksByCommunity = new Map(
+        ((markRows ?? []) as CompletedTourState[]).map((mark) => [mark.community_id, mark.completed_at]),
+      );
+      const outstanding = ((membershipRows ?? []) as MembershipTourState[]).find((membership) =>
+        membershipStillNeedsTour(
+          membership.created_at,
+          marksByCommunity.get(membership.community_id),
+        ),
+      );
+
+      if (outstanding) setCandidateId((current) => current ?? outstanding.community_id);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [candidateId, discoveryTick, tourCommunityId, userId]);
+
+  // Validate an immediate start signal against the current membership cycle.
+  // An older mark from a removed membership must not suppress a fresh invite;
+  // a mark written after the current membership began keeps "never comes back"
+  // true on every device.
   useEffect(() => {
     if (!candidateId || !userId) return;
     let cancelled = false;
 
     (async () => {
-      const { data, error } = await tourMarksTable()
-        .select('community_id')
-        .eq('user_id', userId)
-        .eq('community_id', candidateId)
-        .maybeSingle();
+      const [{ data: membership, error: membershipError }, { data: mark, error: markError }] =
+        await Promise.all([
+          supabase
+            .from('community_memberships')
+            .select('created_at')
+            .eq('user_id', userId)
+            .eq('community_id', candidateId)
+            .maybeSingle(),
+          tourMarksTable()
+            .select('completed_at')
+            .eq('user_id', userId)
+            .eq('community_id', candidateId)
+            .maybeSingle(),
+        ]);
 
       if (cancelled) return;
       setCandidateId(null);
-      if (error) {
-        console.warn('[Tour] Could not check the tour mark, so no tour:', error.message);
+      if (membershipError || markError) {
+        console.warn(
+          '[Tour] Could not check the current membership tour:',
+          membershipError?.message || markError?.message,
+        );
         return;
       }
-      if (!data) setTourCommunityId(candidateId);
+      if (
+        membership &&
+        new Date(membership.created_at).getTime() >= new Date(TOUR_LAUNCHED_AT).getTime() &&
+        membershipStillNeedsTour(membership.created_at, mark?.completed_at)
+      ) {
+        setTourCommunityId(candidateId);
+      }
     })();
 
     return () => {
@@ -144,16 +232,19 @@ export function useTourMarks(): {
         const mark: TourMarkRow = {
           user_id: userId,
           community_id: communityId,
+          completed_at: new Date().toISOString(),
           outcome,
         };
-        const { error } = await tourMarksTable().insert(mark);
-        // 23505 is "row already there" — a second device won the race, and the
-        // answer it wrote is the same answer: never again. Anything else is
-        // worth a line in the console, and nothing more: the tour only ever
-        // starts from an explicit join, so a lost write cannot bring it back.
-        if (error && error.code !== '23505') {
+        const { error } = await tourMarksTable().upsert(mark, {
+          onConflict: 'user_id,community_id',
+        });
+        if (error) {
           console.warn('[Tour] Could not write the tour mark:', error.message);
+          return;
         }
+        // One person may have joined more than one HIVE since their last visit.
+        // Only after this durable write lands do we look for the next one.
+        setDiscoveryTick((current) => current + 1);
       })();
     },
     [tourCommunityId, userId]
