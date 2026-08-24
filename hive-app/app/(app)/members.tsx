@@ -63,6 +63,7 @@ import { EventScopeFields, invalidateBirthdayQueries, type EventAudience } from 
 
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { showAlert } from '../../lib/showAlert';
+import { userFacingError } from '../../lib/userFacingError';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
 /**
@@ -981,7 +982,7 @@ function MemberDetailPage({
           console.warn('[Members] skills delete failed', error);
           showAlert(
             'Your skills did not save',
-            `${error.message ?? 'The skills you removed are still there.'} Nothing was changed — please try again.`
+            userFacingError(error, 'The skills you removed are still there. Nothing changed — please try again.')
           );
           return false;
         }
@@ -994,7 +995,7 @@ function MemberDetailPage({
           console.warn('[Members] skills insert failed', error);
           showAlert(
             'Your new skills did not save',
-            `${error.message ?? 'They could not be added.'} Please try again.`
+            userFacingError(error, 'Your new skills are still selected. Please try saving again.')
           );
           return false;
         }
@@ -1012,7 +1013,7 @@ function MemberDetailPage({
       console.warn('[Members] skills save failed', e);
       showAlert(
         'Your skills did not save',
-        e?.message ? String(e.message) : 'Something went wrong on the way to the database. Please try again.'
+        userFacingError(e, 'Your skills are still selected. Please try saving again.')
       );
       return false;
     } finally {
@@ -1246,7 +1247,7 @@ function MemberDetailPage({
       // that did — the same silence the skills sheet had (2026-08-06). The
       // words you typed stay in the box now, so you can send them again.
       console.warn('[Members] wish save failed', error);
-      showAlert('Your wish did not save', `${error.message ?? 'It was not stored.'} Please try again.`);
+      showAlert('Your wish did not save', userFacingError(error, 'Your wish is still here. Please try saving again.'));
       return;
     }
     if (data) {
@@ -1457,7 +1458,7 @@ function MemberDetailPage({
       const missingProfileFields = error?.message?.includes('does not exist') || error?.code === '42703';
       setSaveError(
         missingProfileFields
-          ? 'These new profile fields are not installed in Supabase yet. We need to apply the profile fields migration once, then this will save.'
+          ? userFacingError(error, 'Those details could not save just now. Your changes are still here — try again after refreshing.')
           : 'Could not save profile updates. Please try again.'
       );
     } finally {
@@ -1570,6 +1571,21 @@ function MemberDetailPage({
                     submitLabel="+ Add"
                   />
                 </View>
+
+                {/* A search miss keeps the write-your-own path in view instead
+                    of turning the picker into a blank sheet. */}
+                {skillSearch.trim() && !SKILL_CATEGORIES.some(cat =>
+                  cat.skills.some(skill => skill.toLowerCase().includes(skillSearch.trim().toLowerCase()))
+                ) ? (
+                  <View style={{ marginBottom: 20, padding: 16, borderRadius: 14, backgroundColor: '#fdf8ec' }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', textAlign: 'center' }}>
+                      No listed skills match that search.
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#8e7a5e', textAlign: 'center', marginTop: 4 }}>
+                      Add it in Type your own above, or clear the search to see every category.
+                    </Text>
+                  </View>
+                ) : null}
 
                 {/* Category sections */}
                 {SKILL_CATEGORIES.map(cat => {
@@ -3323,7 +3339,7 @@ export default function MembersScreen() {
       <SpaceBackdrop />
       {/* Header — just the name; the search bar below carries the detail.
           The tone follows the reader on its own now, so nothing is passed. */}
-      <AppHeader title="Members" />
+      <AppHeader title="Members" subtitle="Find people, skills, wishes, and common ground." />
 
       {/* One page, two things it can be showing: the directory, or one member's
           card. The card takes the whole column rather than floating over it, so

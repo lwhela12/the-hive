@@ -52,6 +52,7 @@ import {
   WishSectionSkeleton,
 } from '../../components/hive/skeletons';
 import { AppHeader } from '../../components/navigation';
+import { userFacingError } from '../../lib/userFacingError';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { ScopeBadge } from '../../components/ui/ScopeBadge';
 import { EventScopeFields, saveBirthdayScope, type EventAudience } from '../../components/events/EventAudienceToggle';
@@ -2545,7 +2546,7 @@ export default function HiveScreen() {
       if (msg.includes('row-level security') || msg.includes('policy') || msg.includes('permission')) {
         setEventError('Permission denied. Ask your admin to apply the latest database update.');
       } else {
-        setEventError(error?.message || `Failed to ${editingEvent ? 'update' : 'create'} event. Please try again.`);
+        setEventError(userFacingError(error, `The event did not ${editingEvent ? 'update' : 'save'}. Your details are still here — please try again.`));
       }
     } finally {
       setSavingEvent(false);
@@ -3142,7 +3143,7 @@ export default function HiveScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
-      <AppHeader title={hiveDisplayName(community?.name)} />
+      <AppHeader title={hiveDisplayName(community?.name)} subtitle="See what is happening and what needs you." />
 
       <BounceScrollView
         ref={homeScrollRef}

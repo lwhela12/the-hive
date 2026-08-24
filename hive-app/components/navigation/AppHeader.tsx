@@ -115,7 +115,7 @@ export const AppHeader = memo(function AppHeader({
       )}
 
       {/* Title */}
-      <View className="items-center">
+      <View className="items-center" style={{ flex: 1, minWidth: 0, paddingHorizontal: 6 }}>
         {showHiveName ? (
           <Text
             style={{
@@ -140,7 +140,14 @@ export const AppHeader = memo(function AppHeader({
         </View>
         {subtitle ? (
           <Text
-            style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.78)', marginTop: 2 }}
+            style={{
+              fontFamily: 'Lato_400Regular',
+              fontSize: 12,
+              lineHeight: 16,
+              color: 'rgba(255,255,255,0.78)',
+              marginTop: 2,
+              textAlign: 'center',
+            }}
           >
             {subtitle}
           </Text>

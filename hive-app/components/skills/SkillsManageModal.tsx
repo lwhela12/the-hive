@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../ui/Button';
 import { ComposerBar } from '../ui/ComposerBar';
 import { supabase } from '../../lib/supabase';
+import { userFacingError } from '../../lib/userFacingError';
 import { PREDEFINED_SKILLS, shuffleSkills } from './constants';
 import type { Skill } from '../../types';
 
@@ -155,7 +156,7 @@ export function SkillsManageModal({
       onSave();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save skills');
+      setError(userFacingError(err, 'Your skills are still selected. Try saving again.'));
     } finally {
       setSaving(false);
     }

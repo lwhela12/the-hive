@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 import { showAlert } from '../showAlert';
+import { userFacingError } from '../userFacingError';
 import { useAuth } from './useAuth';
 
 const SCOPE_RANK: Record<string, number> = { hive: 0, all_hives: 1, public: 2 };
@@ -76,7 +77,7 @@ export function usePrivacyChoices() {
 
         if (error) {
           console.warn('[usePrivacyChoices] save failed', key, error);
-          showAlert('Sorry', `${failureMessage} (${error.message})`);
+          showAlert('Sorry', userFacingError(error, failureMessage));
           return;
         }
         // Awaited all the way, so by the time `pending` clears below the

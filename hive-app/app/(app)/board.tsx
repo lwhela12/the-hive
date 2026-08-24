@@ -34,6 +34,7 @@ import { deleteWishById, restoreWishById } from '../../lib/wishMutations';
 import { UndoBar, useUndoOffer } from '../../components/ui/UndoBar';
 import { matchesMemberSearchText } from '../../lib/memberAliases';
 import { confirmAction, showAlert } from '../../lib/showAlert';
+import { userFacingError } from '../../lib/userFacingError';
 import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -42,6 +43,8 @@ import { BounceScrollView, useEndBounce } from '../../components/ui/BounceScroll
 // Archived boards are no longer browsable (Nat 2026-07-24) — the boards-home
 // "Archive" pill is gone, so the list always shows active topics. Threads keep
 // an archive view only as a landing spot when search finds archived matches.
+const BOARDS_SUBTITLE = 'Choose a board to read, post, or reply.';
+
 type BoardThreadListView = 'active' | 'archive';
 type BoardCategoryStats = { count: number; latestActivity: string | null };
 type GrantThreadContext = {
@@ -52,21 +55,6 @@ type GrantThreadContext = {
 
 function isArchivedCategory(category: BoardCategory) {
   return category.status === 'archived' || category.status === 'completed';
-}
-
-// Every failure on this screen ends up here first, so the member reads one
-// sentence about what happened rather than a database error on its own.
-function getBoardErrorMessage(error: unknown, fallback = 'Something went wrong.') {
-  if (error instanceof Error) return error.message;
-  if (error && typeof error === 'object') {
-    const details = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
-    const message = typeof details.message === 'string' ? details.message : fallback;
-    const extra = [details.details, details.hint, details.code]
-      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-      .join('\n');
-    return extra ? `${message}\n${extra}` : message;
-  }
-  return fallback;
 }
 
 function isCompletableHdAsk(category: BoardCategory) {
@@ -929,7 +917,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       }).select().single();
 
       if (error) {
-        showAlert('That post did not save', `${error.message}\n\nWhat you wrote is still here — try posting again.`);
+        showAlert('That post did not save', userFacingError(error, 'What you wrote is still here — try posting again.'));
         return false;
       }
 
@@ -961,7 +949,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       });
       return true;
     } catch (error: unknown) {
-      showAlert('That post did not save', `${getBoardErrorMessage(error)}\n\nWhat you wrote is still here — try posting again.`);
+      showAlert('That post did not save', userFacingError(error, 'What you wrote is still here — try posting again.'));
       return false;
     }
   };
@@ -985,7 +973,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         .eq('community_id', communityId);
 
       if (error) {
-        showAlert('Your edit did not save', `${error.message}\n\nYour changes are still here — try saving again.`);
+        showAlert('Your edit did not save', userFacingError(error, 'Your changes are still here — try saving again.'));
         return false;
       }
 
@@ -994,7 +982,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       await Promise.all([refetchPosts(), refetchPostCounts()]);
       return true;
     } catch (error: unknown) {
-      showAlert('Your edit did not save', `${getBoardErrorMessage(error)}\n\nYour changes are still here — try saving again.`);
+      showAlert('Your edit did not save', userFacingError(error, 'Your changes are still here — try saving again.'));
       return false;
     }
   };
@@ -1056,7 +1044,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     if (deleteError) {
       showAlert(
         'Could not update who is tagged',
-        `${deleteError.message}\n\nEverything else about the board is saved. Open Edit board to try the tags again.`
+        userFacingError(deleteError, 'Everything else about the board is saved. Open Edit board to try the tags again.')
       );
       return false;
     }
@@ -1078,7 +1066,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     if (insertError) {
       showAlert(
         'Could not save who is tagged',
-        `${insertError.message}\n\nEverything else about the board is saved. Open Edit board to try the tags again.`
+        userFacingError(insertError, 'Everything else about the board is saved. Open Edit board to try the tags again.')
       );
       return false;
     }
@@ -1126,7 +1114,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       }).select().single();
 
       if (error) {
-        showAlert('That board was not created', `${error.message}\n\nWhat you typed is still here — try again.`);
+        showAlert('That board was not created', userFacingError(error, 'What you typed is still here — try again.'));
         return false;
       }
 
@@ -1142,7 +1130,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       setSelectedCategoryId(data.id);
       return true;
     } catch (error: unknown) {
-      showAlert('That board was not created', `${getBoardErrorMessage(error)}\n\nWhat you typed is still here — try again.`);
+      showAlert('That board was not created', userFacingError(error, 'What you typed is still here — try again.'));
       return false;
     }
   };
@@ -1186,7 +1174,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         .eq('community_id', communityId);
 
       if (error) {
-        showAlert('Your changes did not save', `${error.message}\n\nWhat you typed is still here — try saving again.`);
+        showAlert('Your changes did not save', userFacingError(error, 'What you typed is still here — try saving again.'));
         return false;
       }
 
@@ -1197,7 +1185,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       setEditingTopic(null);
       return true;
     } catch (error: unknown) {
-      showAlert('Your changes did not save', `${getBoardErrorMessage(error)}\n\nWhat you typed is still here — try saving again.`);
+      showAlert('Your changes did not save', userFacingError(error, 'What you typed is still here — try saving again.'));
       return false;
     }
   };
@@ -1231,7 +1219,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           .eq('is_system', false);
 
         if (error) {
-          showAlert('That board was not deleted', `${error.message}\n\nIt is still on the list — nothing was lost.`);
+          showAlert('That board was not deleted', userFacingError(error, 'It is still on the list. Try again in a moment.'));
           return;
         }
 
@@ -1250,7 +1238,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         invalidateCategories();
         onDone?.();
       } catch (error: unknown) {
-        showAlert('That board was not deleted', `${getBoardErrorMessage(error)}\n\nIt is still on the list — nothing was lost.`);
+        showAlert('That board was not deleted', userFacingError(error, 'It is still on the list. Try again in a moment.'));
       }
     };
 
@@ -1296,7 +1284,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         if (error) {
           showAlert(
             restore ? 'That board was not restored' : 'That board was not archived',
-            `${error.message}\n\nNothing changed — try again in a moment.`
+            userFacingError(error, 'Nothing changed. Try again in a moment.')
           );
           return;
         }
@@ -1312,7 +1300,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       } catch (error: unknown) {
         showAlert(
           restore ? 'That board was not restored' : 'That board was not archived',
-          `${getBoardErrorMessage(error)}\n\nNothing changed — try again in a moment.`
+          userFacingError(error, 'Nothing changed. Try again in a moment.')
         );
       }
     };
@@ -1347,7 +1335,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           .eq('community_id', communityId);
 
         if (error) {
-          showAlert('Could not mark that complete', `${error.message}\n\nThe board is unchanged — try again in a moment.`);
+          showAlert('Could not mark that complete', userFacingError(error, 'The board is unchanged. Try again in a moment.'));
           return;
         }
 
@@ -1377,7 +1365,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         invalidateLinkedWishes();
         onDone?.();
       } catch (error: unknown) {
-        showAlert('Could not mark that complete', `${getBoardErrorMessage(error)}\n\nThe board is unchanged — try again in a moment.`);
+        showAlert('Could not mark that complete', userFacingError(error, 'The board is unchanged. Try again in a moment.'));
       }
     };
 
@@ -1489,7 +1477,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       await Promise.all([refetchPosts(), refetchLinkedWishes()]);
       onDone?.();
     } catch (error: unknown) {
-      showAlert('Could not turn this into a wish', `${getBoardErrorMessage(error)}\n\nThe thread itself is untouched — try again in a moment.`);
+      showAlert('Could not turn this into a wish', userFacingError(error, 'The thread is unchanged. Try again in a moment.'));
     }
   }, [
     canManageThread,
@@ -1517,7 +1505,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         }
         onDone?.();
       } catch (error: unknown) {
-        showAlert('That wish is still linked', `${getBoardErrorMessage(error)}\n\nNothing changed — try again in a moment.`);
+        showAlert('That wish is still linked', userFacingError(error, 'Nothing changed. Try again in a moment.'));
       }
     };
 
@@ -1556,7 +1544,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         setSelectedLinkedWish(null);
         offerUndo({ id: wish.id, message: 'Wish removed.' });
       } catch (error: unknown) {
-        showAlert('That wish was not archived', `${getBoardErrorMessage(error)}\n\nIt is still on the board — try again in a moment.`);
+        showAlert('That wish was not archived', userFacingError(error, 'It is still on the board. Try again in a moment.'));
       }
     };
 
@@ -1603,7 +1591,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         setManagingLinkedWish(null);
         setSelectedLinkedWish(null);
       } catch (error: unknown) {
-        showAlert('That wish was not deleted', `${getBoardErrorMessage(error)}\n\nIt is still here — try again in a moment.`);
+        showAlert('That wish was not deleted', userFacingError(error, 'It is still here. Try again in a moment.'));
       }
     };
 
@@ -1645,7 +1633,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
 
       setGrantThreadContext({ post, wish, onDone });
     } catch (error: unknown) {
-      showAlert('Could not set up the granting', `${getBoardErrorMessage(error)}\n\nThe thread is unchanged — try again in a moment.`);
+      showAlert('Could not set up the granting', userFacingError(error, 'The thread is unchanged. Try again in a moment.'));
     }
   }, [
     canCompleteThread,
@@ -1726,7 +1714,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       } catch (error: unknown) {
         showAlert(
           restore ? 'That thread was not restored' : 'That thread was not archived',
-          `${getBoardErrorMessage(error)}\n\nNothing changed — try again in a moment.`
+          userFacingError(error, 'Nothing changed. Try again in a moment.')
         );
       }
     };
@@ -1765,7 +1753,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         if (error) {
           showAlert(
             goingPublic ? 'It did not go public' : 'It is still on the public site',
-            `${error.message}\n\nNothing changed — try again in a moment.`
+            userFacingError(error, 'Nothing changed. Try again in a moment.')
           );
           return;
         }
@@ -1780,7 +1768,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       } catch (error: unknown) {
         showAlert(
           goingPublic ? 'It did not go public' : 'It is still on the public site',
-          `${getBoardErrorMessage(error)}\n\nNothing changed — try again in a moment.`
+          userFacingError(error, 'Nothing changed. Try again in a moment.')
         );
       }
     };
@@ -1808,7 +1796,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           .select('id');
 
         if (error) {
-          showAlert('That thread was not deleted', `${error.message}\n\nIt is still on the board — try again in a moment.`);
+          showAlert('That thread was not deleted', userFacingError(error, 'It is still on the board. Try again in a moment.'));
           return;
         }
 
@@ -1824,7 +1812,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         await refetchPosts();
         onDone?.();
       } catch (error: unknown) {
-        showAlert('That thread was not deleted', `${getBoardErrorMessage(error)}\n\nIt is still on the board — try again in a moment.`);
+        showAlert('That thread was not deleted', userFacingError(error, 'It is still on the board. Try again in a moment.'));
       }
     };
 
@@ -2043,7 +2031,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         {/* A link opened from HIVE-Wide is still at HIVE-Wide until it has
             found its HIVE, so the header says so rather than putting one
             HIVE's gold over a page that has not chosen one yet. */}
-        <AppHeader title="Boards" tone={isWide || wholeHive ? 'wide' : 'hive'} />
+        <AppHeader title="Boards" subtitle={BOARDS_SUBTITLE} tone={isWide || wholeHive ? 'wide' : 'hive'} />
         {landedHere?.state !== 'unreachable' ? (
           <View style={{ flex: 1, justifyContent: 'center' }}>
             <ThinkingBee />
@@ -2190,6 +2178,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
             colour and name like every other page (Nat 2026-07-31). */}
         <AppHeader
           title="Boards"
+          subtitle={BOARDS_SUBTITLE}
           // Green and nameless on HIVE-Wide. Wearing OG's gold there would say
           // you are in OG, which is the opposite of what this screen is.
           tone={isWide ? 'wide' : 'hive'}
@@ -2255,6 +2244,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           40pt side slots plus the header's horizontal padding. */}
       <AppHeader
         title={useMobileLayout ? stackHeaderTitle(selectedCategory.name, width - 112) : selectedCategory.name}
+        subtitle={selectedCategory.description || 'Read the conversation and add your voice.'}
         onBackPress={handleBack}
         tone={isWide ? 'wide' : 'hive'}
         rightElement={

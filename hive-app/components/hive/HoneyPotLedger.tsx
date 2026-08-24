@@ -311,8 +311,13 @@ export function HoneyPotLedger({
         </View>
       ) : filteredTransactions.length === 0 ? (
         <View style={{ backgroundColor: '#fff', borderRadius: 14, padding: 18, borderWidth: 1, borderColor: 'rgba(222,193,129,0.34)' }}>
-          <Text style={{ fontFamily: 'Lato_400Regular', color: '#8e7a5e', textAlign: 'center' }}>
-            No Honey Pot entries here yet.
+          <Text style={{ fontFamily: 'Lato_700Bold', color: '#8a6b30', textAlign: 'center' }}>
+            {transactions.length === 0 ? 'The ledger is ready for its first entry.' : 'No entries match this filter.'}
+          </Text>
+          <Text style={{ fontFamily: 'Lato_400Regular', color: '#8e7a5e', textAlign: 'center', lineHeight: 19, marginTop: 4 }}>
+            {transactions.length === 0
+              ? 'The first recorded deposit or payment will appear here.'
+              : 'Choose All to see every recorded entry.'}
           </Text>
         </View>
       ) : (

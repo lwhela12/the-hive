@@ -31,7 +31,6 @@ import {
 import {
   HONEY_POT_PAYMENT_METHOD_OPTIONS,
   fetchHoneyPotLedger,
-  getHoneyPotErrorMessage,
   recordHoneyPotTransaction,
   type HoneyPotLedgerEntry,
   type HoneyPotPaymentMethod,
@@ -76,6 +75,7 @@ import { ThinkingBee } from '../../components/ui/ThinkingBee';
 // native halves of a question, and each already has a `window.confirm` beside it
 // for the web.
 import { showAlert } from '../../lib/showAlert';
+import { userFacingError } from '../../lib/userFacingError';
 type MemberRow = {
   id: string;
   role: UserRole;
@@ -1396,7 +1396,11 @@ export default function AdminScreen() {
       );
     } catch (err) {
       console.error('Honey pot update error:', err);
-      showHoneyPotFeedback('error', 'Honey Pot update failed', getHoneyPotErrorMessage(err));
+      showHoneyPotFeedback(
+        'error',
+        'Honey Pot update failed',
+        userFacingError(err, 'Nothing was recorded. Your details are still here — try again.')
+      );
     } finally {
       setRecordingHoneyPot(false);
     }
@@ -1480,6 +1484,11 @@ export default function AdminScreen() {
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
       <SpaceGlobe />
+      <AppHeader
+        title="Admin"
+        subtitle="Invite members and keep each HIVE running."
+        tone="god"
+      />
 
       {/* This used to carry `minHeight: '101%'`, which made the dashboard one
           per cent taller than its box purely so there was something to scroll

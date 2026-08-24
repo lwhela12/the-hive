@@ -7,11 +7,11 @@ import { FIELD_LOOK } from '../ui/Input';
 import { ThinkingBee } from '../ui/ThinkingBee';
 import {
   HONEY_POT_PAYMENT_METHOD_OPTIONS,
-  getHoneyPotErrorMessage,
   recordHoneyPotTransaction,
   type HoneyPotPaymentMethod,
   type HoneyPotTransactionType,
 } from '../../lib/honeyPot';
+import { userFacingError } from '../../lib/userFacingError';
 
 /**
  * Money in, money out — on the Honey Pot page where the pot is.
@@ -77,7 +77,7 @@ export function RecordHoneyPotModal({
       onRecorded(balance);
       close();
     } catch (err) {
-      setError(getHoneyPotErrorMessage(err));
+      setError(userFacingError(err, 'Nothing was recorded. Your details are still here — try again.'));
     } finally {
       setSaving(false);
     }

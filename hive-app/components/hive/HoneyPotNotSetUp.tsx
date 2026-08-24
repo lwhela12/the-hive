@@ -43,7 +43,7 @@ const IDEAS_BY_SLUG: Record<string, IdeaSet> = {
       'Marketing a show — posters, a boosted post, a photographer for the night',
       'Props, costumes or a rehearsal space nobody wants to fund on their own',
       'Submission fees for a festival, split so one person isn’t carrying it',
-      'Feeding everybody on a build day, which is not a small thing',
+      'Feeding everybody on a build day keeps the whole room going',
     ],
   },
 };
@@ -169,11 +169,11 @@ export function HoneyPotNotSetUp({ community }: { community: Community | null })
           },
           {
             title: 'Only the treasurer moves money',
-            body: 'One person takes money in and pays money out. Not the admin, not whoever asks — the treasurer.',
+            body: 'The treasurer takes money in and pays money out.',
           },
           {
             title: 'Everybody can see everything',
-            body: 'Every amount in and out is written down on this page, with who recorded it and when. It is not the treasurer’s private book; it is the HIVE’s, and anyone can check it any time.',
+            body: 'The ledger belongs to the HIVE. Every amount in and out shows who recorded it and when, so everyone can check it any time.',
           },
         ].map((step, index) => (
           <View key={step.title} style={{ flexDirection: 'row', gap: 12, marginBottom: 14 }}>

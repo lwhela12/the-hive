@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { showAlert } from '../../lib/showAlert';
+import { userFacingError } from '../../lib/userFacingError';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { usePrivacyChoices } from '../../lib/hooks/usePrivacyChoices';
@@ -70,6 +71,8 @@ const MUTED = '#8e7f6b';
  * notify-wish-mention all push, none of them mail — so the Notifications card
  * further down this page is the one that governs them.
  */
+const SETTINGS_SUBTITLE = 'Choose how HIVE keeps you in the loop.';
+
 type EmailSetting = {
   /** The boolean column on profiles that carries this. */
   column: string;
@@ -221,7 +224,7 @@ export default function SettingsScreen() {
 
         if (error) {
           console.warn('[Settings] save failed', key, error);
-          showAlert('Sorry', `${failureMessage} (${error.message})`);
+          showAlert('Sorry', userFacingError(error, `${failureMessage} Please try again.`));
           return;
         }
         await refreshProfile();
@@ -253,7 +256,7 @@ export default function SettingsScreen() {
   if (!profile) {
     return (
       <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
-        <AppHeader title="Settings" onBackPress={closeSettings} />
+        <AppHeader title="Settings" subtitle={SETTINGS_SUBTITLE} onBackPress={closeSettings} />
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <ThinkingBee />
         </View>
@@ -276,7 +279,7 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
-      <AppHeader title="Settings" onBackPress={closeSettings} />
+      <AppHeader title="Settings" subtitle={SETTINGS_SUBTITLE} onBackPress={closeSettings} />
 
       <BounceScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <View

@@ -652,6 +652,7 @@ export default function MessagesScreen() {
       <SpaceBackdrop />
       <AppHeader
         title="Messages"
+        subtitle="Talk with members one-to-one or in a room."
         tone={wholeHive ? 'wide' : 'hive'}
         // No + at HIVE-Wide, same reasoning as the mobile header above: starting
         // a message means picking one HIVE's members, and there isn't one HIVE

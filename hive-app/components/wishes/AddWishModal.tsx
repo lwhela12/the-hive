@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
+import { userFacingError } from '../../lib/userFacingError';
 import { invalidateWishQueries } from '../../lib/queryClient';
 import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { notifyWishMentions } from '../../lib/wishMentions';
@@ -337,7 +338,7 @@ export function AddWishModal({
       await onSave();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : (isEditMode ? 'Failed to update wish' : 'Failed to save wish'));
+      setError(userFacingError(err, isEditMode ? 'Your changes are still here. Try updating the wish again.' : 'Your wish is still here. Try saving again.'));
     } finally {
       setSaving(false);
     }

@@ -14,6 +14,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { userFacingError } from '../../lib/userFacingError';
 import { invalidateWishQueries, queryClient, queryKeys } from '../../lib/queryClient';
 import {
   getStoredItemAsync,
@@ -1302,7 +1303,7 @@ export default function MonthlyTuneupScreen() {
     });
 
     if (error) {
-      return { error: `Failed to post: ${error.message}` };
+      return { error: userFacingError(error, 'That did not post. Your words are still here — try again.') };
     }
 
     return { error: null, boardName: board.name };
@@ -1389,7 +1390,7 @@ export default function MonthlyTuneupScreen() {
           content,
         });
         if (error) {
-          setNewsletterError(`Could not post that: ${error.message}`);
+          setNewsletterError(userFacingError(error, 'That did not post. Your words are still here — try again.'));
           return;
         }
         setNewsletterPosted((current) => [...current, { content, thread: thread.postTitle ?? 'Compliment Corner' }]);
@@ -1487,7 +1488,7 @@ export default function MonthlyTuneupScreen() {
         content,
       });
       if (error) {
-        setNewsletterError(`Could not post that: ${error.message}`);
+        setNewsletterError(userFacingError(error, 'That did not post. Your words are still here — try again.'));
         return;
       }
 
@@ -1766,7 +1767,7 @@ export default function MonthlyTuneupScreen() {
 
       if (error) {
         setHelperPosting(false);
-        setHelperError(`Failed to post: ${error.message}`);
+        setHelperError(userFacingError(error, 'That did not post. Your words are still here — try again.'));
         return;
       }
 
@@ -1798,7 +1799,7 @@ export default function MonthlyTuneupScreen() {
 
       if (error) {
         setHelperPosting(false);
-        setHelperError(`Failed to post: ${error.message}`);
+        setHelperError(userFacingError(error, 'That did not post. Your words are still here — try again.'));
         return;
       }
 
@@ -1936,7 +1937,7 @@ export default function MonthlyTuneupScreen() {
       setEventLocation('');
       await loadNewsletterEvents();
     } catch (error: any) {
-      setEventError(error?.message || 'Failed to create event. Please try again.');
+      setEventError(userFacingError(error, 'The event did not save. Your details are still here — please try again.'));
     } finally {
       setSavingEvent(false);
     }
@@ -2739,7 +2740,7 @@ export default function MonthlyTuneupScreen() {
         <StepHeader
           title="Your HIVE Help"
           icon={<Text style={{ fontSize: 20 }}>🤝</Text>}
-          subtitle="A nudge, not a test — there's no wrong answer here."
+          subtitle="A gentle nudge — every answer helps."
         />
         {/* Name the focus AND say what it means. "Shelter Donation" is a label;
             "bring something to our next meet up" is the actual ask, and it's

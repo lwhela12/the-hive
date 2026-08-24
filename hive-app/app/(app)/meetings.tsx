@@ -11,6 +11,7 @@ import { pickMultipleImages, takePhoto, getImageExtension, getContentType } from
 import { MeetingSummary } from '../../components/meetings/MeetingSummary';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
 import { AppHeader } from '../../components/navigation';
+import { userFacingError } from '../../lib/userFacingError';
 import { FadeIn } from '../../components/ui/FadeIn';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { UpcomingMeetingsSkeleton, PastRecordingsSkeleton } from '../../components/meetings/MeetingsSkeleton';
@@ -604,7 +605,7 @@ export default function MeetingsScreen() {
       });
 
       if (error) {
-        showAlert('Error', `Failed to delete meeting: ${error.message}`);
+        showAlert('Error', userFacingError(error, 'The meeting is still here. Try deleting it again in a moment.'));
         console.error('Delete error:', error);
       } else {
         await fetchMeetings();
@@ -1222,7 +1223,7 @@ export default function MeetingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <AppHeader title="Meetings" />
+      <AppHeader title="Meetings" subtitle="Plan meetings and revisit what the HIVE decided." />
 
       <BounceScrollView
         className="flex-1"

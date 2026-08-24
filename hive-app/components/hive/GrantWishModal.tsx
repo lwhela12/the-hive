@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../ui/Button';
 import { Avatar } from '../ui/Avatar';
 import { supabase } from '../../lib/supabase';
+import { userFacingError } from '../../lib/userFacingError';
 import { ComposerBar } from '../ui/ComposerBar';
 import type { Wish, Profile } from '../../types';
 import { BounceScrollView } from '../ui/BounceScrollView';
@@ -128,13 +129,13 @@ export function GrantWishModal({
       });
 
       if (result.error) {
-        setError(result.error.message || 'Failed to mark wish as granted');
+        setError(userFacingError(result.error, 'The wish is unchanged. Try marking it granted again.'));
         return;
       }
 
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to mark wish as granted');
+      setError(userFacingError(err, 'The wish is unchanged. Try marking it granted again.'));
     } finally {
       setLoading(false);
     }

@@ -11,6 +11,7 @@ import {
 import { ComposerBar } from '../ui/ComposerBar';
 import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
+import { userFacingError } from '../../lib/userFacingError';
 import type { Profile } from '../../types';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { hiveDisplayName, normalizeHiveBrandText } from '../../lib/hiveBrand';
@@ -240,7 +241,7 @@ export function ScheduleMeetingModal({
       setSelectedMembers(new Set());
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to schedule meeting');
+      setError(userFacingError(err, 'The meeting did not schedule. Your details are still here — try again.'));
     } finally {
       setLoading(false);
     }

@@ -6,6 +6,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../../lib/supabase';
+import { userFacingError } from '../../lib/userFacingError';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { APP_NEWS } from '../../lib/appNews';
 import { PARDON_OUR_DUST } from '../../lib/hiveWide';
@@ -530,7 +531,7 @@ export default function NewsletterScreen() {
           .update({ title, content, is_pinned: true, edited_at: new Date().toISOString() })
           .eq('id', (existing as { id: string }[])[0].id);
         if (updateError) {
-          setPostError(`Could not update the post: ${updateError.message}`);
+          setPostError(userFacingError(updateError, 'The draft is still here. Try updating the post again.'));
           return;
         }
       } else {
@@ -546,7 +547,7 @@ export default function NewsletterScreen() {
           is_pinned: true,
         });
         if (insertError) {
-          setPostError(`Could not post it: ${insertError.message}`);
+          setPostError(userFacingError(insertError, 'The draft is still here. Try posting it again.'));
           return;
         }
       }

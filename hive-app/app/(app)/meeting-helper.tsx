@@ -14,6 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { userFacingError } from '../../lib/userFacingError';
 import { hiveAccent } from '../../lib/hiveBrand';
 import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -1390,7 +1391,7 @@ export default function MeetingHelperScreen() {
       setArmedHangIdea(null);
       await loadDeckData();
     } catch (error: any) {
-      setQuickAddError(error?.message || 'Could not save the event — please try again.');
+      setQuickAddError(userFacingError(error, 'The event did not save. Your details are still here — please try again.'));
     } finally {
       setQuickAddSaving(false);
     }

@@ -23,6 +23,7 @@ import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { SpaceBackdrop } from '../ui/SpaceBackdrop';
 import { BounceScrollView } from '../ui/BounceScrollView';
 import { usePageSkin } from '../../lib/pageSkin';
+import { userFacingError } from '../../lib/userFacingError';
 import type { BoardPost, BoardReply, BoardReaction, Profile, Attachment, BoardCategory } from '../../types';
 
 interface BoardPostDetailProps {
@@ -32,19 +33,6 @@ interface BoardPostDetailProps {
 
 type PostWithAuthor = BoardPost & { author?: Profile; reactions?: BoardReaction[]; category?: BoardCategory };
 type ReplyWithAuthor = BoardReply & { author?: Profile; reactions?: BoardReaction[]; nested_replies?: ReplyWithAuthor[] };
-
-function getBoardErrorMessage(error: unknown, fallback = 'Something went wrong.') {
-  if (error instanceof Error) return error.message;
-  if (error && typeof error === 'object') {
-    const details = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
-    const message = typeof details.message === 'string' ? details.message : fallback;
-    const extra = [details.details, details.hint, details.code]
-      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-      .join('\n');
-    return extra ? `${message}\n${extra}` : message;
-  }
-  return fallback;
-}
 
 function showBoardAlert(title: string, message: string) {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.alert) {
@@ -72,7 +60,7 @@ function confirmBoardAction({
     if (window.confirm(message)) {
       onConfirm().catch((error) => {
         console.error(`[BoardPostDetail] ${title} failed`, error);
-        showBoardAlert('Error', getBoardErrorMessage(error));
+        showBoardAlert('That did not work', userFacingError(error, 'Nothing changed. Try again in a moment.'));
       });
     }
     return;
@@ -88,7 +76,7 @@ function confirmBoardAction({
           await onConfirm();
         } catch (error) {
           console.error(`[BoardPostDetail] ${title} failed`, error);
-          showBoardAlert('Error', getBoardErrorMessage(error));
+          showBoardAlert('That did not work', userFacingError(error, 'Nothing changed. Try again in a moment.'));
         }
       },
     },

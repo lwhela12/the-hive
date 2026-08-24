@@ -11,6 +11,7 @@ import { formatDateMedium } from '../../lib/dateUtils';
 // here take the space skin's ink rather than asking `usePageSkin()`.
 import { SPACE_SKIN } from '../../lib/pageSkin';
 import { showAlert } from '../../lib/showAlert';
+import { userFacingError } from '../../lib/userFacingError';
 import { listDeletedWishes, restoreWishById, type DeletedWish } from '../../lib/wishMutations';
 import {
   CHECK_INS_COMING_SOON_MESSAGE,
@@ -383,7 +384,6 @@ async function announceInviteOutcome(data: InviteFunctionResult | null, email: s
     showAlert(
       'Invite created, but the email could not be sent',
       `${email} has a live invite to ${hiveName} — the invite email is what failed.`
-        + (data.emailError ? `\n\nWhy: ${data.emailError}` : '')
         + (data.inviteUrl
           ? `\n\nTheir invite link is copied to your clipboard, so you can send it to them yourself:\n${data.inviteUrl}`
           : ''),
@@ -727,7 +727,7 @@ export function NewsletterPanel({
       const detail = await (async () => {
         try { return (await (error as any).context?.json())?.error ?? null; } catch { return null; }
       })();
-      showAlert('It did not send', detail ?? 'Something went wrong on the way out. Try again in a moment.');
+      showAlert('It did not send', userFacingError(detail, 'The newsletter was not sent. Try again in a moment.'));
       return;
     }
 
@@ -1425,7 +1425,7 @@ export function HiveMemberPanels({
       await load();
       await announceInviteOutcome(data, email, hiveName);
     } catch (err) {
-      showAlert('Could not send that invite', err instanceof Error ? err.message : 'Try again in a moment.');
+      showAlert('Could not send that invite', userFacingError(err, 'The invite was not sent. Try again in a moment.'));
     } finally {
       setSending(false);
     }
@@ -1452,7 +1452,7 @@ export function HiveMemberPanels({
       await load();
       await announceInviteOutcome(data, invite.email, hiveName);
     } catch (err) {
-      showAlert('Could not resend that invite', err instanceof Error ? err.message : 'Try again in a moment.');
+      showAlert('Could not resend that invite', userFacingError(err, 'The invite was not sent. Try again in a moment.'));
     } finally {
       setResendingId(null);
     }
@@ -1478,7 +1478,7 @@ export function HiveMemberPanels({
     setConfirmRevoke(null);
 
     if (error) {
-      showAlert('Could not revoke that invite', error.message);
+      showAlert('Could not revoke that invite', userFacingError(error, 'The invite is still active. Try again in a moment.'));
       return;
     }
     if (!data || data.length === 0) {
@@ -1517,7 +1517,7 @@ export function HiveMemberPanels({
     setSavingRow(null);
 
     if (error) {
-      showAlert('Could not change that', error.message);
+      showAlert('Could not change that', userFacingError(error, 'Nothing changed. Try again in a moment.'));
       return;
     }
     // An empty answer means the rules let the write run and then found no row
@@ -1560,7 +1560,7 @@ export function HiveMemberPanels({
     setConfirmRemove(null);
 
     if (error) {
-      showAlert('Could not remove them', error.message);
+      showAlert('Could not remove them', userFacingError(error, 'They are still in this HIVE. Try again in a moment.'));
       return;
     }
     if (!data || data.length === 0) {
@@ -1620,7 +1620,7 @@ export function HiveMemberPanels({
       // saying nothing here is how "the button does nothing" happens.
       showAlert(
         'Could not launch it',
-        error?.message ?? `The database did not accept it — are you an admin of ${hiveName}?`
+        userFacingError(error, `The check-in is unchanged. Make sure you are an admin of ${hiveName}, then try again.`)
       );
       return;
     }
@@ -2059,9 +2059,14 @@ export function HiveMemberPanels({
                 loading && rows.length === 0 ? (
                   <ActivityIndicator size="small" color="#fffdf5" />
                 ) : rows.length === 0 ? (
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: 'rgba(246,244,229,0.55)', padding: 16 }}>
-                    Nobody here yet.
-                  </Text>
+                  <View style={{ padding: 16, gap: 4 }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: 'rgba(246,244,229,0.82)' }}>
+                      This HIVE is ready for its first member.
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 18, color: 'rgba(246,244,229,0.6)' }}>
+                      Choose Send Invite above to welcome someone in.
+                    </Text>
+                  </View>
                 ) : rows.map((r) => {
                   const rowKey = `${m.community_id}:${r.id}`;
                   const open = managing === rowKey;

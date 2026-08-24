@@ -16,6 +16,7 @@ import { useSkillFlowers } from '../../lib/hooks/useSkillFlowers';
 import { Avatar } from '../../components/ui/Avatar';
 import { BirthdayPicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
+import { userFacingError } from '../../lib/userFacingError';
 import { clearLastAppPath } from '../../lib/navigationState';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { desireIsFor, desireKey, parseStoredSummary, type SurfacedDesire } from '../../lib/desires';
@@ -449,7 +450,7 @@ export default function ProfileScreen() {
       .eq('id', profile.id);
     if (error) {
       console.warn('[Profile] HIVE-Wide visibility save failed', error);
-      showAlert('That did not save', `${error.message ?? 'Your choice was not stored.'} Please try again.`);
+      showAlert('That did not save', userFacingError(error, 'Your choice was not stored. Please try again.'));
       setSavingHiveWideVisibility(false);
       return;
     }
@@ -1406,7 +1407,7 @@ export default function ProfileScreen() {
 
     if (error) {
       console.warn('[Profile] wish reach save failed', error);
-      showAlert('That did not save', `${error.message ?? 'Your choice was not stored.'} Please try again.`);
+      showAlert('That did not save', userFacingError(error, 'Your choice was not stored. Please try again.'));
       await fetchData();
       return;
     }
@@ -2353,6 +2354,7 @@ export default function ProfileScreen() {
       {!compactProfileLandscape && (
         <AppHeader
           title="Profile"
+          subtitle="Share what you are building and how others can help."
           rightElement={(
             <Pressable
               onPress={closeProfile}

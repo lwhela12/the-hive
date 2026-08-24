@@ -3,6 +3,7 @@ import { View, Text, Pressable, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AppHeader } from '../../components/navigation';
+import { userFacingError } from '../../lib/userFacingError';
 import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
 import { CollapsiblePanel } from '../../components/ui/CollapsiblePanel';
 import { ComposerBar } from '../../components/ui/ComposerBar';
@@ -372,7 +373,7 @@ export default function BuzzScreen() {
     if (error) {
       // The box keeps what you wrote, so the reason goes beside it rather than
       // into an alert you have to dismiss before you can try again.
-      setShoutOutError(`Your words are still here. ${error.message}`);
+      setShoutOutError(userFacingError(error, 'Your words are still here. Try posting again in a moment.'));
       return;
     }
 
@@ -384,7 +385,7 @@ export default function BuzzScreen() {
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: skin.page }} edges={['top']}>
       <SpaceBackdrop />
-      <AppHeader title="The Buzz" tone="wide" />
+      <AppHeader title="The Buzz" subtitle="Catch up on news from every HIVE." tone="wide" />
       <BounceScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}

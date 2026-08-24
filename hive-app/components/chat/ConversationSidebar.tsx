@@ -445,13 +445,21 @@ export const ConversationSidebar = memo(function ConversationSidebar({
         ))}
 
         {groupedConversations.length === 0 ? (
-          <View className="px-4 py-8">
-            <Text
-              style={{ fontFamily: 'Lato_400Regular' }}
-              className="text-[#a09274] text-center"
-            >
-              No conversations yet
+          <View className="px-4 py-8 items-center">
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-center">
+              Start talking with Clive.
             </Text>
+            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-[#a09274] text-center mt-1">
+              Ask a question, shape an idea, or begin a new project.
+            </Text>
+            <Pressable
+              onPress={isMobile ? closeAndNewConversation : onNewConversation}
+              className="mt-4 bg-gold py-2.5 px-4 rounded-full active:opacity-80"
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">
+                Start a Clive chat
+              </Text>
+            </Pressable>
           </View>
         ) : (
           groupedConversations.map(([group, convs]) => (
