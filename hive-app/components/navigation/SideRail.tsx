@@ -516,7 +516,11 @@ export const SideRail = memo(function SideRail({
         ) : indented && tint ? (
           <HiveMark size={16} colour={tint} />
         ) : (
-          <Text style={{ fontSize: 19, lineHeight: 25 }}>{emoji}</Text>
+          // Monochrome symbols inherit text colour. Without an explicit rail ink,
+          // Quick Add's ＋ rendered black: barely visible on Tech blue and fully
+          // gone at HIVE-Wide. White is already the label colour and remains
+          // readable across every deepened HIVE rail, in all three rail sizes.
+          <Text style={{ fontSize: 19, lineHeight: 25, color: '#fff' }}>{emoji}</Text>
         )}
         {badge > 0 ? (
           <View
