@@ -73,7 +73,9 @@ tasks that still need doing; how-to-work lives with the repo.
   beneath a top-level page title or restore an `AppHeader` subtitle prop. Keep
   useful guidance beside the control or content it explains — cards, tabs,
   forms, empty states, and wizard steps still get the words they need. Every
-  top-level page uses `AppHeader`; do not hand-roll a second masthead.
+  top-level page uses `AppHeader`; do not hand-roll a second masthead. HIVE-Wide
+  has one black space header on every HIVE-Wide page, including Admin — no
+  one-off “god”/slate exception.
 - Before changing deployed/live behavior, inspect existing data flow and similar working code.
 - For HIVE web/mobile testing, remember that in-app refresh updates app data; code changes require a deployed bundle / browser hard refresh / app reload.
 

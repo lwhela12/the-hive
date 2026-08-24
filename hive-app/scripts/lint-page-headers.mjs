@@ -64,6 +64,9 @@ if (/\bsubtitle\??\s*:/.test(headerSource) || /\{\s*subtitle\s*\?/.test(headerSo
 if (!headerSource.includes("const eyebrow = resolvedTone === 'hive' ? hiveName : 'HIVE-WIDE';")) {
   failures.push('components/navigation/AppHeader.tsx must always render the WHERE line');
 }
+if (/['"]god['"]|#40403C/i.test(headerSource)) {
+  failures.push('components/navigation/AppHeader.tsx must not restore a one-off Admin header tone');
+}
 
 const destinationHeaders = [
   ['app/(app)/hive.tsx', 'Home'],
@@ -87,6 +90,12 @@ for (const [relative, title] of destinationHeaders) {
     new RegExp(`\\btitle\\s*=\\s*["']${escaped}["']`).test(tag.text)
   ));
   if (!hasTitle) failures.push(`${relative} must carry the side-rail title “${title}” in AppHeader`);
+}
+
+const adminSource = fs.readFileSync(path.join(root, 'app/(app)/admin.tsx'), 'utf8');
+const adminHeaders = appHeaderOpeningTags(adminSource).filter((tag) => /\btitle\s*=\s*["']Admin["']/.test(tag.text));
+if (adminHeaders.some((tag) => !/\btone\s*=\s*["']wide["']/.test(tag.text))) {
+  failures.push('app/(app)/admin.tsx must use the same HIVE-Wide header tone on every Admin branch');
 }
 
 const wideHome = fs.readFileSync(path.join(root, 'app/(app)/hive-wide.tsx'), 'utf8');

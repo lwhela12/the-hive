@@ -784,7 +784,7 @@ function LockedAdminScreen({
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
       <SpaceGlobe />
-      <AppHeader title="Admin" tone="god" />
+      <AppHeader title="Admin" tone="wide" />
       <BounceScrollView
         className="flex-1"
         contentContainerStyle={{
@@ -1487,7 +1487,7 @@ export default function AdminScreen() {
       <SpaceGlobe />
       <AppHeader
         title="Admin"
-        tone="god"
+        tone="wide"
       />
 
       {/* This used to carry `minHeight: '101%'`, which made the dashboard one

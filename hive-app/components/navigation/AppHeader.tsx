@@ -16,24 +16,21 @@ interface AppHeaderProps {
    *
    * 'hive'  the HIVE you're in — its colour, its name above the title.
    * 'wide'  HIVE-Wide — space black, with HIVE-WIDE as the location line.
-   * 'god'   Admin. Not OG HIVE's admin — the whole operation's, so its location
-   *         is HIVE-WIDE and its colour is neutral slate.
    *
-   * You rarely need to pass this. A page left on the default follows wherever
-   * the reader is standing, which is the behaviour you almost always want —
-   * see the note on the tone resolution below.
+   * A page left on the default follows wherever the reader is standing. Pass
+   * `wide` only for a page, such as Admin, that always belongs to HIVE-Wide.
+   * There is deliberately no one-off Admin tone: one place gets one header.
    */
-  tone?: 'hive' | 'wide' | 'god';
+  tone?: 'hive' | 'wide';
 }
 
 /**
- * HIVE-Wide's black, and the god view's slate. Neither belongs to a HIVE.
- *
- * Wide was green for about a day. It is the black the globe hangs in now, so
- * that the header, the rail and the page are all obviously the same place —
- * "we'd have the black space header, not green" (Nat 2026-08-03).
+ * HIVE-Wide's black. It is the black the globe hangs in, so the header, rail,
+ * and page are visibly one place — "we'd have the black space header, not
+ * green" (Nat 2026-08-03). Admin uses this same treatment because it says its
+ * location is HIVE-Wide; a different colour would contradict its own WHERE.
  */
-const TONE_COLOURS = { wide: '#0B0B12', god: '#40403C' } as const;
+const WIDE_HEADER = '#0B0B12';
 
 // The one page-title treatment for the whole app: WHERE above WHAT, and stop.
 //
@@ -65,11 +62,11 @@ export const AppHeader = memo(function AppHeader({
   // kept wearing OG's gold over a black rail. Opt-in was the bug. A page that
   // says nothing now inherits the truth instead of a default.
   //
-  // 'god' and an explicit 'wide' still win: Admin is above all of this, and a
-  // screen that is ALWAYS wide (the shared boards) should not depend on how the
-  // reader happened to arrive.
+  // An explicit 'wide' wins for a screen such as Admin that always belongs to
+  // HIVE-Wide. There is no visual sub-world above HIVE-Wide: if the WHERE says
+  // HIVE-Wide, it wears HIVE-Wide's one header.
   const resolvedTone = tone === 'hive' && wholeHive ? 'wide' : tone;
-  const accent = resolvedTone === 'hive' ? hiveAccent(community) : TONE_COLOURS[resolvedTone];
+  const accent = resolvedTone === 'hive' ? hiveAccent(community) : WIDE_HEADER;
   const hiveName = hiveDisplayName(community?.name);
   // The line above the title says WHERE. It never disappears: Home is still a
   // page inside OG HIVE / Tech HIVE / Production HIVE, and Admin is a page at
