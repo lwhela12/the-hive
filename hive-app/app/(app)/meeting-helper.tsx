@@ -893,6 +893,13 @@ export default function MeetingHelperScreen() {
 
   const [expandedHummdingerId, setExpandedHummdingerId] = useState<string | null>(null);
   const [hummdingerVisited, setHummdingerVisited] = useState<Set<string>>(new Set());
+  // Production borrows the HummDinger's readable card-and-spotlight shell, but
+  // not its wishes, visited roster, pacing, or live-note semantics.
+  const [expandedCheckInAnswer, setExpandedCheckInAnswer] = useState<{
+    slide: DeckSlideKey;
+    heading: string;
+    memberId: string;
+  } | null>(null);
 
   // Live meeting notes typed into an expanded HummDinger card. "@name" routes
   // the note onto that member's to-do list; no @ = the expanded member's list.
@@ -2246,84 +2253,201 @@ export default function MeetingHelperScreen() {
         </View>
         )}
       </View>
+      {/* Configured recurring Production answers belong on News itself — not
+          on a removed Treasurer slide or a cached, unreachable renderer. Keep
+          the grid outside the narrow news-card column so it uses the stage. */}
+      {renderCheckInSays('news')}
     </View>
   );
 
+  // Shared with the HummDinger grid below: columns follow the room available to
+  // the stage, not the raw device width (important beside video and the rail).
+  const bubbleColumns = stageW >= 1400 ? 5 : stageW >= 1024 ? 4 : stageW >= 760 ? 3 : stageW >= 480 ? 2 : 1;
+
   /**
-   * "What everyone said before tonight" — the pre-meeting check-in, printed on
-   * the slide that decides the thing it asked about.
-   *
-   * Choice answers are tallied, because four people picking "monthly" is a
-   * decision that has already made itself and the room only has to notice.
-   * Written answers are quoted with a name on them, because a day-and-time
-   * answer is only useful if you know whose it is.
+   * Production's recurring check-in, mounted on the slide named by the deck.
+   * One uniform bubble belongs to one person. The slide gets only a one-line
+   * preview; the configured full answers get their space in a bounded sheet.
    */
   const renderCheckInSays = (slide: DeckSlideKey) => {
     const blocks = (deck.checkInSays ?? []).filter((entry) => entry.slide === slide);
     if (blocks.length === 0) return null;
 
-    const answersFor = (key: string) =>
-      members
-        .map((member) => ({
-          name: getFirstName(member.name),
-          text: getTextAnswer(responsesByUser.get(member.id)?.answers ?? {}, key).trim(),
-        }))
-        .filter((row) => !!row.text);
-
     return (
       <>
         {blocks.map((entry) => {
-          const rows = entry.keys
-            .map((q) => ({ ...q, answers: answersFor(q.key) }))
-            .filter((q) => q.answers.length > 0);
-          if (rows.length === 0) return null;
+          const memberRows = memberOrder
+            .map((member) => {
+              const answers = responsesByUser.get(member.id)?.answers ?? {};
+              const sections = entry.keys
+                .map((question) => ({
+                  ...question,
+                  text: getTextAnswer(answers, question.key).trim(),
+                }))
+                .filter((section) => !!section.text);
+              return { member, sections, preview: sections[0]?.text ?? '' };
+            })
+            .filter((row) => row.sections.length > 0);
+          if (memberRows.length === 0) return null;
           return (
             <View
               key={entry.slide + entry.heading}
               style={{
                 marginTop: sz(18, 12),
-                backgroundColor: CARD,
-                borderWidth: 1,
-                borderColor: GOLD_SOFT,
-                borderRadius: sz(18, 14),
-                paddingHorizontal: sz(22, 14),
-                paddingVertical: sz(16, 11),
-                gap: sz(12, 8),
+                gap: sz(10, 7),
               }}
             >
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
                 {entry.heading}
               </Text>
-              {rows.map((q) => {
-                // Tally identical answers; anything unique keeps its name.
-                const counts = new Map<string, string[]>();
-                q.answers.forEach((row) => {
-                  counts.set(row.text, [...(counts.get(row.text) ?? []), row.name]);
-                });
-                const tallied = Array.from(counts.entries()).sort((a, b) => b[1].length - a[1].length);
-                return (
-                  <View key={q.key} style={{ gap: sz(4, 3) }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(19, 13), color: MUTED }}>
-                      {q.label}
-                    </Text>
-                    {tallied.map(([answer, who]) => (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: sz(-8, -5) }}>
+                {memberRows.map(({ member, preview }) => (
+                  <View key={member.id} style={{ width: `${100 / bubbleColumns}%`, padding: sz(8, 5) }}>
+                    <Pressable
+                      onPress={() => setExpandedCheckInAnswer({
+                        slide: entry.slide,
+                        heading: entry.heading,
+                        memberId: member.id,
+                      })}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${getFirstName(member.name)}'s check-in, collapsed. Tap for full answers.`}
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        minHeight: sz(164, 112),
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: CARD,
+                        borderWidth: 1,
+                        borderColor: pressed ? GOLD : GOLD_SOFT,
+                        borderRadius: sz(20, 14),
+                        paddingHorizontal: sz(18, 11),
+                        paddingVertical: sz(16, 11),
+                        opacity: pressed ? 0.72 : 1,
+                        transform: [{ scale: pressed ? 0.985 : 1 }],
+                        outlineWidth: 0,
+                      })}
+                    >
+                      <Avatar name={member.name} url={member.avatar_url} size={sz(64, 44)} />
                       <Text
-                        key={answer}
-                        style={{ fontFamily: 'Lato_400Regular', fontSize: sz(22, 14), lineHeight: sz(32, 20), color: CHARCOAL }}
+                        numberOfLines={1}
+                        style={{
+                          fontFamily: 'LibreBaskerville_700Bold',
+                          fontSize: sz(22, 15),
+                          color: CHARCOAL,
+                          marginTop: sz(9, 6),
+                          textAlign: 'center',
+                        }}
                       >
-                        {answer}
-                        <Text style={{ color: MUTED }}>
-                          {'  '}{who.length > 1 ? `${who.length} — ${who.join(', ')}` : who[0]}
-                        </Text>
+                        {getFirstName(member.name)}
                       </Text>
-                    ))}
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          alignSelf: 'stretch',
+                          fontFamily: 'Lato_400Regular',
+                          fontSize: sz(16, 11),
+                          lineHeight: sz(22, 15),
+                          color: MUTED,
+                          textAlign: 'center',
+                          marginTop: sz(5, 3),
+                        }}
+                      >
+                        {preview}
+                      </Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 9), color: GOLD_DEEP, marginTop: sz(7, 4) }}>
+                        tap for the full story ↓
+                      </Text>
+                    </Pressable>
                   </View>
-                );
-              })}
+                ))}
+              </View>
             </View>
           );
         })}
       </>
+    );
+  };
+
+  const renderCheckInAnswerSpotlight = () => {
+    if (!expandedCheckInAnswer) return null;
+    const entry = (deck.checkInSays ?? []).find(
+      (candidate) => candidate.slide === expandedCheckInAnswer.slide
+        && candidate.heading === expandedCheckInAnswer.heading
+    );
+    const member = memberOrder.find((candidate) => candidate.id === expandedCheckInAnswer.memberId);
+    if (!entry || !member) return null;
+    const answers = responsesByUser.get(member.id)?.answers ?? {};
+    const sections = entry.keys
+      .map((question) => ({ ...question, text: getTextAnswer(answers, question.key).trim() }))
+      .filter((section) => !!section.text);
+    if (sections.length === 0) return null;
+    const close = () => setExpandedCheckInAnswer(null);
+    const firstName = getFirstName(member.name);
+    const sectionLabel = { fontFamily: 'Lato_700Bold' as const, fontSize: sz(15, 11), letterSpacing: 1.5, textTransform: 'uppercase' as const, color: GOLD, marginBottom: sz(4, 3) };
+    const sectionText = { fontFamily: 'Lato_400Regular' as const, fontSize: sz(18, 13), lineHeight: sz(27, 19), color: CHARCOAL };
+
+    return (
+      <Modal visible animationType="fade" transparent onRequestClose={close}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Close ${firstName}'s full check-in`}
+          style={{ flex: 1, backgroundColor: 'rgba(49,49,48,0.5)', alignItems: 'center', justifyContent: 'center', padding: sz(40, 14) }}
+          onPress={close}
+        >
+          <Pressable
+            accessibilityRole="none"
+            onPress={(event) => event.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: sz(880, 640),
+              maxHeight: '88%',
+              backgroundColor: PAPER,
+              borderRadius: sz(26, 18),
+              borderWidth: 1,
+              borderColor: GOLD_SOFT,
+              overflow: 'hidden',
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(16, 10), paddingHorizontal: sz(28, 16), paddingTop: sz(24, 14), paddingBottom: sz(14, 9), borderBottomWidth: 1, borderColor: GOLD_SOFT }}>
+              <Avatar name={member.name} url={member.avatar_url} size={sz(64, 44)} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(30, 19), color: CHARCOAL }}>
+                  {firstName}
+                </Text>
+                <Text numberOfLines={1} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(14, 10), color: MUTED }}>
+                  {entry.heading}
+                </Text>
+              </View>
+              <Pressable
+                onPress={close}
+                accessibilityRole="button"
+                accessibilityLabel={`Back to the group from ${firstName}'s check-in`}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: tintWash(0.18),
+                  borderRadius: 999,
+                  paddingHorizontal: sz(18, 12),
+                  paddingVertical: sz(9, 7),
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: GOLD_DEEP }}>
+                  ← back to the group
+                </Text>
+              </Pressable>
+            </View>
+            <BounceScrollView contentContainerStyle={{ paddingHorizontal: sz(28, 16), paddingVertical: sz(20, 12), gap: sz(16, 10) }}>
+              {sections.map((section) => (
+                <View key={section.key}>
+                  <Text style={sectionLabel}>{section.label}</Text>
+                  <Text style={sectionText}>{section.text}</Text>
+                </View>
+              ))}
+            </BounceScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     );
   };
 
@@ -3189,8 +3313,6 @@ export default function MeetingHelperScreen() {
   // into these bubbles — early on most people haven't filled out the check-in,
   // and an empty personal slide makes them feel singled out. As the check-in
   // data richens, per-member slides can be reintroduced from git history.
-  const bubbleColumns = stageW >= 1400 ? 5 : stageW >= 1024 ? 4 : stageW >= 760 ? 3 : stageW >= 480 ? 2 : 1;
-
   const HUMMDINGER_DETAIL_SECTIONS = [
     { key: 'q_pop_progress', label: 'Progress' },
     { key: 'q_pop_obstacles', label: 'Obstacles' },
@@ -3913,6 +4035,8 @@ export default function MeetingHelperScreen() {
       >
         Tap one, say who is taking it.
       </Text>
+      {/* Capacity and obstacles come before the room hands out more work. */}
+      {renderCheckInSays('assignments')}
       {/* A plain column, not a scroller.
           This was a BounceScrollView inside the stage's own BounceScrollView,
           and two scrollers stacked on top of each other is why the room could
@@ -5082,6 +5206,10 @@ export default function MeetingHelperScreen() {
 
         {/* HummDinger spotlight — one member's full story, grid stays put */}
         {renderHummdingerSpotlight()}
+
+        {/* Production check-in spotlight — the same bounded visual shell,
+            without HummDinger wishes, pacing, visited state, or live notes. */}
+        {renderCheckInAnswerSpotlight()}
 
         {/* Full meeting scheduler — same one as the Meetings page, seeded
             with the tapped calendar day */}
