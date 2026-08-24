@@ -21,6 +21,7 @@ import { supabase } from '../../lib/supabase';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { Avatar } from '../ui/Avatar';
+import { CloseButton } from '../ui/CloseButton';
 
 import { ComposerBar } from '../ui/ComposerBar';
 import { ThinkingBee } from '../ui/ThinkingBee';
@@ -550,13 +551,12 @@ export function SurveyModal({
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#bd9348' }}>Progress saved</Text>
               </View>
             ) : <View style={{ width: 80 }} />}
-            <Pressable
+            <CloseButton
               onPress={onClose}
-              hitSlop={12}
-              style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1, padding: 4 })}
-            >
-              <Ionicons name="close" size={22} color="#9a8060" />
-            </Pressable>
+              accessibilityLabel="Close survey"
+              color="#9a8060"
+              size={22}
+            />
           </View>
 
           {submitted ? (

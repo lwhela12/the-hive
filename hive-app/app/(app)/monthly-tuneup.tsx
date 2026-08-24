@@ -38,6 +38,8 @@ import {
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { HiveIcon } from '../../components/ui/HiveIcon';
+import { BackButton } from '../../components/ui/BackButton';
+import { CloseButton } from '../../components/ui/CloseButton';
 import { pickSpotlightWish } from '../../lib/wishDisplay';
 import { parseFocusAnswer, parseHangsAnswer } from '../../components/surveys/SurveyQuestionField';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
@@ -4084,24 +4086,13 @@ export default function MonthlyTuneupScreen() {
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
-        <Pressable
+        <BackButton
           onPress={goBack}
-          accessibilityRole="button"
           accessibilityLabel={stepIndex === 0 ? 'Close tune-up' : 'Previous step'}
-          hitSlop={10}
-          style={({ pressed }) => ({
-            width: 38,
-            height: 38,
-            borderRadius: 19,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
-            borderWidth: 1,
-            borderColor: 'rgba(222,193,129,0.55)',
-          })}
-        >
-          <Ionicons name="chevron-back" size={20} color="#8a6b30" />
-        </Pressable>
+          backgroundColor="#fffdf5"
+          size={20}
+          style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.55)' }}
+        />
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Image
@@ -4139,15 +4130,11 @@ export default function MonthlyTuneupScreen() {
             <Ionicons name="refresh" size={20} color="#8a6b30" />
           )}
         </Pressable>
-        <Pressable
+        <CloseButton
           onPress={leaveTuneup}
-          accessibilityRole="button"
           accessibilityLabel={`Leave the tune-up and go back to ${exit.label}`}
-          hitSlop={10}
-          style={({ pressed }) => ({ opacity: pressed ? 0.9 : 0.4, paddingHorizontal: 6 })}
-        >
-          <Ionicons name="close" size={22} color="#8a6b30" />
-        </Pressable>
+          color="#8a6b30"
+        />
       </View>
 
       {/* Progress dots */}

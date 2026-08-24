@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EditButton } from '../ui/EditButton';
+import { BackButton } from '../ui/BackButton';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { Avatar } from '../ui/Avatar';
@@ -337,9 +338,7 @@ export function WishDetail({
         className="flex-row items-center justify-between px-4 py-3 border-b"
         style={{ borderBottomColor: 'rgba(222,193,129,0.5)' }}
       >
-        <Pressable onPress={onClose} className="p-2 -ml-2">
-          <Ionicons name="arrow-back" size={24} color={skin.ink} />
-        </Pressable>
+        <BackButton onPress={onClose} color={skin.ink} style={{ marginLeft: -8 }} />
         <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="text-lg">
           Wish Details
         </Text>

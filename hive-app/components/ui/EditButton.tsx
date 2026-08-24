@@ -1,4 +1,4 @@
-import { Pressable, StyleProp, ViewStyle, GestureResponderEvent } from 'react-native';
+import { Pressable, StyleProp, Text, ViewStyle, GestureResponderEvent } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 
 // The one Edit affordance for the whole app: HIVE's own pencil — drawn in the
@@ -9,6 +9,8 @@ export function EditButton({
   onPress,
   size = 32,
   color = '#8e6f35',
+  backgroundColor = 'transparent',
+  label,
   accessibilityLabel = 'Edit',
   style,
 }: {
@@ -16,9 +18,12 @@ export function EditButton({
   /** Touch-target size; the icon draws at ~2/3 of it. */
   size?: number;
   color?: string;
+  backgroundColor?: string;
+  label?: string;
   accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
 }) {
+  const target = Math.max(44, size);
   const icon = Math.round(size * 0.68);
   return (
     <Pressable
@@ -28,10 +33,14 @@ export function EditButton({
       accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [
         {
-          width: size,
-          height: size,
+          width: label ? undefined : target,
+          minWidth: target,
+          height: target,
           alignItems: 'center',
           justifyContent: 'center',
+          flexDirection: 'row',
+          paddingHorizontal: label ? 14 : 0,
+          backgroundColor,
           opacity: pressed ? 0.5 : 1,
         },
         style,
@@ -51,6 +60,9 @@ export function EditButton({
         {/* The honey drop at the tip — the HIVE pencil writes in honey */}
         <Circle cx="4.6" cy="20.1" r="1.5" fill={color} />
       </Svg>
+      {label ? (
+        <Text style={{ marginLeft: 6, fontFamily: 'Lato_700Bold', fontSize: 15, color }}>{label}</Text>
+      ) : null}
     </Pressable>
   );
 }

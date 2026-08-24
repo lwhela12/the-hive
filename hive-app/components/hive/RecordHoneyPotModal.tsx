@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Modal, View, Text, TextInput, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { ComposerBar } from '../ui/ComposerBar';
+import { CloseButton } from '../ui/CloseButton';
 import { FIELD_LOOK } from '../ui/Input';
 import { ThinkingBee } from '../ui/ThinkingBee';
 import {
@@ -100,9 +100,7 @@ export function RecordHoneyPotModal({
             <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 18, color: '#313130', flex: 1 }}>
               Record a transaction
             </Text>
-            <Pressable onPress={close} hitSlop={10} accessibilityLabel="Close">
-              <Ionicons name="close" size={24} color="#8e7a5e" />
-            </Pressable>
+            <CloseButton onPress={close} color="#8e7a5e" />
           </View>
 
           <ScrollView contentContainerStyle={{ padding: 18, paddingTop: 4, gap: 16 }}>

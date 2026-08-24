@@ -23,6 +23,7 @@ import {
   type SpeakerNameMap,
 } from './SpeakerNames';
 import type { Meeting, ActionItem, Profile } from '../../types';
+import { BackButton } from '../ui/BackButton';
 
 interface MeetingSummaryProps {
   meeting: Meeting;
@@ -992,9 +993,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   return (
     <View className="flex-1 bg-white">
       <View className="flex-row items-center p-4 border-b border-gray-200">
-        <Pressable onPress={onBack} className="mr-4">
-          <Text className="text-2xl">←</Text>
-        </Pressable>
+        <BackButton onPress={onBack} color="#313130" style={{ marginRight: 8 }} />
         <View className="flex-1">
           <Text className="text-xl font-bold text-hive-dark">
             {normalizeHiveBrandText(parsedSummary.title) || 'Meeting Summary'}

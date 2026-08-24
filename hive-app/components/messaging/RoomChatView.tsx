@@ -50,6 +50,7 @@ import { confirmAction, showAlert } from '../../lib/showAlert';
 import { SignedImage } from '../ui/SignedImage';
 import { ThinkingBee } from '../ui/ThinkingBee';
 import { BounceScrollView } from '../ui/BounceScrollView';
+import { BackButton } from '../ui/BackButton';
 interface RoomChatViewProps {
   room: ChatRoom & { members?: Array<ChatRoomMember & { user?: Profile }> };
   onBack: () => void;
@@ -833,9 +834,12 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
           style={{ backgroundColor: roomTheme.header, borderBottomColor: roomTheme.border }}
         >
           {!hideBackButton && (
-            <Pressable onPress={onBack} className="mr-3 w-9 h-9 rounded-full items-center justify-center">
-              <Ionicons name="chevron-back" size={28} color={wholeHive ? SPACE_SKIN.ink : '#313130'} />
-            </Pressable>
+            <BackButton
+              onPress={onBack}
+              accessibilityLabel="Back to your messages"
+              color={wholeHive ? SPACE_SKIN.ink : '#313130'}
+              style={{ marginRight: 8 }}
+            />
           )}
           <View className="mr-3">{renderRoomIcon(42)}</View>
           <Pressable

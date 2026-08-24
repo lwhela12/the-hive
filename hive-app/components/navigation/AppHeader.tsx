@@ -1,8 +1,8 @@
 import { memo } from 'react';
-import { Pressable, View, Text } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text } from 'react-native';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { BackButton } from '../ui/BackButton';
 
 interface AppHeaderProps {
   title: string;
@@ -101,17 +101,9 @@ export const AppHeader = memo(function AppHeader({
           A screen that pushed on top of another still gets its back arrow; the
           left slot is otherwise an empty spacer, so the title stays centred. */}
       {onBackPress ? (
-        <Pressable
-          onPress={onBackPress}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          className="w-10 h-10 items-center justify-center rounded-full active:opacity-70"
-          hitSlop={8}
-        >
-          <Ionicons name="chevron-back" size={24} color="white" />
-        </Pressable>
+        <BackButton onPress={onBackPress} color="white" />
       ) : (
-        <View className="w-10 h-10" />
+        <View className="w-11 h-11" />
       )}
 
       {/* Title */}
@@ -158,7 +150,7 @@ export const AppHeader = memo(function AppHeader({
       {rightElement ? (
         rightElement
       ) : (
-        <View className="w-10 h-10" />
+        <View className="w-11 h-11" />
       )}
     </View>
   );

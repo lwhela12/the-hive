@@ -34,6 +34,8 @@ import { isInvitedToEvent, getEventEmoji, getEventHiveIcon } from '../../lib/eve
 import { HiveIcon, type HiveIconName } from '../../components/ui/HiveIcon';
 import { ModalBackdrop } from '../../components/ui/ModalBackdrop';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
+import { CloseButton } from '../../components/ui/CloseButton';
+import { EditButton } from '../../components/ui/EditButton';
 import { useActivityFeed, type ActivityItem } from '../../lib/hooks/useActivityFeed';
 import { getSurveyResponsePeriod, isMonthlyCheckInSurvey, useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
 import { useCarryForwardContext } from '../../lib/hooks/useCarryForwardContext';
@@ -588,7 +590,7 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
                     e.stopPropagation();
                     setEditingBirthdayId(null);
                   }}
-                  className="bg-gray-200 py-1.5 px-3 rounded-full"
+                  className="bg-gray-200 py-1.5 px-3 rounded-full active:opacity-70"
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-xs">
                     Cancel
@@ -994,6 +996,7 @@ export default function HiveScreen() {
   // Map of user_id → ISO timestamp for sorting by recency
   const [answerTimestamps, setAnswerTimestamps] = useState<Map<string, string>>(new Map());
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
+  const answerSubmitInFlight = useRef(false);
   // The answer box used to glow and pulse a "Listening…" dot of its own while
   // the mic was open — one screen's private idea of what dictation looks like.
   // The answer box is the shared box now, and the mic button already says it is
@@ -1105,7 +1108,8 @@ export default function HiveScreen() {
 
   const handleSubmitAnswer = async () => {
     const text = myAnswer.trim();
-    if (!text || !profile?.id || !communityId || isSubmittingAnswer) return;
+    if (!text || !profile?.id || !communityId || answerSubmitInFlight.current) return;
+    answerSubmitInFlight.current = true;
     setAnswerError(null);
     setIsSubmittingAnswer(true);
     // One answer per person per HIVE per day (migration 173) — each HIVE
@@ -1118,6 +1122,7 @@ export default function HiveScreen() {
       answer: text,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id,community_id,question_date' });
+    answerSubmitInFlight.current = false;
     setIsSubmittingAnswer(false);
 
     if (error) {
@@ -1401,10 +1406,12 @@ export default function HiveScreen() {
   const [selectedActionItemId, setSelectedActionItemId] = useState<string | null>(null);
   const [newTaskText, setNewTaskText] = useState('');
   const [savingTask, setSavingTask] = useState(false);
+  const taskSaveInFlight = useRef(false);
   const [taskError, setTaskError] = useState<string | null>(null);
   const [editingActionItemId, setEditingActionItemId] = useState<string | null>(null);
   const [taskEditText, setTaskEditText] = useState('');
   const [savingTaskEdit, setSavingTaskEdit] = useState(false);
+  const taskEditSaveInFlight = useRef(false);
   const [taskEditError, setTaskEditError] = useState<string | null>(null);
 
   const triggerCompletion = useCallback(() => {
@@ -1551,11 +1558,12 @@ export default function HiveScreen() {
 
   const handleAddTask = async () => {
     const description = newTaskText.trim();
-    if (!profile?.id || !communityId) return;
+    if (!profile?.id || !communityId || taskSaveInFlight.current) return;
     if (!hasMeaningfulActionItemText(description)) {
       setTaskError('Add a real action, not only punctuation or an @name.');
       return;
     }
+    taskSaveInFlight.current = true;
     setSavingTask(true);
     setTaskError(null);
     const { error } = await supabase.from('action_items').insert({
@@ -1565,6 +1573,7 @@ export default function HiveScreen() {
       community_id: communityId,
       completed: false,
     } as any);
+    taskSaveInFlight.current = false;
     setSavingTask(false);
 
     if (error) {
@@ -1592,7 +1601,7 @@ export default function HiveScreen() {
 
   const saveActionItemEdit = useCallback(async (item: ActionItem) => {
     const description = taskEditText.trim();
-    if (!profile?.id || !communityId || savingTaskEdit) return;
+    if (!profile?.id || !communityId || taskEditSaveInFlight.current) return;
     if (!hasMeaningfulActionItemText(description)) {
       setTaskEditError('Add a real action, not only punctuation or an @name.');
       return;
@@ -1602,6 +1611,7 @@ export default function HiveScreen() {
       return;
     }
 
+    taskEditSaveInFlight.current = true;
     setSavingTaskEdit(true);
     setTaskEditError(null);
     const editedAt = new Date().toISOString();
@@ -1616,6 +1626,7 @@ export default function HiveScreen() {
       .eq('id', item.id)
       .eq('community_id', communityId)
       .eq('assigned_to', profile.id);
+    taskEditSaveInFlight.current = false;
     setSavingTaskEdit(false);
 
     if (error) {
@@ -1636,7 +1647,7 @@ export default function HiveScreen() {
         : action
     )));
     cancelEditingActionItem();
-  }, [cancelEditingActionItem, communityId, profile?.id, savingTaskEdit, taskEditText]);
+  }, [cancelEditingActionItem, communityId, profile?.id, taskEditText]);
 
   const selectedActionItem = selectedActionItemId
     ? homeActionItems.find(item => item.id === selectedActionItemId) ?? null
@@ -3174,15 +3185,12 @@ export default function HiveScreen() {
                   </Text>
                 </Text>
               </Pressable>
-              <Pressable
+              <CloseButton
                 onPress={dismissAppNews}
-                accessibilityRole="button"
                 accessibilityLabel="Mark what's new as read"
-                hitSlop={8}
-                style={({ pressed }) => ({ paddingVertical: 9, paddingHorizontal: 14, opacity: pressed ? 0.6 : 1 })}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#7b6b59' }}>✕</Text>
-              </Pressable>
+                color="#7b6b59"
+                size={18}
+              />
             </View>
             {newsExpanded ? (
               <View style={{ paddingHorizontal: 16, paddingBottom: 12, gap: 8 }}>
@@ -3232,7 +3240,7 @@ export default function HiveScreen() {
                     </Pressable>
                   );
                 })}
-                <Pressable onPress={dismissAppNews} accessibilityRole="button" hitSlop={6}>
+                <Pressable onPress={dismissAppNews} accessibilityRole="button" hitSlop={6} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#bd9348', marginTop: 2 }}>
                     Got it, thanks →
                   </Text>
@@ -3272,7 +3280,7 @@ export default function HiveScreen() {
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignSelf: 'flex-start', marginTop: 10 }}>
                 <Pressable
                   onPress={() => setShowCatchUpModal(true)}
-                  style={{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(189,147,72,0.35)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5 }}
+                  style={({ pressed }) => [{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(189,147,72,0.35)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5 }, pressed && { opacity: 0.7 }]}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348' }}>
                     Catch up
@@ -3280,7 +3288,7 @@ export default function HiveScreen() {
                 </Pressable>
                 <Pressable
                   onPress={() => router.push({ pathname: '/(app)/members', params: { view: 'swarm' } })}
-                  style={{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(189,147,72,0.35)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5 }}
+                  style={({ pressed }) => [{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(189,147,72,0.35)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5 }, pressed && { opacity: 0.7 }]}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348' }}>
                     Report
@@ -3332,7 +3340,7 @@ export default function HiveScreen() {
                         setExpandedAnswerId(null);
                         router.push(isMe ? '/profile' : { pathname: '/(app)/members', params: { memberId: member.id } });
                       }}
-                      style={{ alignItems: 'center', width: '100%' }}
+                      style={({ pressed }) => [{ alignItems: 'center', width: '100%' }, pressed && { opacity: 0.7 }]}
                     >
                       <View style={{
                         borderRadius: 28,
@@ -3379,7 +3387,7 @@ export default function HiveScreen() {
                           router.push({ pathname: '/(app)/members', params: { memberId: member.id } });
                         }
                       }}
-                      style={{ width: '100%' }}
+                      style={({ pressed }) => [{ width: '100%' }, pressed && { opacity: 0.7 }]}
                     >
                       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: isMe && !hasAnswered ? '#bd9348' : hasAnswered ? '#2d2d2d' : '#b0a898', textAlign: 'center', marginBottom: 5 }} numberOfLines={1}>
                         {isMe && !hasAnswered ? 'Answer' : firstName}
@@ -4156,7 +4164,7 @@ export default function HiveScreen() {
                       {isViewOnly ? 'Event Details' : editingEvent ? 'Edit Event' : 'Add Event'}
                     </Text>
                     {editingEvent && canEdit && (
-                      <Pressable onPress={deleteEvent} className="p-2">
+                      <Pressable onPress={deleteEvent} className="p-2 active:opacity-70">
                         <Text className="text-red-500 text-sm">Delete</Text>
                       </Pressable>
                     )}
@@ -4213,7 +4221,7 @@ export default function HiveScreen() {
                       )}
                       <Pressable
                         onPress={closeEventModal}
-                        className="bg-gray-200 py-3 rounded-lg"
+                        className="bg-gray-200 py-3 rounded-lg active:opacity-70"
                       >
                         <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-center text-charcoal">Close</Text>
                       </Pressable>
@@ -4411,7 +4419,7 @@ export default function HiveScreen() {
                       <View className="flex-row">
                         <Pressable
                           onPress={closeEventModal}
-                          className="flex-1 bg-gray-200 py-3 rounded-lg mr-2"
+                          className="flex-1 bg-gray-200 py-3 rounded-lg mr-2 active:opacity-70"
                         >
                           <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-center text-charcoal">Cancel</Text>
                         </Pressable>
@@ -4589,27 +4597,17 @@ export default function HiveScreen() {
                         : selectedActionItem.due_date ? `Due ${formatDateShort(selectedActionItem.due_date)}` : 'On your personal to-do list'}
                     </Text>
                   </View>
-                  <Pressable
+                  <CloseButton
                     onPress={() => {
                       setSelectedActionItemId(null);
                       cancelEditingActionItem();
                     }}
-                    accessibilityRole="button"
                     accessibilityLabel="Close task details"
-                    hitSlop={8}
-                    style={({ pressed }) => ({
-                      width: 34,
-                      height: 34,
-                      borderRadius: 17,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: pressed ? '#f2e1bd' : '#fff8e8',
-                      borderWidth: 1,
-                      borderColor: 'rgba(189,147,72,0.24)',
-                    })}
-                  >
-                    <Ionicons name="close" size={18} color="#8e6f35" />
-                  </Pressable>
+                    color="#8e6f35"
+                    backgroundColor="#fff8e8"
+                    size={18}
+                    style={{ borderWidth: 1, borderColor: 'rgba(189,147,72,0.24)' }}
+                  />
                 </View>
 
                 {editingActionItemId === selectedActionItem.id ? (
@@ -4690,26 +4688,14 @@ export default function HiveScreen() {
 
                 <View style={{ gap: 10 }}>
                   {editingActionItemId !== selectedActionItem.id ? (
-                    <Pressable
+                    <EditButton
                       onPress={() => startEditingActionItem(selectedActionItem)}
-                      accessibilityRole="button"
                       accessibilityLabel="Edit task"
-                      style={({ pressed }) => ({
-                        backgroundColor: pressed ? '#f2e1bd' : '#fff8e8',
-                        borderColor: 'rgba(189,147,72,0.36)',
-                        borderWidth: 1,
-                        borderRadius: 14,
-                        paddingVertical: 13,
-                        paddingHorizontal: 14,
-                        alignItems: 'center',
-                        flexDirection: 'row',
-                        justifyContent: 'center',
-                        gap: 8,
-                      })}
-                    >
-                      <Ionicons name="create-outline" size={16} color="#8e6f35" />
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#8e6f35' }}>Edit</Text>
-                    </Pressable>
+                      label="Edit"
+                      color="#8e6f35"
+                      backgroundColor="#fff8e8"
+                      style={{ alignSelf: 'stretch', borderColor: 'rgba(189,147,72,0.36)', borderWidth: 1, borderRadius: 14 }}
+                    />
                   ) : null}
                   {(() => {
                     const deepLink = getActionItemDeepLink(selectedActionItem);
@@ -4853,7 +4839,7 @@ export default function HiveScreen() {
 
               <Pressable
                 onPress={() => setShowAddHomeGuide(false)}
-                style={{ backgroundColor: '#bd9348', borderRadius: 16, paddingVertical: 14 }}
+                style={({ pressed }) => [{ backgroundColor: '#bd9348', borderRadius: 16, paddingVertical: 14 }, pressed && { opacity: 0.7 }]}
               >
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white', textAlign: 'center' }}>
                   Got it
@@ -4974,7 +4960,7 @@ export default function HiveScreen() {
               </BounceScrollView>
               <Pressable
                 onPress={closeCatchUpModal}
-                style={{ backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14, marginTop: 6 }}
+                style={({ pressed }) => [{ backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14, marginTop: 6 }, pressed && { opacity: 0.7 }]}
               >
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Close</Text>
               </Pressable>
@@ -5032,13 +5018,13 @@ export default function HiveScreen() {
                     setAnswerError(null);
                     closeAnswerModal();
                   }}
-                  style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }}
+                  style={({ pressed }) => [{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }, pressed && { opacity: 0.7 }]}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Cancel</Text>
                 </Pressable>
                 <Pressable
                   onPress={handleSubmitAnswer}
-                  style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, opacity: myAnswer.trim() && !isSubmittingAnswer ? 1 : 0.4 }}
+                  style={({ pressed }) => [{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, opacity: myAnswer.trim() && !isSubmittingAnswer ? 1 : 0.4 }, pressed && { opacity: 0.7 }]}
                   disabled={!myAnswer.trim() || isSubmittingAnswer}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white', textAlign: 'center' }}>

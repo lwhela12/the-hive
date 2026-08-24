@@ -3,6 +3,7 @@ import { View, Text, Pressable, Alert, RefreshControl, Platform, KeyboardAvoidin
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { EditButton } from '../ui/EditButton';
+import { BackButton } from '../ui/BackButton';
 import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
@@ -535,9 +536,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         className="flex-row items-center px-4 py-3 border-b"
         style={{ backgroundColor: skin.card, borderBottomColor: skin.border }}
       >
-        <Pressable onPress={onBack} className="mr-4">
-          <Text className="text-2xl" style={{ color: skin.ink }}>←</Text>
-        </Pressable>
+        <BackButton onPress={onBack} color={skin.ink} style={{ marginRight: 8 }} />
         {/* It said "Thread" here, which names the KIND of thing you are looking
             at rather than where it sits — no use at all to somebody who does not
             already carry the structure in their head (Nat 2026-08-05). It was

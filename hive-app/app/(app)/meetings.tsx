@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, RefreshControl, Pressable, Linking, useWindowDimensions, Platform, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -20,6 +20,7 @@ import { normalizeHiveBrandText } from '../../lib/hiveBrand';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
+import { EditButton } from '../../components/ui/EditButton';
 import { confirmAction, showAlert } from '../../lib/showAlert';
 import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns, hasMeetingDeck, hasEndOfMonthCheckIn, getSeasonCheckInKind, isSurveyOnHomeToday, SEASON_CHECK_IN_EMOJI } from '../../lib/checkIns';
 import { useSurveys, isMonthlyCheckInSurvey } from '../../lib/hooks/useSurveys';
@@ -232,6 +233,7 @@ export default function MeetingsScreen() {
   const [showDeckEdit, setShowDeckEdit] = useState(false);
   const [deckUrlDraft, setDeckUrlDraft] = useState('');
   const [savingDeckUrl, setSavingDeckUrl] = useState(false);
+  const deckUrlSaveInFlight = useRef(false);
   const effectiveSlideDeckUrl = slideDeckUrl.trim() || DEFAULT_HIVE_DECK_VIEW_URL;
 
   useEffect(() => {
@@ -261,19 +263,24 @@ export default function MeetingsScreen() {
   }, [fetchLatestSlideDeckUrl]);
 
   const handleSaveDeckUrl = async () => {
-    if (!communityId) return;
+    if (!communityId || deckUrlSaveInFlight.current) return;
+    deckUrlSaveInFlight.current = true;
     const nextUrl = deckUrlDraft.trim();
     setSavingDeckUrl(true);
-    const { error } = await (supabase.from('communities') as any).update({ slide_deck_url: nextUrl || null }).eq('id', communityId);
-    setSavingDeckUrl(false);
-    if (!error) {
-      setSlideDeckUrl(nextUrl);
-      await refreshProfile();
-      await fetchLatestSlideDeckUrl();
-      setShowDeckEdit(false);
-    } else {
-      showAlert('Error', 'Could not save the slide deck link. Please try again.');
-      console.error('Slide deck URL save failed:', error);
+    try {
+      const { error } = await (supabase.from('communities') as any).update({ slide_deck_url: nextUrl || null }).eq('id', communityId);
+      if (!error) {
+        setSlideDeckUrl(nextUrl);
+        await refreshProfile();
+        await fetchLatestSlideDeckUrl();
+        setShowDeckEdit(false);
+      } else {
+        showAlert('Error', 'Could not save the slide deck link. Please try again.');
+        console.error('Slide deck URL save failed:', error);
+      }
+    } finally {
+      deckUrlSaveInFlight.current = false;
+      setSavingDeckUrl(false);
     }
   };
 
@@ -359,6 +366,8 @@ export default function MeetingsScreen() {
   });
   const [savingEdit, setSavingEdit] = useState(false);
   const [addingMeetLink, setAddingMeetLink] = useState(false);
+  const meetingEditSaveInFlight = useRef(false);
+  const meetLinkInFlight = useRef(false);
   const notesImportDraftKey = communityId ? `the-hive:meeting-notes-import-draft:${communityId}` : null;
   const activeMeetingEditKey = communityId ? `the-hive:meeting-edit-active:${communityId}` : null;
   const eventEditDraftKey = communityId && editingEvent
@@ -676,8 +685,9 @@ export default function MeetingsScreen() {
   };
 
   const handleSaveEdit = async () => {
-    if (!editingEvent) return;
+    if (!editingEvent || meetingEditSaveInFlight.current) return;
 
+    meetingEditSaveInFlight.current = true;
     setSavingEdit(true);
     try {
       // Use edge function to update both database and Google Calendar
@@ -705,6 +715,7 @@ export default function MeetingsScreen() {
       console.error('Error updating event:', error);
       showAlert('Error', 'Failed to update meeting');
     } finally {
+      meetingEditSaveInFlight.current = false;
       setSavingEdit(false);
     }
   };
@@ -1195,7 +1206,8 @@ export default function MeetingsScreen() {
    */
   const hiveOnMeet = !!community?.meets_on_google_meet;
   const addMeetLink = async (target: Event) => {
-    if (addingMeetLink) return;
+    if (meetLinkInFlight.current) return;
+    meetLinkInFlight.current = true;
     setAddingMeetLink(true);
     try {
       const { error } = await supabase.functions.invoke('update-meeting', {
@@ -1213,6 +1225,7 @@ export default function MeetingsScreen() {
     } catch {
       showAlert('Error', 'Could not add the Meet link. Please try again.');
     } finally {
+      meetLinkInFlight.current = false;
       setAddingMeetLink(false);
     }
   };
@@ -1527,7 +1540,7 @@ export default function MeetingsScreen() {
                       <Pressable
                         onPress={() => void addMeetLink(event)}
                         disabled={addingMeetLink}
-                        className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full mt-3 self-start"
+                        className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full mt-3 self-start active:opacity-70"
                         style={{ opacity: addingMeetLink ? 0.6 : 1 }}
                       >
                         <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
@@ -1537,12 +1550,14 @@ export default function MeetingsScreen() {
                     ) : null}
                   </View>
                   <View className="flex-row items-center gap-2">
-                    <Pressable
+                    <EditButton
                       onPress={() => handleEditEvent(event)}
-                      className="bg-gray-200 px-3 py-2 rounded-lg active:bg-gray-300"
-                    >
-                      <Text className="text-gray-700 font-semibold">Edit</Text>
-                    </Pressable>
+                      accessibilityLabel={`Edit ${event.title}`}
+                      label="Edit"
+                      color="#374151"
+                      backgroundColor="#e5e7eb"
+                      style={{ borderRadius: 8 }}
+                    />
                     {isAdmin && (
                       <Pressable
                         onPress={() => handleDeleteMeeting(event.id, event.title)}
@@ -1657,14 +1672,14 @@ export default function MeetingsScreen() {
         <SafeAreaView className="flex-1 bg-white" edges={['top']}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
-            <Pressable onPress={closeEventEdit}>
+            <Pressable onPress={closeEventEdit} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
               <Text className="text-label text-base">Cancel</Text>
             </Pressable>
             <Text className="text-lg font-bold text-hive-dark">Edit Meeting</Text>
             <Pressable
               onPress={handleSaveEdit}
               disabled={savingEdit || !editForm.title.trim()}
-              className={savingEdit || !editForm.title.trim() ? 'opacity-50' : ''}
+              className={savingEdit || !editForm.title.trim() ? 'opacity-50' : ''} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
             >
               <Text className="text-honey-600 text-base font-semibold">
                 {savingEdit ? 'Saving...' : 'Save'}
@@ -1816,7 +1831,7 @@ export default function MeetingsScreen() {
                   setShowDeckActions(false);
                   handleOpenSlideDeck(effectiveSlideDeckUrl);
                 }}
-                style={{ backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
+                style={({ pressed }) => [{ backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }, pressed && { opacity: 0.7 }]}
               >
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>View Deck</Text>
               </Pressable>
@@ -1826,7 +1841,7 @@ export default function MeetingsScreen() {
                     setShowDeckActions(false);
                     router.push({ pathname: '/arrival-board', params: { from: 'meetings' } });
                   }}
-                  style={{ backgroundColor: '#f0ede6', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
+                  style={({ pressed }) => [{ backgroundColor: '#f0ede6', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }, pressed && { opacity: 0.7 }]}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#8e7a5e' }}>📺 Arrival Board</Text>
                 </Pressable>
@@ -1838,7 +1853,7 @@ export default function MeetingsScreen() {
                     setDeckUrlDraft(slideDeckUrl.trim() || DEFAULT_HIVE_DECK_VIEW_URL);
                     setShowDeckEdit(true);
                   }}
-                  style={{ backgroundColor: '#f0ede6', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
+                  style={({ pressed }) => [{ backgroundColor: '#f0ede6', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }, pressed && { opacity: 0.7 }]}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#8e7a5e' }}>Change View Link</Text>
                 </Pressable>
@@ -1900,14 +1915,14 @@ export default function MeetingsScreen() {
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <Pressable
                   onPress={() => setShowDeckEdit(false)}
-                  style={{ flex: 1, backgroundColor: '#f0ede6', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
+                  style={({ pressed }) => [{ flex: 1, backgroundColor: '#f0ede6', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }, pressed && { opacity: 0.7 }]}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#8e7a5e' }}>Cancel</Text>
                 </Pressable>
                 <Pressable
                   onPress={handleSaveDeckUrl}
                   disabled={savingDeckUrl}
-                  style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, alignItems: 'center', opacity: savingDeckUrl ? 0.7 : 1 }}
+                  style={({ pressed }) => [{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, alignItems: 'center', opacity: savingDeckUrl ? 0.7 : 1 }, pressed && { opacity: 0.7 }]}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>
                     {savingDeckUrl ? 'Saving…' : 'Save Link'}

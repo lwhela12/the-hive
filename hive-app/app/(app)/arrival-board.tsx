@@ -8,7 +8,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
+
 import {
   formatMeetingDate,
   getCheckInOrder,
@@ -19,6 +19,7 @@ import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
+import { BackButton } from '../../components/ui/BackButton';
 // The plain bee mark, not the crest — the crest's sunburst ring turns to mush
 // at header size (see monthly-tuneup for the full note).
 const hiveBee = require('../../assets/BEE ONLY IN GOLD BG.png');
@@ -81,25 +82,11 @@ export default function ArrivalBoardScreen() {
       >
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: isTV ? 22 : 14 }}>
-          <Pressable
+          <BackButton
             onPress={closeBoard}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            hitSlop={10}
-            style={({ pressed }) => ({
-              width: 38,
-              height: 38,
-              borderRadius: 19,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
-              borderWidth: 1,
-              borderColor: 'rgba(222,193,129,0.55)',
-              marginTop: isTV ? 8 : 2,
-            })}
-          >
-            <Ionicons name="chevron-back" size={20} color="#8a6b30" />
-          </Pressable>
+            backgroundColor="#fffdf5"
+            style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.55)', marginTop: isTV ? 8 : 2 }}
+          />
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: isTV ? 14 : 8 }}>
               <Image

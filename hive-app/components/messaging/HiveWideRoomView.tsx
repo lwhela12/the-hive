@@ -1,9 +1,10 @@
-import { View, Text, Pressable } from 'react-native';
+import { View, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+
 import { SpaceGlobe } from '../ui/SpaceGlobe';
 import { SPACE_SKIN } from '../../lib/pageSkin';
 import { WorldMark } from '../ui/WorldMark';
+import { BackButton } from '../ui/BackButton';
 import {
   HIVE_WIDE_ROOM_NAME,
   HIVE_WIDE_ROOM_SUBTITLE,
@@ -43,13 +44,12 @@ export function HiveWideRoomView({
         style={{ backgroundColor: SPACE_SKIN.page, borderBottomColor: SPACE_SKIN.border }}
       >
         {!hideBackButton && (
-          <Pressable
+          <BackButton
             onPress={onBack}
-            className="mr-3 w-9 h-9 rounded-full items-center justify-center"
             accessibilityLabel="Back to your messages"
-          >
-            <Ionicons name="chevron-back" size={28} color={SPACE_SKIN.ink} />
-          </Pressable>
+            color={SPACE_SKIN.ink}
+            style={{ marginRight: 8 }}
+          />
         )}
         <View
           className="mr-3 items-center justify-center"

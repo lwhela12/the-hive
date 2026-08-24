@@ -33,6 +33,7 @@ import { WishDetail } from '../../components/hive/WishDetail';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { EditButton } from '../../components/ui/EditButton';
+import { CloseButton } from '../../components/ui/CloseButton';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { normaliseScope } from '../../lib/scopeLook';
 import { ReachPill } from '../../components/ui/ReachPill';
@@ -275,6 +276,7 @@ export default function ProfileScreen() {
   const showsHiveGoal = community?.slug === 'show';
   const [hiveGoal, setHiveGoal] = useState('');
   const [hiveGoalSaving, setHiveGoalSaving] = useState(false);
+  const hiveGoalSaveInFlight = useRef(false);
   const [hiveGoalDraft, setHiveGoalDraft] = useState('');
   const [editingHiveGoal, setEditingHiveGoal] = useState(false);
   useEffect(() => {
@@ -385,20 +387,25 @@ export default function ProfileScreen() {
     return error ?? null;
   }, []);
   const saveHiveGoal = async (next: string) => {
-    if (!communityId || !profile?.id) return;
+    if (!communityId || !profile?.id || hiveGoalSaveInFlight.current) return;
+    hiveGoalSaveInFlight.current = true;
     setHiveGoalSaving(true);
-    const { error: saveError } = await supabase
-      .from('community_memberships')
-      .update({ hive_goal: next.trim() || null })
-      .eq('community_id', communityId)
-      .eq('user_id', profile.id);
-    setHiveGoalSaving(false);
-    if (saveError) {
-      showAlert('Error', 'Could not save your goal. Please try again.');
-      return;
+    try {
+      const { error: saveError } = await supabase
+        .from('community_memberships')
+        .update({ hive_goal: next.trim() || null })
+        .eq('community_id', communityId)
+        .eq('user_id', profile.id);
+      if (saveError) {
+        showAlert('Error', 'Could not save your goal. Please try again.');
+        return;
+      }
+      setHiveGoal(next.trim());
+      setEditingHiveGoal(false);
+    } finally {
+      hiveGoalSaveInFlight.current = false;
+      setHiveGoalSaving(false);
     }
-    setHiveGoal(next.trim());
-    setEditingHiveGoal(false);
   };
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { grantWish } = useWishes();
@@ -481,6 +488,7 @@ export default function ProfileScreen() {
    * plant them here too.
    */
   const [skillsElsewhere, setSkillsElsewhere] = useState<{ communityId: string; descriptions: string[] }[]>([]);
+  const bringGardenInFlight = useRef(false);
   const [addWishModalVisible, setAddWishModalVisible] = useState(false);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
   const [managingWish, setManagingWish] = useState<Wish | null>(null);
@@ -593,6 +601,8 @@ export default function ProfileScreen() {
   const [deepQuizStep, setDeepQuizStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const profileSaveInFlight = useRef(false);
+  const avatarUploadInFlight = useRef(false);
 
   /** This HIVE's own card row for me (migration 194). Null until fetched, or when this HIVE's card was never written. */
   const [hiveCard, setHiveCard] = useState<HiveCard | null>(null);
@@ -1123,7 +1133,7 @@ export default function ProfileScreen() {
   };
 
   const saveProfileDraft = async (failureMessage: string) => {
-    if (!profile) return false;
+    if (!profile || profileSaveInFlight.current) return false;
 
     const { cleanBirthday, birthdayIso, payload, cardPayload } = buildProfileUpdate();
     if (cleanBirthday && !birthdayIso) {
@@ -1135,6 +1145,7 @@ export default function ProfileScreen() {
     // edits the one travelling card; this-HIVE-only edits this HIVE's own.
     const profilesPayload = cardTravels ? { ...payload, ...cardPayload } : payload;
 
+    profileSaveInFlight.current = true;
     setIsSaving(true);
     try {
       let { error } = await supabase
@@ -1185,6 +1196,7 @@ export default function ProfileScreen() {
       await invalidateBirthdayQueries(communityId);
       return true;
     } finally {
+      profileSaveInFlight.current = false;
       setIsSaving(false);
     }
   };
@@ -1213,29 +1225,35 @@ export default function ProfileScreen() {
   };
 
   const pickImage = async () => {
-    // Request permission
-    const hasPermission = await requestMediaLibraryPermission();
-    if (!hasPermission) {
-      return;
-    }
+    if (avatarUploadInFlight.current) return;
+    avatarUploadInFlight.current = true;
+    setIsUploadingPhoto(true);
+    try {
+      const hasPermission = await requestMediaLibraryPermission();
+      if (!hasPermission) return;
 
-    // Pick an image
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
 
-    if (!result.canceled && result.assets[0]) {
-      await uploadAvatar(result.assets[0].uri);
+      if (!result.canceled && result.assets[0]) {
+        await uploadAvatar(result.assets[0].uri, true);
+      }
+    } finally {
+      avatarUploadInFlight.current = false;
+      setIsUploadingPhoto(false);
     }
   };
 
-  const uploadAvatar = async (uri: string) => {
-    if (!profile) return;
-
-    setIsUploadingPhoto(true);
+  const uploadAvatar = async (uri: string, lockAlreadyHeld = false) => {
+    if (!profile || (!lockAlreadyHeld && avatarUploadInFlight.current)) return;
+    if (!lockAlreadyHeld) {
+      avatarUploadInFlight.current = true;
+      setIsUploadingPhoto(true);
+    }
 
     try {
       // Get the file extension
@@ -1282,6 +1300,7 @@ export default function ProfileScreen() {
       console.error('Error uploading avatar:', error);
       showAlert('Error', 'Failed to upload photo. Please try again.');
     } finally {
+      avatarUploadInFlight.current = false;
       setIsUploadingPhoto(false);
     }
   };
@@ -1757,14 +1776,20 @@ export default function ProfileScreen() {
    * they are, because the people there are still looking at them.
    */
   const bringGardenOver = useCallback(async (descriptions: string[]) => {
-    const planted = await handlePlantSkills(
-      descriptions.map((description) => ({ description, enthusiasmLevel: 1 })),
-      { mode: 'fill' }
-    );
-    if (planted === null) return;
-    setSkillsElsewhere([]);
-    if (descriptions.length > planted) {
-      setReplantNotice(`Planted ${planted} — the garden holds ${SKILLS_GARDEN_CAPACITY}, so ${descriptions.length - planted} stayed where they were.`);
+    if (bringGardenInFlight.current) return;
+    bringGardenInFlight.current = true;
+    try {
+      const planted = await handlePlantSkills(
+        descriptions.map((description) => ({ description, enthusiasmLevel: 1 })),
+        { mode: 'fill' }
+      );
+      if (planted === null) return;
+      setSkillsElsewhere([]);
+      if (descriptions.length > planted) {
+        setReplantNotice(`Planted ${planted} — the garden holds ${SKILLS_GARDEN_CAPACITY}, so ${descriptions.length - planted} stayed where they were.`);
+      }
+    } finally {
+      bringGardenInFlight.current = false;
     }
   }, [handlePlantSkills]);
 
@@ -2249,7 +2274,7 @@ export default function ProfileScreen() {
         </Text>
         <Pressable
           onPress={handleFind3MiqWithClive}
-          style={{ alignSelf: 'flex-start', borderRadius: 999, borderWidth: 1, borderColor: 'rgba(222,193,129,0.72)', backgroundColor: '#fffdf7', paddingHorizontal: 14, paddingVertical: 8, marginBottom: 16 }}
+          style={({ pressed }) => [{ alignSelf: 'flex-start', borderRadius: 999, borderWidth: 1, borderColor: 'rgba(222,193,129,0.72)', backgroundColor: '#fffdf7', paddingHorizontal: 14, paddingVertical: 8, marginBottom: 16 }, pressed && { opacity: 0.7 }]}
         >
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
             {hasProfileMiq ? 'Refine these with Clive' : 'Find these with Clive'}
@@ -2356,15 +2381,7 @@ export default function ProfileScreen() {
           title="Profile"
           subtitle="Share what you are building and how others can help."
           rightElement={(
-            <Pressable
-              onPress={closeProfile}
-              accessibilityRole="button"
-              accessibilityLabel="Close profile"
-              className="w-10 h-10 items-center justify-center rounded-full active:opacity-70"
-              hitSlop={8}
-            >
-              <Ionicons name="close" size={24} color="white" />
-            </Pressable>
+            <CloseButton onPress={closeProfile} accessibilityLabel="Close profile" color="white" />
           )}
         />
       )}
@@ -2446,7 +2463,7 @@ export default function ProfileScreen() {
               </View>
 
               {/* Change photo */}
-              <Pressable onPress={pickImage} disabled={isUploadingPhoto} style={{ marginTop: 8 }}>
+              <Pressable onPress={pickImage} disabled={isUploadingPhoto} style={({ pressed }) => [{ marginTop: 8 }, pressed && { opacity: 0.7 }]}>
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#bd9348' }}>
                   Change Photo
                 </Text>
@@ -3140,7 +3157,7 @@ export default function ProfileScreen() {
                         editPreferredContact === option
                           ? 'bg-gold'
                           : 'bg-cream'
-                      }`}
+                      }`} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                     >
                       <Text
                         style={{ fontFamily: 'Lato_700Bold' }}
@@ -3268,14 +3285,12 @@ export default function ProfileScreen() {
                               written goal keeps its card (Nat, 2026-08-19:
                               "an X somewhere where we can X out the helper"). */}
                           {!hiveGoal && !editingHiveGoal ? (
-                            <Pressable
+                            <CloseButton
                               onPress={dismissWishStarter}
-                              hitSlop={10}
-                              accessibilityRole="button"
                               accessibilityLabel="Close this helper"
-                            >
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'rgba(49,49,48,0.45)' }}>✕</Text>
-                            </Pressable>
+                              color="rgba(49,49,48,0.45)"
+                              size={16}
+                            />
                           ) : null}
                         </View>
                         <View className="bg-white rounded-xl shadow-sm p-4">
@@ -3293,14 +3308,14 @@ export default function ProfileScreen() {
                               <View className="flex-row gap-2 mt-3">
                                 <Pressable
                                   onPress={() => setEditingHiveGoal(false)}
-                                  className="flex-1 bg-cream rounded-lg py-2"
+                                  className="flex-1 bg-cream rounded-lg py-2 active:opacity-70"
                                 >
                                   <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/60 text-center">Cancel</Text>
                                 </Pressable>
                                 <Pressable
                                   onPress={() => void saveHiveGoal(hiveGoalDraft)}
                                   disabled={hiveGoalSaving}
-                                  className="flex-1 bg-gold rounded-lg py-2"
+                                  className="flex-1 bg-gold rounded-lg py-2 active:opacity-70"
                                 >
                                   <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-center">
                                     {hiveGoalSaving ? 'Saving…' : 'Save'}
@@ -3315,7 +3330,7 @@ export default function ProfileScreen() {
                               </Text>
                               <View className="flex-row gap-4 mt-3">
                                 <Pressable
-                                  onPress={() => { setHiveGoalDraft(hiveGoal); setEditingHiveGoal(true); }}
+                                  onPress={() => { setHiveGoalDraft(hiveGoal); setEditingHiveGoal(true); }} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                                 >
                                   <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
                                     {hiveGoal ? 'Edit' : 'Write it myself'}
@@ -3329,7 +3344,7 @@ export default function ProfileScreen() {
                                         ? `Help me refine my production goal for this HIVE. Here's what I have so far: "${hiveGoal}". Help me make it sharper.`
                                         : 'Help me get clear on my production goal for this HIVE — what am I working toward with this show?',
                                     },
-                                  })}
+                                  })} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                                 >
                                   <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
                                     {hiveGoal ? 'Refine with Clive ✨' : 'Find with Clive ✨'}
@@ -3362,7 +3377,7 @@ export default function ProfileScreen() {
                                 onPress={() => void dismissMeetingDesire(item)}
                                 hitSlop={10}
                                 accessibilityRole="button"
-                                accessibilityLabel="Not a wish — put it away"
+                                accessibilityLabel="Not a wish — put it away" style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                               >
                                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'rgba(49,49,48,0.45)' }}>✕</Text>
                               </Pressable>
@@ -3373,7 +3388,7 @@ export default function ProfileScreen() {
                             <View className="flex-row gap-4 mt-3">
                               <Pressable
                                 onPress={() => void addMeetingDesire(item)}
-                                disabled={!!workingDesire}
+                                disabled={!!workingDesire} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                               >
                                 <Text style={{ fontFamily: 'Lato_700Bold', opacity: workingDesire ? 0.5 : 1 }} className="text-gold text-sm">
                                   {workingDesire === item.key ? 'Adding…' : 'Add it'}
@@ -3385,7 +3400,7 @@ export default function ProfileScreen() {
                                   params: {
                                     prefill: `A HIVE meeting heard this from me: "${item.description}". Help me turn it into a real HD wish.`,
                                   },
-                                })}
+                                })} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                               >
                                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
                                   Refine with Clive ✨
@@ -3408,21 +3423,19 @@ export default function ProfileScreen() {
                             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/70">
                               {wishStarterHeading}
                             </Text>
-                            <Pressable
+                            <CloseButton
                               onPress={dismissWishStarter}
-                              hitSlop={10}
-                              accessibilityRole="button"
                               accessibilityLabel="Close this helper"
-                            >
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'rgba(49,49,48,0.45)' }}>✕</Text>
-                            </Pressable>
+                              color="rgba(49,49,48,0.45)"
+                              size={16}
+                            />
                           </View>
                           <View className="bg-white rounded-xl shadow-sm p-4">
                             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
                               Get clear on it — Clive can help you find the words.
                             </Text>
                             <View className="flex-row gap-4 mt-3">
-                              <Pressable onPress={() => setAddWishModalVisible(true)}>
+                              <Pressable onPress={() => setAddWishModalVisible(true)} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
                                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
                                   Write it myself
                                 </Text>
@@ -3433,7 +3446,7 @@ export default function ProfileScreen() {
                                   params: {
                                     prefill: `Help me shape an HD wish. The question on my profile asks: "${wishStarterHeading}" — help me find the words.`,
                                   },
-                                })}
+                                })} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                               >
                                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
                                   Find with Clive ✨
@@ -3551,14 +3564,14 @@ export default function ProfileScreen() {
                       Array.from(new Set(skillsElsewhere.flatMap(entry => entry.descriptions)))
                     )}
                     accessibilityRole="button"
-                    style={{
+                    style={({ pressed }) => [{
                       alignSelf: 'flex-start',
                       backgroundColor: '#315d4e',
                       borderRadius: 999,
                       paddingVertical: 6,
                       paddingHorizontal: 14,
                       marginTop: 4,
-                    }}
+                    }, pressed && { opacity: 0.7 }]}
                   >
                     <Text style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 12 }}>
                       Plant them in {hiveWord} too
@@ -3605,13 +3618,13 @@ export default function ProfileScreen() {
                       disabled={replantingGarden}
                       accessibilityRole="button"
                       accessibilityState={{ disabled: replantingGarden }}
-                      style={{
+                      style={({ pressed }) => [{
                         backgroundColor: '#315d4e',
                         borderRadius: 999,
                         paddingVertical: 6,
                         paddingHorizontal: 14,
                         opacity: replantingGarden ? 0.6 : 1,
-                      }}
+                      }, pressed && { opacity: 0.7 }]}
                     >
                       <Text style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 12 }}>
                         {replantingGarden ? 'Replanting…' : 'Replant all'}
@@ -3768,21 +3781,14 @@ export default function ProfileScreen() {
                     {DEEP_PROFILE_STEPS[deepQuizStep]} · {deepQuizProgress}
                   </Text>
                 </View>
-                <Pressable
+                <CloseButton
                   onPress={closeDeepQuiz}
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 17,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: '#fffdf7',
-                    borderWidth: 1,
-                    borderColor: 'rgba(222,193,129,0.5)',
-                  }}
-                >
-                  <Ionicons name="close" size={18} color="#9a7a3a" />
-                </Pressable>
+                  accessibilityLabel="Close deeper profile"
+                  color="#9a7a3a"
+                  backgroundColor="#fffdf7"
+                  size={18}
+                  style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)' }}
+                />
               </View>
               <View style={{ flexDirection: 'row', gap: 6, marginTop: 14 }}>
                 {DEEP_PROFILE_STEPS.map((step, index) => (
@@ -3823,7 +3829,7 @@ export default function ProfileScreen() {
               <Pressable
                 disabled={!deepQuizCanGoBack || isSaving}
                 onPress={() => setDeepQuizStep(step => Math.max(0, step - 1))}
-                style={{
+                style={({ pressed }) => [{
                   flex: isProfilePhone ? undefined : 0.85,
                   borderRadius: 999,
                   borderWidth: 1,
@@ -3832,14 +3838,14 @@ export default function ProfileScreen() {
                   paddingVertical: 12,
                   alignItems: 'center',
                   opacity: !deepQuizCanGoBack || isSaving ? 0.45 : 1,
-                }}
+                }, pressed && { opacity: 0.7 }]}
               >
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9a7a3a' }}>Back</Text>
               </Pressable>
               <Pressable
                 disabled={isSaving}
                 onPress={handleDeepQuizSaveAndExit}
-                style={{
+                style={({ pressed }) => [{
                   flex: isProfilePhone ? undefined : 1.15,
                   borderRadius: 999,
                   borderWidth: 1,
@@ -3848,7 +3854,7 @@ export default function ProfileScreen() {
                   paddingVertical: 12,
                   alignItems: 'center',
                   opacity: isSaving ? 0.62 : 1,
-                }}
+                }, pressed && { opacity: 0.7 }]}
               >
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9a7a3a' }}>
                   {isSaving ? 'Saving...' : 'Save & exit'}
@@ -3857,14 +3863,14 @@ export default function ProfileScreen() {
               <Pressable
                 disabled={isSaving}
                 onPress={handleDeepQuizSaveAndContinue}
-                style={{
+                style={({ pressed }) => [{
                   flex: isProfilePhone ? undefined : 1.45,
                   borderRadius: 999,
                   backgroundColor: '#bd9348',
                   paddingVertical: 12,
                   alignItems: 'center',
                   opacity: isSaving ? 0.62 : 1,
-                }}
+                }, pressed && { opacity: 0.7 }]}
               >
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#fffaf0' }}>
                   {isSaving ? 'Saving...' : deepQuizPrimaryLabel}

@@ -17,6 +17,7 @@ import { Attachment } from '../../types';
 import { formatFileSize, isVideoAttachment } from '../../lib/mediaAttachments';
 
 import { SignedImage, openSignedUrl } from './SignedImage';
+import { CloseButton } from './CloseButton';
 import { useSignedUrl } from '../../lib/signedAttachment';
 interface AttachmentGalleryProps {
   attachments: Attachment[];
@@ -300,14 +301,14 @@ export function AttachmentGallery({
       >
         <View className="flex-1 bg-black">
           {/* Close button */}
-          <Pressable
+          <CloseButton
             onPress={() => setSelectedIndex(null)}
-            className="absolute top-12 right-4 z-10 p-2 bg-black/50 rounded-full"
-            accessibilityRole="button"
             accessibilityLabel="Close image viewer"
-          >
-            <Ionicons name="close" size={28} color="white" />
-          </Pressable>
+            color="white"
+            backgroundColor="rgba(0,0,0,0.5)"
+            size={28}
+            style={{ position: 'absolute', top: 48, right: 16, zIndex: 10 }}
+          />
 
           {/* Swipeable image viewer */}
           {selectedIndex !== null && (

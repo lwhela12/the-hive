@@ -40,6 +40,8 @@ import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types'
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 import { SkeletonRows } from '../../components/ui/SkeletonRows';
 import { BounceScrollView, useEndBounce } from '../../components/ui/BounceScrollView';
+import { BackButton } from '../../components/ui/BackButton';
+import { EditButton } from '../../components/ui/EditButton';
 // Archived boards are no longer browsable (Nat 2026-07-24) — the boards-home
 // "Archive" pill is gone, so the list always shows active topics. Threads keep
 // an archive view only as a landing spot when search finds archived matches.
@@ -1928,26 +1930,19 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           ) : null}
 
           {managingLinkedWish && canEditLinkedWish(managingLinkedWish) ? (
-            <Pressable
+            <EditButton
               onPress={() => {
                 const wish = managingLinkedWish;
                 setManagingLinkedWish(null);
                 setSelectedLinkedWish(null);
                 setEditingLinkedWish(wish);
               }}
-              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 active:opacity-75"
-              // Asked the skin instead of hard-coding a white pill. On HIVE-Wide
-              // this sheet is a dark card, and three white bars sat on it.
-              style={{ backgroundColor: skin.card, borderWidth: 1, borderColor: skin.border }}
-            >
-              <View className="flex-row items-center">
-                <Ionicons name="pencil-outline" size={18} color={skin.inkBody} />
-                <Text style={{ fontFamily: 'Lato_700Bold', color: skin.inkBody }} className="text-sm ml-2">
-                  Edit
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={skin.inkFaint} />
-            </Pressable>
+              accessibilityLabel="Edit linked wish"
+              label="Edit"
+              color={skin.inkBody}
+              backgroundColor={skin.card}
+              style={{ alignSelf: 'stretch', borderWidth: 1, borderColor: skin.border, borderRadius: 12, marginTop: 8 }}
+            />
           ) : null}
 
           {managingLinkedWish && canManageLinkedWish(managingLinkedWish) ? (
@@ -2249,15 +2244,12 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         tone={isWide ? 'wide' : 'hive'}
         rightElement={
           (canManageCategory(selectedCategory) || canArchiveCategory(selectedCategory)) ? (
-          <Pressable
+          <EditButton
             onPress={() => openEditTopic(selectedCategory)}
-            className="w-9 h-9 items-center justify-center rounded-full active:opacity-70 ml-2"
-            accessibilityRole="button"
             accessibilityLabel="Edit board"
-            hitSlop={8}
-          >
-            <Ionicons name="pencil-outline" size={20} color="rgba(255,255,255,0.86)" />
-          </Pressable>
+            color="rgba(255,255,255,0.86)"
+            style={{ marginLeft: 8 }}
+          />
           ) : undefined
         }
       />
@@ -2339,23 +2331,12 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
                   lands on archived threads, so it just needs a way back out. */}
               <View className="flex-row items-center" style={{ gap: 8 }}>
                 {threadListView === 'archive' && (
-                  <Pressable
+                  <BackButton
                     onPress={() => setThreadListView('active')}
-                    className="flex-row items-center rounded-full px-3 py-1.5 active:opacity-70"
-                    hitSlop={8}
-                  >
-                    <Ionicons
-                      name="arrow-back-outline"
-                      size={15}
-                      // Charcoal-on-assumed-cream, invisible on the night sky —
-                      // and search CAN land you on this archive view HIVE-Wide.
-                      color={skin.inkSoft}
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text style={{ fontFamily: 'Lato_700Bold', color: skin.inkSoft }} className="text-xs">
-                      Threads
-                    </Text>
-                  </Pressable>
+                    accessibilityLabel="Back to active threads"
+                    color={skin.inkSoft}
+                    label="Threads"
+                  />
                 )}
               </View>
             </View>

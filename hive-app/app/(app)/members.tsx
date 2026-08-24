@@ -20,6 +20,7 @@ import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { AppHeader } from '../../components/navigation';
 import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
 import { EditButton } from '../../components/ui/EditButton';
+import { CloseButton } from '../../components/ui/CloseButton';
 /**
  * The shared face, not a copy of one.
  *
@@ -650,6 +651,7 @@ function MemberDetailPage({
   const [introExpanded, setIntroExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const profileSaveInFlight = useRef(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showDeeper, setShowDeeper] = useState(false);
   const [draftName, setDraftName] = useState(member.name ?? '');
@@ -682,6 +684,7 @@ function MemberDetailPage({
   const [draftSkillList, setDraftSkillList] = useState<string[]>(skillsInThisHive.map(s => s.description));
   const [newSkillInput, setNewSkillInput] = useState('');
   const [savingSkills, setSavingSkills] = useState(false);
+  const skillsSaveInFlight = useRef(false);
   const [showSkillPicker, setShowSkillPicker] = useState(false);
   const [skillSearch, setSkillSearch] = useState('');
   const [showWishesSheet, setShowWishesSheet] = useState(false);
@@ -697,6 +700,8 @@ function MemberDetailPage({
   const [addingWish, setAddingWish] = useState(false);
   const [newWishInput, setNewWishInput] = useState('');
   const [startingMessage, setStartingMessage] = useState(false);
+  const wishSaveInFlight = useRef(false);
+  const directMessageInFlight = useRef(false);
   // Tagging with "@" used to be wired up by hand here. ComposerBar carries it
   // now — it tracks the "@", draws the suggestion list and the "Tagged Nat"
   // pills itself — so the composers below only have to hand it the members.
@@ -963,7 +968,8 @@ function MemberDetailPage({
    * close the sheet.
    */
   const saveSkillsOnly = async (): Promise<boolean> => {
-    if (!communityId) return false;
+    if (!communityId || skillsSaveInFlight.current) return false;
+    skillsSaveInFlight.current = true;
     setSavingSkills(true);
     const skillDescriptions = Array.from(new Set(draftSkillList.map(s => s.trim()).filter(Boolean)));
     try {
@@ -1017,6 +1023,7 @@ function MemberDetailPage({
       );
       return false;
     } finally {
+      skillsSaveInFlight.current = false;
       setSavingSkills(false);
     }
   };
@@ -1235,37 +1242,42 @@ function MemberDetailPage({
 
   const saveNewWish = async () => {
     const desc = newWishInput.trim();
-    if (!desc || !communityId) return;
-    const { data, error } = await (supabase as any)
-      .from('wishes')
-      .insert({ user_id: member.id, community_id: communityId, description: desc, raw_input: desc, status: 'public', is_active: true, extracted_from: 'manual' })
-      .select('id, community_id, share_scope, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
-      .single();
-    if (error) {
-      // This used to end at the console. The composer emptied itself either
-      // way, so a wish that never reached the database looked exactly like one
-      // that did — the same silence the skills sheet had (2026-08-06). The
-      // words you typed stay in the box now, so you can send them again.
-      console.warn('[Members] wish save failed', error);
-      showAlert('Your wish did not save', userFacingError(error, 'Your wish is still here. Please try saving again.'));
-      return;
+    if (!desc || !communityId || wishSaveInFlight.current) return;
+    wishSaveInFlight.current = true;
+    try {
+      const { data, error } = await (supabase as any)
+        .from('wishes')
+        .insert({ user_id: member.id, community_id: communityId, description: desc, raw_input: desc, status: 'public', is_active: true, extracted_from: 'manual' })
+        .select('id, community_id, share_scope, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
+        .single();
+      if (error) {
+        // This used to end at the console. The composer emptied itself either
+        // way, so a wish that never reached the database looked exactly like one
+        // that did — the same silence the skills sheet had (2026-08-06). The
+        // words you typed stay in the box now, so you can send them again.
+        console.warn('[Members] wish save failed', error);
+        showAlert('Your wish did not save', userFacingError(error, 'Your wish is still here. Please try saving again.'));
+        return;
+      }
+      if (data) {
+        setMyWishes(prev => [data, ...prev]);
+        notifyWishMentions({
+          wishId: data.id,
+          senderId: currentAuthId ?? member.id,
+          communityId,
+          content: desc,
+          members: mentionableMembers,
+          reach: mentionReach,
+          wishOwnerName: member.name,
+        });
+        await invalidateWishQueries(communityId, member.id);
+      }
+      setNewWishInput('');
+      setAddingWish(false);
+      setWishStatusTab('public');
+    } finally {
+      wishSaveInFlight.current = false;
     }
-    if (data) {
-      setMyWishes(prev => [data, ...prev]);
-      notifyWishMentions({
-        wishId: data.id,
-        senderId: currentAuthId ?? member.id,
-        communityId,
-        content: desc,
-        members: mentionableMembers,
-        reach: mentionReach,
-        wishOwnerName: member.name,
-      });
-      await invalidateWishQueries(communityId, member.id);
-    }
-    setNewWishInput('');
-    setAddingWish(false);
-    setWishStatusTab('public');
   };
 
   const refineWithClive = (description: string) => {
@@ -1295,7 +1307,7 @@ function MemberDetailPage({
   };
 
   const startDirectMessage = async () => {
-    if (startingMessage) return;
+    if (directMessageInFlight.current) return;
     if (isCurrentUser) {
       onClose();
       router.push('/messages');
@@ -1305,6 +1317,7 @@ function MemberDetailPage({
       showAlert('Could not open message', 'Please refresh HIVE and try again.');
       return;
     }
+    directMessageInFlight.current = true;
     setStartingMessage(true);
     try {
       const room = await getOrCreateDMRoom(member.id);
@@ -1316,11 +1329,13 @@ function MemberDetailPage({
       console.warn('[Members] start DM failed', error);
       showAlert('Could not open message', 'Please try again from Messages.');
     } finally {
+      directMessageInFlight.current = false;
       setStartingMessage(false);
     }
   };
 
   const saveProfilePrompts = async () => {
+    if (profileSaveInFlight.current) return;
     setSaving(true);
     setSaveError(null);
     const cleanName = draftName.trim();
@@ -1346,6 +1361,7 @@ function MemberDetailPage({
       return;
     }
 
+    profileSaveInFlight.current = true;
     try {
       const funFacts = [draftFunFact1, draftFunFact2, draftFunFact3]
         .map(fact => fact.trim())
@@ -1462,6 +1478,7 @@ function MemberDetailPage({
           : 'Could not save profile updates. Please try again.'
       );
     } finally {
+      profileSaveInFlight.current = false;
       setSaving(false);
     }
   };
@@ -1520,7 +1537,7 @@ function MemberDetailPage({
               <View style={{ paddingHorizontal: 20, paddingBottom: 10 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 18, color: '#2d2d2d' }}>Pick your skills</Text>
-                  <Pressable onPress={() => { setShowSkillPicker(false); setSkillSearch(''); }} style={{ padding: 6 }}>
+                  <Pressable onPress={() => { setShowSkillPicker(false); setSkillSearch(''); }} style={({ pressed }) => [{ padding: 6 }, pressed && { opacity: 0.7 }]}>
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#a09274' }}>Done picking</Text>
                   </Pressable>
                 </View>
@@ -1611,14 +1628,14 @@ function MemberDetailPage({
                                   setDraftSkillList(prev => [...prev, skill]);
                                 }
                               }}
-                              style={{
+                              style={({ pressed }) => [{
                                 backgroundColor: selected ? '#bd9348' : '#fdf8ec',
                                 borderWidth: 1,
                                 borderColor: selected ? '#bd9348' : 'rgba(222,193,129,0.4)',
                                 borderRadius: 24,
                                 paddingHorizontal: 14,
                                 paddingVertical: 8,
-                              }}
+                              }, pressed && { opacity: 0.7 }]}
                             >
                               <Text style={{ fontFamily: selected ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: selected ? 'white' : '#2d2d2d' }}>
                                 {selected ? '✓ ' : ''}{skill}
@@ -1635,7 +1652,7 @@ function MemberDetailPage({
               <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.3)', padding: 20, paddingBottom: 32, flexDirection: 'row', gap: 10 }}>
                 <Pressable
                   onPress={() => { setShowSkillPicker(false); setDraftSkillList(skillsInThisHive.map(s => s.description)); setSkillSearch(''); }}
-                  style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }}
+                  style={({ pressed }) => [{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }, pressed && { opacity: 0.7 }]}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', color: '#8e7a5e', textAlign: 'center' }}>Cancel</Text>
                 </Pressable>
@@ -1650,7 +1667,7 @@ function MemberDetailPage({
                     setSkillSearch('');
                   }}
                   disabled={savingSkills}
-                  style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, opacity: savingSkills ? 0.6 : 1 }}
+                  style={({ pressed }) => [{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, opacity: savingSkills ? 0.6 : 1 }, pressed && { opacity: 0.7 }]}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center' }}>
                     {savingSkills ? 'Saving...' : `Save ${draftSkillList.length} skill${draftSkillList.length !== 1 ? 's' : ''}`}
@@ -1668,7 +1685,7 @@ function MemberDetailPage({
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingBottom: 12 }}>
                 <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 18, color: '#2d2d2d' }}>My HD Wishes 🌟</Text>
-                <Pressable onPress={() => setShowWishesSheet(false)} style={{ padding: 6 }}>
+                <Pressable onPress={() => setShowWishesSheet(false)} style={({ pressed }) => [{ padding: 6 }, pressed && { opacity: 0.7 }]}>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#a09274' }}>Close</Text>
                 </Pressable>
               </View>
@@ -1779,14 +1796,14 @@ function MemberDetailPage({
                           currentUserId={currentAuthId ?? undefined}
                         />
                         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                          <Pressable onPress={cancelNewWish} style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 10, paddingVertical: 10 }}>
+                          <Pressable onPress={cancelNewWish} style={({ pressed }) => [{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 10, paddingVertical: 10 }, pressed && { opacity: 0.7 }]}>
                             <Text style={{ fontFamily: 'Lato_700Bold', color: '#8e7a5e', textAlign: 'center', fontSize: 13 }}>Cancel</Text>
                           </Pressable>
-                          <Pressable onPress={saveNewWish} disabled={!newWishInput.trim()} style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}>
+                          <Pressable onPress={saveNewWish} disabled={!newWishInput.trim()} style={({ pressed }) => [{ flex: 2, backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }, pressed && { opacity: 0.7 }]}>
                             <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>Add HD Wish</Text>
                           </Pressable>
                         </View>
-                        <Pressable onPress={() => refineWithClive(newWishInput)} disabled={!newWishInput.trim()} style={{ alignItems: 'center', paddingVertical: 6, opacity: newWishInput.trim() ? 1 : 0.4 }}>
+                        <Pressable onPress={() => refineWithClive(newWishInput)} disabled={!newWishInput.trim()} style={({ pressed }) => [{ alignItems: 'center', paddingVertical: 6, opacity: newWishInput.trim() ? 1 : 0.4 }, pressed && { opacity: 0.7 }]}>
                           <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', fontSize: 13 }}>Refine with Clive ✨</Text>
                         </Pressable>
                       </View>
@@ -1854,15 +1871,11 @@ function MemberDetailPage({
                     {dailyAnswers.length} question{dailyAnswers.length !== 1 ? 's' : ''} answered
                   </Text>
                 </View>
-                <Pressable
+                <CloseButton
                   onPress={() => setShowDailyAnswersSheet(false)}
-                  accessibilityRole="button"
                   accessibilityLabel="Close daily answers"
-                  hitSlop={8}
-                  style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f3ee' }}
-                >
-                  <Ionicons name="close" size={24} color="#8e7a5e" />
-                </Pressable>
+                  backgroundColor="#f5f3ee"
+                />
               </View>
 
               <BounceScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
@@ -1960,7 +1973,7 @@ function MemberDetailPage({
                   onPress={() => setShowDailyAnswersSheet(true)}
                   accessibilityRole="button"
                   accessibilityLabel={`View ${member.name}'s daily question answers`}
-                  style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, backgroundColor: '#f6f4e5', paddingHorizontal: 15, paddingVertical: 4, borderRadius: 20 }}
+                  style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', marginTop: 6, backgroundColor: '#f6f4e5', paddingHorizontal: 15, paddingVertical: 4, borderRadius: 20 }, pressed && { opacity: 0.7 }]}
                 >
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#8e7a5e' }}>
                     ✨ {member.questionAnswerCount} daily Q&A{' '}
@@ -1996,7 +2009,7 @@ function MemberDetailPage({
                     disabled={startingMessage}
                     accessibilityRole="button"
                     accessibilityLabel={`Message ${member.name}`}
-                    style={{
+                    style={({ pressed }) => [{
                       backgroundColor: '#bd9348',
                       borderRadius: 999,
                       paddingVertical: 8,
@@ -2007,7 +2020,7 @@ function MemberDetailPage({
                       flexDirection: 'row',
                       gap: 6,
                       opacity: startingMessage ? 0.6 : 1,
-                    }}
+                    }, pressed && { opacity: 0.7 }]}
                   >
                     <Ionicons name="chatbubble-ellipses-outline" size={15} color="white" />
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: 'white' }}>
@@ -2173,7 +2186,7 @@ function MemberDetailPage({
                             <Pressable
                               key={i}
                               onPress={() => setDraftSkillList(prev => prev.filter((_, idx) => idx !== i))}
-                              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 24, paddingHorizontal: 12, paddingVertical: 7 }}
+                              style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 24, paddingHorizontal: 12, paddingVertical: 7 }, pressed && { opacity: 0.7 }]}
                             >
                               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', marginRight: 5 }}>{skill}</Text>
                               <Text style={{ fontSize: 15, color: '#bd9348', lineHeight: 18 }}>×</Text>
@@ -2198,7 +2211,7 @@ function MemberDetailPage({
                     {/* Go deeper toggle */}
                     <Pressable
                       onPress={() => setShowDeeper(v => !v)}
-                      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: showDeeper ? '#fdf3dc' : '#f5f3ee', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: showDeeper ? 12 : 16 }}
+                      style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: showDeeper ? '#fdf3dc' : '#f5f3ee', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: showDeeper ? 12 : 16 }, pressed && { opacity: 0.7 }]}
                     >
                       <View>
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>Want to go deeper? 🐝</Text>
@@ -2226,14 +2239,14 @@ function MemberDetailPage({
                       <Pressable
                         disabled={saving}
                         onPress={() => setEditing(false)}
-                        style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 12, paddingVertical: 12, opacity: saving ? 0.55 : 1 }}
+                        style={({ pressed }) => [{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 12, paddingVertical: 12, opacity: saving ? 0.55 : 1 }, pressed && { opacity: 0.7 }]}
                       >
                         <Text style={{ fontFamily: 'Lato_700Bold', color: '#2d2d2d', textAlign: 'center' }}>Cancel</Text>
                       </Pressable>
                       <Pressable
                         disabled={saving}
                         onPress={saveProfilePrompts}
-                        style={{ flex: 1, backgroundColor: '#bd9348', borderRadius: 12, paddingVertical: 12, opacity: saving ? 0.55 : 1 }}
+                        style={({ pressed }) => [{ flex: 1, backgroundColor: '#bd9348', borderRadius: 12, paddingVertical: 12, opacity: saving ? 0.55 : 1 }, pressed && { opacity: 0.7 }]}
                       >
                         <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center' }}>
                           {saving ? 'Saving...' : 'Save'}
@@ -2430,14 +2443,14 @@ function MemberDetailPage({
                         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
                           <Pressable
                             onPress={cancelNewWish}
-                            style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 10, paddingVertical: 10 }}
+                            style={({ pressed }) => [{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 10, paddingVertical: 10 }, pressed && { opacity: 0.7 }]}
                           >
                             <Text style={{ fontFamily: 'Lato_700Bold', color: '#8e7a5e', textAlign: 'center', fontSize: 13 }}>Cancel</Text>
                           </Pressable>
                           <Pressable
                             onPress={saveNewWish}
                             disabled={!newWishInput.trim()}
-                            style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}
+                            style={({ pressed }) => [{ flex: 2, backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }, pressed && { opacity: 0.7 }]}
                           >
                             <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>Add HD Wish</Text>
                           </Pressable>
@@ -2445,7 +2458,7 @@ function MemberDetailPage({
                         <Pressable
                           onPress={() => refineWithClive(newWishInput)}
                           disabled={!newWishInput.trim()}
-                          style={{ alignItems: 'center', paddingVertical: 6, opacity: newWishInput.trim() ? 1 : 0.4 }}
+                          style={({ pressed }) => [{ alignItems: 'center', paddingVertical: 6, opacity: newWishInput.trim() ? 1 : 0.4 }, pressed && { opacity: 0.7 }]}
                         >
                           <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', fontSize: 13 }}>Refine with Clive ✨</Text>
                         </Pressable>
@@ -2505,7 +2518,7 @@ function MemberDetailPage({
                   {introNeedsToggle && (
                     <Pressable
                       onPress={() => setIntroExpanded(value => !value)}
-                      style={{ alignSelf: 'flex-start', backgroundColor: '#fffaf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, marginTop: 12 }}
+                      style={({ pressed }) => [{ alignSelf: 'flex-start', backgroundColor: '#fffaf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, marginTop: 12 }, pressed && { opacity: 0.7 }]}
                     >
                       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
                         {introExpanded ? 'Show less' : 'Read full intro'}
@@ -2544,7 +2557,7 @@ function MemberDetailPage({
                     setDraftSkillList(skillsInThisHive.map(s => s.description));
                     setShowSkillPicker(true);
                   }}
-                  style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 9, borderStyle: 'dashed', alignSelf: 'flex-start' }}
+                  style={({ pressed }) => [{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 9, borderStyle: 'dashed', alignSelf: 'flex-start' }, pressed && { opacity: 0.7 }]}
                 >
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#bd9348' }}>+ Seed your Skills Garden 🌱</Text>
                 </Pressable>
@@ -2566,13 +2579,13 @@ function MemberDetailPage({
                     <Pressable
                       onPress={() => router.push({ pathname: '/profile', params: { focus: 'garden', from: 'members' } })}
                       accessibilityRole="button"
-                      style={{
+                      style={({ pressed }) => [{
                         marginTop: 12,
                         backgroundColor: '#315d4e',
                         borderRadius: 999,
                         paddingVertical: 7,
                         paddingHorizontal: 16,
-                      }}
+                      }, pressed && { opacity: 0.7 }]}
                     >
                       <Text style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 12 }}>
                         Plant your garden here
@@ -2591,7 +2604,7 @@ function MemberDetailPage({
               )}
             </View>
 
-            <Pressable onPress={onClose} style={{ backgroundColor: '#fdf8ec', borderRadius: 14, paddingVertical: 14, marginTop: 4 }}>
+            <Pressable onPress={onClose} style={({ pressed }) => [{ backgroundColor: '#fdf8ec', borderRadius: 14, paddingVertical: 14, marginTop: 4 }, pressed && { opacity: 0.7 }]}>
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Close</Text>
             </Pressable>
             </View>
@@ -2599,20 +2612,12 @@ function MemberDetailPage({
           {/* Hidden while an overlay sheet is up — it was floating over the
               Daily Answers header and colliding with that sheet's Close. */}
           {!selectedWish && !showDailyAnswersSheet && (
-            <Pressable
-              // Both handlers on purpose: press-in makes the X instant under
-              // a finger, plain press is what a keyboard or screen reader
-              // fires. Closing twice is harmless — the dismissal ref makes
-              // the second call a no-op.
+            <CloseButton
               onPress={onClose}
-              onPressIn={onClose}
-              accessibilityRole="button"
               accessibilityLabel="Close member profile"
-              hitSlop={8}
-              style={{ position: 'absolute', right: 18, top: 8, width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f3ee', zIndex: 100, elevation: 100 }}
-            >
-              <Ionicons name="close" size={24} color="#8e7a5e" />
-            </Pressable>
+              backgroundColor="#f5f3ee"
+              style={{ position: 'absolute', right: 18, top: 8, zIndex: 100, elevation: 100 }}
+            />
           )}
         </View>
       <UndoBar
@@ -3413,7 +3418,7 @@ export default function MembersScreen() {
               style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: skin.ink, flex: 1 }}
             />
             {search.length > 0 && (
-              <Pressable onPress={() => setSearch('')}>
+              <Pressable onPress={() => setSearch('')} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
                 <Text style={{ color: '#a09274', fontSize: 18, lineHeight: 20 }}>×</Text>
               </Pressable>
             )}
@@ -3440,14 +3445,14 @@ export default function MembersScreen() {
                 <Pressable
                   key={option.mode}
                   onPress={() => setMemberViewMode(option.mode)}
-                  style={{
+                  style={({ pressed }) => [{
                     borderRadius: 999,
                     backgroundColor: active ? '#bd9348' : 'transparent',
                     paddingHorizontal: 14,
                     paddingVertical: 7,
                     minWidth: listContentWidth < 324 ? 108 : 128,
                     alignItems: 'center',
-                  }}
+                  }, pressed && { opacity: 0.7 }]}
                 >
                   <Text
                     style={{
@@ -3468,7 +3473,7 @@ export default function MembersScreen() {
                 onPress={() => setSortMenuOpen(open => !open)}
                 accessibilityRole="button"
                 accessibilityLabel={`Sort members, currently by ${MEMBER_SORT_OPTIONS.find(option => option.key === memberSort)?.label ?? 'First name'}`}
-                style={{
+                style={({ pressed }) => [{
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 5,
@@ -3478,7 +3483,7 @@ export default function MembersScreen() {
                   borderColor: 'rgba(222,193,129,0.45)',
                   paddingHorizontal: 12,
                   paddingVertical: 6,
-                }}
+                }, pressed && { opacity: 0.7 }]}
               >
                 <Ionicons name="swap-vertical" size={12} color="#8f7b55" />
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8f7b55' }}>
@@ -3496,14 +3501,14 @@ export default function MembersScreen() {
                         onPress={() => selectMemberSort(option.key)}
                         accessibilityRole="button"
                         accessibilityLabel={`Sort members by ${option.label}`}
-                        style={{
+                        style={({ pressed }) => [{
                           borderRadius: 999,
                           borderWidth: 1,
                           borderColor: active ? '#bd9348' : 'rgba(222,193,129,0.45)',
                           backgroundColor: active ? '#bd9348' : 'rgba(255,255,255,0.78)',
                           paddingHorizontal: 12,
                           paddingVertical: 6,
-                        }}
+                        }, pressed && { opacity: 0.7 }]}
                       >
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: active ? '#fffdf7' : '#8f7b55' }}>
                           {option.label}
@@ -3730,14 +3735,14 @@ export default function MembersScreen() {
                       <Pressable
                         key={member.id}
                         onPress={() => openMemberProfile(member)}
-                        style={{
+                        style={({ pressed }) => [{
                           position: 'absolute',
                           left,
                           top,
                           width: honeycombCellWidth,
                           alignItems: 'center',
                           zIndex: isMe ? visibleMembers.length + 10 : visibleMembers.length - index,
-                        }}
+                        }, pressed && { opacity: 0.7 }]}
                       >
                         <HoneycombCardShell isMe={isMe} height={honeycombCardHeight} width={honeycombCellWidth}>
                           {isPhoneHoneycomb ? (
