@@ -458,16 +458,60 @@ function CarryForwardPreviewList({ items }: { items: PopPreviewCarryForwardItem[
  * wall a day earlier.
  */
 function PanelTabStrip({ edge, children }: { edge: string; children: ReactNode }) {
+  const scrollRef = useRef<ScrollView>(null);
   const [visibleWidth, setVisibleWidth] = useState(0);
   const [rowWidth, setRowWidth] = useState(0);
   const [scrolledBy, setScrolledBy] = useState(0);
   // Four points of slack, so a rounding difference between the row and the box
   // never leaves an arrow pointing at nothing.
+  const moreToTheLeft = scrolledBy > 4;
   const moreToTheRight = rowWidth - visibleWidth - scrolledBy > 4;
+  const move = (direction: -1 | 1) => {
+    const distance = Math.max(120, visibleWidth * 0.7);
+    const max = Math.max(0, rowWidth - visibleWidth);
+    scrollRef.current?.scrollTo({
+      x: Math.max(0, Math.min(max, scrolledBy + direction * distance)),
+      animated: true,
+    });
+  };
+  const arrow = (direction: -1 | 1) => (
+    <Pressable
+      onPress={() => move(direction)}
+      accessibilityRole="button"
+      accessibilityLabel={direction < 0 ? 'Show earlier tabs' : 'Show more tabs'}
+      hitSlop={6}
+      style={({ pressed }) => ({
+        position: 'absolute',
+        [direction < 0 ? 'left' : 'right']: 0,
+        top: 0,
+        bottom: 0,
+        justifyContent: 'center',
+        opacity: pressed ? 0.65 : 1,
+      })}
+    >
+      <View
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: 12,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'rgba(11,11,18,0.96)',
+          borderWidth: 1,
+          borderColor: edge,
+        }}
+      >
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, lineHeight: 18, color: SPACE_SKIN.gold }}>
+          {direction < 0 ? '‹' : '›'}
+        </Text>
+      </View>
+    </Pressable>
+  );
 
   return (
     <View>
       <ScrollView
+        ref={scrollRef}
         horizontal
         showsHorizontalScrollIndicator={false}
         onLayout={(event) => setVisibleWidth(event.nativeEvent.layout.width)}
@@ -480,32 +524,8 @@ function PanelTabStrip({ edge, children }: { edge: string; children: ReactNode }
       >
         {children}
       </ScrollView>
-      {moreToTheRight ? (
-        // Sits over the last visible tab and lets every press through to it.
-        <View
-          pointerEvents="none"
-          style={{ position: 'absolute', right: 0, top: 0, bottom: 0, justifyContent: 'center' }}
-        >
-          <View
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: 11,
-              alignItems: 'center',
-              justifyContent: 'center',
-              // Near-opaque, because it floats over the star field as well as
-              // over a tab, and a see-through arrow on stars is a smudge.
-              backgroundColor: 'rgba(11,11,18,0.92)',
-              borderWidth: 1,
-              borderColor: edge,
-            }}
-          >
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, lineHeight: 16, color: SPACE_SKIN.gold }}>
-              ›
-            </Text>
-          </View>
-        </View>
-      ) : null}
+      {moreToTheLeft ? arrow(-1) : null}
+      {moreToTheRight ? arrow(1) : null}
     </View>
   );
 }
@@ -520,6 +540,7 @@ function PanelTabStrip({ edge, children }: { edge: string; children: ReactNode }
 // "this belongs to all of them" while wearing the same folder.
 function AdminPanel({
   title,
+  titleTabKey,
   tabs,
   activeTab,
   onTabChange,
@@ -530,6 +551,8 @@ function AdminPanel({
   children,
 }: {
   title: string;
+  /** When supplied, the folder name is also its first selectable tab. */
+  titleTabKey?: string;
   /**
    * Extra folder tabs beside the title. Nat's idea, 2026-08-04:
    *
@@ -677,22 +700,49 @@ function AdminPanel({
   return (
     <View style={[{ marginBottom: 0 }, style]}>
       <PanelTabStrip edge={edge}>
-        {/* THE NAME. The tab that says whose folder this is, and the only one
-            that is not a place you can go. */}
-        <View
-          style={{
-            ...tabShape,
-            backgroundColor: tabFill,
-            borderTopLeftRadius: 14,
-            borderTopRightRadius: 14,
-            paddingHorizontal: narrow ? 12 : 14,
-            paddingVertical: 7,
-          }}
-        >
-          <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: narrow ? 15.5 : 17, color: tabText }}>
-            {title}
-          </Text>
-        </View>
+        {/* THE NAME. Newsletter combines its name with its ideas worktop, so its
+            name is also a real first tab. HIVE folders keep a static name. */}
+        {titleTabKey ? (
+          <Pressable
+            onPress={() => onTabChange?.(titleTabKey)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === titleTabKey }}
+            style={{
+              ...tabShape,
+              backgroundColor: activeTab === titleTabKey ? tabFill : 'rgba(255,248,233,0.07)',
+              borderTopLeftRadius: 14,
+              borderTopRightRadius: 14,
+              paddingHorizontal: narrow ? 12 : 14,
+              paddingVertical: activeTab === titleTabKey ? 7 : 5,
+            }}
+          >
+            <Text
+              numberOfLines={1}
+              style={{
+                fontFamily: 'Lato_700Bold',
+                fontSize: narrow ? 15.5 : 17,
+                color: activeTab === titleTabKey ? tabText : 'rgba(255,248,233,0.72)',
+              }}
+            >
+              {title}
+            </Text>
+          </Pressable>
+        ) : (
+          <View
+            style={{
+              ...tabShape,
+              backgroundColor: tabFill,
+              borderTopLeftRadius: 14,
+              borderTopRightRadius: 14,
+              paddingHorizontal: narrow ? 12 : 14,
+              paddingVertical: 7,
+            }}
+          >
+            <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: narrow ? 15.5 : 17, color: tabText }}>
+              {title}
+            </Text>
+          </View>
+        )}
         {(tabs ?? []).map(renderTab)}
         {/* THE ACTION, wearing the folder's shape and the folder's OWN colour.
             Gold for OG, blue for Tech, purple for Production.

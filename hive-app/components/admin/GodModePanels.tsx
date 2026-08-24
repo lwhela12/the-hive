@@ -12,6 +12,7 @@ import { formatDateMedium } from '../../lib/dateUtils';
 import { SPACE_SKIN } from '../../lib/pageSkin';
 import { showAlert } from '../../lib/showAlert';
 import { userFacingError } from '../../lib/userFacingError';
+import { currentNewsletterDraft, newsletterIssueHistory } from '../../lib/newsletterIssues';
 import { listDeletedWishes, restoreWishById, type DeletedWish } from '../../lib/wishMutations';
 import {
   CHECK_INS_COMING_SOON_MESSAGE,
@@ -718,12 +719,13 @@ export function NewsletterPanel({
     ...memberEmails,
   ]).size;
   /**
-   * The letter in progress — written, never sent, never published.
-   *
-   * The same test The Buzz uses, so "still a draft" means one thing in both
-   * places: it clears from here the moment Send to everyone goes through.
+   * The one genuine letter in progress. Imported pre-send issues are history,
+   * even though they have no `newsletter_sends` row and kept members-only
+   * visibility. The shared policy also protects the writer page from reopening
+   * June as this month's draft.
    */
-  const draftIssue = issues.find((issue) => !issue.sentAt && issue.visibility !== 'public') ?? null;
+  const draftIssue = currentNewsletterDraft(issues);
+  const issueHistory = newsletterIssueHistory(issues, draftIssue);
 
   /**
    * Send an issue. A test goes only to whoever pressed it; a live send goes
@@ -772,15 +774,11 @@ export function NewsletterPanel({
           the component already did, which is the drift this whole day has been
           about. */}
       <Panel
-        title="Newsletter"
-        // In the order the work happens. Nat, 2026-08-17: *"first we collect
-        // the survey responses which are called shout-outs, then we write this
-        // month's newsletter, then we test it, and that's the order that it
-        // goes in."* Signed-up is a list you consult, so it stays last.
+        title={`Newsletter (${shoutOuts.length + newsletterThoughts.length})`}
+        titleTabKey="shoutouts"
+        // The folder name IS the ideas worktop now. That removes the duplicate
+        // first tab and gives Nat one obvious way back to collected material.
         tabs={[
-          { key: 'shoutouts', label: `Ideas & shout-outs (${shoutOuts.length + newsletterThoughts.length})` },
-          // The draft quotes members before Nat has chosen what stays in, so
-          // the tab itself is hers alone. Anyone else never sees the door.
           ...(profile?.is_owner ? [{ key: 'write', label: 'Write this month’s' }] : []),
           // Sending speaks for HIVE to everybody it has an address for, so
           // the door is owners-only, same as writing.
@@ -864,36 +862,22 @@ export function NewsletterPanel({
                 Public privacy check: use collective totals and open invitations only. No member names,
                 profiles, HIVE membership, roles, ownership clues, private wishes/posts, or internal project details.
               </Text>
-              {issues.length === 0 ? (
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: SPACE_SKIN.inkSoft, lineHeight: 19 }}>
-                  No issues written yet. Write one first, and it will show up here.
-                </Text>
-              ) : issues.slice(0, 1).map((issue) => (
+              {draftIssue ? (
                 <View
-                  key={issue.id}
                   style={{
                     borderWidth: 1, borderColor: SPACE_SKIN.border, backgroundColor: SPACE_SKIN.card,
                     borderRadius: 12, padding: 11, gap: 8,
                   }}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13.5, color: SPACE_SKIN.ink }}>
-                    {issue.title}
+                    {draftIssue.title}
                   </Text>
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: SPACE_SKIN.inkSoft }}>
-                    {issue.sentAt
-                      ? `Sent ${String(issue.sentAt).slice(0, 10)} to ${issue.sentCount} ${issue.sentCount === 1 ? 'person' : 'people'}`
-                      : issue.visibility === 'public'
-                        ? 'Published — never emailed'
-                        : 'Draft — publish it before you send'}
+                    Draft — test it here when it is ready
                   </Text>
-                  {issue.sentAt ? (
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 12, color: SPACE_SKIN.inkSoft }}>
-                      Done and dusted 🐝
-                    </Text>
-                  ) : (
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     <Pressable
-                      onPress={() => { void sendIssue(issue, 'test'); }}
+                      onPress={() => { void sendIssue(draftIssue, 'test'); }}
                       disabled={!!sending}
                       style={({ pressed }) => ({
                         borderWidth: 1, borderColor: SPACE_SKIN.border, borderRadius: 999,
@@ -902,11 +886,11 @@ export function NewsletterPanel({
                       })}
                     >
                       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.ink }}>
-                        {sending === `${issue.id}:test` ? 'Sending…' : 'Send test to me'}
+                        {sending === `${draftIssue.id}:test` ? 'Sending…' : 'Send test to me'}
                       </Text>
                     </Pressable>
                     <Pressable
-                      onPress={() => setConfirmSend(issue)}
+                      onPress={() => setConfirmSend(draftIssue)}
                       disabled={!!sending}
                       style={({ pressed }) => ({
                         backgroundColor: SPACE_SKIN.gold, borderRadius: 999,
@@ -915,40 +899,36 @@ export function NewsletterPanel({
                       })}
                     >
                       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#1b1a16' }}>
-                        {sending === `${issue.id}:live` ? 'Sending…' : 'Send to everyone'}
+                        {sending === `${draftIssue.id}:live` ? 'Sending…' : 'Send to everyone'}
                       </Text>
                     </Pressable>
                   </View>
-                  )}
                 </View>
-              ))}
+              ) : (
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: SPACE_SKIN.inkSoft, lineHeight: 19 }}>
+                  Nothing is waiting to test or send. Start the next issue in Write this month’s.
+                </Text>
+              )}
 
-              {/* EARLIER ISSUES — read-only on purpose.
-                  Every issue used to get its own pair of buttons, which turned
-                  a shelf of finished work into a to-do list. Nat, seeing it
-                  live 2026-08-12: *"how do i get rid of those buttons? i dont
-                  like feeling like i have 'un done' tasks, and i dont want to
-                  accidently send out an old one. those have all been accounted
-                  for in various ways."* Both halves of that are the same fix:
-                  only the newest issue can be sent, so the older ones cannot
-                  nag and cannot go out by accident. */}
-              {issues.length > 1 ? (
-                <View style={{ borderTopWidth: 1, borderTopColor: PANEL_HAIRLINE, paddingTop: 10, gap: 5 }}>
+              {issueHistory.length > 0 ? (
+                <View style={{ borderTopWidth: 1, borderTopColor: PANEL_HAIRLINE, paddingTop: 10, gap: 7 }}>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: SPACE_SKIN.inkSoft }}>
-                    Earlier issues
+                    Sent & past issues
                   </Text>
-                  {issues.slice(1).map((issue) => (
-                    <Text
-                      key={issue.id}
-                      style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 19, color: SPACE_SKIN.inkSoft }}
-                    >
-                      {issue.title}
-                      {issue.sentAt ? ` · emailed ${String(issue.sentAt).slice(0, 10)}` : ''}
-                    </Text>
+                  {issueHistory.map((issue) => (
+                    <View key={issue.id} style={{ gap: 1 }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, lineHeight: 18, color: SPACE_SKIN.ink }}>
+                        {issue.title}
+                      </Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, lineHeight: 17, color: SPACE_SKIN.inkSoft }}>
+                        {issue.sentAt
+                          ? `Emailed ${String(issue.sentAt).slice(0, 10)} to ${issue.sentCount} ${issue.sentCount === 1 ? 'person' : 'people'}`
+                          : issue.visibility === 'public'
+                            ? 'Published'
+                            : 'Past issue · before in-app sending'}
+                      </Text>
+                    </View>
                   ))}
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 11.5, lineHeight: 17, color: SPACE_SKIN.inkSoft, paddingTop: 2 }}>
-                    Done and dusted — only the newest issue can be sent from here.
-                  </Text>
                 </View>
               ) : null}
             </View>

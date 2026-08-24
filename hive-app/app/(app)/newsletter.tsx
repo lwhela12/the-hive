@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../../lib/supabase';
 import { userFacingError } from '../../lib/userFacingError';
+import { currentNewsletterDraft } from '../../lib/newsletterIssues';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { getAppNewsForMonth } from '../../lib/appNews';
 import { useAppNews } from '../../lib/hooks/useAppNews';
@@ -382,9 +383,11 @@ export default function NewsletterScreen() {
      */
     const { data: sends } = await supabase
       .from('newsletter_sends')
-      .select('post_id')
+      .select('post_id, created_at')
       .eq('mode', 'live');
-    const sentIds = new Set(((sends ?? []) as { post_id: string }[]).map((s) => s.post_id));
+    const sentAtById = new Map(
+      ((sends ?? []) as { post_id: string; created_at: string }[]).map((send) => [send.post_id, send.created_at])
+    );
 
     const { data: boardRows } = await supabase
       .from('board_categories')
@@ -396,15 +399,16 @@ export default function NewsletterScreen() {
     if (newsletterBoardIds.length > 0) {
       const { data: drafts } = await supabase
         .from('board_posts')
-        .select('id, title, content, visibility')
+        .select('id, title, content, visibility, created_at')
         .in('category_id', newsletterBoardIds)
         .is('archived_at', null)
-        .neq('visibility', 'public')
         .order('created_at', { ascending: false })
         .limit(10);
-      const inProgress = ((drafts ?? []) as { id: string; title: string; content: string }[])
-        .find((row) => !sentIds.has(row.id) && String(row.content ?? '').trim());
-      if (inProgress) {
+      const candidates = ((drafts ?? []) as {
+        id: string; title: string; content: string; visibility: string | null; created_at: string;
+      }[]).map((row) => ({ ...row, sentAt: sentAtById.get(row.id) ?? null }));
+      const inProgress = currentNewsletterDraft(candidates);
+      if (inProgress && String(inProgress.content ?? '').trim()) {
         setProse(inProgress.content);
         setRecapTitle(inProgress.title);
         setExistingDraft(true);
@@ -498,21 +502,24 @@ export default function NewsletterScreen() {
        */
       const { data: sends } = await supabase
         .from('newsletter_sends')
-        .select('post_id')
+        .select('post_id, created_at')
         .eq('mode', 'live');
-      const sent = new Set(((sends ?? []) as { post_id: string }[]).map((s) => s.post_id));
+      const sentAtById = new Map(
+        ((sends ?? []) as { post_id: string; created_at: string }[]).map((send) => [send.post_id, send.created_at])
+      );
 
       const { data: drafts } = await supabase
         .from('board_posts')
-        .select('id, visibility')
+        .select('id, visibility, created_at')
         .eq('category_id', board.id)
         .is('archived_at', null)
-        .neq('visibility', 'public')
         .order('created_at', { ascending: false })
         .limit(10);
 
-      const inProgress = ((drafts ?? []) as { id: string; visibility: string }[])
-        .find((row) => !sent.has(row.id));
+      const candidates = ((drafts ?? []) as {
+        id: string; visibility: string | null; created_at: string;
+      }[]).map((row) => ({ ...row, sentAt: sentAtById.get(row.id) ?? null }));
+      const inProgress = currentNewsletterDraft(candidates);
 
       const { data: byMonth } = inProgress ? { data: null } : await supabase
         .from('board_posts')
