@@ -3,15 +3,33 @@ import { Image, Platform, Pressable, TextInput, View, Text, useWindowDimensions 
 import { headerForSection } from '../../lib/newsletterHeaders';
 import { MentionSuggestions } from '../ui/MentionSuggestions';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
-import { getMentionedMembers, getMentionTargetHandle } from '../../lib/mentions';
 import type { Profile } from '../../types';
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 function firstNameOf(name: string): string {
   return name.trim().split(/\s+/)[0] || name;
+}
+
+/**
+ * Whoever the last "@word" in the text actually names — by first-name
+ * prefix, not an exact handle. Nat, 2026-08-24: typed "@meg" and blurred
+ * without tapping the dropdown row, and the exact-handle matcher this
+ * replaced didn't recognise "meg" as "Meghan" — the line saved with a
+ * literal, unresolved "@meg" in it instead of reassigning anything. A
+ * prefix match is what "just doing the @ thing" actually needs: type the
+ * start of a name, click away, done. Ambiguous (two names sharing a
+ * prefix) resolves to nobody rather than guessing wrong.
+ */
+function resolveMentionedMember(
+  text: string,
+  members: Pick<Profile, 'id' | 'name'>[],
+): Pick<Profile, 'id' | 'name'> | null {
+  const at = text.lastIndexOf('@');
+  if (at === -1) return null;
+  const match = text.slice(at + 1).match(/^[a-z0-9._-]+/i);
+  if (!match) return null;
+  const query = match[0].toLowerCase();
+  const matches = members.filter((member) => firstNameOf(member.name).toLowerCase().startsWith(query));
+  return matches.length === 1 ? matches[0] : null;
 }
 
 /**
@@ -256,12 +274,12 @@ export function SummarySections({
         onDeleteDuty(key, original, dutyMeta.action_item_ids);
         return;
       }
-      const mentioned = mentionMembers ? getMentionedMembers(text, mentionMembers) : [];
-      if (mentioned.length > 0 && onReassignByMention) {
-        const member = mentioned[0];
-        const cleaned = text
-          .replace(new RegExp(`@${escapeRegExp(getMentionTargetHandle(member))}\\s*`, 'i'), '')
-          .trim();
+      const member = mentionMembers ? resolveMentionedMember(text, mentionMembers) : null;
+      if (member && onReassignByMention) {
+        const at = text.lastIndexOf('@');
+        const cleaned = at === -1
+          ? text.trim()
+          : `${text.slice(0, at)}${text.slice(at).replace(/^@[a-z0-9._-]*\s*/i, '')}`.trim();
         const finalText = /—\s*[^—]+$/.test(cleaned)
           ? cleaned.replace(/—\s*[^—]+$/, `— ${firstNameOf(member.name)}`)
           : `${cleaned} — ${firstNameOf(member.name)}`;
