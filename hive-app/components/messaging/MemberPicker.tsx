@@ -12,6 +12,10 @@ interface MemberPickerProps {
   onSelect: (member: Profile) => void;
   onSelectMultiple?: (members: Profile[]) => void;
   multiSelect?: boolean;
+  /** Overrides the header — this picker started life for "New Message" / "New Group" only. */
+  title?: string;
+  /** Messaging can't message yourself; reassigning a duty legitimately can go to yourself. Defaults to the messaging behavior. */
+  excludeSelf?: boolean;
 }
 
 export function MemberPicker({
@@ -20,6 +24,8 @@ export function MemberPicker({
   onSelect,
   onSelectMultiple,
   multiSelect = true,
+  title,
+  excludeSelf = true,
 }: MemberPickerProps) {
   const { profile, communityId } = useAuth();
   const [members, setMembers] = useState<Profile[]>([]);
@@ -40,11 +46,12 @@ export function MemberPicker({
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('community_memberships')
         .select('user:profiles(*)')
-        .eq('community_id', communityId)
-        .neq('user_id', profile.id);
+        .eq('community_id', communityId);
+      if (excludeSelf) query = query.neq('user_id', profile.id);
+      const { data, error } = await query;
 
       if (!error && data) {
         const profiles = data
@@ -99,6 +106,7 @@ export function MemberPicker({
   };
 
   const getHeaderTitle = () => {
+    if (title) return title;
     if (!multiSelect) return 'New Message';
     if (selectedMembers.length === 0) return 'New Message';
     if (selectedMembers.length === 1) return 'New Message';

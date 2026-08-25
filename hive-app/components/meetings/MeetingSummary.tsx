@@ -24,6 +24,7 @@ import {
 } from './SpeakerNames';
 import type { Meeting, ActionItem, Profile } from '../../types';
 import { BackButton } from '../ui/BackButton';
+import { MemberPicker } from '../messaging/MemberPicker';
 
 interface MeetingSummaryProps {
   meeting: Meeting;
@@ -84,6 +85,14 @@ interface ParsedSummary {
     confirmed_absentee_ids?: string[];
     confirmed_absentee_names?: string[];
   };
+  /**
+   * Which real `action_items` row(s) a "Confirmed duty" line actually is.
+   * Nat, 2026-08-24, after editing a duty's text from Nic to Meg: "does that
+   * update the appropriate to do list?" It didn't — this is what lets a
+   * reassign actually change the real to-do, keyed by the same `lineKey()`
+   * SummarySections.tsx uses to edit the line's text.
+   */
+  duty_index?: Record<string, { action_item_ids: string[]; owner_ids: (string | null)[] }>;
   provenance?: {
     kind?: 'automatic_activity_record' | 'reviewed_import' | 'reconciled_helper_record';
     meeting_date?: string;
@@ -339,6 +348,12 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   } | null>(null);
   const [recapPreviewSending, setRecapPreviewSending] = useState<Record<string, boolean>>({});
   const [approvingRecap, setApprovingRecap] = useState(false);
+  const [reassignTarget, setReassignTarget] = useState<{
+    key: string;
+    lineText: string;
+    actionItemIds: string[];
+  } | null>(null);
+  const [reassigning, setReassigning] = useState(false);
   const [summaryToolsOpen, setSummaryToolsOpen] = useState(false);
   const [taskChecklistOpen, setTaskChecklistOpen] = useState(false);
   const [resolvingConflictId, setResolvingConflictId] = useState<string | null>(null);
@@ -753,6 +768,38 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
     if (updated) {
       setMeeting(updated as Meeting);
       onMeetingUpdated?.(updated as Meeting);
+    }
+  };
+
+  /**
+   * A real reassign, not just a rewritten line. Nat, 2026-08-24: "does that
+   * update the appropriate to do list?" — the double-click edit didn't, and
+   * neither would just @-mentioning someone in the text, so this writes the
+   * actual `action_items.assigned_to` and then corrects the line's own text
+   * to match, in the same action — otherwise the summary would say one name
+   * while the real to-do said another.
+   */
+  const reassignDuty = async (member: Profile) => {
+    if (!reassignTarget || !isHiveAdmin) return;
+    setReassigning(true);
+    try {
+      const { error } = await supabase
+        .from('action_items')
+        .update({ assigned_to: member.id })
+        .in('id', reassignTarget.actionItemIds);
+      if (error) throw error;
+
+      const firstName = member.name.trim().split(/\s+/)[0] || member.name;
+      const newLineText = reassignTarget.lineText.replace(/—\s*[^—]+$/, `— ${firstName}`);
+      await saveLineCorrection(reassignTarget.key, newLineText);
+
+      setReassignTarget(null);
+      showAlert('Reassigned', `This duty now belongs to ${firstName} — the real to-do moved, not just the words here.`);
+    } catch (error) {
+      console.error('Error reassigning duty:', error);
+      showAlert('Not reassigned', 'That did not save. Please try again.');
+    } finally {
+      setReassigning(false);
     }
   };
 
@@ -1393,6 +1440,21 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
               lineCorrections={parsedSummary.line_corrections}
               editable={isHiveAdmin}
               onSaveLine={saveLineCorrection}
+              renderDutyAction={(key, currentLineText) => {
+                if (!isHiveAdmin) return null;
+                const duty = parsedSummary.duty_index?.[key];
+                if (!duty || duty.action_item_ids.length === 0) return null;
+                return (
+                  <Pressable
+                    onPress={() => setReassignTarget({ key, lineText: currentLineText, actionItemIds: duty.action_item_ids })}
+                    accessibilityRole="button"
+                    accessibilityLabel="Reassign this duty"
+                    className="self-start"
+                  >
+                    <Text className="text-xs text-honey-800 font-semibold underline">Reassign</Text>
+                  </Pressable>
+                );
+              }}
               renderReview={(review) => (
                 isHiveAdmin ? (
                   <MeetingConflictResolver
@@ -1770,6 +1832,15 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           </View>
         )}
       </ScrollView>
+
+      <MemberPicker
+        visible={!!reassignTarget}
+        onClose={() => setReassignTarget(null)}
+        onSelect={(member) => void reassignDuty(member)}
+        multiSelect={false}
+        excludeSelf={false}
+        title={reassigning ? 'Reassigning…' : 'Reassign this duty to'}
+      />
     </View>
   );
 }

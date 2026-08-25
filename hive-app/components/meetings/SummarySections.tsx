@@ -159,6 +159,7 @@ export function SummarySections({
   lineCorrections,
   editable = false,
   onSaveLine,
+  renderDutyAction,
 }: {
   sections: SummarySection[];
   /** Use the drawn headers. Newsletter yes, meeting summary no. */
@@ -171,6 +172,8 @@ export function SummarySections({
   editable?: boolean;
   /** Persists one line's correction (empty text clears it back to the generated version). */
   onSaveLine?: (key: string, text: string) => Promise<void> | void;
+  /** A "Confirmed duty" line's own action — reassigning who actually owns the to-do, not just its text. Null/undefined renders nothing. */
+  renderDutyAction?: (key: string, currentLineText: string) => ReactNode;
 }) {
   const { width } = useWindowDimensions();
   const [expandedMeetingSections, setExpandedMeetingSections] = useState<Set<string>>(() => new Set());
@@ -276,40 +279,45 @@ export function SummarySections({
                           const effectiveLine = lineCorrections?.[key] ?? line;
                           const duty = effectiveLine.startsWith('Confirmed duty:');
                           const clean = duty ? effectiveLine.replace(/^Confirmed duty:\s*/, '') : effectiveLine;
+                          const isEditingThis = editingKey === key;
                           return (
-                            <EditableLine
-                              key={lineIndex}
-                              editable={editable && !!onSaveLine}
-                              editing={editingKey === key}
-                              draftText={draftText}
-                              onChangeDraft={setDraftText}
-                              onCommit={() => void commitEdit(key, effectiveLine)}
-                              onCancel={() => setEditingKey(null)}
-                              onRequestEdit={() => {
-                                setDraftText(effectiveLine);
-                                setEditingKey(key);
-                              }}
-                              className="flex-row items-start"
-                              inputStyle={{
-                                backgroundColor: '#ffffff',
-                                borderWidth: 1,
-                                borderColor: '#bd9348',
-                                borderRadius: 8,
-                                padding: 8,
-                                fontFamily: 'Lato_400Regular',
-                                fontSize: 14.5,
-                                lineHeight: 21,
-                                color: '#453f37',
-                              }}
-                            >
-                              <Text style={{ color: duty ? '#bd9348' : '#c7a76b', fontSize: 13, lineHeight: 21, marginRight: 8 }}>
-                                {duty ? '✓' : '•'}
-                              </Text>
-                              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14.5, lineHeight: 21, color: '#453f37', flex: 1 }}>
-                                {duty ? <Text style={{ fontFamily: 'Lato_700Bold', color: '#6d5427' }}>Confirmed duty: </Text> : null}
-                                {clean}
-                              </Text>
-                            </EditableLine>
+                            <View key={lineIndex}>
+                              <EditableLine
+                                editable={editable && !!onSaveLine}
+                                editing={isEditingThis}
+                                draftText={draftText}
+                                onChangeDraft={setDraftText}
+                                onCommit={() => void commitEdit(key, effectiveLine)}
+                                onCancel={() => setEditingKey(null)}
+                                onRequestEdit={() => {
+                                  setDraftText(effectiveLine);
+                                  setEditingKey(key);
+                                }}
+                                className="flex-row items-start"
+                                inputStyle={{
+                                  backgroundColor: '#ffffff',
+                                  borderWidth: 1,
+                                  borderColor: '#bd9348',
+                                  borderRadius: 8,
+                                  padding: 8,
+                                  fontFamily: 'Lato_400Regular',
+                                  fontSize: 14.5,
+                                  lineHeight: 21,
+                                  color: '#453f37',
+                                }}
+                              >
+                                <Text style={{ color: duty ? '#bd9348' : '#c7a76b', fontSize: 13, lineHeight: 21, marginRight: 8 }}>
+                                  {duty ? '✓' : '•'}
+                                </Text>
+                                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14.5, lineHeight: 21, color: '#453f37', flex: 1 }}>
+                                  {duty ? <Text style={{ fontFamily: 'Lato_700Bold', color: '#6d5427' }}>Confirmed duty: </Text> : null}
+                                  {clean}
+                                </Text>
+                              </EditableLine>
+                              {duty && !isEditingThis && renderDutyAction ? (
+                                <View style={{ paddingLeft: 21 }}>{renderDutyAction(key, effectiveLine)}</View>
+                              ) : null}
+                            </View>
                           );
                         })}
                       </View>

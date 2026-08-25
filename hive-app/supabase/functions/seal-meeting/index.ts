@@ -978,7 +978,33 @@ serve(async (req) => {
         ...(context ? [context] : fallbackContext),
         ...dutyLines,
       ];
-      return lines.length > 0 ? [{ title: name, lines, meta: hdByUser.get(checkIn?.user_id ?? '') ?? undefined }] : [];
+      // `_duties` and its offset ride along only to build `duty_index` below —
+      // stripped before this group reaches the stored summary.
+      return lines.length > 0
+        ? [{ title: name, lines, meta: hdByUser.get(checkIn?.user_id ?? '') ?? undefined, _duties: dutiesForPerson, _dutyOffset: lines.length - dutiesForPerson.length }]
+        : [];
+    });
+
+    // Which real `action_items` row(s) each "Confirmed duty" line actually
+    // is — so a reassignment can write to the real to-do, not just repaint
+    // the summary's text. Nat, 2026-08-24, after double-clicking a duty line
+    // from "Nic" to "Meg": "does that update the appropriate to do list?"
+    // It didn't; this is what makes a real reassign possible. Keyed exactly
+    // like SummarySections.tsx's `lineKey()` — section title, group index,
+    // line index within that group.
+    const dutyIndex: Record<string, { action_item_ids: string[]; owner_ids: (string | null)[] }> = {};
+    hummdingerGroups.forEach((group, groupIndex) => {
+      (group._duties ?? []).forEach((duty, dutyIdx) => {
+        const lineIndex = group._dutyOffset + dutyIdx;
+        dutyIndex[`HummDinger Sesh::g${groupIndex}::${lineIndex}`] = {
+          action_item_ids: duty.action_item_ids,
+          owner_ids: duty.owner_ids,
+        };
+      });
+    });
+    hummdingerGroups.forEach((group) => {
+      delete (group as { _duties?: unknown })._duties;
+      delete (group as { _dutyOffset?: unknown })._dutyOffset;
     });
     if (hummdingerGroups.length > 0) sections.push({
       title: 'HummDinger Sesh',
@@ -1072,6 +1098,7 @@ serve(async (req) => {
       events_created: events.length,
       live_sealed_at: rebuiltAt,
       meeting_helper_snapshot: helperSnapshot,
+      duty_index: dutyIndex,
       ...(isRebuild
         ? {
           rebuilt_at: rebuiltAt,
