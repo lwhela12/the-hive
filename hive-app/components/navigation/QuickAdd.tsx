@@ -3,34 +3,20 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth, type HiveMembership } from '../../lib/hooks/useAuth';
 import { supabase } from '../../lib/supabase';
-import { queryClient, queryKeys } from '../../lib/queryClient';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { ComposerBar } from '../ui/ComposerBar';
-import { Input } from '../ui/Input';
 
 const INK = '#313130';
 const GOLD = '#bd9348';
 const QUIET = '#756b5d';
 const BORDER = 'rgba(189,147,72,0.28)';
 
-export type QuickAddDestination = 'meeting' | 'news' | 'newsletter' | null;
+// Nat, 2026-08-24: "i only need 2 shortcuts: news from nat & newsletter
+// idea." The app-wide changelog entry ("New in the app") is still real and
+// still written by hand elsewhere when it's needed — it just doesn't need
+// its own button in a menu she never reaches for.
+export type QuickAddDestination = 'meeting' | 'newsletter' | null;
 type MeetingHelperNotes = Record<string, unknown> & { news?: string };
-
-function localIsoDate(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-
-function defaultNewsDate() {
-  return localIsoDate();
-}
-
-function isRealIsoDate(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year, month, day] = value.split('-').map(Number);
-  const parsed = new Date(year, month - 1, day);
-  return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
-}
 
 function mayManageHive(membership: HiveMembership) {
   return membership.role === 'admin' || membership.role === 'treasurer';
@@ -59,21 +45,15 @@ export function QuickAdd({
   const [destination, setDestination] = useState<QuickAddDestination>(null);
   const [targetHiveId, setTargetHiveId] = useState<string | null>(null);
   const [meetingThought, setMeetingThought] = useState('');
-  const [newsDate, setNewsDate] = useState(defaultNewsDate);
-  const [newsTitle, setNewsTitle] = useState('');
-  const [newsDetail, setNewsDetail] = useState('');
   const [newsletterThought, setNewsletterThought] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
-    setDestination((initialDestination === 'news' || initialDestination === 'newsletter') && !isOwner ? null : initialDestination);
+    setDestination(initialDestination === 'newsletter' && !isOwner ? null : initialDestination);
     setTargetHiveId(wholeHive ? null : communityId ?? null);
     setMeetingThought('');
-    setNewsDate(defaultNewsDate());
-    setNewsTitle('');
-    setNewsDetail('');
     setNewsletterThought('');
     setSaving(false);
     setError(null);
@@ -156,36 +136,6 @@ export function QuickAdd({
       finish();
       return;
     }
-
-    if (!isOwner) {
-      setError('Only the HIVE owner can add app-wide news.');
-      return;
-    }
-    const title = newsTitle.trim();
-    const detail = newsDetail.trim();
-    if (!title) {
-      setError('Add a title before saving.');
-      return;
-    }
-    if (!isRealIsoDate(newsDate)) {
-      setError('Use a real date in YYYY-MM-DD format.');
-      return;
-    }
-
-    setSaving(true);
-    const { error: writeError } = await supabase.from('app_news').insert({
-      occurred_on: newsDate,
-      title,
-      detail: detail || null,
-      created_by: profile.id,
-    });
-    if (writeError) {
-      setSaving(false);
-      setError('That did not save. Check your connection and try again.');
-      return;
-    }
-    await queryClient.invalidateQueries({ queryKey: queryKeys.appNews });
-    finish();
   };
 
   const needsHivePicker = wholeHive && destination === 'meeting';
@@ -223,14 +173,6 @@ export function QuickAdd({
                 />
                 {isOwner ? (
                   <DestinationButton
-                    icon="sparkles-outline"
-                    title="New in the app"
-                    detail="App-wide, not per-HIVE — shows in every HIVE’s deck and is eligible for newsletter facts."
-                    onPress={() => setDestination('news')}
-                  />
-                ) : null}
-                {isOwner ? (
-                  <DestinationButton
                     icon="bulb-outline"
                     title="Newsletter thought"
                     detail="Private note for you. It waits in the Newsletter box until you are ready to write."
@@ -259,15 +201,6 @@ export function QuickAdd({
                     attachments="none"
                     autoFocus={!wholeHive}
                   />
-                ) : destination === 'news' ? (
-                  <View style={{ gap: 10 }}>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 17, color: QUIET }}>
-                      Visible to every HIVE, not just this one — and eligible for newsletter facts. Saving never drafts, previews, publishes or sends.
-                    </Text>
-                    <Input label="Date · YYYY-MM-DD" value={newsDate} onChangeText={setNewsDate} maxLength={10} autoCapitalize="none" autoCorrect={false} style={{ marginBottom: -16 }} />
-                    <ComposerBar variant="form" tone="light" label="Title" value={newsTitle} onChangeText={setNewsTitle} placeholder="What can members do now?" multiline={false} minHeight={44} maxLength={140} counter="none" attachments="none" autoFocus />
-                    <ComposerBar variant="form" tone="light" label="Detail · optional" value={newsDetail} onChangeText={setNewsDetail} placeholder="One short detail" minHeight={58} maxHeight={110} maxLength={500} counter="none" attachments="none" />
-                  </View>
                 ) : (
                   <View style={{ gap: 10 }}>
                     <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 17, color: QUIET }}>
