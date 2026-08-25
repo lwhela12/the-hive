@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#bd9348" />
+    <title>Getting you the newest HIVE</title>
+    <!--
+      The escape hatch for a phone holding an old copy of the app.
+
+      Nat, 2026-08-25, after deleting her home screen shortcut and reinstalling
+      from a second browser and STILL seeing weeks-old code: "there has to be a
+      solution... NO ONE WILL DO THAT and it'll really suck to ask them to."
+
+      She is right. A service worker and its caches belong to the SITE, not to
+      the icon on the home screen, so deleting the shortcut can never shift one.
+      The only tools iOS gives a person are Clear History and Website Data,
+      which signs them out of everything they own, or waiting.
+
+      This page is the third option. It is plain HTML with no bundle behind it,
+      so it loads even when every cached thing the app owns is broken — and the
+      old service worker cannot serve a stale copy of it, because a page is
+      fetched network-first and this file has never existed before.
+
+      What it throws away: HIVE's service workers and HIVE's caches.
+      What it keeps: localStorage — which is where the signed-in session lives
+      (`the-hive-auth`, see lib/supabase.ts). Nobody gets logged out by this,
+      which is the whole reason it beats clearing website data.
+
+      Send someone here once and they land on a current app.
+    -->
+    <style>
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: #f4f0e6;
+        color: #313130;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+      main {
+        min-height: 100%;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 32px 24px calc(32px + env(safe-area-inset-bottom));
+      }
+      .bee { font-size: 44px; line-height: 1; margin-bottom: 18px; }
+      h1 { font-size: 22px; margin: 0 0 10px; font-weight: 700; }
+      p { font-size: 16px; line-height: 24px; margin: 0 0 8px; max-width: 30rem; }
+      .quiet { color: #7a6a52; font-size: 14px; line-height: 21px; }
+      a.button {
+        display: inline-block;
+        margin-top: 22px;
+        background: #bd9348;
+        color: #fff;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 16px;
+        padding: 14px 26px;
+        border-radius: 999px;
+      }
+      #manual { display: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="bee" aria-hidden="true">&#128029;</div>
+      <h1 id="headline">Getting you the newest HIVE</h1>
+      <p id="status">One moment — clearing out the old copy.</p>
+      <p class="quiet">You stay signed in. Nothing else on your phone is touched.</p>
+      <div id="manual">
+        <a class="button" href="/" id="go">Open HIVE</a>
+      </div>
+    </main>
+
+    <script>
+      (function () {
+        var status = document.getElementById('status');
+        var headline = document.getElementById('headline');
+        var manual = document.getElementById('manual');
+
+        // Every step is wrapped on its own: a browser that refuses one of these
+        // (private mode, an old iOS) must still reach the redirect at the end.
+        // Landing on a page that says "one moment" forever would be worse than
+        // the problem it is here to fix.
+        function unregisterWorkers() {
+          if (!('serviceWorker' in navigator)) return Promise.resolve();
+          return navigator.serviceWorker.getRegistrations()
+            .then(function (regs) {
+              return Promise.all(regs.map(function (r) { return r.unregister(); }));
+            })
+            .catch(function () {});
+        }
+
+        function deleteCaches() {
+          if (!window.caches || !caches.keys) return Promise.resolve();
+          return caches.keys()
+            .then(function (keys) {
+              return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+            })
+            .catch(function () {});
+        }
+
+        function done() {
+          // A unique address on the way back, so nothing in between — the
+          // browser's own cache, a proxy — can hand over the same old page one
+          // last time. The app ignores the parameter.
+          window.location.replace('/?fresh=' + Date.now());
+        }
+
+        // If anything hangs, show a button rather than a spinner with no end.
+        var bailout = window.setTimeout(function () {
+          headline.textContent = 'Almost there';
+          status.textContent = 'Tap below to open HIVE.';
+          manual.style.display = 'block';
+        }, 6000);
+
+        unregisterWorkers()
+          .then(deleteCaches)
+          .then(function () {
+            window.clearTimeout(bailout);
+            status.textContent = 'Done — opening HIVE.';
+            window.setTimeout(done, 350);
+          })
+          .catch(function () {
+            window.clearTimeout(bailout);
+            done();
+          });
+      })();
+    </script>
+  </body>
+</html>
