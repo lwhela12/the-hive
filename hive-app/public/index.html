@@ -240,6 +240,51 @@
     </style>
 
     <script>
+      // A web app saved to the iPhone home screen is told the screen is one
+      // status bar SHORTER than it really is.
+      //
+      // Measured off Nat's screenshots, 2026-08-25: her iPhone's screen is
+      // 874pt tall, the app's own box ended at 812pt, and the missing 62pt is
+      // exactly her status bar. iOS lays out a saved-to-home-screen web app
+      // with a see-through status bar from the very top of the glass but
+      // reports the viewport as screen-minus-status-bar — so everything sized
+      // "100%" stops 62pt above the bottom edge. That one shortfall was both
+      // things she kept reporting: the side rail's last icons clipped with
+      // empty space visibly BELOW the rail, and a same-cream band under the
+      // breadcrumb strip that made a 58pt footer read as a 120pt one.
+      //
+      // `navigator.standalone` is an iOS-only property and only true for a
+      // saved icon, so a normal Safari or Chrome tab never takes this path.
+      // The gap guard keeps it to the status-bar-sized shortfall this bug
+      // produces: a keyboard shrinking the viewport (hundreds of points) or a
+      // future iOS that fixes the bug (0pt) both leave the defaults alone.
+      (function () {
+        if (!navigator.standalone) return;
+        function fit() {
+          var portrait = window.matchMedia('(orientation: portrait)').matches;
+          // iOS reports screen.height in portrait terms whichever way the
+          // phone is held, so landscape reads the width.
+          var target = portrait ? window.screen.height : window.screen.width;
+          var gap = target - window.innerHeight;
+          if (gap > 8 && gap < 90) {
+            var px = target + 'px';
+            document.documentElement.style.height = px;
+            document.body.style.height = px;
+            var root = document.getElementById('root');
+            if (root) root.style.height = px;
+          }
+        }
+        fit();
+        window.addEventListener('orientationchange', function () {
+          window.setTimeout(fit, 250);
+        });
+        // #root does not exist yet when this first runs from the head, so run
+        // again once the page is parsed.
+        document.addEventListener('DOMContentLoaded', fit);
+      })();
+    </script>
+
+    <script>
       // Where is this person going? Answered before the first pixel.
       //
       // This runs in the head, so it blocks parsing and finishes before the
