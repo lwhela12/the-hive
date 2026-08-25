@@ -31,8 +31,8 @@ export const APP_NEWS: AppNewsEntry[] = [
   {
     id: '2026-08-24-second-doors',
     date: '2026-08-24',
-    title: 'The Buzz, Admin and Arrival Board are easier to find',
-    detail: 'HIVE-Wide points to The Buzz and Admin, and meeting runners can open the Arrival Board right from Meetings.',
+    title: 'The Buzz and Admin are easier to find',
+    detail: 'HIVE-Wide points to The Buzz and Admin.',
     href: { pathname: '/hive-wide' },
     action: 'Open HIVE-Wide',
   },
