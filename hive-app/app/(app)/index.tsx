@@ -201,7 +201,7 @@ export default function ChatScreen() {
   // a conversation in the wrong one and then having it change underneath him.
   if (switchPending) {
     return (
-      <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+      <SafeAreaView className="flex-1" style={{ backgroundColor: '#faf8f3' }} edges={['top']}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
           <ThinkingBee label="Getting Clive…" />
         </View>
@@ -210,7 +210,7 @@ export default function ChatScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: '#faf8f3' }} edges={['top']}>
       <View className="flex-1 flex-row">
         {/* Sidebar - always visible on wide screens (collapsible), drawer on narrow screens */}
         {!useMobileLayout && (

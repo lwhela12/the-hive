@@ -2358,7 +2358,7 @@ export default function ProfileScreen() {
 
   if (selectedWish) {
     return (
-      <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+      <SafeAreaView className="flex-1" style={{ backgroundColor: '#faf8f3' }} edges={['top']}>
         <WishDetail
           wish={selectedWish}
           onClose={() => setSelectedWish(null)}

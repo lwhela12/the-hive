@@ -3008,7 +3008,7 @@ export default function HiveScreen() {
   // Show wish detail fullscreen
   if (selectedWish) {
     return (
-      <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+      <SafeAreaView className="flex-1" style={{ backgroundColor: '#faf8f3' }} edges={['top']}>
         <WishDetail
           wish={selectedWish}
           onClose={closeWishDetail}
@@ -3025,14 +3025,18 @@ export default function HiveScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: '#faf8f3' }} edges={['top']}>
       <AppHeader title="Home" />
 
       <BounceScrollView
         ref={homeScrollRef}
         className="flex-1"
         contentContainerClassName="pb-4"
-        contentContainerStyle={{ paddingBottom: useMobileLayout ? 104 : 16 }}
+        // 16 on every width now. The 104 was clearance for the bottom tab bar,
+        // which left on 2026-08-03 — since then it was just a blank stripe of
+        // the root's background pasted under the last card on every phone
+        // (Nat, 2026-08-25: "a plain white stripe of wasted space").
+        contentContainerStyle={{ paddingBottom: 16 }}
         refreshControl={
           <RefreshControl refreshing={refreshing || isLoading} onRefresh={onRefresh} tintColor="#bd9348" />
         }

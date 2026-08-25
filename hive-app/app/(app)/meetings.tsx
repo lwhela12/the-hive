@@ -1179,7 +1179,7 @@ export default function MeetingsScreen() {
 
   if (selectedMeeting) {
     return (
-      <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+      <SafeAreaView className="flex-1" style={{ backgroundColor: '#faf8f3' }} edges={['top']}>
         <MeetingSummary
           meeting={selectedMeeting}
           onBack={() => setSelectedMeeting(null)}
@@ -1669,7 +1669,7 @@ export default function MeetingsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={closeEventEdit}
       >
-        <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+        <SafeAreaView className="flex-1" style={{ backgroundColor: '#faf8f3' }} edges={['top']}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
             <Pressable onPress={closeEventEdit} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
