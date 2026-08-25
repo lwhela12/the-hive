@@ -1142,36 +1142,17 @@ serve(async (req) => {
       if (linkError) throw linkError;
     }
 
-    // Sealing can only create a held Nat preview. The recap function has no
-    // member-send path without a separate owner approval request.
-    let recapHold: Record<string, unknown> | null = null;
-    if (confirmedAbsenteeIds.length > 0 && meetingId) {
-      try {
-        const recapResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/post-meeting-recap`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${serviceKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            meeting_id: meetingId,
-            confirmed_absentee_ids: confirmedAbsenteeIds,
-          }),
-        });
-        recapHold = await recapResponse.json();
-        if (!recapResponse.ok) console.error('Post-meeting recap hold failed:', recapHold);
-      } catch (recapError) {
-        console.error('Post-meeting recap hold failed:', recapError);
-        recapHold = { held: false, error: 'The meeting sealed, but its recap preview could not be created.' };
-      }
-    }
+    // The "what you missed" recap is no longer created here. Nat, 2026-08-24:
+    // "I won't ever send that quickly... I'll read through the notes, make
+    // sure they're correct, and THEN send." Sealing just seals; the recap
+    // preview is a deliberate, separate action she triggers from the meeting
+    // summary once she's reviewed it. See post-meeting-recap/index.ts.
 
     return jsonResponse({
       success: true,
       sealed: true,
       rebuilt: isRebuild,
       meetingId,
-      recapHold,
       counts: {
         events: events.length,
         todos: todoGroups.size,

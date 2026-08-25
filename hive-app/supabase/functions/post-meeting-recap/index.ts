@@ -208,21 +208,47 @@ serve(async (req) => {
       return jsonResponse({ approved: true, sent, opted_out_or_ineligible: confirmedIds.length - recipients.length });
     }
 
-    // Only a trusted server path may create a hold. Seal Meeting passes an
-    // explicit Wrap-Up list; a member cannot call this function and nominate
-    // arbitrary people as absent.
-    if (!calledByService) return errorResponse('Recap previews are created at Wrap-Up.', 403);
+    // Two trusted paths create a hold. Seal Meeting no longer calls this
+    // automatically as of 2026-08-24 — Nat: "I won't ever send a 'what you
+    // missed' email that quickly... I'll read through the notes, make sure
+    // they're correct, and THEN send." So this now runs only when an owner
+    // deliberately triggers it from the meeting summary, after reviewing —
+    // or, still, from a trusted service caller for anything scripted later.
+    if (!calledByService) {
+      const auth = await verifySupabaseJwt(authHeader);
+      if (isAuthError(auth) || !(await isOwner(admin, auth.userId))) {
+        return errorResponse('Recap previews can only be created by a HIVE owner.', 403);
+      }
+    }
 
     const meetingId = typeof body.meeting_id === 'string' ? body.meeting_id.trim() : '';
     const rawIds = Array.isArray(body.confirmed_absentee_ids) ? body.confirmed_absentee_ids : null;
     if (!meetingId || !rawIds || rawIds.some((id) => typeof id !== 'string')) {
       return errorResponse('meeting_id and confirmed_absentee_ids are required.', 400);
     }
-    const confirmedIds = [...new Set((rawIds as string[]).filter(Boolean))];
-    if (confirmedIds.length === 0) return jsonResponse({ held: false, reason: 'No confirmed absentees.' });
+    const requestedIds = [...new Set((rawIds as string[]).filter(Boolean))];
+    if (requestedIds.length === 0) return jsonResponse({ held: false, reason: 'No confirmed absentees.' });
 
     const meeting = await loadMeeting(admin, meetingId);
     if (!meeting) return errorResponse('Meeting not found.', 404);
+
+    // A pending hold from an earlier click (or a person added since) grows
+    // rather than duplicates — one held preview per meeting, always reflecting
+    // the current, reviewed notes. A hold that already finished sending gets
+    // a fresh one instead of being reopened underneath people who were sent.
+    const { data: existingRows } = await admin
+      .from('notifications')
+      .select('id, metadata')
+      .eq('metadata->>post_meeting_recap_meeting_id', meeting.id)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const existingRow = existingRows?.[0] as { id: string; metadata: HeldMetadata } | undefined;
+    const existingPending = existingRow?.metadata?.post_meeting_recap_approval === 'pending' ? existingRow : null;
+    const confirmedIds = [...new Set([
+      ...(existingPending?.metadata.post_meeting_recap_absentee_ids ?? []),
+      ...requestedIds,
+    ])];
+
     const recipients = eligibleRecapRecipients(
       confirmedIds,
       await loadCommunityProfiles(admin, meeting.communityId),
@@ -231,23 +257,30 @@ serve(async (req) => {
       return jsonResponse({ held: false, reason: 'No confirmed absentees have recap email enabled.' });
     }
 
-    const { data: existing } = await admin
-      .from('notifications')
-      .select('id')
-      .eq('metadata->>post_meeting_recap_meeting_id', meeting.id)
-      .limit(1);
-    if ((existing ?? []).length > 0) return jsonResponse({ held: true, duplicate: true, notificationId: existing![0].id });
-
     const previewTo = await findPreviewProfile(admin);
     if (!previewTo) return errorResponse('No preview recipient is configured; nobody was emailed.', 503);
 
     // Preview one personalized example, but say exactly how many approved sends
-    // it unlocks. This is the only email generated automatically by Wrap-Up.
+    // it unlocks. Sent fresh every time this is triggered, on purpose — Nat
+    // wants to see the actual current wording each time, not a stale copy.
     await sendEmail(
       previewTo.email,
       `[Waiting on you] ${postMeetingRecapSubject(meeting)}`,
       `${recapPreviewBanner(meeting, recipients.length)}${postMeetingRecapHtml(recipients[0].name, meeting, APP_URL)}`,
     );
+
+    if (existingPending) {
+      const { error } = await admin.from('notifications').update({
+        content: `${recipients.length} confirmed ${recipients.length === 1 ? 'absentee gets' : 'absentees get'} the recap only after you approve the inbox preview.`,
+        metadata: {
+          ...existingPending.metadata,
+          post_meeting_recap_absentee_ids: confirmedIds,
+          post_meeting_recap_preview_recipient_count: recipients.length,
+        },
+      }).eq('id', existingPending.id);
+      if (error) throw error;
+      return jsonResponse({ held: true, refreshed: true, notificationId: existingPending.id, recipients: recipients.length });
+    }
 
     const { data: notification, error } = await admin.from('notifications').insert({
       user_id: previewTo.id,

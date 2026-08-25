@@ -79,6 +79,11 @@ interface ParsedSummary {
   decisions?: string[];
   /** The meeting deck in outline form — same running order as the helper. */
   sections?: SummarySection[];
+  /** Who Wrap-Up confirmed as absent — the "what you missed" panel reads this for names it can actually email. */
+  meeting_helper_snapshot?: {
+    confirmed_absentee_ids?: string[];
+    confirmed_absentee_names?: string[];
+  };
   provenance?: {
     kind?: 'automatic_activity_record' | 'reviewed_import' | 'reconciled_helper_record';
     meeting_date?: string;
@@ -327,6 +332,15 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   const [correctionDraft, setCorrectionDraft] = useState('');
   const [savingCorrection, setSavingCorrection] = useState(false);
   const [rebuildingSummary, setRebuildingSummary] = useState(false);
+  const [recapHold, setRecapHold] = useState<{
+    id: string;
+    approval: string;
+    absenteeIds: string[];
+    sentIds: string[];
+    recipientCount: number;
+  } | null>(null);
+  const [recapPreviewSending, setRecapPreviewSending] = useState<Record<string, boolean>>({});
+  const [approvingRecap, setApprovingRecap] = useState(false);
   const [summaryToolsOpen, setSummaryToolsOpen] = useState(false);
   const [taskChecklistOpen, setTaskChecklistOpen] = useState(false);
   const [resolvingConflictId, setResolvingConflictId] = useState<string | null>(null);
@@ -742,6 +756,90 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
       setMeeting(updated as Meeting);
       onMeetingUpdated?.(updated as Meeting);
     }
+  };
+
+  /**
+   * "What you missed" for confirmed absentees — entirely manual now.
+   * Nat, 2026-08-24: "I won't ever send that quickly... I'll read through the
+   * notes, make sure they're correct, and THEN send." Sealing no longer holds
+   * this automatically (see seal-meeting/index.ts); it starts only when she
+   * clicks a name below, after reviewing.
+   */
+  const loadRecapHold = useCallback(async () => {
+    const { data } = await supabase
+      .from('notifications')
+      .select('id, metadata')
+      .eq('metadata->>post_meeting_recap_meeting_id', meeting.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const metadata = (data as { metadata?: Record<string, unknown> } | null)?.metadata;
+    if (data && metadata?.post_meeting_recap_approval) {
+      setRecapHold({
+        id: (data as { id: string }).id,
+        approval: String(metadata.post_meeting_recap_approval),
+        absenteeIds: Array.isArray(metadata.post_meeting_recap_absentee_ids)
+          ? metadata.post_meeting_recap_absentee_ids as string[]
+          : [],
+        sentIds: Array.isArray(metadata.post_meeting_recap_sent_recipient_ids)
+          ? metadata.post_meeting_recap_sent_recipient_ids as string[]
+          : [],
+        recipientCount: typeof metadata.post_meeting_recap_preview_recipient_count === 'number'
+          ? metadata.post_meeting_recap_preview_recipient_count
+          : 0,
+      });
+    } else {
+      setRecapHold(null);
+    }
+  }, [meeting.id]);
+
+  useEffect(() => { void loadRecapHold(); }, [loadRecapHold]);
+
+  const sendRecapPreview = async (personId: string) => {
+    if (!isHiveAdmin) return;
+    setRecapPreviewSending((current) => ({ ...current, [personId]: true }));
+    try {
+      const { data, error } = await supabase.functions.invoke('post-meeting-recap', {
+        body: { meeting_id: meeting.id, confirmed_absentee_ids: [personId] },
+      });
+      if (error) throw error;
+      if (data?.held === false) {
+        showAlert('Not sent', data?.reason ?? 'That preview could not be created — this person may have recap email turned off.');
+      } else {
+        await loadRecapHold();
+      }
+    } catch (error) {
+      console.error('Error creating recap preview:', error);
+      showAlert('Not sent', 'That preview could not be created just now. Please try again.');
+    } finally {
+      setRecapPreviewSending((current) => ({ ...current, [personId]: false }));
+    }
+  };
+
+  const approveRecap = () => {
+    if (!recapHold) return;
+    const pendingCount = recapHold.recipientCount - recapHold.sentIds.length;
+    confirmAction({
+      title: 'Send "What you missed" now?',
+      message: `This sends the recap to ${pendingCount} confirmed absentee${pendingCount === 1 ? '' : 's'} who still have recap email turned on. Everyone else already sent stays untouched.`,
+      confirmLabel: 'Send it',
+      onConfirm: async () => {
+        setApprovingRecap(true);
+        try {
+          const { data, error } = await supabase.functions.invoke('post-meeting-recap', {
+            body: { approve_notification_id: recapHold.id },
+          });
+          if (error) throw error;
+          showAlert('Sent', `Sent to ${data?.sent ?? 0} confirmed absentee${data?.sent === 1 ? '' : 's'}.`);
+          await loadRecapHold();
+        } catch (error) {
+          console.error('Error approving recap:', error);
+          showAlert('Not sent', 'That did not go through. Please try again.');
+        } finally {
+          setApprovingRecap(false);
+        }
+      },
+    });
   };
 
   const resolveSummaryConflict = async (
@@ -1312,6 +1410,58 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                 )
               )}
             />
+          </View>
+        )}
+
+        {isHiveAdmin && (parsedSummary.meeting_helper_snapshot?.confirmed_absentee_ids?.length ?? 0) > 0 && (
+          <View className="mb-6 bg-honey-50 border border-honey-200 rounded-xl p-4">
+            <Text className="text-lg font-semibold text-hive-dark">What you missed</Text>
+            <Text className="text-honey-800 mt-1 leading-5">
+              Nothing sends until you say so. Preview it for yourself first — send it to whoever missed once you're happy with the notes.
+            </Text>
+            <View className="mt-3" style={{ gap: 8 }}>
+              {(parsedSummary.meeting_helper_snapshot?.confirmed_absentee_ids ?? []).map((personId, index) => {
+                const name = parsedSummary.meeting_helper_snapshot?.confirmed_absentee_names?.[index] ?? 'Someone';
+                const alreadySent = recapHold?.absenteeIds.includes(personId) && recapHold?.sentIds.includes(personId);
+                const previewedNotSent = recapHold?.absenteeIds.includes(personId) && !alreadySent;
+                const sending = recapPreviewSending[personId];
+                return (
+                  <View key={personId} className="flex-row items-center justify-between bg-white border border-honey-200 rounded-lg px-3 py-2">
+                    <Text className="text-gray-800 font-medium">{name}</Text>
+                    {alreadySent ? (
+                      <Text className="text-sm text-green-700">Sent</Text>
+                    ) : previewedNotSent ? (
+                      <Text className="text-sm text-honey-800">Preview sent to you — see below</Text>
+                    ) : (
+                      <Pressable
+                        onPress={() => void sendRecapPreview(personId)}
+                        disabled={sending}
+                        accessibilityRole="button"
+                        className={`px-3 py-1.5 rounded-lg border border-honey-300 bg-honey-100 active:bg-honey-200 ${sending ? 'opacity-60' : ''}`}
+                      >
+                        <Text className="text-honey-900 font-semibold text-sm">
+                          {sending ? 'Sending preview…' : 'Send myself a preview'}
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+            {recapHold?.approval === 'pending' && recapHold.recipientCount > recapHold.sentIds.length && (
+              <Pressable
+                onPress={approveRecap}
+                disabled={approvingRecap}
+                accessibilityRole="button"
+                className={`mt-4 self-start bg-honey-500 px-4 py-3 rounded-lg active:bg-honey-600 ${approvingRecap ? 'opacity-60' : ''}`}
+              >
+                <Text className="text-white font-semibold">
+                  {approvingRecap
+                    ? 'Sending…'
+                    : `Approve — send to ${recapHold.recipientCount - recapHold.sentIds.length} confirmed absentee${recapHold.recipientCount - recapHold.sentIds.length === 1 ? '' : 's'}`}
+                </Text>
+              </Pressable>
+            )}
           </View>
         )}
 
