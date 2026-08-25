@@ -2,6 +2,7 @@ import { memo, useCallback, useRef, useState } from 'react';
 import { View, Text, Pressable, useWindowDimensions, Animated, Platform } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomInset } from '../../lib/safeAreaBottom';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -276,6 +277,7 @@ export const SideRail = memo(function SideRail({
    * clock with its expand button hidden behind the time (2026-08-06).
    */
   const insets = useSafeAreaInsets();
+  const bottomInset = useBottomInset();
 
   const [confirmingLogOut, setConfirmingLogOut] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
@@ -609,7 +611,11 @@ export const SideRail = memo(function SideRail({
           // and the size button live in the first 42 pixels of this rail, which
           // is exactly where an iPhone puts the time.
           paddingTop: 12 + insets.top,
-          paddingBottom: 8 + insets.bottom,
+          // Capped — the raw bottom measurement came back around 62pt on Nat's
+          // iPhone, which pushed the rail's last icons off the end of a list
+          // that had obvious empty space beneath it (2026-08-25). See
+          // lib/safeAreaBottom.ts; PathFooter reads the same number.
+          paddingBottom: 8 + bottomInset,
           paddingLeft: insets.left,
           ...(phoneDrawer
             ? {
