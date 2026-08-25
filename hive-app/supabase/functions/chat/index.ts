@@ -1720,18 +1720,42 @@ serve(async (req) => {
                 : '';
               // A per-line fix (2026-08-24, double-click in place) is the same
               // rule at the smallest grain: swap that one bullet's text in,
-              // using the exact same `title::g<i>::<j>` / `title::s<j>` keys
-              // SummarySections.tsx writes, so Clive reads whatever a member
-              // would actually see on the summary page — not the stale
-              // generated text underneath a correction.
+              // so Clive reads whatever a member would actually see on the
+              // summary page — not the stale generated text underneath a
+              // correction. A duty line's key is the stable set of its real
+              // `action_items` ids (from `duty_index`), matching
+              // SummarySections.tsx exactly — a positional key would silently
+              // misapply after the duty list reshuffles on a later rebuild,
+              // which is exactly what happened once already (Nat, 2026-08-24:
+              // "these two are basically the same" — a stale correction had
+              // landed on an unrelated duty after a rebuild). Anything
+              // without a stable id — group lines that aren't duties,
+              // section-level lines — keeps the positional key; a deleted
+              // duty (`hidden_lines`) is dropped from what Clive sees too.
               const lineCorrections = !correctedText
                 && summaryObject?.line_corrections
                 && typeof summaryObject.line_corrections === 'object'
                 && !Array.isArray(summaryObject.line_corrections)
                 ? summaryObject.line_corrections as Record<string, unknown>
                 : null;
+              const hiddenLines = summaryObject?.hidden_lines
+                && typeof summaryObject.hidden_lines === 'object'
+                && !Array.isArray(summaryObject.hidden_lines)
+                ? summaryObject.hidden_lines as Record<string, unknown>
+                : null;
+              const dutyIndex = summaryObject?.duty_index
+                && typeof summaryObject.duty_index === 'object'
+                && !Array.isArray(summaryObject.duty_index)
+                ? summaryObject.duty_index as Record<string, { action_item_ids?: unknown }>
+                : null;
+              const dutyKeyAt = (positionalKey: string) => {
+                const ids = dutyIndex?.[positionalKey]?.action_item_ids;
+                return Array.isArray(ids) && ids.length > 0
+                  ? `duty:${[...ids].sort().join(',')}`
+                  : positionalKey;
+              };
               const sectionsToCorrect = summaryObject?.sections;
-              const correctedSections = lineCorrections && Array.isArray(sectionsToCorrect)
+              const correctedSections = (lineCorrections || hiddenLines) && Array.isArray(sectionsToCorrect)
                 ? (sectionsToCorrect as Record<string, unknown>[]).map((section) => {
                     const title = String(section.title ?? '');
                     const groups = Array.isArray(section.groups)
@@ -1739,16 +1763,18 @@ serve(async (req) => {
                           const lines = Array.isArray(group.lines) ? group.lines as unknown[] : [];
                           return {
                             ...group,
-                            lines: lines.map((line, lineIndex) => {
-                              const fix = lineCorrections[`${title}::g${groupIndex}::${lineIndex}`];
-                              return typeof fix === 'string' && fix.trim() ? fix.trim() : line;
+                            lines: lines.flatMap((line, lineIndex) => {
+                              const key = dutyKeyAt(`${title}::g${groupIndex}::${lineIndex}`);
+                              if (hiddenLines?.[key]) return [];
+                              const fix = lineCorrections?.[key];
+                              return [typeof fix === 'string' && fix.trim() ? fix.trim() : line];
                             }),
                           };
                         })
                       : section.groups;
                     const lines = Array.isArray(section.lines)
                       ? (section.lines as unknown[]).map((line, lineIndex) => {
-                          const fix = lineCorrections[`${title}::s${lineIndex}`];
+                          const fix = lineCorrections?.[`${title}::s${lineIndex}`];
                           return typeof fix === 'string' && fix.trim() ? fix.trim() : line;
                         })
                       : section.lines;

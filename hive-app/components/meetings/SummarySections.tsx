@@ -152,6 +152,22 @@ const MEETING_SECTION_ICONS: Record<string, string> = {
  * which is a working document — "Community Wins" in gold over a set of action
  * items would be dressing up a to-do list. The newsletter passes it.
  */
+export interface DutyMeta {
+  action_item_ids: string[];
+  owner_ids: (string | null)[];
+}
+
+/**
+ * A duty line's real, stable identity — the actual `action_items` rows it
+ * is, not the position it happens to render at. Nat, 2026-08-24, after a
+ * rebuild silently moved a duty to a new position: a correction keyed by
+ * `group 3, line 3` doesn't mean anything once the duty at that position
+ * is a different one. The set of underlying row ids does not move.
+ */
+function dutyKey(meta: DutyMeta): string {
+  return `duty:${[...meta.action_item_ids].sort().join(',')}`;
+}
+
 export function SummarySections({
   sections,
   art = false,
@@ -159,21 +175,27 @@ export function SummarySections({
   lineCorrections,
   editable = false,
   onSaveLine,
+  dutyIndex,
   renderDutyAction,
+  hiddenLines,
 }: {
   sections: SummarySection[];
   /** Use the drawn headers. Newsletter yes, meeting summary no. */
   art?: boolean;
   /** Meeting summaries may resolve a source conflict inside its own card. */
   renderReview?: (review: MeetingConflictReview, group: SummaryGroup) => ReactNode;
-  /** A human rewrite of one line, keyed by `lineKey()`. Wins over the generated line, in place — the rest of the card is untouched. */
+  /** A human rewrite of one line. A duty line is keyed by `dutyKey()` (stable across rebuilds); anything else by position. Wins over the generated line, in place — the rest of the card is untouched. */
   lineCorrections?: Record<string, string>;
   /** Double-click/double-tap to edit any line. Meeting summaries only — never the newsletter. */
   editable?: boolean;
   /** Persists one line's correction (empty text clears it back to the generated version). */
   onSaveLine?: (key: string, text: string) => Promise<void> | void;
+  /** Which real `action_items` row(s) a duty line actually is, keyed by its position THIS render (`section::g<i>::<j>`) — used only to resolve the stable `dutyKey()` and to hand to `renderDutyAction`. */
+  dutyIndex?: Record<string, DutyMeta>;
   /** A "Confirmed duty" line's own action — reassigning who actually owns the to-do, not just its text. Null/undefined renders nothing. */
-  renderDutyAction?: (key: string, currentLineText: string) => ReactNode;
+  renderDutyAction?: (key: string, currentLineText: string, duty: DutyMeta) => ReactNode;
+  /** Duty keys archived away — the line no longer renders at all. */
+  hiddenLines?: Record<string, true>;
 }) {
   const { width } = useWindowDimensions();
   const [expandedMeetingSections, setExpandedMeetingSections] = useState<Set<string>>(() => new Set());
@@ -275,7 +297,13 @@ export function SummarySections({
                       </View>
                       <View style={{ marginTop: 7, gap: 6 }}>
                         {group.lines.map((line, lineIndex) => {
-                          const key = `${section.title}::g${groupIndex}::${lineIndex}`;
+                          const positionalKey = `${section.title}::g${groupIndex}::${lineIndex}`;
+                          const dutyMeta = dutyIndex?.[positionalKey];
+                          // A duty's real identity is the row(s) it is, not where it landed
+                          // this render — everything else has no such identity, so it keeps
+                          // the positional key, which is the best available.
+                          const key = dutyMeta ? dutyKey(dutyMeta) : positionalKey;
+                          if (hiddenLines?.[key]) return null;
                           const effectiveLine = lineCorrections?.[key] ?? line;
                           const duty = effectiveLine.startsWith('Confirmed duty:');
                           const clean = duty ? effectiveLine.replace(/^Confirmed duty:\s*/, '') : effectiveLine;
@@ -314,8 +342,8 @@ export function SummarySections({
                                   {clean}
                                 </Text>
                               </EditableLine>
-                              {duty && !isEditingThis && renderDutyAction ? (
-                                <View style={{ paddingLeft: 21 }}>{renderDutyAction(key, effectiveLine)}</View>
+                              {duty && dutyMeta && !isEditingThis && renderDutyAction ? (
+                                <View style={{ paddingLeft: 21 }}>{renderDutyAction(key, effectiveLine, dutyMeta)}</View>
                               ) : null}
                             </View>
                           );

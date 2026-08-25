@@ -93,6 +93,8 @@ interface ParsedSummary {
    * SummarySections.tsx uses to edit the line's text.
    */
   duty_index?: Record<string, { action_item_ids: string[]; owner_ids: (string | null)[] }>;
+  /** A duty, deleted from the summary — keyed by the same stable `dutyKey()` as `line_corrections`. The real `action_items` row(s) are archived, not dropped. */
+  hidden_lines?: Record<string, true>;
   provenance?: {
     kind?: 'automatic_activity_record' | 'reviewed_import' | 'reconciled_helper_record';
     meeting_date?: string;
@@ -804,6 +806,50 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   };
 
   /**
+   * Nat, 2026-08-24: "i just want to be able to delete one & it wont let
+   * me." Archives the real `action_items` row(s) — preserve, not destroy,
+   * same as everywhere else duties disappear — and hides the line itself so
+   * the summary stops showing a duty that no longer exists.
+   */
+  const deleteDuty = (key: string, lineText: string, actionItemIds: string[]) => {
+    if (!isHiveAdmin) return;
+    confirmAction({
+      title: 'Delete this duty?',
+      message: actionItemIds.length > 1
+        ? `This is a shared duty across ${actionItemIds.length} people's lists. Deleting it archives all ${actionItemIds.length} — none of them will see it as an open to-do anymore.`
+        : 'The real to-do is archived, not destroyed — it can be restored from wherever archived to-dos live.',
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('action_items')
+            .update({ archived_at: new Date().toISOString(), archive_reason: 'Deleted from the meeting summary' })
+            .in('id', actionItemIds);
+          if (error) throw error;
+
+          const base = storedSummaryBase();
+          const existingHidden = (base.hidden_lines as ParsedSummary['hidden_lines']) ?? {};
+          const { data: updated, error: saveError } = await supabase
+            .from('meetings')
+            .update({ summary: JSON.stringify({ ...base, hidden_lines: { ...existingHidden, [key]: true } }) })
+            .eq('id', meeting.id)
+            .select('*')
+            .single();
+          if (saveError) throw saveError;
+          if (updated) {
+            setMeeting(updated as Meeting);
+            onMeetingUpdated?.(updated as Meeting);
+          }
+        } catch (error) {
+          console.error('Error deleting duty:', error);
+          showAlert('Not deleted', 'That did not save. Please try again.');
+        }
+      },
+    });
+  };
+
+  /**
    * "What you missed" for confirmed absentees — entirely manual now.
    * Nat, 2026-08-24: "I won't ever send that quickly... I'll read through the
    * notes, make sure they're correct, and THEN send." Sealing no longer holds
@@ -1440,19 +1486,34 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
               lineCorrections={parsedSummary.line_corrections}
               editable={isHiveAdmin}
               onSaveLine={saveLineCorrection}
-              renderDutyAction={(key, currentLineText) => {
-                if (!isHiveAdmin) return null;
-                const duty = parsedSummary.duty_index?.[key];
-                if (!duty || duty.action_item_ids.length === 0) return null;
+              dutyIndex={parsedSummary.duty_index}
+              hiddenLines={parsedSummary.hidden_lines}
+              renderDutyAction={(key, currentLineText, duty) => {
+                if (!isHiveAdmin || duty.action_item_ids.length === 0) return null;
+                // A duty owned by more than one person is a shared task —
+                // "reassign" would silently move everyone's copy to one
+                // person, which is never what a single click should do.
+                // Delete (archive) is unambiguous either way.
+                const canReassign = duty.owner_ids.length <= 1;
                 return (
-                  <Pressable
-                    onPress={() => setReassignTarget({ key, lineText: currentLineText, actionItemIds: duty.action_item_ids })}
-                    accessibilityRole="button"
-                    accessibilityLabel="Reassign this duty"
-                    className="self-start"
-                  >
-                    <Text className="text-xs text-honey-800 font-semibold underline">Reassign</Text>
-                  </Pressable>
+                  <View className="flex-row" style={{ gap: 14 }}>
+                    {canReassign ? (
+                      <Pressable
+                        onPress={() => setReassignTarget({ key, lineText: currentLineText, actionItemIds: duty.action_item_ids })}
+                        accessibilityRole="button"
+                        accessibilityLabel="Reassign this duty"
+                      >
+                        <Text className="text-xs text-honey-800 font-semibold underline">Reassign</Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      onPress={() => deleteDuty(key, currentLineText, duty.action_item_ids)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Delete this duty"
+                    >
+                      <Text className="text-xs text-red-700 font-semibold underline">Delete</Text>
+                    </Pressable>
+                  </View>
                 );
               }}
               renderReview={(review) => (
