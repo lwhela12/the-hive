@@ -1718,6 +1718,25 @@ serve(async (req) => {
               const correctedText = typeof manualCorrection?.text === 'string'
                 ? manualCorrection.text.trim()
                 : '';
+              // A per-section fix (2026-08-24) is the same rule at a smaller
+              // grain: swap that one card's text in, leave the sections nobody
+              // touched exactly as generated, so a one-line correction doesn't
+              // silently drop everything else the meeting produced.
+              const sectionCorrections = !correctedText
+                && summaryObject?.section_corrections
+                && typeof summaryObject.section_corrections === 'object'
+                && !Array.isArray(summaryObject.section_corrections)
+                ? summaryObject.section_corrections as Record<string, { text?: unknown }>
+                : null;
+              const sectionsToCorrect = summaryObject?.sections;
+              const correctedSections = sectionCorrections && Array.isArray(sectionsToCorrect)
+                ? (sectionsToCorrect as Record<string, unknown>[]).map((section) => {
+                    const fix = sectionCorrections[String(section.title)];
+                    const fixedText = typeof fix?.text === 'string' ? fix.text.trim() : '';
+                    if (!fixedText) return section;
+                    return { title: section.title, lines: fixedText.split('\n').filter((line) => line.trim()) };
+                  })
+                : null;
               // Once a HIVE admin has supplied the recap members should trust,
               // Clive gets that version alone. Do not let the superseded
               // generated fields — or an overlong/pre-meeting transcript —
@@ -1731,7 +1750,9 @@ serve(async (req) => {
                       corrected_at: manualCorrection?.corrected_at,
                     },
                   }
-                : parsedSummary;
+                : correctedSections
+                  ? { ...(summaryObject ?? {}), sections: correctedSections }
+                  : parsedSummary;
               const transcript = includeTranscript && index === 0 && !correctedText
                 ? (meeting.transcript_attributed || meeting.transcript_raw || '').slice(0, 12000)
                 : undefined;

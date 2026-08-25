@@ -131,6 +131,17 @@ interface ParsedSummary {
     corrected_at: string;
     corrected_by: string;
   }[];
+  /**
+   * A per-section correction — Nat, 2026-08-24: rewriting the whole summary
+   * to fix one line threw away every other section's formatting. Keyed by
+   * `section.title`, same "generated stays underneath" rule as the
+   * whole-summary correction, just scoped to one card instead of all of them.
+   */
+  section_corrections?: Record<string, {
+    text: string;
+    corrected_at: string;
+    corrected_by: string;
+  }>;
   conflict_resolutions?: {
     conflict_id: string;
     topic: string;
@@ -697,6 +708,42 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
     }
   };
 
+  /**
+   * One section's fix, not the whole recap. Nat, 2026-08-24: the existing
+   * "Fix summary" tool rewrote the entire meeting as one flat block the
+   * moment she touched anything — every other section's formatting was
+   * collateral damage for correcting one line. This keeps every untouched
+   * section exactly as generated.
+   */
+  const saveSectionCorrection = async (title: string, text: string) => {
+    if (!profile?.id || !isHiveAdmin) return;
+    const trimmed = text.trim();
+    const base = storedSummaryBase();
+    const existing = (base.section_corrections as ParsedSummary['section_corrections']) ?? {};
+    const next = { ...existing };
+    if (trimmed) {
+      next[title] = { text: trimmed, corrected_at: new Date().toISOString(), corrected_by: profile.id };
+    } else {
+      delete next[title];
+    }
+
+    const { data: updated, error } = await supabase
+      .from('meetings')
+      .update({ summary: JSON.stringify({ ...base, section_corrections: next }) })
+      .eq('id', meeting.id)
+      .select('*')
+      .single();
+    if (error) {
+      console.error('Error correcting summary section:', error);
+      showAlert('Not saved', 'That section could not be saved just now. Please try again.');
+      throw error;
+    }
+    if (updated) {
+      setMeeting(updated as Meeting);
+      onMeetingUpdated?.(updated as Meeting);
+    }
+  };
+
   const resolveSummaryConflict = async (
     review: MeetingConflictReview,
     input: ConflictResolutionInput,
@@ -1247,6 +1294,9 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           <View className="mb-2">
             <SummarySections
               sections={parsedSummary.sections}
+              sectionCorrections={parsedSummary.section_corrections}
+              editable={isHiveAdmin}
+              onSaveSection={saveSectionCorrection}
               renderReview={(review) => (
                 isHiveAdmin ? (
                   <MeetingConflictResolver

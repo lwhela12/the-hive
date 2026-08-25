@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Image, Pressable, View, Text, useWindowDimensions } from 'react-native';
+import { Image, Pressable, TextInput, View, Text, useWindowDimensions } from 'react-native';
 import { headerForSection } from '../../lib/newsletterHeaders';
 
 export interface SummarySection {
@@ -58,19 +58,61 @@ const MEETING_SECTION_ICONS: Record<string, string> = {
  * which is a working document — "Community Wins" in gold over a set of action
  * items would be dressing up a to-do list. The newsletter passes it.
  */
+/** Every section, boiled down to the plain text a human would type to replace it. */
+function sectionAsPlainText(section: SummarySection): string {
+  const groups = (section.groups ?? []).flatMap((group) => [
+    group.title,
+    ...group.lines.map((line) => `• ${line.trim()}`),
+  ]);
+  const lines = (section.lines ?? []).map((line) => line.trim()).filter(Boolean);
+  return [section.intro?.trim(), ...groups, ...lines].filter(Boolean).join('\n');
+}
+
 export function SummarySections({
   sections,
   art = false,
   renderReview,
+  sectionCorrections,
+  editable = false,
+  onSaveSection,
 }: {
   sections: SummarySection[];
   /** Use the drawn headers. Newsletter yes, meeting summary no. */
   art?: boolean;
   /** Meeting summaries may resolve a source conflict inside its own card. */
   renderReview?: (review: MeetingConflictReview, group: SummaryGroup) => ReactNode;
+  /** A human rewrite of one section, keyed by `section.title`. Wins over the generated groups/lines for that card only. */
+  sectionCorrections?: Record<string, { text: string }>;
+  /** Shows the per-section edit pencil. Meeting summaries only — never the newsletter. */
+  editable?: boolean;
+  /** Persists one section's correction (empty text clears it back to the generated version). */
+  onSaveSection?: (title: string, text: string) => Promise<void> | void;
 }) {
   const { width } = useWindowDimensions();
   const [expandedMeetingSections, setExpandedMeetingSections] = useState<Set<string>>(() => new Set());
+  const [editingTitle, setEditingTitle] = useState<string | null>(null);
+  const [draftText, setDraftText] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const beginEdit = (section: SummarySection) => {
+    setDraftText(sectionCorrections?.[section.title]?.text ?? sectionAsPlainText(section));
+    setEditingTitle(section.title);
+  };
+
+  const saveEdit = async () => {
+    if (!editingTitle || !onSaveSection) return;
+    setSaving(true);
+    try {
+      await onSaveSection(editingTitle, draftText);
+      setEditingTitle(null);
+    } catch {
+      // onSaveSection is responsible for telling the admin it failed — this
+      // just keeps the editor open with their draft so nothing is lost.
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!sections || sections.length === 0) return null;
 
   // The summary follows the Meeting Helper instead of turning every source into
@@ -81,7 +123,9 @@ export function SummarySections({
       <View style={{ gap: 16 }}>
         {sections.map((section) => {
           const canCollapse = section.title === 'How We Arrived';
-          const expanded = !canCollapse || expandedMeetingSections.has(section.title);
+          const correction = sectionCorrections?.[section.title];
+          const isEditing = editingTitle === section.title;
+          const expanded = !canCollapse || expandedMeetingSections.has(section.title) || isEditing;
           const warning = section.tone === 'warning';
           return (
             <View
@@ -95,43 +139,129 @@ export function SummarySections({
               }}
             >
               <View style={{ paddingHorizontal: 18, paddingTop: 17, paddingBottom: expanded ? 12 : 17 }}>
-                {canCollapse ? (
-                  <Pressable
-                    onPress={() => setExpandedMeetingSections((current) => {
-                      const next = new Set(current);
-                      if (next.has(section.title)) next.delete(section.title);
-                      else next.add(section.title);
-                      return next;
-                    })}
-                    accessibilityRole="button"
-                    accessibilityState={{ expanded }}
-                    accessibilityLabel={`${expanded ? 'Hide' : 'Read'} ${section.title}`}
-                    className="flex-row items-center"
-                  >
-                    <Text style={{ fontSize: 22, marginRight: 10 }}>{MEETING_SECTION_ICONS[section.title] ?? '✦'}</Text>
-                    <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 19, lineHeight: 26, color: '#2d2d2d', flex: 1 }}>
-                      {section.title}
-                    </Text>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6a2f' }}>
-                      {expanded ? 'Hide' : 'Read'}
-                    </Text>
-                  </Pressable>
-                ) : (
-                  <View className="flex-row items-center">
-                    <Text style={{ fontSize: 22, marginRight: 10 }}>{MEETING_SECTION_ICONS[section.title] ?? '✦'}</Text>
-                    <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 19, lineHeight: 26, color: warning ? '#8b4b24' : '#2d2d2d', flex: 1 }}>
-                      {section.title}
-                    </Text>
-                  </View>
-                )}
-                {expanded && section.intro ? (
+                <View className="flex-row items-center">
+                  {canCollapse ? (
+                    <Pressable
+                      onPress={() => setExpandedMeetingSections((current) => {
+                        const next = new Set(current);
+                        if (next.has(section.title)) next.delete(section.title);
+                        else next.add(section.title);
+                        return next;
+                      })}
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded }}
+                      accessibilityLabel={`${expanded ? 'Hide' : 'Read'} ${section.title}`}
+                      className="flex-row items-center flex-1"
+                    >
+                      <Text style={{ fontSize: 22, marginRight: 10 }}>{MEETING_SECTION_ICONS[section.title] ?? '✦'}</Text>
+                      <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 19, lineHeight: 26, color: '#2d2d2d', flex: 1 }}>
+                        {section.title}
+                      </Text>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6a2f' }}>
+                        {expanded ? 'Hide' : 'Read'}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <View className="flex-row items-center flex-1">
+                      <Text style={{ fontSize: 22, marginRight: 10 }}>{MEETING_SECTION_ICONS[section.title] ?? '✦'}</Text>
+                      <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 19, lineHeight: 26, color: warning ? '#8b4b24' : '#2d2d2d', flex: 1 }}>
+                        {section.title}
+                      </Text>
+                    </View>
+                  )}
+                  {editable && onSaveSection && !isEditing ? (
+                    <Pressable
+                      onPress={() => beginEdit(section)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Edit ${section.title}`}
+                      hitSlop={8}
+                      style={{ marginLeft: 10, padding: 4 }}
+                    >
+                      <Text style={{ fontSize: 16 }}>✏️</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+                {expanded && !isEditing && correction ? (
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, lineHeight: 17, color: '#9a8060', marginTop: 6 }}>
+                    Edited by an admin — the automatic version is kept underneath.
+                  </Text>
+                ) : null}
+                {expanded && !isEditing && !correction && section.intro ? (
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14.5, lineHeight: 21, color: '#6f6559', marginTop: 8 }}>
                     {section.intro}
                   </Text>
                 ) : null}
               </View>
 
-              {expanded ? (
+              {isEditing ? (
+                <View style={{ paddingHorizontal: 18, paddingBottom: 16, gap: 10 }}>
+                  <TextInput
+                    value={draftText}
+                    onChangeText={setDraftText}
+                    multiline
+                    textAlignVertical="top"
+                    accessibilityLabel={`Corrected text for ${section.title}`}
+                    style={{
+                      minHeight: 140,
+                      backgroundColor: '#ffffff',
+                      borderWidth: 1,
+                      borderColor: '#eadfcf',
+                      borderRadius: 12,
+                      padding: 12,
+                      fontFamily: 'Lato_400Regular',
+                      fontSize: 14.5,
+                      lineHeight: 21,
+                      color: '#3f3a33',
+                    }}
+                  />
+                  <View className="flex-row flex-wrap items-center" style={{ gap: 10 }}>
+                    <Pressable
+                      onPress={() => void saveEdit()}
+                      disabled={saving || !draftText.trim()}
+                      accessibilityRole="button"
+                      style={{
+                        backgroundColor: '#bd9348',
+                        borderRadius: 10,
+                        paddingHorizontal: 14,
+                        paddingVertical: 9,
+                        opacity: saving || !draftText.trim() ? 0.6 : 1,
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#ffffff' }}>
+                        {saving ? 'Saving…' : 'Save'}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setEditingTitle(null)}
+                      disabled={saving}
+                      accessibilityRole="button"
+                      style={{ paddingHorizontal: 8, paddingVertical: 9 }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6a2f' }}>Cancel</Text>
+                    </Pressable>
+                    {correction ? (
+                      <Pressable
+                        onPress={() => setDraftText('')}
+                        disabled={saving}
+                        accessibilityRole="button"
+                        style={{ paddingHorizontal: 8, paddingVertical: 9 }}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9a6a4a' }}>
+                          Clear (Save empty to restore the automatic version)
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </View>
+              ) : expanded && correction ? (
+                <View style={{ paddingHorizontal: 18, paddingBottom: 16, gap: 6 }}>
+                  {correction.text.split('\n').filter((line) => line.trim()).map((line, index) => (
+                    <Text key={index} style={{ fontFamily: 'Lato_400Regular', fontSize: 14.5, lineHeight: 21, color: '#453f37' }}>
+                      {line}
+                    </Text>
+                  ))}
+                </View>
+              ) : expanded ? (
                 <View style={{ paddingHorizontal: 18, paddingBottom: 16, gap: 10 }}>
                   {(section.groups ?? []).map((group, groupIndex) => (
                     <View
