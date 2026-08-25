@@ -137,16 +137,14 @@ interface ParsedSummary {
     corrected_by: string;
   }[];
   /**
-   * A per-section correction — Nat, 2026-08-24: rewriting the whole summary
-   * to fix one line threw away every other section's formatting. Keyed by
-   * `section.title`, same "generated stays underneath" rule as the
-   * whole-summary correction, just scoped to one card instead of all of them.
+   * A per-line correction. Nat, 2026-08-24, first on the whole-summary "Fix
+   * summary" tool ("rewriting the whole thing threw away every other
+   * section"), then on a per-section version of the same idea ("the little
+   * pencil edit did me dirty... what if I can just double click something to
+   * edit it?"). Keyed by `lineKey()` in SummarySections.tsx — one bullet,
+   * left in place, everything around it exactly as generated.
    */
-  section_corrections?: Record<string, {
-    text: string;
-    corrected_at: string;
-    corrected_by: string;
-  }>;
+  line_corrections?: Record<string, string>;
   conflict_resolutions?: {
     conflict_id: string;
     topic: string;
@@ -723,33 +721,33 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   };
 
   /**
-   * One section's fix, not the whole recap. Nat, 2026-08-24: the existing
-   * "Fix summary" tool rewrote the entire meeting as one flat block the
-   * moment she touched anything — every other section's formatting was
-   * collateral damage for correcting one line. This keeps every untouched
-   * section exactly as generated.
+   * One line's fix, double-clicked in place. Nat, 2026-08-24, first on the
+   * whole-summary correction tool, then a per-section version of the same
+   * idea: "the little pencil edit did me dirty... what if I can just double
+   * click something to edit it?" This is that — every other line, in every
+   * other section, stays exactly as generated.
    */
-  const saveSectionCorrection = async (title: string, text: string) => {
-    if (!profile?.id || !isHiveAdmin) return;
+  const saveLineCorrection = async (key: string, text: string) => {
+    if (!isHiveAdmin) return;
     const trimmed = text.trim();
     const base = storedSummaryBase();
-    const existing = (base.section_corrections as ParsedSummary['section_corrections']) ?? {};
+    const existing = (base.line_corrections as ParsedSummary['line_corrections']) ?? {};
     const next = { ...existing };
     if (trimmed) {
-      next[title] = { text: trimmed, corrected_at: new Date().toISOString(), corrected_by: profile.id };
+      next[key] = trimmed;
     } else {
-      delete next[title];
+      delete next[key];
     }
 
     const { data: updated, error } = await supabase
       .from('meetings')
-      .update({ summary: JSON.stringify({ ...base, section_corrections: next }) })
+      .update({ summary: JSON.stringify({ ...base, line_corrections: next }) })
       .eq('id', meeting.id)
       .select('*')
       .single();
     if (error) {
-      console.error('Error correcting summary section:', error);
-      showAlert('Not saved', 'That section could not be saved just now. Please try again.');
+      console.error('Error correcting summary line:', error);
+      showAlert('Not saved', 'That line could not be saved just now. Please try again.');
       throw error;
     }
     if (updated) {
@@ -1392,9 +1390,9 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           <View className="mb-2">
             <SummarySections
               sections={parsedSummary.sections}
-              sectionCorrections={parsedSummary.section_corrections}
+              lineCorrections={parsedSummary.line_corrections}
               editable={isHiveAdmin}
-              onSaveSection={saveSectionCorrection}
+              onSaveLine={saveLineCorrection}
               renderReview={(review) => (
                 isHiveAdmin ? (
                   <MeetingConflictResolver

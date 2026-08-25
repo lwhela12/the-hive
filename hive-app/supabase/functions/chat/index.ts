@@ -1718,23 +1718,41 @@ serve(async (req) => {
               const correctedText = typeof manualCorrection?.text === 'string'
                 ? manualCorrection.text.trim()
                 : '';
-              // A per-section fix (2026-08-24) is the same rule at a smaller
-              // grain: swap that one card's text in, leave the sections nobody
-              // touched exactly as generated, so a one-line correction doesn't
-              // silently drop everything else the meeting produced.
-              const sectionCorrections = !correctedText
-                && summaryObject?.section_corrections
-                && typeof summaryObject.section_corrections === 'object'
-                && !Array.isArray(summaryObject.section_corrections)
-                ? summaryObject.section_corrections as Record<string, { text?: unknown }>
+              // A per-line fix (2026-08-24, double-click in place) is the same
+              // rule at the smallest grain: swap that one bullet's text in,
+              // using the exact same `title::g<i>::<j>` / `title::s<j>` keys
+              // SummarySections.tsx writes, so Clive reads whatever a member
+              // would actually see on the summary page — not the stale
+              // generated text underneath a correction.
+              const lineCorrections = !correctedText
+                && summaryObject?.line_corrections
+                && typeof summaryObject.line_corrections === 'object'
+                && !Array.isArray(summaryObject.line_corrections)
+                ? summaryObject.line_corrections as Record<string, unknown>
                 : null;
               const sectionsToCorrect = summaryObject?.sections;
-              const correctedSections = sectionCorrections && Array.isArray(sectionsToCorrect)
+              const correctedSections = lineCorrections && Array.isArray(sectionsToCorrect)
                 ? (sectionsToCorrect as Record<string, unknown>[]).map((section) => {
-                    const fix = sectionCorrections[String(section.title)];
-                    const fixedText = typeof fix?.text === 'string' ? fix.text.trim() : '';
-                    if (!fixedText) return section;
-                    return { title: section.title, lines: fixedText.split('\n').filter((line) => line.trim()) };
+                    const title = String(section.title ?? '');
+                    const groups = Array.isArray(section.groups)
+                      ? (section.groups as Record<string, unknown>[]).map((group, groupIndex) => {
+                          const lines = Array.isArray(group.lines) ? group.lines as unknown[] : [];
+                          return {
+                            ...group,
+                            lines: lines.map((line, lineIndex) => {
+                              const fix = lineCorrections[`${title}::g${groupIndex}::${lineIndex}`];
+                              return typeof fix === 'string' && fix.trim() ? fix.trim() : line;
+                            }),
+                          };
+                        })
+                      : section.groups;
+                    const lines = Array.isArray(section.lines)
+                      ? (section.lines as unknown[]).map((line, lineIndex) => {
+                          const fix = lineCorrections[`${title}::s${lineIndex}`];
+                          return typeof fix === 'string' && fix.trim() ? fix.trim() : line;
+                        })
+                      : section.lines;
+                    return { ...section, groups, lines };
                   })
                 : null;
               // Once a HIVE admin has supplied the recap members should trust,
