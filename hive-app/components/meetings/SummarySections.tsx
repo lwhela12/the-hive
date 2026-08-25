@@ -1,6 +1,100 @@
-import { useRef, useState, type ReactNode } from 'react';
-import { Image, Pressable, TextInput, View, Text, useWindowDimensions } from 'react-native';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Image, Platform, Pressable, TextInput, View, Text, useWindowDimensions } from 'react-native';
 import { headerForSection } from '../../lib/newsletterHeaders';
+
+/**
+ * One line, double-click (web) or double-tap (native) to edit in place.
+ *
+ * Nat, 2026-08-24, first attempt: a manual "two `onPress` calls within
+ * 400ms" timer on `Pressable`. She reported it did nothing — and the
+ * reason is real, not a fluke: React Native Web's `Pressable` doesn't
+ * forward `onDoubleClick` to the DOM at all (`forwardedProps/index.js` has
+ * no such key), and its own press-responder collapses a fast double
+ * click into a single `onPress` more often than not. A real `dblclick`
+ * listener attached straight to the underlying DOM node, found via `ref`,
+ * is what a browser actually fires on a genuine double click — that's
+ * the primary path here. The `onPress` timer stays as the fallback for
+ * the iOS app, where there is no DOM and no `dblclick` event at all.
+ */
+function EditableLine({
+  editable,
+  editing,
+  draftText,
+  onChangeDraft,
+  onCommit,
+  onCancel,
+  onRequestEdit,
+  inputStyle,
+  children,
+  className,
+  style,
+}: {
+  editable: boolean;
+  editing: boolean;
+  draftText: string;
+  onChangeDraft: (text: string) => void;
+  onCommit: () => void;
+  onCancel: () => void;
+  onRequestEdit: () => void;
+  inputStyle: object;
+  children: ReactNode;
+  className?: string;
+  style?: object;
+}) {
+  const nodeRef = useRef<unknown>(null);
+  const lastPressRef = useRef(0);
+
+  useEffect(() => {
+    if (!editable || Platform.OS !== 'web') return;
+    const node = nodeRef.current as (EventTarget & { addEventListener?: unknown }) | null;
+    if (!node || typeof node.addEventListener !== 'function') return;
+    const handler = (event: Event) => {
+      event.preventDefault();
+      onRequestEdit();
+    };
+    node.addEventListener('dblclick', handler);
+    return () => node.removeEventListener?.('dblclick', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editable]);
+
+  if (editing) {
+    return (
+      <TextInput
+        value={draftText}
+        onChangeText={onChangeDraft}
+        multiline
+        autoFocus
+        textAlignVertical="top"
+        onBlur={onCommit}
+        onKeyPress={(event) => {
+          if (event.nativeEvent.key === 'Escape') onCancel();
+        }}
+        style={inputStyle}
+      />
+    );
+  }
+
+  return (
+    <Pressable
+      ref={nodeRef as never}
+      onPress={() => {
+        if (!editable) return;
+        const now = Date.now();
+        if (now - lastPressRef.current < 400) {
+          lastPressRef.current = 0;
+          onRequestEdit();
+        } else {
+          lastPressRef.current = now;
+        }
+      }}
+      accessibilityHint={editable ? 'Double tap to edit' : undefined}
+      className={className}
+      style={style}
+    >
+      {children}
+    </Pressable>
+  );
+}
 
 export interface SummarySection {
   title: string;
@@ -82,26 +176,6 @@ export function SummarySections({
   const [expandedMeetingSections, setExpandedMeetingSections] = useState<Set<string>>(() => new Set());
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draftText, setDraftText] = useState('');
-  const lastTapRef = useRef<{ key: string; time: number } | null>(null);
-
-  /**
-   * Nat, 2026-08-24, after the flatten-the-whole-section "Fix summary" tool:
-   * "the little pencil edit did me dirty... what if I can just double click
-   * something to edit it?" A real second click within 400ms on the same line
-   * — the same test on web (click) and native (tap), no platform branching.
-   */
-  const handleLinePress = (key: string, currentText: string) => {
-    if (!editable || !onSaveLine) return;
-    const now = Date.now();
-    const last = lastTapRef.current;
-    if (last && last.key === key && now - last.time < 400) {
-      lastTapRef.current = null;
-      setDraftText(currentText);
-      setEditingKey(key);
-    } else {
-      lastTapRef.current = { key, time: now };
-    }
-  };
 
   const commitEdit = async (key: string, original: string) => {
     if (editingKey !== key) return;
@@ -202,40 +276,31 @@ export function SummarySections({
                           const effectiveLine = lineCorrections?.[key] ?? line;
                           const duty = effectiveLine.startsWith('Confirmed duty:');
                           const clean = duty ? effectiveLine.replace(/^Confirmed duty:\s*/, '') : effectiveLine;
-                          if (editingKey === key) {
-                            return (
-                              <TextInput
-                                key={lineIndex}
-                                value={draftText}
-                                onChangeText={setDraftText}
-                                multiline
-                                autoFocus
-                                textAlignVertical="top"
-                                accessibilityLabel={`Editing: ${effectiveLine}`}
-                                onBlur={() => void commitEdit(key, effectiveLine)}
-                                onKeyPress={(event) => {
-                                  if (event.nativeEvent.key === 'Escape') setEditingKey(null);
-                                }}
-                                style={{
-                                  backgroundColor: '#ffffff',
-                                  borderWidth: 1,
-                                  borderColor: '#bd9348',
-                                  borderRadius: 8,
-                                  padding: 8,
-                                  fontFamily: 'Lato_400Regular',
-                                  fontSize: 14.5,
-                                  lineHeight: 21,
-                                  color: '#453f37',
-                                }}
-                              />
-                            );
-                          }
                           return (
-                            <Pressable
+                            <EditableLine
                               key={lineIndex}
-                              onPress={() => handleLinePress(key, effectiveLine)}
-                              accessibilityHint={editable ? 'Double tap to edit' : undefined}
+                              editable={editable && !!onSaveLine}
+                              editing={editingKey === key}
+                              draftText={draftText}
+                              onChangeDraft={setDraftText}
+                              onCommit={() => void commitEdit(key, effectiveLine)}
+                              onCancel={() => setEditingKey(null)}
+                              onRequestEdit={() => {
+                                setDraftText(effectiveLine);
+                                setEditingKey(key);
+                              }}
                               className="flex-row items-start"
+                              inputStyle={{
+                                backgroundColor: '#ffffff',
+                                borderWidth: 1,
+                                borderColor: '#bd9348',
+                                borderRadius: 8,
+                                padding: 8,
+                                fontFamily: 'Lato_400Regular',
+                                fontSize: 14.5,
+                                lineHeight: 21,
+                                color: '#453f37',
+                              }}
                             >
                               <Text style={{ color: duty ? '#bd9348' : '#c7a76b', fontSize: 13, lineHeight: 21, marginRight: 8 }}>
                                 {duty ? '✓' : '•'}
@@ -244,7 +309,7 @@ export function SummarySections({
                                 {duty ? <Text style={{ fontFamily: 'Lato_700Bold', color: '#6d5427' }}>Confirmed duty: </Text> : null}
                                 {clean}
                               </Text>
-                            </Pressable>
+                            </EditableLine>
                           );
                         })}
                       </View>
@@ -257,48 +322,39 @@ export function SummarySections({
                     const effectiveLine = lineCorrections?.[key] ?? line;
                     const indented = effectiveLine.startsWith('    ');
                     const text = effectiveLine.trim();
-                    if (editingKey === key) {
-                      return (
-                        <TextInput
-                          key={index}
-                          value={draftText}
-                          onChangeText={setDraftText}
-                          multiline
-                          autoFocus
-                          textAlignVertical="top"
-                          accessibilityLabel={`Editing: ${effectiveLine}`}
-                          onBlur={() => void commitEdit(key, effectiveLine)}
-                          onKeyPress={(event) => {
-                            if (event.nativeEvent.key === 'Escape') setEditingKey(null);
-                          }}
-                          style={{
-                            backgroundColor: '#ffffff',
-                            borderWidth: 1,
-                            borderColor: '#bd9348',
-                            borderRadius: 8,
-                            padding: 8,
-                            marginLeft: indented ? 18 : 0,
-                            fontFamily: 'Lato_400Regular',
-                            fontSize: 14.5,
-                            lineHeight: 21,
-                            color: '#3f3a33',
-                          }}
-                        />
-                      );
-                    }
                     return (
-                      <Pressable
+                      <EditableLine
                         key={index}
-                        onPress={() => handleLinePress(key, effectiveLine)}
-                        accessibilityHint={editable ? 'Double tap to edit' : undefined}
+                        editable={editable && !!onSaveLine}
+                        editing={editingKey === key}
+                        draftText={draftText}
+                        onChangeDraft={setDraftText}
+                        onCommit={() => void commitEdit(key, effectiveLine)}
+                        onCancel={() => setEditingKey(null)}
+                        onRequestEdit={() => {
+                          setDraftText(effectiveLine);
+                          setEditingKey(key);
+                        }}
                         className="flex-row"
                         style={{ paddingLeft: indented ? 18 : 0 }}
+                        inputStyle={{
+                          backgroundColor: '#ffffff',
+                          borderWidth: 1,
+                          borderColor: '#bd9348',
+                          borderRadius: 8,
+                          padding: 8,
+                          marginLeft: indented ? 18 : 0,
+                          fontFamily: 'Lato_400Regular',
+                          fontSize: 14.5,
+                          lineHeight: 21,
+                          color: '#3f3a33',
+                        }}
                       >
                         {!indented ? <Text style={{ color: '#b58a39', fontSize: 14, lineHeight: 22, marginRight: 9 }}>•</Text> : null}
                         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: indented ? 14 : 15, lineHeight: 22, color: '#3f3a33', flex: 1 }}>
                           {text}
                         </Text>
-                      </Pressable>
+                      </EditableLine>
                     );
                   })}
 
