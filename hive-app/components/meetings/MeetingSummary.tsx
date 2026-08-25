@@ -825,6 +825,28 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   };
 
   /**
+   * A wording fix on a duty line, not a reassign. Nat, 2026-08-24: "what if
+   * i'm updating a word, not a person? ... will that update my to do
+   * list?" It didn't, same gap reassign had before it wrote the real
+   * `assigned_to` — this writes the real `action_items.description` too,
+   * not just the summary's copy of it.
+   */
+  const editDutyText = async (key: string, actionItemIds: string[], description: string, fullLineText: string) => {
+    if (!isHiveAdmin) return;
+    try {
+      const { error } = await supabase
+        .from('action_items')
+        .update({ description })
+        .in('id', actionItemIds);
+      if (error) throw error;
+      await saveLineCorrection(key, fullLineText);
+    } catch (error) {
+      console.error('Error editing duty wording:', error);
+      showAlert('Not saved', 'That did not save. Please try again.');
+    }
+  };
+
+  /**
    * Nat, 2026-08-24: "i just want to be able to delete one & it wont let
    * me." Archives the real `action_items` row(s) — preserve, not destroy,
    * same as everywhere else duties disappear — and hides the line itself so
@@ -1510,6 +1532,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
               mentionMembers={isHiveAdmin ? mentionableMembers : undefined}
               onReassignByMention={reassignByMention}
               onDeleteDuty={deleteDuty}
+              onEditDutyText={editDutyText}
               renderReview={(review) => (
                 isHiveAdmin ? (
                   <MeetingConflictResolver

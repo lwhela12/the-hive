@@ -235,6 +235,7 @@ export function SummarySections({
   mentionMembers,
   onReassignByMention,
   onDeleteDuty,
+  onEditDutyText,
 }: {
   sections: SummarySection[];
   /** Use the drawn headers. Newsletter yes, meeting summary no. */
@@ -257,6 +258,8 @@ export function SummarySections({
   onReassignByMention?: (key: string, member: Pick<Profile, 'id' | 'name'>, actionItemIds: string[], cleanedText: string) => Promise<void> | void;
   /** A duty line was double-clicked, cleared to empty, and blurred — delete, not "revert to generated" (which would be pointless — the generated text is the thing being deleted). */
   onDeleteDuty?: (key: string, lineText: string, actionItemIds: string[]) => void;
+  /** A duty line's wording changed with no "@" reassign in it — the real to-do's description is corrected too, not just the summary's copy. */
+  onEditDutyText?: (key: string, actionItemIds: string[], description: string, fullLineText: string) => Promise<void> | void;
 }) {
   const { width } = useWindowDimensions();
   const [expandedMeetingSections, setExpandedMeetingSections] = useState<Set<string>>(() => new Set());
@@ -284,6 +287,16 @@ export function SummarySections({
           ? cleaned.replace(/—\s*[^—]+$/, `— ${firstNameOf(member.name)}`)
           : `${cleaned} — ${firstNameOf(member.name)}`;
         await onReassignByMention(key, member, dutyMeta.action_item_ids, finalText);
+        return;
+      }
+      if (onEditDutyText) {
+        // Nat, 2026-08-24: "what about this — what if I'm updating a word,
+        // not a person?" A wording fix deserves the same real answer
+        // reassign and delete already got: the actual to-do's description
+        // changes too, not just the summary's cosmetic copy.
+        const withoutPrefix = text.replace(/^Confirmed duty:\s*(✓\s*)?/i, '');
+        const description = withoutPrefix.replace(/—\s*[^—]+$/, '').trim() || withoutPrefix.trim();
+        await onEditDutyText(key, dutyMeta.action_item_ids, description, text);
         return;
       }
     }
