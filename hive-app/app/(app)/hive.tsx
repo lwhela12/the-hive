@@ -39,7 +39,7 @@ import { EditButton } from '../../components/ui/EditButton';
 import { useActivityFeed, type ActivityItem } from '../../lib/hooks/useActivityFeed';
 import { getSurveyResponsePeriod, isMonthlyCheckInSurvey, useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
 import { useCarryForwardContext } from '../../lib/hooks/useCarryForwardContext';
-import { useAppUpdate } from '../../lib/hooks/useAppUpdate';
+import { useAppUpdate, checkForUpdateNow } from '../../lib/hooks/useAppUpdate';
 import { useInstallPrompt } from '../../lib/hooks/useInstallPrompt';
 import { useWebAppDisplayMode } from '../../lib/hooks/useWebAppDisplayMode';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
@@ -2271,8 +2271,14 @@ export default function HiveScreen() {
   // Refresh pill: data refresh normally; when a new build is live it quietly
   // runs the full app-update flow instead. The banner is the only visual
   // messenger for updates — the pill label never changes (no doubling up).
-  const handleRefreshPill = () => {
-    if (Platform.OS === 'web' && updateAvailable) {
+  //
+  // This has to force a fresh check on every tap rather than trust
+  // `updateAvailable` (the background poll's last result) — that flag can
+  // still be false the moment someone taps, especially right after opening
+  // the app, and this pill is the one thing Nat told her least technical
+  // members to rely on for staying current (2026-08-25).
+  const handleRefreshPill = async () => {
+    if (Platform.OS === 'web' && (updateAvailable || (await checkForUpdateNow()))) {
       void applyUpdate();
       return;
     }

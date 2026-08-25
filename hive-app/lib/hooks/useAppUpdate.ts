@@ -46,11 +46,11 @@ async function fetchDeployedBuildId(): Promise<string | null> {
   }
 }
 
-async function checkForUpdate() {
-  if (updateAvailable) return; // already flagged; nothing more to learn
+async function checkForUpdate(): Promise<boolean> {
+  if (updateAvailable) return true; // already flagged; nothing more to learn
 
   const deployedBuildId = await fetchDeployedBuildId();
-  if (!deployedBuildId) return;
+  if (!deployedBuildId) return false;
 
   // Normal case: we know which build we are, so any difference is fresh honey —
   // including one deployed before this tab was ever opened.
@@ -59,7 +59,7 @@ async function checkForUpdate() {
       updateAvailable = true;
       notifyListeners();
     }
-    return;
+    return updateAvailable;
   }
 
   // Fallback for local dev and any build without a stamped id: we can't know
@@ -67,13 +67,28 @@ async function checkForUpdate() {
   // than nagging every dev server about a mismatch it can't do anything about.
   if (baselineBuildId === null) {
     baselineBuildId = deployedBuildId;
-    return;
+    return false;
   }
 
   if (deployedBuildId !== baselineBuildId) {
     updateAvailable = true;
     notifyListeners();
   }
+  return updateAvailable;
+}
+
+/**
+ * Force a real, right-now check instead of trusting the background poll's
+ * last result. The Refresh pill on Home is Nat's own answer for a group that
+ * doesn't know to close and reopen an app — she told members "just tap that
+ * and you'll always have the latest" — so it cannot settle for whatever the
+ * passive 2-minute poll happened to have found by the time they tapped it.
+ * (Nat, 2026-08-25: tapped it three times and got the old build every time,
+ * because `updateAvailable` was still false at the moment of the tap.)
+ */
+export async function checkForUpdateNow(): Promise<boolean> {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
+  return checkForUpdate();
 }
 
 function startPollingOnce() {
