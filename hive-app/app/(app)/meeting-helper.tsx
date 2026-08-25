@@ -345,6 +345,8 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
   default: {
     slides: ['room', 'outline', 'rollcall', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
     agenda: [
+      { key: 'room', label: 'Arrivals' },
+      { key: 'outline', label: 'Outline' },
       { key: 'rollcall', label: 'Roll call' },
       { key: 'news', label: 'News from Nat' },
       { key: 'treasurer', label: 'Treasurer' },
@@ -375,6 +377,8 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
   tech: {
     slides: ['room', 'outline', 'rollcall', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
     agenda: [
+      { key: 'room', label: 'Arrivals' },
+      { key: 'outline', label: 'Outline' },
       { key: 'rollcall', label: 'Roll call' },
       { key: 'news', label: 'News from Nat' },
       { key: 'treasurer', label: 'Treasurer' },
@@ -445,6 +449,8 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
   show: {
     slides: ['room', 'outline', 'rollcall', 'news', 'meetups', 'assignments', 'wrapup', 'thanks'],
     agenda: [
+      { key: 'room', label: 'Arrivals' },
+      { key: 'outline', label: 'Outline' },
       { key: 'rollcall', label: 'Roll call' },
       { key: 'news', label: 'News from Nat' },
       { key: 'meetups', label: 'Next meeting' },
