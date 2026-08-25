@@ -20,9 +20,12 @@ import { Platform } from 'react-native';
 
 const RUNNING_BUILD_ID = process.env.EXPO_PUBLIC_BUILD_ID ?? '';
 
-// Two minutes: version.json is a few bytes and served no-store, and a banner
-// that shows up five minutes late has usually been beaten by a manual refresh.
-const POLL_INTERVAL_MS = 2 * 60 * 1000;
+// Thirty seconds: version.json is a few bytes and served no-store, so there is
+// no real cost to asking often. iPhone freezes a home-screen web app instead
+// of truly closing it most of the time, so the timer only gets to run during
+// the minutes someone is actually looking at the screen — a short interval is
+// what gives it a real chance to land in that window (Nat, 2026-08-25).
+const POLL_INTERVAL_MS = 30 * 1000;
 
 // Module-level singleton so every consumer (banner, refresh pill) shares one
 // baseline and one polling loop no matter how many components mount the hook.
@@ -109,6 +112,19 @@ function startPollingOnce() {
       }
     });
   }
+
+  // `visibilitychange` covers switching tabs; it does not reliably cover an
+  // iPhone un-freezing a home-screen app that never actually closed. `pageshow`
+  // fires on that kind of resume too (its own `persisted` flag specifically
+  // means "this is a resumed page, not a fresh load") — one more real chance to
+  // catch a stale build before someone goes looking for a banner that never
+  // came (Nat, 2026-08-25).
+  window.addEventListener('pageshow', () => {
+    void checkForUpdate();
+  });
+  window.addEventListener('focus', () => {
+    void checkForUpdate();
+  });
 }
 
 /**
