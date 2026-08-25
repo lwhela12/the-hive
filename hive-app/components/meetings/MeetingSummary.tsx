@@ -790,6 +790,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
     cleanedText: string,
   ) => {
     if (!isHiveAdmin) return;
+    const firstName = member.name.trim().split(/\s+/)[0] || member.name;
     const commit = async () => {
       try {
         const { error } = await supabase
@@ -798,6 +799,10 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           .in('id', actionItemIds);
         if (error) throw error;
         await saveLineCorrection(key, cleanedText);
+        // The edit box closes the instant the @-tag is tapped — no visible
+        // change to point at, unlike a plain text edit. Nat, 2026-08-24,
+        // after it closed with no confirmation: "did that work or not?"
+        showAlert('Reassigned', `Moved to ${firstName} — the real to-do, not just the words here.`);
       } catch (error) {
         console.error('Error reassigning duty:', error);
         showAlert('Not reassigned', 'That did not save. Please try again.');
@@ -809,7 +814,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
     if (actionItemIds.length > 1) {
       confirmAction({
         title: 'Reassign this shared duty?',
-        message: `This duty is on ${actionItemIds.length} people's lists. Reassigning moves all ${actionItemIds.length} to ${member.name.trim().split(/\s+/)[0] || member.name} — nobody else keeps a copy.`,
+        message: `This duty is on ${actionItemIds.length} people's lists. Reassigning moves all ${actionItemIds.length} to ${firstName} — nobody else keeps a copy.`,
         confirmLabel: 'Reassign',
         onConfirm: commit,
       });
