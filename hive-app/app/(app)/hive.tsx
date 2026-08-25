@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert, ActivityIndicator, Animated, Platform } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, ActivityIndicator, Animated, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Polygon } from 'react-native-svg';
@@ -56,6 +56,7 @@ import {
 import { AppHeader } from '../../components/navigation';
 import { userFacingError } from '../../lib/userFacingError';
 import { hiveAccent } from '../../lib/hiveBrand';
+import { openAddToCalendar } from '../../lib/addToCalendar';
 import { ScopeBadge } from '../../components/ui/ScopeBadge';
 import { EventScopeFields, saveBirthdayScope, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { SignedAvatarImage } from '../../components/ui/Avatar';
@@ -112,7 +113,6 @@ type HomeTodo = {
   onArchive?: () => void;
 };
 
-const CALENDAR_DURATION_MS = 2.5 * 60 * 60 * 1000; // 30-min arrival + 2-hour meeting
 const CATCH_UP_BATCH_SIZE = 7;
 const CATCH_UP_MAX_DAYS = DAILY_QUESTIONS.length;
 // Screens that deep-link into Catch up (/hive?catchup=1&from=X) and where
@@ -132,34 +132,6 @@ const getRecentDailyQuestions = (deck: DailyQuestion[], days = CATCH_UP_BATCH_SI
     date.setDate(date.getDate() - offset);
     return getQuestionForDate(date, deck);
   });
-};
-
-const getEventStartDate = (event: Event) => {
-  const [year, month, day] = event.event_date.split('-').map(Number);
-  const [hour = 9, minute = 0] = (event.event_time || '09:00').split(':').map(Number);
-  return new Date(year, month - 1, day, hour, minute);
-};
-
-const formatGoogleCalendarDate = (date: Date) => {
-  return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-};
-
-const formatIcsDate = (date: Date) => formatGoogleCalendarDate(date);
-
-// Time-less events export as all-day calendar entries spanning event_date
-// through end_date (calendar end dates are exclusive, hence the +1 day).
-const isAllDayEvent = (event: Event) => !event.event_time;
-
-const formatAllDayDate = (date: Date) =>
-  `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
-
-const getAllDayRange = (event: Event) => {
-  const [startYear, startMonth, startDay] = event.event_date.split('-').map(Number);
-  const [endYear, endMonth, endDay] = (event.end_date || event.event_date).split('-').map(Number);
-  return {
-    start: new Date(startYear, startMonth - 1, startDay),
-    endExclusive: new Date(endYear, endMonth - 1, endDay + 1),
-  };
 };
 
 const formatSurveyDueDate = (dueDate: string) => {
@@ -244,84 +216,6 @@ const withoutTimeNotes = (description?: string | null) =>
     .join('\n\n')
     .trim();
 
-const escapeIcsText = (value = '') => value
-  .replace(/\\/g, '\\\\')
-  .replace(/;/g, '\\;')
-  .replace(/,/g, '\\,')
-  .replace(/\n/g, '\\n');
-
-const getCalendarDescription = (event: Event) => {
-  return [
-    event.description,
-    event.meet_link ? `Join Google Meet: ${event.meet_link}` : null,
-  ].filter(Boolean).join('\n\n');
-};
-
-const createCalendarLinks = (event: Event) => {
-  const allDay = isAllDayEvent(event);
-  const allDayRange = getAllDayRange(event);
-  const start = getEventStartDate(event);
-  const end = new Date(start.getTime() + CALENDAR_DURATION_MS);
-  const description = getCalendarDescription(event);
-
-  const googleParams = new URLSearchParams({
-    action: 'TEMPLATE',
-    text: event.title,
-    dates: allDay
-      ? `${formatAllDayDate(allDayRange.start)}/${formatAllDayDate(allDayRange.endExclusive)}`
-      : `${formatGoogleCalendarDate(start)}/${formatGoogleCalendarDate(end)}`,
-    details: description,
-    location: event.location || '',
-  });
-
-  const outlookParams = new URLSearchParams({
-    path: '/calendar/action/compose',
-    rru: 'addevent',
-    subject: event.title,
-    startdt: allDay ? event.event_date : start.toISOString(),
-    enddt: allDay
-      ? `${allDayRange.endExclusive.getFullYear()}-${String(allDayRange.endExclusive.getMonth() + 1).padStart(2, '0')}-${String(allDayRange.endExclusive.getDate()).padStart(2, '0')}`
-      : end.toISOString(),
-    ...(allDay ? { allday: 'true' } : {}),
-    body: description,
-    location: event.location || '',
-  });
-
-  return {
-    google: `https://calendar.google.com/calendar/render?${googleParams.toString()}`,
-    outlook: `https://outlook.live.com/calendar/0/deeplink/compose?${outlookParams.toString()}`,
-  };
-};
-
-const createIcsContent = (event: Event) => {
-  const allDay = isAllDayEvent(event);
-  const allDayRange = getAllDayRange(event);
-  const start = getEventStartDate(event);
-  const end = new Date(start.getTime() + CALENDAR_DURATION_MS);
-  const timestamp = formatIcsDate(new Date());
-  const uid = `${event.id}@the-hive.app`;
-
-  return [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//HIVE//Community Event//EN',
-    'BEGIN:VEVENT',
-    `UID:${uid}`,
-    `DTSTAMP:${timestamp}`,
-    allDay
-      ? `DTSTART;VALUE=DATE:${formatAllDayDate(allDayRange.start)}`
-      : `DTSTART:${formatIcsDate(start)}`,
-    allDay
-      ? `DTEND;VALUE=DATE:${formatAllDayDate(allDayRange.endExclusive)}`
-      : `DTEND:${formatIcsDate(end)}`,
-    `SUMMARY:${escapeIcsText(event.title)}`,
-    `DESCRIPTION:${escapeIcsText(getCalendarDescription(event))}`,
-    `LOCATION:${escapeIcsText(event.location || '')}`,
-    'END:VEVENT',
-    'END:VCALENDAR',
-  ].join('\r\n');
-};
-
 const formatDateKey = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -347,51 +241,6 @@ const isQuarterlyDuesActionItem = (
   if (itemDueDate === dueDateKey) return true;
 
   return description.includes(`q${period.quarter}`) && description.includes(String(period.year));
-};
-
-const downloadIcsFile = (event: Event) => {
-  const icsContent = createIcsContent(event);
-  const safeTitle = event.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'hive-event';
-  const fileName = `${safeTitle}.ics`;
-
-  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    return;
-  }
-
-  const dataUrl = `data:text/calendar;charset=utf8,${encodeURIComponent(icsContent)}`;
-  Linking.openURL(dataUrl);
-};
-
-const openAddToCalendar = (event: Event) => {
-  const links = createCalendarLinks(event);
-
-  if (typeof window !== 'undefined' && window.confirm) {
-    if (window.confirm('Open Google Calendar? Press Cancel to download a calendar file instead.')) {
-      Linking.openURL(links.google);
-    } else {
-      downloadIcsFile(event);
-    }
-    return;
-  }
-
-  // The last raw `Alert.alert` on this screen, and it is safe: the browser path
-  // returns above, so only a phone reaches here. It offers three choices, which
-  // `confirmAction` (a yes or no) cannot carry.
-  Alert.alert('Add to Calendar', event.title, [
-    { text: 'Google Calendar', onPress: () => Linking.openURL(links.google) },
-    { text: 'Outlook Calendar', onPress: () => Linking.openURL(links.outlook) },
-    { text: 'Apple / Other Calendar', onPress: () => downloadIcsFile(event) },
-    { text: 'Cancel', style: 'cancel' },
-  ]);
 };
 
 function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (event: Event) => void }) {

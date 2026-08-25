@@ -17,6 +17,7 @@ import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { UpcomingMeetingsSkeleton, PastRecordingsSkeleton } from '../../components/meetings/MeetingsSkeleton';
 import { formatDateLong, formatTimeRange, parseAmericanDate } from '../../lib/dateUtils';
 import { normalizeHiveBrandText } from '../../lib/hiveBrand';
+import { openAddToCalendar } from '../../lib/addToCalendar';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
@@ -1514,28 +1515,43 @@ export default function MeetingsScreen() {
                         corner"). In-app HIVEs still get no Join here — their
                         door is the Meeting Helper, and old rows' leftover Meet
                         links stay retired. */}
-                    {hiveOnMeet && event.meet_link ? (
+                    <View className="flex-row flex-wrap gap-2 mt-3">
+                      {hiveOnMeet && event.meet_link ? (
+                        <Pressable
+                          onPress={() => void Linking.openURL(event.meet_link!)}
+                          className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10 self-start"
+                        >
+                          <Text className="text-xs mr-1.5">📹</Text>
+                          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
+                            Join Google Meet
+                          </Text>
+                        </Pressable>
+                      ) : hiveOnMeet && isAdmin && event.event_type === 'meeting' ? (
+                        <Pressable
+                          onPress={() => void addMeetLink(event)}
+                          disabled={addingMeetLink}
+                          className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full self-start active:opacity-70"
+                          style={{ opacity: addingMeetLink ? 0.6 : 1 }}
+                        >
+                          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
+                            {addingMeetLink ? 'Adding the Meet link…' : 'Add the Google Meet link'}
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                      {/* Home's event card has always had this button; the
+                          meeting-specific card here never did, so the only way
+                          to add a meeting to a phone's calendar was to go find
+                          it again from Home (Nat, 2026-08-25). */}
                       <Pressable
-                        onPress={() => void Linking.openURL(event.meet_link!)}
-                        className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10 mt-3 self-start"
+                        onPress={() => openAddToCalendar(event)}
+                        className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10 self-start"
                       >
-                        <Text className="text-xs mr-1.5">📹</Text>
+                        <Text className="text-xs mr-1.5">📅</Text>
                         <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
-                          Join Google Meet
+                          Add to Calendar
                         </Text>
                       </Pressable>
-                    ) : hiveOnMeet && isAdmin && event.event_type === 'meeting' ? (
-                      <Pressable
-                        onPress={() => void addMeetLink(event)}
-                        disabled={addingMeetLink}
-                        className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full mt-3 self-start active:opacity-70"
-                        style={{ opacity: addingMeetLink ? 0.6 : 1 }}
-                      >
-                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
-                          {addingMeetLink ? 'Adding the Meet link…' : 'Add the Google Meet link'}
-                        </Text>
-                      </Pressable>
-                    ) : null}
+                    </View>
                   </View>
                   <View className="flex-row items-center gap-2">
                     <EditButton

@@ -13,7 +13,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError, isCommunityAdmin } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
-const DEFAULT_MEETING_DURATION_MINUTES = 150;
+// Was 150 (2.5 hours) — kept in step with ScheduleMeetingModal.tsx's default,
+// which changed to 120 (2 hours) on 2026-08-25.
+const DEFAULT_MEETING_DURATION_MINUTES = 120;
 
 /**
  * The single answer to every "no" this function gives about a HIVE, whether the

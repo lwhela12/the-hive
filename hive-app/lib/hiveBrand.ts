@@ -71,10 +71,17 @@ export function luminance(hex: string): number {
  *
  * Tech's #2f4a63 on HIVE-Wide's near-black is about 1.9:1 — a HIVE name nobody
  * can see. This keeps the hue and raises the lightness until it can be.
+ *
+ * The lift used to be 0.55, which pushed every non-gold accent most of the
+ * way to white — Tech's blue and Production's purple both landed as close to
+ * the same pale gray, impossible to tell apart in a small dot (Nat,
+ * 2026-08-25). 0.3 keeps both comfortably above the 4.5:1 text-contrast floor
+ * on `#0B0B12` while leaving enough of the original hue that a blue still
+ * reads as blue next to a purple.
  */
 export function accentOnDark(hex: string): string {
   const [r, g, b] = channels(hex);
-  const lift = (c: number) => Math.round(c + (255 - c) * 0.55);
+  const lift = (c: number) => Math.round(c + (255 - c) * 0.3);
   return luminance(hex) > 0.45 ? hex : `rgb(${lift(r)},${lift(g)},${lift(b)})`;
 }
 

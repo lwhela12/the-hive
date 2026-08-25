@@ -16,7 +16,10 @@ import type { Profile } from '../../types';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { hiveDisplayName, normalizeHiveBrandText } from '../../lib/hiveBrand';
 
-const DEFAULT_MEETING_DURATION_MINUTES = '150';
+// Was 150 (2.5 hours) — Nat's standard meeting is 2 hours (5-7 PM), and the
+// 2.5-hour default meant every new meeting needed a manual duration change or
+// it went out wrong (2026-08-25).
+const DEFAULT_MEETING_DURATION_MINUTES = '120';
 
 // Only import DateTimePicker on native platforms
 let DateTimePicker: typeof import('@react-native-community/datetimepicker').default | null = null;
