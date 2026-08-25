@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { View, Text } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Breadcrumbs, type Crumb } from '../ui/Breadcrumbs';
@@ -137,7 +137,35 @@ export function PathFooter() {
         paddingRight: insets.right,
       }}
     >
-      <Breadcrumbs items={items} compact dense tone={skin.dark ? 'dark' : 'light'} />
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flex: 1 }}>
+          <Breadcrumbs items={items} compact dense tone={skin.dark ? 'dark' : 'light'} />
+        </View>
+        {/* Which version this screen is actually running, said out loud.
+            2026-08-25 was spent shipping fixes to a phone while nobody —
+            including the person holding it — could tell whether the phone had
+            them yet. Every "did it update?" was a guess read off pixel
+            measurements of screenshots. Seven quiet characters end that: the
+            screen itself says which build it is, and "are you current" becomes
+            a ten-second look instead of an afternoon. */}
+        {BUILD_STAMP ? (
+          <Text
+            style={{
+              fontFamily: 'Lato_400Regular',
+              fontSize: 9,
+              color: skin.dark ? 'rgba(255,248,233,0.28)' : 'rgba(49,49,48,0.26)',
+              paddingRight: 10,
+              paddingLeft: 6,
+            }}
+            accessibilityLabel={`App version ${BUILD_STAMP}`}
+          >
+            {BUILD_STAMP}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 }
+
+/** The running bundle's commit, shortened. Empty in local dev, which hides it. */
+const BUILD_STAMP = (process.env.EXPO_PUBLIC_BUILD_ID ?? '').slice(0, 7);
