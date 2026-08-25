@@ -1780,7 +1780,12 @@ serve(async (req) => {
                           return [typeof fix === 'string' && fix.trim() ? fix.trim() : line];
                         })
                       : section.lines;
-                    return { ...section, groups, lines };
+                    const introKey = `${title}::intro`;
+                    const introFix = lineCorrections?.[introKey];
+                    const intro = hiddenLines?.[introKey]
+                      ? undefined
+                      : (typeof introFix === 'string' && introFix.trim() ? introFix : section.intro);
+                    return { ...section, groups, lines, intro };
                   })
                 : null;
               // Once a HIVE admin has supplied the recap members should trust,

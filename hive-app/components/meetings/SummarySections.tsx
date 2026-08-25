@@ -322,6 +322,22 @@ export function SummarySections({
     return meta ? dutyKey(meta) : positionalKey;
   };
 
+  /**
+   * Nat, 2026-08-24: "i keep trying to delete it, you must like it? or
+   * something?" The intro paragraph was never wired for double-click at
+   * all — nothing she clicked could ever have worked. Once every visible
+   * thing in a section is deleted, the section itself — header included —
+   * has to go too, or an empty card just sits there instead.
+   */
+  const sectionHasVisibleContent = (section: SummarySection) => {
+    if (section.intro && !hiddenLines?.[`${section.title}::intro`]) return true;
+    const hasGroupLine = (section.groups ?? []).some((group, groupIndex) =>
+      group.lines.some((_, lineIndex) => !hiddenLines?.[groupLineKey(section.title, groupIndex, lineIndex)])
+    );
+    if (hasGroupLine) return true;
+    return (section.lines ?? []).some((_, lineIndex) => !hiddenLines?.[`${section.title}::s${lineIndex}`]);
+  };
+
   if (!sections || sections.length === 0) return null;
 
   // The summary follows the Meeting Helper instead of turning every source into
@@ -331,9 +347,13 @@ export function SummarySections({
     return (
       <View style={{ gap: 16 }}>
         {sections.map((section) => {
+          if (!sectionHasVisibleContent(section)) return null;
           const canCollapse = section.title === 'How We Arrived';
           const expanded = !canCollapse || expandedMeetingSections.has(section.title);
           const warning = section.tone === 'warning';
+          const introKey = `${section.title}::intro`;
+          const introHidden = hiddenLines?.[introKey];
+          const effectiveIntro = introHidden ? null : (lineCorrections?.[introKey] ?? section.intro);
           return (
             <View
               key={section.title}
@@ -375,10 +395,36 @@ export function SummarySections({
                     </Text>
                   </View>
                 )}
-                {expanded && section.intro ? (
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14.5, lineHeight: 21, color: '#6f6559', marginTop: 8 }}>
-                    {section.intro}
-                  </Text>
+                {expanded && effectiveIntro ? (
+                  <View style={{ marginTop: 8 }}>
+                    <EditableLine
+                      editable={editable && !!onSaveLine}
+                      editing={editingKey === introKey}
+                      draftText={draftText}
+                      onChangeDraft={setDraftText}
+                      onCommit={() => void commitEdit(introKey, effectiveIntro)}
+                      onCancel={() => setEditingKey(null)}
+                      onRequestEdit={() => {
+                        setDraftText(effectiveIntro);
+                        setEditingKey(introKey);
+                      }}
+                      inputStyle={{
+                        backgroundColor: '#ffffff',
+                        borderWidth: 1,
+                        borderColor: '#bd9348',
+                        borderRadius: 8,
+                        padding: 8,
+                        fontFamily: 'Lato_400Regular',
+                        fontSize: 14.5,
+                        lineHeight: 21,
+                        color: '#6f6559',
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14.5, lineHeight: 21, color: '#6f6559' }}>
+                        {effectiveIntro}
+                      </Text>
+                    </EditableLine>
+                  </View>
                 ) : null}
               </View>
 
