@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, Pressable, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/ui/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import { AppHeader } from '../../components/navigation';
 import { userFacingError } from '../../lib/userFacingError';

@@ -15,7 +15,7 @@ import {
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { useQueryClient } from '@tanstack/react-query';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/ui/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';

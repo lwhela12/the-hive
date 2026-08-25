@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Linking, Platform, Pressable, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/ui/SafeArea';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';

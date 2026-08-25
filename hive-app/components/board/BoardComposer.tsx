@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { View, Text, Pressable, Modal, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../ui/SafeArea';
 import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types';
 import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';

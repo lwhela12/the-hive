@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Text, ScrollView, Pressable, RefreshControl, TextInput, Platform, ActivityIndicator, KeyboardAvoidingView, Modal, useWindowDimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/ui/SafeArea';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { requestMediaLibraryPermission } from '../../lib/imagePicker';

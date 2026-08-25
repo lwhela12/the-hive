@@ -1,5 +1,5 @@
 import { View, Text } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../ui/SafeArea';
 
 import { SpaceGlobe } from '../ui/SpaceGlobe';
 import { SPACE_SKIN } from '../../lib/pageSkin';

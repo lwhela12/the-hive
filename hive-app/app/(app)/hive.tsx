@@ -3,7 +3,7 @@ import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pre
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Polygon } from 'react-native-svg';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/ui/SafeArea';
 import { supabase } from '../../lib/supabase';
 // Home used to tell people things with `Alert.alert`, which does nothing at all
 // in a browser — and nearly everybody is in a browser. Eleven explanations were

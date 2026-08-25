@@ -6,7 +6,7 @@ import {
   RefreshControl,
   useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/ui/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 // No AppHeader here on purpose — the title floats in the sky, and a gold bar

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, Pressable, Modal, ScrollView, TextInput } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../ui/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';

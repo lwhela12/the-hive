@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, Pressable, Alert, RefreshControl, Platform, KeyboardAvoidingView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../ui/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import { EditButton } from '../ui/EditButton';
 import { BackButton } from '../ui/BackButton';

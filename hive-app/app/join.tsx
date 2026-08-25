@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../components/ui/SafeArea';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/hooks/useAuth';

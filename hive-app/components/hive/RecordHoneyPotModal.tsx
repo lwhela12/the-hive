@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Modal, View, Text, TextInput, Pressable, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../ui/SafeArea';
 import { ComposerBar } from '../ui/ComposerBar';
 import { CloseButton } from '../ui/CloseButton';
 import { FIELD_LOOK } from '../ui/Input';

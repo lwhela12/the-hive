@@ -1,5 +1,5 @@
 import { View, Text, Image, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from './SafeArea';
 
 /**
  * "We'll BEE right back."

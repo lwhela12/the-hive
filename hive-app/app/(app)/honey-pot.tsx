@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/ui/SafeArea';
 import { AppHeader } from '../../components/navigation';
 import { HoneyPotPaymentCard } from '../../components/hive/HoneyPotPaymentCard';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';

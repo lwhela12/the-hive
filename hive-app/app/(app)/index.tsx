@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Platform, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/ui/SafeArea';
 import { useLocalSearchParams } from 'expo-router';
 import { ChatInterface } from '../../components/chat/ChatInterface';
 import { ConversationSidebar } from '../../components/chat/ConversationSidebar';
