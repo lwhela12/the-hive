@@ -1592,35 +1592,22 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                 const previewedNotSent = recapHold?.absenteeIds.includes(personId) && !alreadySent;
                 const sending = recapPreviewSending[personId];
                 return (
-                  <View key={personId} className="bg-white border border-honey-200 rounded-lg px-3 py-2">
-                    <View className="flex-row items-center justify-between">
-                      <Text className="text-gray-800 font-medium">{name}</Text>
-                      {alreadySent ? (
-                        <Text className="text-sm text-green-700">Sent</Text>
-                      ) : (
-                        <Pressable
-                          onPress={() => void sendRecapPreview(personId)}
-                          disabled={sending}
-                          accessibilityRole="button"
-                          className={`px-3 py-1.5 rounded-lg border border-honey-300 bg-honey-100 active:bg-honey-200 ${sending ? 'opacity-60' : ''}`}
-                        >
-                          <Text className="text-honey-900 font-semibold text-sm">
-                            {sending ? 'Sending preview…' : previewedNotSent ? 'Send a fresh preview' : 'Send myself a preview'}
-                          </Text>
-                        </Pressable>
-                      )}
-                    </View>
-                    {/* A stale preview sitting unread isn't the same as "you've
-                        seen this" — Nat, 2026-08-24: "if it sent to me a
-                        while ago, its a lame version, right? ... i want to
-                        test the good version." The button above always
-                        works — this just says a preview is already sitting
-                        there too, in case that one's still what she wants. */}
-                    {!alreadySent && previewedNotSent ? (
-                      <Text className="text-xs text-honey-700 mt-1">
-                        An earlier preview is also sitting in your inbox — send a fresh one if the notes have changed since then.
-                      </Text>
-                    ) : null}
+                  <View key={personId} className="flex-row items-center justify-between bg-white border border-honey-200 rounded-lg px-3 py-2">
+                    <Text className="text-gray-800 font-medium">{name}</Text>
+                    {alreadySent ? (
+                      <Text className="text-sm text-green-700">Sent</Text>
+                    ) : (
+                      <Pressable
+                        onPress={() => void sendRecapPreview(personId)}
+                        disabled={sending}
+                        accessibilityRole="button"
+                        className={`px-3 py-1.5 rounded-lg border border-honey-300 bg-honey-100 active:bg-honey-200 ${sending ? 'opacity-60' : ''}`}
+                      >
+                        <Text className="text-honey-900 font-semibold text-sm">
+                          {sending ? 'Sending preview…' : previewedNotSent ? 'Send a fresh preview' : 'Send myself a preview'}
+                        </Text>
+                      </Pressable>
+                    )}
                   </View>
                 );
               })}
