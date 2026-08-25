@@ -1569,7 +1569,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                     {alreadySent ? (
                       <Text className="text-sm text-green-700">Sent</Text>
                     ) : previewedNotSent ? (
-                      <Text className="text-sm text-honey-800">Preview sent to you — see below</Text>
+                      <Text className="text-sm text-honey-800">Preview emailed to you — check your inbox</Text>
                     ) : (
                       <Pressable
                         onPress={() => void sendRecapPreview(personId)}
