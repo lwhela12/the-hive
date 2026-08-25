@@ -541,16 +541,25 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   //
   // A link that is mid-arrival names its own board and thread, so it is left
   // alone — the route-target effect below owns that landing.
-  const prevWholeHiveRef = useRef(wholeHive);
+  // Nat, 2026-08-24, on the meeting-summary screen not resetting when she
+  // switched HIVEs directly: "i shouldnt be able to have a crossover
+  // screen, right?" This only caught the HIVE-Wide-mode toggle — switching
+  // straight from one real HIVE to another (same `wholeHive` value both
+  // times) left the previous HIVE's thread open underneath the new one's
+  // header. Tracks the pair together, same fix messages.tsx already has.
+  const prevBoardStandingRef = useRef({ wholeHive, communityId: myCommunityId });
   useEffect(() => {
-    if (prevWholeHiveRef.current === wholeHive) return;
-    prevWholeHiveRef.current = wholeHive;
+    const prev = prevBoardStandingRef.current;
+    const swappedMode = prev.wholeHive !== wholeHive;
+    const swappedHive = prev.communityId !== myCommunityId && prev.communityId !== null && myCommunityId !== null;
+    prevBoardStandingRef.current = { wholeHive, communityId: myCommunityId };
+    if (!swappedMode && !swappedHive) return;
     if (hasRouteTarget) return;
 
     setBoardSearch('');
     setThreadListView('active');
     resetBoardToList();
-  }, [hasRouteTarget, resetBoardToList, wholeHive]);
+  }, [hasRouteTarget, myCommunityId, resetBoardToList, wholeHive]);
 
   useFocusEffect(
     useCallback(() => {

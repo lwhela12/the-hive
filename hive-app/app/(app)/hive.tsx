@@ -1404,6 +1404,22 @@ export default function HiveScreen() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [selectedActionItemId, setSelectedActionItemId] = useState<string | null>(null);
+
+  // Nat, 2026-08-24, on the meeting-summary screen not resetting when she
+  // switched HIVEs directly: "i shouldnt be able to have a crossover
+  // screen, right?" Same shape here — a wish or to-do detail stayed open
+  // showing content from the HIVE she just left. `resetHomeToRoot` exists
+  // for this but only fires on an explicit Home tap, not a direct
+  // HIVE-to-HIVE switch from the sidebar.
+  useEffect(() => {
+    setSelectedWish((current) => (current && current.community_id !== communityId ? null : current));
+    setEditingWish((current) => (current && current.community_id !== communityId ? null : current));
+    setManagingWish((current) => (current && current.community_id !== communityId ? null : current));
+    setWishToGrant((current) => (current && current.community_id !== communityId ? null : current));
+    setSelectedActionItemId((current) => (current ? null : current));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [communityId]);
+
   const [newTaskText, setNewTaskText] = useState('');
   const [savingTask, setSavingTask] = useState(false);
   const taskSaveInFlight = useRef(false);

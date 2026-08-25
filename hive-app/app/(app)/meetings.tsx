@@ -316,6 +316,18 @@ export default function MeetingsScreen() {
   const [notesDropActive, setNotesDropActive] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
 
+  // Nat, 2026-08-24, switching HIVEs from inside an open meeting summary:
+  // "i shouldnt be able to have a crossover screen, right? ... nothing
+  // changed." Nothing reset it — `selectedMeeting` is plain local state, so
+  // switching the sidebar's HIVE changed `communityId` and the breadcrumb
+  // underneath it while the OG meeting stayed on screen. Falls back to the
+  // meetings list the instant the open meeting isn't this HIVE's own; the
+  // deep-link effect below still re-opens the right one when a link is
+  // switching HIVEs on purpose.
+  useEffect(() => {
+    setSelectedMeeting((current) => (current && current.community_id !== communityId ? null : current));
+  }, [communityId]);
+
   // Email links name both rooms: first enter the correct HIVE, then open the
   // exact sealed summary. Holding until the switch finishes avoids briefly
   // showing the same id against whichever HIVE the app remembered last.
