@@ -1,14 +1,28 @@
-// Cache names: bump these when a deployed app shell must replace old clients.
+// Cache names carry the build they belong to, so every deploy retires the last
+// one automatically.
 //
-// v40 exists to throw away what v39 had swallowed. Until 2026-08-07 a missing
-// file came back from the server as `200` with an HTML page in it, and the
-// static branch below cached anything with an ok status — so members were
-// carrying an HTML page filed under a .js address, cache-first, for good. A
-// deploy alone could never have shifted it; only a new cache name can.
-const APP_CACHE = 'hive-app-v40-honest-404';
-const STATIC_CACHE = 'hive-static-v40-honest-404';
+// This used to be a hand-written version string ('v40-honest-404'), bumped only
+// when somebody remembered a cache needed throwing away. That is the bug Nat
+// spent 2026-08-25 hitting: this file's own bytes decide whether the browser
+// installs a new worker, so a build that changed everything EXCEPT this file
+// left the old worker in place, still holding the old app. Deleting the home
+// screen shortcut did not help, and could not — a service worker and its caches
+// belong to the site, not the icon. The only routes left were clearing website
+// data or waiting for a bump nobody was going to make.
+//
+// `__HIVE_BUILD_ID__` is replaced with the commit SHA at build time by
+// scripts/write-web-version.mjs, so this file is different on every deploy —
+// which makes the browser install the new worker, which makes `activate` below
+// throw away every older cache and reload whoever is looking. Opening the app
+// is the update. Nobody has to clear anything, ever.
+//
+// The literal below is what a local dev build (no VERCEL_GIT_COMMIT_SHA) keeps.
+const BUILD_ID = '__HIVE_BUILD_ID__';
+
+const APP_CACHE = `hive-app-${BUILD_ID}`;
+const STATIC_CACHE = `hive-static-${BUILD_ID}`;
 const REFRESH_PARAM = 'hive_refresh';
-const REFRESH_TOKEN = 'honest-404-v40';
+const REFRESH_TOKEN = BUILD_ID;
 
 // ─── Install ────────────────────────────────────────────────────────────────
 // Pre-cache the app shell HTML so the next launch is instant
