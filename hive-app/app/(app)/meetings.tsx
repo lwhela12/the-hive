@@ -1557,10 +1557,6 @@ export default function MeetingsScreen() {
                     <EditButton
                       onPress={() => handleEditEvent(event)}
                       accessibilityLabel={`Edit ${event.title}`}
-                      label="Edit"
-                      color="#374151"
-                      backgroundColor="#e5e7eb"
-                      style={{ borderRadius: 8 }}
                     />
                     {isAdmin && (
                       <Pressable

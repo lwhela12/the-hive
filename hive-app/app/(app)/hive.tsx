@@ -4556,10 +4556,7 @@ export default function HiveScreen() {
                     <EditButton
                       onPress={() => startEditingActionItem(selectedActionItem)}
                       accessibilityLabel="Edit task"
-                      label="Edit"
-                      color="#8e6f35"
-                      backgroundColor="#fff8e8"
-                      style={{ alignSelf: 'stretch', borderColor: 'rgba(189,147,72,0.36)', borderWidth: 1, borderRadius: 14 }}
+                      style={{ alignSelf: 'flex-start' }}
                     />
                   ) : null}
                   {(() => {

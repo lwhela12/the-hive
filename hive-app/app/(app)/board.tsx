@@ -1950,10 +1950,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
                 setEditingLinkedWish(wish);
               }}
               accessibilityLabel="Edit linked wish"
-              label="Edit"
-              color={skin.inkBody}
-              backgroundColor={skin.card}
-              style={{ alignSelf: 'stretch', borderWidth: 1, borderColor: skin.border, borderRadius: 12, marginTop: 8 }}
+              style={{ alignSelf: 'flex-start', marginTop: 8 }}
             />
           ) : null}
 

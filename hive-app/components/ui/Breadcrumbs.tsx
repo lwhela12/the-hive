@@ -42,6 +42,12 @@ import { View, Text, Pressable, Platform, ScrollView } from 'react-native';
  * So every step carries its own height now — eight pixels of padding above and
  * below the words, taken out of the strip's own padding so the bar grows by
  * about six pixels in total and stays the thin Finder-ish line Nat asked for.
+ * `dense` (the footer strip's own mode) halves that to four — a phone already
+ * stacks its home-indicator safe-area padding underneath this strip, and the
+ * full eight on top of that read as a second nav bar rather than a thin
+ * status line (Nat, 2026-08-25). `hitSlop={12}` on the pressable steps still
+ * covers the difference, so the tap target this section was written for
+ * stays real.
  * The room has to be real padding: a horizontal scroller clips anything hanging
  * outside it, taps included, so a negative margin would have looked bigger and
  * caught nothing.
@@ -166,7 +172,7 @@ export function Breadcrumbs({
                 // room is built into the box as well.
                 hitSlop={12}
                 style={({ pressed }) => ({
-                  paddingVertical: 8,
+                  paddingVertical: dense ? 4 : 8,
                   paddingHorizontal: 5,
                   marginHorizontal: -5,
                   opacity: pressed ? 0.6 : 1,
@@ -181,7 +187,7 @@ export function Breadcrumbs({
               <View
                 accessibilityRole="header"
                 accessibilityLabel={`You are in ${item.label}`}
-                style={{ paddingVertical: 8 }}
+                style={{ paddingVertical: dense ? 4 : 8 }}
               >
                 {label(false)}
               </View>
