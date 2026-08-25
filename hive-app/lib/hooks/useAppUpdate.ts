@@ -94,36 +94,78 @@ export async function checkForUpdateNow(): Promise<boolean> {
   return checkForUpdate();
 }
 
+// Whether the thing someone is looking at right now has something worth
+// protecting — a reply, a wish, a profile field mid-edit. A focused search
+// box or a date picker is not; a focused textarea or a prose input is. This
+// is the one thing that decides whether an update can apply itself silently
+// or has to wait for a safer moment: not which event noticed it, since a
+// resumed-from-frozen tab and a live mid-session tab both fire the exact same
+// events on iPhone and are impossible to tell apart from the event alone.
+function isActivelyTyping(): boolean {
+  if (typeof document === 'undefined') return false;
+  const el = document.activeElement as HTMLElement | null;
+  if (!el) return false;
+  if (el.tagName === 'TEXTAREA') return true;
+  if (el.isContentEditable) return true;
+  if (el.tagName === 'INPUT') {
+    const type = (el as HTMLInputElement).type;
+    const structured = ['button', 'checkbox', 'radio', 'range', 'submit', 'reset', 'file', 'color', 'search'];
+    return !structured.includes(type);
+  }
+  return false;
+}
+
+/**
+ * Nat, 2026-08-25: "I don't want people to have to go out and back in" —
+ * every earlier layer here (the banner, the Refresh pill) still asked for a
+ * tap. This is the actual answer: whenever a check finds a real update AND
+ * nobody is mid-keystroke, apply it immediately and silently. Opening the
+ * app IS the update from here on — nothing extra, on any HIVE, ever again
+ * (once this fix itself has reached a phone the one time it has to).
+ */
+async function checkAndMaybeApply() {
+  const hasUpdate = await checkForUpdate();
+  if (hasUpdate && !isActivelyTyping()) {
+    void applyAppUpdate();
+  }
+}
+
 function startPollingOnce() {
   if (pollingStarted) return;
   if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof fetch !== 'function') return;
   pollingStarted = true;
 
-  void checkForUpdate(); // startup: establish the baseline buildId
+  void checkAndMaybeApply(); // startup
 
   setInterval(() => {
-    void checkForUpdate();
+    void checkAndMaybeApply();
   }, POLL_INTERVAL_MS);
 
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        void checkForUpdate();
+        void checkAndMaybeApply();
       }
+    });
+
+    // The moment someone finishes typing and taps elsewhere is a second safe
+    // window inside an otherwise-protected session — catches a member who
+    // was composing something at the exact instant a deploy landed.
+    document.addEventListener('focusout', () => {
+      void checkAndMaybeApply();
     });
   }
 
   // `visibilitychange` covers switching tabs; it does not reliably cover an
   // iPhone un-freezing a home-screen app that never actually closed. `pageshow`
-  // fires on that kind of resume too (its own `persisted` flag specifically
-  // means "this is a resumed page, not a fresh load") — one more real chance to
-  // catch a stale build before someone goes looking for a banner that never
-  // came (Nat, 2026-08-25).
+  // fires on that kind of resume too — one more real chance to catch a stale
+  // build before someone goes looking for a banner that never came
+  // (Nat, 2026-08-25).
   window.addEventListener('pageshow', () => {
-    void checkForUpdate();
+    void checkAndMaybeApply();
   });
   window.addEventListener('focus', () => {
-    void checkForUpdate();
+    void checkAndMaybeApply();
   });
 }
 
