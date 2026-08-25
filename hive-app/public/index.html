@@ -355,69 +355,6 @@
     <noscript>
       You need to enable JavaScript to run this app.
     </noscript>
-    <script>
-      // TEMPORARY X-RAY — remove after the 2026-08-25 stripe hunt.
-      //
-      // Four fixes in a row found something real and none of them killed the
-      // stripe above the footer on Nat's phone, because from here nobody can
-      // see which LAYER is painting it — iOS gives a saved-to-home-screen app
-      // no inspector. So this asks the running page directly: what elements
-      // are stacked at the stripe, and at the band under the header, and what
-      // does the phone say about its own viewport. It prints the answer in a
-      // small box Nat can screenshot. One build, one screenshot, then this
-      // comes out.
-      window.addEventListener('load', function () {
-        window.setTimeout(function () {
-          try {
-            var out = [];
-            var root = document.getElementById('root');
-            var rr = root ? root.getBoundingClientRect() : { top: 0, bottom: 0 };
-            out.push(
-              'ih=' + window.innerHeight +
-              ' sh=' + (window.screen ? window.screen.height : '-') +
-              ' vv=' + (window.visualViewport ? Math.round(window.visualViewport.height) : '-') +
-              ' root=' + Math.round(rr.bottom - rr.top) +
-              ' standalone=' + String(!!navigator.standalone)
-            );
-            var t = document.createElement('div');
-            t.style.cssText = 'position:fixed;top:0;left:0;visibility:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)';
-            document.body.appendChild(t);
-            var cs = window.getComputedStyle(t);
-            out.push('inset top=' + cs.paddingTop + ' bottom=' + cs.paddingBottom);
-            document.body.removeChild(t);
-
-            function chain(x, y, label) {
-              var els = (document.elementsFromPoint(x, y) || []).slice(0, 7);
-              out.push(label + ' @' + Math.round(x) + ',' + Math.round(y) + ':');
-              els.forEach(function (el) {
-                var g = window.getComputedStyle(el);
-                var r = el.getBoundingClientRect();
-                var bg = g.backgroundColor;
-                out.push(
-                  '  ' + el.tagName.toLowerCase() +
-                  (el.id ? '#' + el.id : '') +
-                  ' y' + Math.round(r.top) + '-' + Math.round(r.bottom) +
-                  (bg && bg !== 'rgba(0, 0, 0, 0)' ? ' bg:' + bg : '') +
-                  (g.position !== 'static' ? ' ' + g.position : '')
-                );
-              });
-            }
-            var w = window.innerWidth;
-            // The stripe: just above the footer (footer is ~58 tall).
-            chain(w * 0.6, Math.min(rr.bottom - 75, window.innerHeight - 5), 'STRIPE');
-            // The band that appeared under the gold header (~header bottom + 6).
-            chain(w * 0.6, rr.top + 102, 'HEADERBAND');
-
-            var box = document.createElement('div');
-            box.style.cssText = 'position:fixed;left:2px;bottom:70px;z-index:2147483647;background:rgba(0,0,0,0.82);color:#7CFC00;font:9px/1.35 Menlo,monospace;padding:4px 6px;max-width:96vw;white-space:pre-wrap;pointer-events:none;border-radius:6px';
-            box.textContent = out.join('\n');
-            document.body.appendChild(box);
-          } catch (err) {
-            /* an x-ray must never break the patient */
-          }
-        }, 3500);
-      });
-    </script>
     <div id="hive-boot-splash" role="progressbar" aria-label="HIVE is opening">
       <span aria-hidden="true">&#128029;</span>
     </div>
