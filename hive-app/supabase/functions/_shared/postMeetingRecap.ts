@@ -78,8 +78,19 @@ export function postMeetingRecapHtml(
   const title = escapeHtml(meeting.title);
   const { summaryUrl, cliveUrl } = buildPostMeetingRecapLinks(appUrl, meeting);
 
+  // Nat, 2026-08-24, reading this email live: "the only thing missing is one
+  // of our bee's or logos or something." Same file the invite and The Buzz
+  // already send — RGB with no transparency despite its name, hence the
+  // white tile underneath; width in the tag as well as the style because
+  // Outlook ignores CSS sizing on images.
   return `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;color:#2b2b2b;line-height:1.5;">
+      <div style="text-align:center;padding:8px 0 4px;">
+        <img src="https://the-hive.app/assets/hive-logo-email.png"
+             alt="H.I.V.E. — Human, Insight, Vision, Execution"
+             width="72" height="72"
+             style="width:72px;height:72px;display:inline-block;border:0;outline:none;text-decoration:none;background:#ffffff;border-radius:36px;" />
+      </div>
       <p style="text-align:center;color:#bd9348;font-size:11px;letter-spacing:1.6px;text-transform:uppercase;font-weight:700;margin:0 0 2px;">${hive}</p>
       <h1 style="color:#bd9348;font-size:22px;text-align:center;margin:8px 0 4px;">What you missed</h1>
       <p style="text-align:center;color:#6b6b6b;font-size:14px;margin:0 0 20px;">${title}</p>
