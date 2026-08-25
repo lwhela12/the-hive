@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Image, Platform, Pressable, TextInput, View, Text, useWindowDimensions } from 'react-native';
 import { headerForSection } from '../../lib/newsletterHeaders';
+import { MentionSuggestions } from '../ui/MentionSuggestions';
+import { useMentionInput } from '../../lib/hooks/useMentionInput';
+import { getMentionedMembers, getMentionTargetHandle } from '../../lib/mentions';
+import type { Profile } from '../../types';
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function firstNameOf(name: string): string {
+  return name.trim().split(/\s+/)[0] || name;
+}
 
 /**
  * One line, double-click (web) or double-tap (native) to edit in place.
@@ -28,6 +40,7 @@ function EditableLine({
   children,
   className,
   style,
+  mentionMembers,
 }: {
   editable: boolean;
   editing: boolean;
@@ -40,9 +53,22 @@ function EditableLine({
   children: ReactNode;
   className?: string;
   style?: object;
+  /**
+   * Turns on "@" to reassign, for a duty line only. Nat, 2026-08-24: "just
+   * doing the @ thing is the cleanest and easiest" — the same tag-someone
+   * picker the rest of the app already has, not a separate Reassign button.
+   * Typing "@Meg" here and blurring is what SummarySections.tsx reads as a
+   * real reassignment, not just a text edit.
+   */
+  mentionMembers?: Pick<Profile, 'id' | 'name'>[];
 }) {
   const nodeRef = useRef<unknown>(null);
   const lastPressRef = useRef(0);
+  const mention = useMentionInput({
+    value: draftText,
+    onChangeText: onChangeDraft,
+    members: mentionMembers ?? [],
+  });
 
   useEffect(() => {
     if (!editable || Platform.OS !== 'web') return;
@@ -59,18 +85,29 @@ function EditableLine({
 
   if (editing) {
     return (
-      <TextInput
-        value={draftText}
-        onChangeText={onChangeDraft}
-        multiline
-        autoFocus
-        textAlignVertical="top"
-        onBlur={onCommit}
-        onKeyPress={(event) => {
-          if (event.nativeEvent.key === 'Escape') onCancel();
-        }}
-        style={inputStyle}
-      />
+      <View>
+        <TextInput
+          value={draftText}
+          multiline
+          autoFocus
+          textAlignVertical="top"
+          onBlur={onCommit}
+          onKeyPress={(event) => {
+            if (event.nativeEvent.key === 'Escape') onCancel();
+          }}
+          style={inputStyle}
+          {...(mentionMembers ? mention.textInputMentionProps : { onChangeText: onChangeDraft })}
+        />
+        {mentionMembers ? (
+          <MentionSuggestions
+            suggestions={mention.mentionSuggestions}
+            onSelect={mention.selectMention}
+            query={mention.mentionQuery}
+            active={mention.mentionQuery !== null}
+            tone="light"
+          />
+        ) : null}
+      </View>
     );
   }
 
@@ -176,8 +213,10 @@ export function SummarySections({
   editable = false,
   onSaveLine,
   dutyIndex,
-  renderDutyAction,
   hiddenLines,
+  mentionMembers,
+  onReassignByMention,
+  onDeleteDuty,
 }: {
   sections: SummarySection[];
   /** Use the drawn headers. Newsletter yes, meeting summary no. */
@@ -190,23 +229,47 @@ export function SummarySections({
   editable?: boolean;
   /** Persists one line's correction (empty text clears it back to the generated version). */
   onSaveLine?: (key: string, text: string) => Promise<void> | void;
-  /** Which real `action_items` row(s) a duty line actually is, keyed by its position THIS render (`section::g<i>::<j>`) — used only to resolve the stable `dutyKey()` and to hand to `renderDutyAction`. */
+  /** Which real `action_items` row(s) a duty line actually is, keyed by its position THIS render (`section::g<i>::<j>`) — used to resolve the stable `dutyKey()` and to detect a real reassign. */
   dutyIndex?: Record<string, DutyMeta>;
-  /** A "Confirmed duty" line's own action — reassigning who actually owns the to-do, not just its text. Null/undefined renders nothing. */
-  renderDutyAction?: (key: string, currentLineText: string, duty: DutyMeta) => ReactNode;
   /** Duty keys archived away — the line no longer renders at all. */
   hiddenLines?: Record<string, true>;
+  /** Turns on "@" reassign on every duty line. */
+  mentionMembers?: Pick<Profile, 'id' | 'name'>[];
+  /** A duty line was double-clicked, "@Someone" typed, and blurred — the real reassignment, not just a text edit. */
+  onReassignByMention?: (key: string, member: Pick<Profile, 'id' | 'name'>, actionItemIds: string[], cleanedText: string) => Promise<void> | void;
+  /** A duty line was double-clicked, cleared to empty, and blurred — delete, not "revert to generated" (which would be pointless — the generated text is the thing being deleted). */
+  onDeleteDuty?: (key: string, lineText: string, actionItemIds: string[]) => void;
 }) {
   const { width } = useWindowDimensions();
   const [expandedMeetingSections, setExpandedMeetingSections] = useState<Set<string>>(() => new Set());
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draftText, setDraftText] = useState('');
 
-  const commitEdit = async (key: string, original: string) => {
+  const commitEdit = async (key: string, original: string, dutyMeta?: DutyMeta) => {
     if (editingKey !== key) return;
     setEditingKey(null);
     const text = draftText;
     if (text === original) return;
+
+    if (dutyMeta) {
+      if (!text.trim() && onDeleteDuty) {
+        onDeleteDuty(key, original, dutyMeta.action_item_ids);
+        return;
+      }
+      const mentioned = mentionMembers ? getMentionedMembers(text, mentionMembers) : [];
+      if (mentioned.length > 0 && onReassignByMention) {
+        const member = mentioned[0];
+        const cleaned = text
+          .replace(new RegExp(`@${escapeRegExp(getMentionTargetHandle(member))}\\s*`, 'i'), '')
+          .trim();
+        const finalText = /—\s*[^—]+$/.test(cleaned)
+          ? cleaned.replace(/—\s*[^—]+$/, `— ${firstNameOf(member.name)}`)
+          : `${cleaned} — ${firstNameOf(member.name)}`;
+        await onReassignByMention(key, member, dutyMeta.action_item_ids, finalText);
+        return;
+      }
+    }
+
     await onSaveLine?.(key, text);
   };
 
@@ -315,7 +378,7 @@ export function SummarySections({
                                 editing={isEditingThis}
                                 draftText={draftText}
                                 onChangeDraft={setDraftText}
-                                onCommit={() => void commitEdit(key, effectiveLine)}
+                                onCommit={() => void commitEdit(key, effectiveLine, dutyMeta)}
                                 onCancel={() => setEditingKey(null)}
                                 onRequestEdit={() => {
                                   setDraftText(effectiveLine);
@@ -333,6 +396,7 @@ export function SummarySections({
                                   lineHeight: 21,
                                   color: '#453f37',
                                 }}
+                                mentionMembers={duty && dutyMeta ? mentionMembers : undefined}
                               >
                                 <Text style={{ color: duty ? '#bd9348' : '#c7a76b', fontSize: 13, lineHeight: 21, marginRight: 8 }}>
                                   {duty ? '✓' : '•'}
@@ -342,9 +406,6 @@ export function SummarySections({
                                   {clean}
                                 </Text>
                               </EditableLine>
-                              {duty && dutyMeta && !isEditingThis && renderDutyAction ? (
-                                <View style={{ paddingLeft: 21 }}>{renderDutyAction(key, effectiveLine, dutyMeta)}</View>
-                              ) : null}
                             </View>
                           );
                         })}

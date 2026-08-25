@@ -24,7 +24,6 @@ import {
 } from './SpeakerNames';
 import type { Meeting, ActionItem, Profile } from '../../types';
 import { BackButton } from '../ui/BackButton';
-import { MemberPicker } from '../messaging/MemberPicker';
 
 interface MeetingSummaryProps {
   meeting: Meeting;
@@ -336,6 +335,13 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   // and the exact words are for the night you need them.
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [members, setMembers] = useState<SpeakerMember[]>([]);
+  /** Real names only — @-mentioning a duty needs someone to actually reassign it to. */
+  const mentionableMembers = useMemo(
+    () => members
+      .filter((member): member is SpeakerMember & { name: string } => !!member.name)
+      .map((member) => ({ id: member.id, name: member.name })),
+    [members],
+  );
   const [addingDesire, setAddingDesire] = useState<string | null>(null);
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [correctionDraft, setCorrectionDraft] = useState('');
@@ -350,12 +356,6 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   } | null>(null);
   const [recapPreviewSending, setRecapPreviewSending] = useState<Record<string, boolean>>({});
   const [approvingRecap, setApprovingRecap] = useState(false);
-  const [reassignTarget, setReassignTarget] = useState<{
-    key: string;
-    lineText: string;
-    actionItemIds: string[];
-  } | null>(null);
-  const [reassigning, setReassigning] = useState(false);
   const [summaryToolsOpen, setSummaryToolsOpen] = useState(false);
   const [taskChecklistOpen, setTaskChecklistOpen] = useState(false);
   const [resolvingConflictId, setResolvingConflictId] = useState<string | null>(null);
@@ -774,35 +774,49 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   };
 
   /**
-   * A real reassign, not just a rewritten line. Nat, 2026-08-24: "does that
-   * update the appropriate to do list?" — the double-click edit didn't, and
-   * neither would just @-mentioning someone in the text, so this writes the
-   * actual `action_items.assigned_to` and then corrects the line's own text
-   * to match, in the same action — otherwise the summary would say one name
-   * while the real to-do said another.
+   * A real reassign, triggered by @-mentioning someone while editing a duty
+   * line in place. Nat, 2026-08-24: first "does that update the appropriate
+   * to do list?" (it didn't), then, after a separate Reassign button/picker
+   * felt like a detour: "just doing the @ thing is the cleanest and
+   * easiest." SummarySections.tsx detects the mention on blur and calls this
+   * instead of a plain text save — writes the real `action_items.assigned_to`
+   * and corrects the line's text in the same action, so the summary and the
+   * real to-do never disagree.
    */
-  const reassignDuty = async (member: Profile) => {
-    if (!reassignTarget || !isHiveAdmin) return;
-    setReassigning(true);
-    try {
-      const { error } = await supabase
-        .from('action_items')
-        .update({ assigned_to: member.id })
-        .in('id', reassignTarget.actionItemIds);
-      if (error) throw error;
+  const reassignByMention = async (
+    key: string,
+    member: Pick<Profile, 'id' | 'name'>,
+    actionItemIds: string[],
+    cleanedText: string,
+  ) => {
+    if (!isHiveAdmin) return;
+    const commit = async () => {
+      try {
+        const { error } = await supabase
+          .from('action_items')
+          .update({ assigned_to: member.id })
+          .in('id', actionItemIds);
+        if (error) throw error;
+        await saveLineCorrection(key, cleanedText);
+      } catch (error) {
+        console.error('Error reassigning duty:', error);
+        showAlert('Not reassigned', 'That did not save. Please try again.');
+      }
+    };
 
-      const firstName = member.name.trim().split(/\s+/)[0] || member.name;
-      const newLineText = reassignTarget.lineText.replace(/—\s*[^—]+$/, `— ${firstName}`);
-      await saveLineCorrection(reassignTarget.key, newLineText);
-
-      setReassignTarget(null);
-      showAlert('Reassigned', `This duty now belongs to ${firstName} — the real to-do moved, not just the words here.`);
-    } catch (error) {
-      console.error('Error reassigning duty:', error);
-      showAlert('Not reassigned', 'That did not save. Please try again.');
-    } finally {
-      setReassigning(false);
+    // A duty owned by more than one person is a shared task — @mentioning
+    // someone should not silently move everyone else's copy too.
+    if (actionItemIds.length > 1) {
+      confirmAction({
+        title: 'Reassign this shared duty?',
+        message: `This duty is on ${actionItemIds.length} people's lists. Reassigning moves all ${actionItemIds.length} to ${member.name.trim().split(/\s+/)[0] || member.name} — nobody else keeps a copy.`,
+        confirmLabel: 'Reassign',
+        onConfirm: commit,
+      });
+      return;
     }
+
+    await commit();
   };
 
   /**
@@ -1488,34 +1502,9 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
               onSaveLine={saveLineCorrection}
               dutyIndex={parsedSummary.duty_index}
               hiddenLines={parsedSummary.hidden_lines}
-              renderDutyAction={(key, currentLineText, duty) => {
-                if (!isHiveAdmin || duty.action_item_ids.length === 0) return null;
-                // A duty owned by more than one person is a shared task —
-                // "reassign" would silently move everyone's copy to one
-                // person, which is never what a single click should do.
-                // Delete (archive) is unambiguous either way.
-                const canReassign = duty.owner_ids.length <= 1;
-                return (
-                  <View className="flex-row" style={{ gap: 14 }}>
-                    {canReassign ? (
-                      <Pressable
-                        onPress={() => setReassignTarget({ key, lineText: currentLineText, actionItemIds: duty.action_item_ids })}
-                        accessibilityRole="button"
-                        accessibilityLabel="Reassign this duty"
-                      >
-                        <Text className="text-xs text-honey-800 font-semibold underline">Reassign</Text>
-                      </Pressable>
-                    ) : null}
-                    <Pressable
-                      onPress={() => deleteDuty(key, currentLineText, duty.action_item_ids)}
-                      accessibilityRole="button"
-                      accessibilityLabel="Delete this duty"
-                    >
-                      <Text className="text-xs text-red-700 font-semibold underline">Delete</Text>
-                    </Pressable>
-                  </View>
-                );
-              }}
+              mentionMembers={isHiveAdmin ? mentionableMembers : undefined}
+              onReassignByMention={reassignByMention}
+              onDeleteDuty={deleteDuty}
               renderReview={(review) => (
                 isHiveAdmin ? (
                   <MeetingConflictResolver
@@ -1893,15 +1882,6 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           </View>
         )}
       </ScrollView>
-
-      <MemberPicker
-        visible={!!reassignTarget}
-        onClose={() => setReassignTarget(null)}
-        onSelect={(member) => void reassignDuty(member)}
-        multiSelect={false}
-        excludeSelf={false}
-        title={reassigning ? 'Reassigning…' : 'Reassign this duty to'}
-      />
     </View>
   );
 }
