@@ -847,6 +847,33 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   };
 
   /**
+   * A non-duty line, deleted. Nat, 2026-08-24: "I don't think we need this
+   * extra info here... right?" — a redundant note or a line the AI shouldn't
+   * have written, with no real to-do underneath it. Just hides it, no
+   * archiving, no confirmation — there's nothing to preserve.
+   */
+  const hideLine = async (key: string) => {
+    if (!isHiveAdmin) return;
+    const base = storedSummaryBase();
+    const existingHidden = (base.hidden_lines as ParsedSummary['hidden_lines']) ?? {};
+    const { data: updated, error } = await supabase
+      .from('meetings')
+      .update({ summary: JSON.stringify({ ...base, hidden_lines: { ...existingHidden, [key]: true } }) })
+      .eq('id', meeting.id)
+      .select('*')
+      .single();
+    if (error) {
+      console.error('Error hiding line:', error);
+      showAlert('Not saved', 'That did not save. Please try again.');
+      return;
+    }
+    if (updated) {
+      setMeeting(updated as Meeting);
+      onMeetingUpdated?.(updated as Meeting);
+    }
+  };
+
+  /**
    * Nat, 2026-08-24: "i just want to be able to delete one & it wont let
    * me." Archives the real `action_items` row(s) — preserve, not destroy,
    * same as everywhere else duties disappear — and hides the line itself so
@@ -1533,6 +1560,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
               onReassignByMention={reassignByMention}
               onDeleteDuty={deleteDuty}
               onEditDutyText={editDutyText}
+              onHideLine={hideLine}
               renderReview={(review) => (
                 isHiveAdmin ? (
                   <MeetingConflictResolver

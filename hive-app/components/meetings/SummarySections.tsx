@@ -236,6 +236,7 @@ export function SummarySections({
   onReassignByMention,
   onDeleteDuty,
   onEditDutyText,
+  onHideLine,
 }: {
   sections: SummarySection[];
   /** Use the drawn headers. Newsletter yes, meeting summary no. */
@@ -260,6 +261,8 @@ export function SummarySections({
   onDeleteDuty?: (key: string, lineText: string, actionItemIds: string[]) => void;
   /** A duty line's wording changed with no "@" reassign in it — the real to-do's description is corrected too, not just the summary's copy. */
   onEditDutyText?: (key: string, actionItemIds: string[], description: string, fullLineText: string) => Promise<void> | void;
+  /** A non-duty line, double-clicked, cleared, and blurred — just hides it. No real record underneath to preserve. */
+  onHideLine?: (key: string) => void;
 }) {
   const { width } = useWindowDimensions();
   const [expandedMeetingSections, setExpandedMeetingSections] = useState<Set<string>>(() => new Set());
@@ -299,9 +302,24 @@ export function SummarySections({
         await onEditDutyText(key, dutyMeta.action_item_ids, description, text);
         return;
       }
+    } else if (!text.trim() && onHideLine) {
+      // Nat, 2026-08-24: "I don't think we need this extra info here...
+      // right?" Not everything worth removing is a duty — a redundant note
+      // or a stray line the AI shouldn't have written deserves the same
+      // "clear it and blur" delete a duty gets. No real to-do underneath it
+      // to archive, so no confirmation — it's just cosmetic copy.
+      onHideLine(key);
+      return;
     }
 
     await onSaveLine?.(key, text);
+  };
+
+  /** Resolves a group line's real key — stable duty id if it's a duty, position otherwise — the same rule used everywhere else in this file. */
+  const groupLineKey = (sectionTitle: string, groupIndex: number, lineIndex: number) => {
+    const positionalKey = `${sectionTitle}::g${groupIndex}::${lineIndex}`;
+    const meta = dutyIndex?.[positionalKey];
+    return meta ? dutyKey(meta) : positionalKey;
   };
 
   if (!sections || sections.length === 0) return null;
@@ -366,7 +384,12 @@ export function SummarySections({
 
               {expanded ? (
                 <View style={{ paddingHorizontal: 18, paddingBottom: 16, gap: 10 }}>
-                  {(section.groups ?? []).map((group, groupIndex) => (
+                  {(section.groups ?? []).map((group, groupIndex) => {
+                    const anyLineVisible = group.lines.some(
+                      (_, lineIndex) => !hiddenLines?.[groupLineKey(section.title, groupIndex, lineIndex)]
+                    );
+                    if (!anyLineVisible) return null;
+                    return (
                     <View
                       key={`${section.title}-${group.title}-${groupIndex}`}
                       style={{
@@ -443,10 +466,12 @@ export function SummarySections({
                       </View>
                       {group.review && renderReview ? renderReview(group.review, group) : null}
                     </View>
-                  ))}
+                    );
+                  })}
 
                   {(section.lines ?? []).map((line, index) => {
                     const key = `${section.title}::s${index}`;
+                    if (hiddenLines?.[key]) return null;
                     const effectiveLine = lineCorrections?.[key] ?? line;
                     const indented = effectiveLine.startsWith('    ');
                     const text = effectiveLine.trim();

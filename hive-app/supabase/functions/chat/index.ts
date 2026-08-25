@@ -1773,9 +1773,11 @@ serve(async (req) => {
                         })
                       : section.groups;
                     const lines = Array.isArray(section.lines)
-                      ? (section.lines as unknown[]).map((line, lineIndex) => {
-                          const fix = lineCorrections?.[`${title}::s${lineIndex}`];
-                          return typeof fix === 'string' && fix.trim() ? fix.trim() : line;
+                      ? (section.lines as unknown[]).flatMap((line, lineIndex) => {
+                          const key = `${title}::s${lineIndex}`;
+                          if (hiddenLines?.[key]) return [];
+                          const fix = lineCorrections?.[key];
+                          return [typeof fix === 'string' && fix.trim() ? fix.trim() : line];
                         })
                       : section.lines;
                     return { ...section, groups, lines };
