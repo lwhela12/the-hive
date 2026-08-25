@@ -56,6 +56,17 @@ export function PathFooter() {
    * its own (2026-08-06).
    */
   const insets = useSafeAreaInsets();
+  /**
+   * Every current iPhone's home-indicator clearance is exactly 34pt — Apple
+   * has never shipped a bigger one. `react-native-safe-area-context`'s web
+   * measurement reported something like 3x that on Nat's phone (measured
+   * directly from a screenshot, 2026-08-25: about 100pt of dead cream below
+   * the breadcrumb's own text, where 34pt was the whole footer she was
+   * expecting). Capping it treats "bigger than the one real value" as the
+   * library's own miscalculation rather than a device fact — clearing the
+   * home indicator never needs more than 34pt to begin with.
+   */
+  const bottomInset = Math.min(insets.bottom, 34);
 
   const activeKey = activeKeyForPath(pathname);
   const page = [...NAV_DESTINATIONS, ADMIN_DESTINATION].find((d) => d.key === activeKey);
@@ -127,7 +138,7 @@ export function PathFooter() {
         // The bar's colour carries on under the home indicator; the words stop
         // above it. The right edge is the landscape notch — the left one is
         // already taken care of by the rail standing in front of it.
-        paddingBottom: insets.bottom,
+        paddingBottom: bottomInset,
         paddingRight: insets.right,
       }}
     >
