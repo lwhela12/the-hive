@@ -308,6 +308,18 @@ export default function AppLayout() {
       <View ref={feedbackCaptureTargetRef} collapsable={false} style={{ flex: 1 }}>
       <Tabs
         initialRouteName={getLastAppTabName()}
+        // No tab bar AT ALL — not a hidden one. `tabBarStyle: display 'none'`
+        // (below, kept for belt-and-braces) does not remove the bar in this
+        // navigator: it repositions it as an absolute layer and slides it
+        // off-screen, and the slide's math includes the phone's home-indicator
+        // inset — which left a 34pt sliver of blank bar lying OVER the bottom
+        // of every page on a phone. That sliver was the "plain white stripe
+        // pasted over the to do list" Nat chased across four builds on
+        // 2026-08-25, and why Home's scroll carried 104pt of mystery bottom
+        // padding (someone had already met this bar without recognising it).
+        // The rail is this app's navigation; nothing here has ever needed the
+        // bar to exist.
+        tabBar={() => null}
         screenOptions={{
           headerShown: false,
           // ------------------------------------------------------------------
