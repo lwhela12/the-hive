@@ -1591,41 +1591,42 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                 const alreadySent = recapHold?.absenteeIds.includes(personId) && recapHold?.sentIds.includes(personId);
                 const previewedNotSent = recapHold?.absenteeIds.includes(personId) && !alreadySent;
                 const sending = recapPreviewSending[personId];
+                const canSend = !!recapHold && recapHold.approval === 'pending' && recapHold.recipientCount > recapHold.sentIds.length;
                 return (
                   <View key={personId} className="flex-row items-center justify-between bg-white border border-honey-200 rounded-lg px-3 py-2">
                     <Text className="text-gray-800 font-medium">{name}</Text>
                     {alreadySent ? (
                       <Text className="text-sm text-green-700">Sent</Text>
                     ) : (
-                      <Pressable
-                        onPress={() => void sendRecapPreview(personId)}
-                        disabled={sending}
-                        accessibilityRole="button"
-                        className={`px-3 py-1.5 rounded-lg border border-honey-300 bg-honey-100 active:bg-honey-200 ${sending ? 'opacity-60' : ''}`}
-                      >
-                        <Text className="text-honey-900 font-semibold text-sm">
-                          {sending ? 'Sending preview…' : previewedNotSent ? 'Send a fresh preview' : 'Send myself a preview'}
-                        </Text>
-                      </Pressable>
+                      <View className="flex-row" style={{ gap: 8 }}>
+                        <Pressable
+                          onPress={() => void sendRecapPreview(personId)}
+                          disabled={sending}
+                          accessibilityRole="button"
+                          className={`px-3 py-1.5 rounded-lg border border-honey-300 bg-honey-100 active:bg-honey-200 ${sending ? 'opacity-60' : ''}`}
+                        >
+                          <Text className="text-honey-900 font-semibold text-sm">
+                            {sending ? 'Sending…' : previewedNotSent ? 'Preview again' : 'Preview'}
+                          </Text>
+                        </Pressable>
+                        {canSend ? (
+                          <Pressable
+                            onPress={approveRecap}
+                            disabled={approvingRecap}
+                            accessibilityRole="button"
+                            className={`px-3 py-1.5 rounded-lg bg-honey-500 active:bg-honey-600 ${approvingRecap ? 'opacity-60' : ''}`}
+                          >
+                            <Text className="text-white font-semibold text-sm">
+                              {approvingRecap ? 'Sending…' : 'Send'}
+                            </Text>
+                          </Pressable>
+                        ) : null}
+                      </View>
                     )}
                   </View>
                 );
               })}
             </View>
-            {recapHold?.approval === 'pending' && recapHold.recipientCount > recapHold.sentIds.length && (
-              <Pressable
-                onPress={approveRecap}
-                disabled={approvingRecap}
-                accessibilityRole="button"
-                className={`mt-4 self-start bg-honey-500 px-4 py-3 rounded-lg active:bg-honey-600 ${approvingRecap ? 'opacity-60' : ''}`}
-              >
-                <Text className="text-white font-semibold">
-                  {approvingRecap
-                    ? 'Sending…'
-                    : `Approve — send to ${recapHold.recipientCount - recapHold.sentIds.length} confirmed absentee${recapHold.recipientCount - recapHold.sentIds.length === 1 ? '' : 's'}`}
-                </Text>
-              </Pressable>
-            )}
           </View>
         )}
 
