@@ -982,12 +982,19 @@ export default function MonthlyTuneupScreen() {
         .is('archived_at', null)
         .order('created_at', { ascending: false })
         .limit(30),
+      // Archiving is how a to-do is retired, so an archived one is not a win to
+      // read back — "body double", ticked on 24 August and archived on the
+      // 25th, was still being offered as this cycle's news two days later.
+      // The open list above has always excluded archived rows; these two had
+      // not, which made "done this cycle" the one list where retiring
+      // something did nothing.
       supabase
         .from('action_items')
         .select('id, description, completed_at')
         .eq('community_id', communityId)
         .eq('assigned_to', profile.id)
         .eq('completed', true)
+        .is('archived_at', null)
         .gte('completed_at', since.toISOString())
         .order('completed_at', { ascending: false })
         .limit(20),
@@ -998,6 +1005,7 @@ export default function MonthlyTuneupScreen() {
         .eq('related_user_id', profile.id)
         .neq('assigned_to', profile.id)
         .eq('completed', true)
+        .is('archived_at', null)
         .gte('completed_at', since.toISOString())
         .order('completed_at', { ascending: false })
         .limit(20),

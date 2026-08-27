@@ -78,3 +78,76 @@ export function normalizeCarryForwardResponse(value: unknown): CarryForwardRespo
     })
     .filter(Boolean) as CarryForwardResponseItem[];
 }
+
+/**
+ * A status picked in the check-in has to reach the to-do it was picked on.
+ *
+ * The roster asks four things of every open task — Keep active, Needs
+ * attention, Done, Archive — and until 2026-08-27 all four did the same thing:
+ * they were written into the answers blob and nothing ever read them back out.
+ * A member on 13 July marked "Do one 15-minute HIVE helper…" as **Archive**;
+ * six weeks later `archived_at` on that row was still null and the task was
+ * still being offered back to them. That is the whole of Nat's rule the same
+ * morning — *"If you're going to make someone answer a question, you better
+ * damn well know what you're going to do with the answer"* — failing on the
+ * one question the check-in asks most often.
+ *
+ * So: Done completes the task, Archive retires it, and the two soft answers
+ * (Keep active, Needs attention) deliberately change nothing — they are the
+ * member saying "leave it where it is".
+ *
+ * Only `action_item` rows are touched. A wish is retired through its own
+ * flow with its own confirmation, and an HD board or a thread is not a task.
+ * Row-level security already lets exactly the assignee write these; a row this
+ * person may not update simply does not change, and the check-in still saves.
+ */
+export async function applyCarryForwardStatuses(
+  client: {
+    from: (table: string) => any;
+  },
+  userId: string,
+  items: CarryForwardResponseItem[],
+): Promise<void> {
+  const now = new Date().toISOString();
+
+  const done = items.filter((item) => item.type === 'action_item' && item.status === 'done');
+  const archived = items.filter((item) => item.type === 'action_item' && item.status === 'archive');
+
+  const writes: Promise<unknown>[] = [];
+
+  if (done.length > 0) {
+    writes.push(
+      client
+        .from('action_items')
+        .update({ completed: true, completed_at: now })
+        .in('id', done.map((item) => item.id))
+        .eq('assigned_to', userId)
+        .or('completed.is.null,completed.is.false')
+    );
+  }
+
+  if (archived.length > 0) {
+    writes.push(
+      client
+        .from('action_items')
+        .update({
+          archived_at: now,
+          archived_by: userId,
+          archive_reason: 'member_archived_from_check_in',
+        })
+        .in('id', archived.map((item) => item.id))
+        .eq('assigned_to', userId)
+        .is('archived_at', null)
+    );
+  }
+
+  if (writes.length === 0) return;
+
+  const results = await Promise.all(writes);
+  results.forEach((result) => {
+    const error = (result as { error?: unknown } | null)?.error;
+    // Never blocks the check-in: the answers are saved either way, and a
+    // to-do that refused to move is worth knowing about without losing them.
+    if (error) console.warn('Could not apply a carry-forward status', error);
+  });
+}

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { CARRY_FORWARD_ANSWER_KEY, type CarryForwardItem } from '../carryForward';
 import { supabase } from '../supabase';
+import { isEndOfMonthCheckInSurvey } from '../checkIns';
 import { getSurveyResponsePeriod, isMonthlyCheckInSurvey, type Survey } from './useSurveys';
 
 type CarryForwardHookArgs = {
@@ -58,10 +59,14 @@ function asText(value: unknown) {
 function buildPreviousPopDetail(answers?: Record<string, unknown> | null) {
   if (!answers) return '';
 
+  // Two spellings of the same three questions: OG and Tech write `q_pop_*`,
+  // Production's decks write `q_show_*` because its meeting deck reads those
+  // keys onto its slides. First non-empty wins, so one HIVE's wording never
+  // hands another HIVE a blank card.
   const lines = [
-    ['Progress', asText(answers.q_pop_progress)],
-    ['Obstacles', asText(answers.q_pop_obstacles)],
-    ['Priorities', asText(answers.q_pop_priorities)],
+    ['Progress', asText(answers.q_pop_progress) || asText(answers.q_show_progress)],
+    ['Obstacles', asText(answers.q_pop_obstacles) || asText(answers.q_show_obstacles)],
+    ['Priorities', asText(answers.q_pop_priorities) || asText(answers.q_show_next)],
     ['Carry-forward', asText(answers.q_carry_forward)],
   ]
     .filter(([, value]) => value)
@@ -267,7 +272,16 @@ export function useCarryForwardContext({
   userId,
   survey,
 }: CarryForwardHookArgs) {
-  const enabled = !!communityId && !!userId && !!survey && isMonthlyCheckInSurvey(survey);
+  // OG and Tech's monthly check-in has always carried the roster. Production's
+  // end-of-month check-in carries it from 2026-08-27, because Nat's list of
+  // what she loves about OG's names it out loud — *"their own open to-dos, to
+  // tick off"* — and Production had a blank prose box where the roster should
+  // have been. `isEndOfMonthCheckInSurvey` reads titles from lib/checkIns.ts,
+  // so a fourth HIVE's end-of-month deck inherits this without a code change.
+  const enabled = !!communityId
+    && !!userId
+    && !!survey
+    && (isMonthlyCheckInSurvey(survey) || isEndOfMonthCheckInSurvey(survey));
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['carryForwardContext', communityId ?? '', userId ?? '', survey?.id ?? ''],

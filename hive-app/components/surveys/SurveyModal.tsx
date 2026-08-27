@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 const cliveIcon = require('../../assets/Clive_logo.png');
 import {
+  applyCarryForwardStatuses,
   CARRY_FORWARD_ANSWER_KEY,
   CARRY_FORWARD_STATUS_OPTIONS,
   getCarryForwardStatusLabel,
@@ -16,8 +17,13 @@ import {
 } from '../../lib/carryForward';
 import type { Survey, SurveyAnswers, SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { SurveyQuestionField } from './SurveyQuestionField';
-import { getSeasonCheckInKind, isPreMeetingCheckInSurvey } from '../../lib/checkIns';
+import {
+  getSeasonCheckInKind,
+  isEndOfMonthCheckInSurvey,
+  isPreMeetingCheckInSurvey,
+} from '../../lib/checkIns';
 import { supabase } from '../../lib/supabase';
+import { getCycleStart } from '../../lib/meetingCycle';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { Avatar } from '../ui/Avatar';
@@ -299,7 +305,11 @@ export function SurveyModal({
    */
   useEffect(() => {
     if (!draftLoaded) return;
-    if (!isPreMeetingCheckInSurvey(survey)) return;
+    // The end-of-month check-in asks the same question of the same cycle
+    // (lib/checkIns.ts, rebuilt 2026-08-27), so it gets the same pre-fill —
+    // the field is `q_show_progress` on both, which is also the key the
+    // meeting deck reads.
+    if (!isPreMeetingCheckInSurvey(survey) && !isEndOfMonthCheckInSurvey(survey)) return;
     if (!viewerProfile?.id) return;
     const target = survey.questions.find((q) => q.id === 'q_show_progress');
     if (!target) return;
@@ -307,20 +317,15 @@ export function SurveyModal({
 
     let active = true;
     (async () => {
-      // Since the meeting before this one — or a month, when there was no
-      // previous meeting to measure from.
+      // Since the meeting before this one. `getCycleStart` is the one anchor
+      // the whole app measures a cycle from — it reads the calendar AND the
+      // record of nights that actually happened, which is what stopped these
+      // lists reaching back into the previous cycle (lib/meetingCycle.ts).
       const due = new Date(survey.due_date ?? Date.now());
-      const { data: previous } = await supabase
-        .from('events')
-        .select('event_date')
-        .eq('community_id', survey.community_id)
-        .eq('event_type', 'meeting')
-        .lt('event_date', due.toISOString().slice(0, 10))
-        .order('event_date', { ascending: false })
-        .limit(1);
-      const since = previous?.[0]?.event_date
-        ? new Date(previous[0].event_date)
-        : new Date(due.getTime() - 31 * 86_400_000);
+      const since = await getCycleStart(
+        survey.community_id,
+        due.toISOString().slice(0, 10),
+      );
 
       const { data: done } = await supabase
         .from('action_items')
@@ -328,6 +333,7 @@ export function SurveyModal({
         .eq('community_id', survey.community_id)
         .eq('assigned_to', viewerProfile.id)
         .eq('completed', true)
+        .is('archived_at', null)
         .gte('completed_at', since.toISOString())
         .order('completed_at', { ascending: true })
         .limit(20);
@@ -372,13 +378,24 @@ export function SurveyModal({
         }
       : answers;
     const { error: submitError } = await onSubmit(finalAnswers);
-    setSubmitting(false);
     if (submitError) {
+      setSubmitting(false);
       setError('Could not save your responses. Please try again.');
-    } else {
-      AsyncStorage.removeItem(DRAFT_KEY(survey.id)).catch(() => {});
-      setSubmitted(true);
+      return;
     }
+    // Ticking a to-do off in the roster now actually ticks it off. Answers are
+    // already saved by this point, so a task that will not move costs a warning
+    // in the console and nothing else (see `applyCarryForwardStatuses`).
+    if (viewerProfile?.id && carryForwardItems.length > 0) {
+      await applyCarryForwardStatuses(
+        supabase as never,
+        viewerProfile.id,
+        normalizeCarryForwardResponse(finalAnswers[CARRY_FORWARD_ANSWER_KEY]),
+      );
+    }
+    setSubmitting(false);
+    AsyncStorage.removeItem(DRAFT_KEY(survey.id)).catch(() => {});
+    setSubmitted(true);
   };
 
   const answeredCount = survey.questions.filter(q => answers[q.id] !== undefined && answers[q.id] !== '').length;

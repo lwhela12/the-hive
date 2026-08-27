@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { hiveMark } from '../_shared/hiveMark.ts';
 import {
   MONTHLY_CHECK_IN_PATTERN,
   QUARTERLY_CHECK_IN_PATTERN,
@@ -478,13 +479,27 @@ function seasonEmailHtml(
    * something worth knowing while it is at it.
    */
   footerNote?: string,
+  /**
+   * The HIVE's own slug and accent, so the letter wears its own costume.
+   *
+   * Nat, 2026-08-27, opening Tech HIVE's check-in: *"Tech HIVE has the wrong
+   * emoji — it has the director's cut board, like for movies. Tech HIVE should
+   * have the little robot… Tech HIVE is the wrong colour too — I just opened
+   * the survey and it's purple."* The clapperboard and the purple were typed
+   * into this file when Production was the only HIVE it wrote to, so every
+   * other HIVE inherited Production's dress. `_shared/hiveMark.ts` is the one
+   * table now; the row's own `accent_color` wins when the caller selected it.
+   */
+  hiveSlug?: string | null,
+  hiveAccent?: string | null,
 ): string {
   const name = escapeHtml(rawName);
+  const mark = hiveMark(hiveSlug, hiveAccent);
   // Whose HIVE this is, said in the email itself and on the button. Nat,
   // 2026-08-15: *"I think it should have either the hive honeybee or a pro
   // hive before we meet ... I think it's just open pro hive."*
   const hive = escapeHtml(rawHiveName);
-  const kicker = `<p style="text-align: center; color: #6b4a8f; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 0 0 2px;">${hive}</p>`;
+  const kicker = `<p style="text-align: center; color: ${mark.accent}; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 0 0 2px;">${hive}</p>`;
   // The button lands ON the check-in, not near it. Nat, 2026-08-15: *"when I
   // clicked on the survey button in the mail, it just brought me into HIVE, it
   // didn't bring me directly into the survey ... if you leave instructions
@@ -495,18 +510,34 @@ function seasonEmailHtml(
   const openHref = surveyId && communityId
     ? `${APP_URL}/hive?openSurveyId=${encodeURIComponent(surveyId)}&hive=${encodeURIComponent(communityId)}`
     : `${APP_URL}/hive`;
-  const openButton = `<a href="${openHref}" style="background: #6b4a8f; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open the check-in</a>`;
+  const openButton = `<a href="${openHref}" style="background: ${mark.accent}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open the check-in</a>`;
   if (kind === 'endofmonth') {
-    const heading = touch === 'day_of' ? 'Last day of the month' : 'Halfway there';
+    /**
+     * **Nothing here says when the month ends.**
+     *
+     * Nat, 2026-08-27, reading the one that reached her inbox: *"'the month
+     * ends August 30th' is factually wrong AND unnecessary."* It was the
+     * check-in's due date wearing the month's name, so it was a day early
+     * every single month — and nobody needs telling when August finishes.
+     * The line that replaces it is the one OG's halfway email has always
+     * carried, and it is the true reason the email arrived: **the newsletter
+     * goes out on the 1st.** "Closes" went with it, from the heading and from
+     * the footer — a check-in that is open for you is not a door shutting.
+     *
+     * The questions ask like questions now, and the halfway line parses:
+     * *"'A gentle one, halfway through' does not parse. Say something like
+     * 'we're halfway through the month'."*
+     */
+    const heading = touch === 'day_of' ? 'Last call' : 'Halfway there';
     const body = touch === 'day_of'
-      ? `It's the last day of the month. Nothing owed — just a quick one if you want a hand with anything, or you have something for the newsletter.`
-      : `A gentle one, halfway through. How is it going, is there anything you want a hand with, and have you got anything for the newsletter — a shout-out, a compliment, something you're teaching. Blanks are completely fine, and whatever is still on your list is on your to-do list in the app.`;
+      ? `Last call for the newsletter — it goes out on the 1st. Nothing owed: just a quick one if you want a hand with anything, or you have something to put in.`
+      : `We're halfway through the month. How is it going? Is there anything you want a hand with? And have you got anything for the newsletter — a shout-out, a plug, an event to come to, a reminder, or a compliment for someone? Blanks are completely fine, and whatever is still on your list is on your to-do list in the app.`;
     return `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
-        <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">🎬</span></div>
+        <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">${mark.emoji}</span></div>
         ${kicker}
-        <h1 style="color: #6b4a8f; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
-        <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The month ends ${month} ${day}</p>
+        <h1 style="color: ${mark.accent}; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
+        <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The newsletter goes out on the 1st</p>
         <p style="font-size: 15px;">Hi ${name},</p>
         <p style="font-size: 15px;">${body}</p>
         <div style="text-align: center; margin: 28px 0;">
@@ -524,9 +555,9 @@ function seasonEmailHtml(
       : `Our check-in is open — about <strong>3 minutes</strong>. How often you want to meet, what day works, how you feel about a Honey Pot, and who is allowed to know you are part of this. Answering beforehand means the meeting gets to decide. Short answers are perfect.`;
     return `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
-        <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">🎬</span></div>
+        <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">${mark.emoji}</span></div>
         ${kicker}
-        <h1 style="color: #6b4a8f; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
+        <h1 style="color: ${mark.accent}; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
         <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">${month} ${day}</p>
         <p style="font-size: 15px;">Hi ${name},</p>
         <p style="font-size: 15px;">${body}</p>
@@ -607,18 +638,23 @@ function seasonSubject(
   fullMonth: string,
   day: number,
   hiveName: string,
+  /** The HIVE's slug, so its own emoji leads the subject line rather than
+   *  Production's clapperboard (see `_shared/hiveMark.ts`). */
+  hiveSlug?: string | null,
 ): string {
   const from = `${shortHiveName(hiveName)} · `;
   const month = SHORT_MONTHS[fullMonth] ?? fullMonth;
+  const emoji = hiveMark(hiveSlug).emoji;
   if (kind === 'premeeting') {
     return touch === 'day_of'
-      ? `🎬 ${from}We meet today — 3 minutes before we do`
-      : `🎬 ${from}Before we meet on ${month} ${day} — your check-in is open`;
+      ? `${emoji} ${from}We meet today — 3 minutes before we do`
+      : `${emoji} ${from}Before we meet on ${month} ${day} — your check-in is open`;
   }
   if (kind === 'endofmonth') {
+    // Never dates the end of the month (see the letter itself for why).
     return touch === 'day_of'
-      ? `🎬 ${from}Last day of the month — anything for the newsletter?`
-      : `🎬 ${from}Halfway check-in — no obligations`;
+      ? `${emoji} ${from}Last call — anything for the newsletter?`
+      : `${emoji} ${from}Halfway check-in — no obligations`;
   }
   if (kind === 'quarter') {
     return touch === 'day_of'
@@ -940,10 +976,11 @@ serve(async (req) => {
       const { month: kMonth, day: kDay } = formatMeetingDate(dateOnly);
       const { data: hive } = await supabaseAdmin
         .from('communities')
-        .select('name')
+        .select('name, slug, accent_color')
         .eq('id', match.community_id)
         .maybeSingle();
-      const hiveName = (hive as { name?: string } | null)?.name || 'Your HIVE';
+      const hiveRow = hive as { name?: string; slug?: string; accent_color?: string } | null;
+      const hiveName = hiveRow?.name || 'Your HIVE';
       // 'day_of' is the last-call version; 'window' is the one that goes out
       // three days ahead. Default to the one members actually saw first.
       const touch: SeasonTouch = body.test_touch === 'day_of' ? 'day_of' : 'window';
@@ -953,11 +990,13 @@ serve(async (req) => {
         body: JSON.stringify({
           from: FROM_EMAIL,
           to: testEmail,
-          subject: `[Preview] ${seasonSubject(seasonKind, touch, kMonth, kDay, hiveName)}`,
+          subject: `[Preview] ${seasonSubject(seasonKind, touch, kMonth, kDay, hiveName, hiveRow?.slug)}`,
           html: seasonEmailHtml(
             typeof body.test_name === 'string' ? body.test_name : 'there',
             seasonKind, touch, kMonth, kDay, hiveName, match.id, match.community_id,
-            `${hiveName} · closes ${kMonth} ${kDay} · preview sent ${new Date().toLocaleTimeString('en-US', { timeZone: PACIFIC_TZ, hour: 'numeric', minute: '2-digit' })}`,
+            // No "closes" and no month-end date — see the end-of-month branch.
+            `${hiveName} · ${kMonth} · preview sent ${new Date().toLocaleTimeString('en-US', { timeZone: PACIFIC_TZ, hour: 'numeric', minute: '2-digit' })}`,
+            hiveRow?.slug, hiveRow?.accent_color,
           ),
         }),
       });
@@ -1641,34 +1680,83 @@ serve(async (req) => {
         }
 
         const { month, day } = formatMeetingDate(dueDateOnly);
-        const notificationTitle = kind === 'quarter'
-          ? (touch === 'day_of'
-              ? '🧭 Last day of the quarter — quick check-in if you haven\'t'
-              : '🧭 Your quarterly check-in is open')
-          : (touch === 'day_of'
-              ? '🎉 Last day of the year — one look back before it goes'
-              : '🎉 Your end-of-year check-in is open');
-        const notificationBody = kind === 'quarter'
-          ? (touch === 'day_of'
-              ? `The quarter ends today and your check-in isn't in yet — five quiet minutes on Home closes the chapter.`
-              : `The quarter wraps up ${month} ${day}. Five quiet minutes on Home: what happened, what you're proud of, what's next.`)
-          : (touch === 'day_of'
-              ? `The year ends today and your check-in isn't in yet — five minutes on Home and you walk into the new year with the story written down.`
-              : `The year wraps up ${month} ${day}. Look back with us on Home — celebrate a little, and point at what comes next.`);
+        /**
+         * Four kinds ride this loop, and the push had words for two.
+         *
+         * `kind` is one of quarter, year, premeeting or endofmonth — the
+         * loop's own matcher says so — and this was written as
+         * `kind === 'quarter' ? … : …`, so Production's halfway nudge and
+         * Tech's before-we-meet nudge both went out on a member's phone
+         * reading *"🎉 Your end-of-year check-in is open"*. The email beside
+         * them was right the whole time; only the notification lied.
+         *
+         * A record, so a fifth kind is a fifth entry rather than a fifth
+         * ternary. Every line here matches the letter it travels with.
+         */
+        const NOTIFICATION_WORDS: Record<SeasonKind, Record<SeasonTouch, { title: string; body: string }>> = {
+          quarter: {
+            window: {
+              title: '🧭 Your quarterly check-in is open',
+              body: `The quarter wraps up ${month} ${day}. Five quiet minutes on Home: what happened, what you're proud of, what's next.`,
+            },
+            day_of: {
+              title: "🧭 Last day of the quarter — quick check-in if you haven't",
+              body: `The quarter ends today and your check-in isn't in yet — five quiet minutes on Home closes the chapter.`,
+            },
+          },
+          year: {
+            window: {
+              title: '🎉 Your end-of-year check-in is open',
+              body: `The year wraps up ${month} ${day}. Look back with us on Home — celebrate a little, and point at what comes next.`,
+            },
+            day_of: {
+              title: '🎉 Last day of the year — one look back before it goes',
+              body: `The year ends today and your check-in isn't in yet — five minutes on Home and you walk into the new year with the story written down.`,
+            },
+          },
+          premeeting: {
+            window: {
+              title: '📋 Your check-in is open',
+              body: `We meet on ${month} ${day}. About three minutes on Home, and the meeting gets to decide instead of asking each other questions.`,
+            },
+            day_of: {
+              title: '📋 We meet today — 3 minutes before we do',
+              body: `Your answers aren't in yet. Three minutes on Home means we can spend the hour deciding together.`,
+            },
+          },
+          endofmonth: {
+            window: {
+              title: '🍯 Halfway check-in — no obligations',
+              body: `We're halfway through the month. How is it going, do you want a hand with anything, and have you got anything for the newsletter? It goes out on the 1st.`,
+            },
+            day_of: {
+              title: '🍯 Last call — anything for the newsletter?',
+              body: `The newsletter goes out on the 1st. Nothing owed — just a quick one if you want a hand with anything, or you have something to put in.`,
+            },
+          },
+        };
+        const notificationTitle = NOTIFICATION_WORDS[kind][touch].title;
+        const notificationBody = NOTIFICATION_WORDS[kind][touch].body;
         // Whose HIVE the members are about to hear from. Every check-in email
         // says it in the subject line, because an inbox shows the subject and
         // nothing else, and a person can be in three HIVEs at once.
         const { data: seasonHive } = await supabaseAdmin
           .from('communities')
-          .select('name')
+          .select('name, slug, accent_color')
           .eq('id', survey.community_id)
           .maybeSingle();
-        const hiveName = (seasonHive as { name?: string } | null)?.name || 'Your HIVE';
-        const emailSubject = approving?.subject ?? seasonSubject(kind, touch, month, day, hiveName);
+        const seasonHiveRow = seasonHive as { name?: string; slug?: string; accent_color?: string } | null;
+        const hiveName = seasonHiveRow?.name || 'Your HIVE';
+        const emailSubject = approving?.subject
+          ?? seasonSubject(kind, touch, month, day, hiveName, seasonHiveRow?.slug);
         const htmlTemplate = approving?.htmlTemplate ?? seasonEmailHtml(
           MEMBER_NAME_TOKEN, kind, touch, month, day, approving?.hiveName ?? hiveName,
           survey.id, survey.community_id,
-          `${approving?.hiveName ?? hiveName} · closes ${month} ${day}`,
+          // The tail has to CHANGE between sends or Gmail folds the button
+          // away as quoted text — the month does that. It never says "closes"
+          // and never dates the end of the month (Nat, 2026-08-27).
+          `${approving?.hiveName ?? hiveName} · ${month}`,
+          seasonHiveRow?.slug, seasonHiveRow?.accent_color,
         );
 
         // THE HOLD — same as the monthly loop. Nothing above this line has

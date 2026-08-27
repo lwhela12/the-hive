@@ -2671,7 +2671,12 @@ export default function HiveScreen() {
   const todayDate = new Date();
   const halfwayShape = getHalfwayShape(community);
   const nextMeetingDate = upcomingEvents.find((event) => event.event_type === 'meeting')?.event_date;
+  // A HIVE whose halfway IS a check-in survey (`flow: 'survey'` — Production)
+  // already has that survey's own card on Home in the same window, and the
+  // wizard this card opens is OG and Tech's. Two cards for one job, one of
+  // them landing on "coming soon", is worse than the one that works.
   const inHalfwayWindow = !!halfwayShape
+    && halfwayShape.flow === 'tuneup'
     && isInHalfwayWindow(halfwayShape, todayDate, nextMeetingDate);
 
   const homeTodos: HomeTodo[] = [

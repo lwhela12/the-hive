@@ -824,7 +824,12 @@ export interface ChatRoomsWithDataRow extends Record<string, unknown> {
 export interface SurveyQuestion extends Record<string, unknown> {
   id: string;
   text: string;
-  type: 'short' | 'long' | 'scale' | 'choice';
+  // 'hangs' and 'focus' are the two auto-populating fields: 'hangs' offers the
+  // month's hang events as went/didn't-go chips, 'focus' the month's HIVE Help
+  // with a 1-5 score. Both have been rendered by SurveyQuestionField and stored
+  // on live surveys since long before this list caught up with them, and
+  // `lib/hooks/useSurveys.ts` has always named all six.
+  type: 'short' | 'long' | 'scale' | 'choice' | 'hangs' | 'focus';
   options?: string[];
   required: boolean;
 }

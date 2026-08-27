@@ -87,6 +87,17 @@ export type HalfwayShape = {
   window: 'month' | 'cycle';
   emoji: string;
   detail: string;
+  /**
+   * Where the halfway nudge actually goes.
+   *
+   * `tuneup` is OG and Tech's guided wizard at `/monthly-tuneup?mode=midpoint`.
+   * `survey` is a HIVE whose halfway IS a check-in survey, which already has
+   * its own card on Home — Production works that way on purpose (the note on
+   * `hasTailoredCheckIns` above, and the same call written out in Admin's
+   * check-in schedule). Saying so here is what stops a second Home card being
+   * offered for a door that would answer "coming soon".
+   */
+  flow: 'tuneup' | 'survey';
 };
 
 const HALFWAY_BY_SLUG: Record<string, HalfwayShape> = {
@@ -94,11 +105,31 @@ const HALFWAY_BY_SLUG: Record<string, HalfwayShape> = {
     window: 'month',
     emoji: '🗞️',
     detail: 'The newsletter goes out on the 1st — want a shout-out, a plug, or a reminder in it?',
+    flow: 'tuneup',
   },
   tech: {
     window: 'cycle',
     emoji: '🫶',
     detail: "Halfway to the next meeting — how's it going, and who deserves a shout-out?",
+    flow: 'tuneup',
+  },
+  /**
+   * Production HIVE keeps the database slug `show`.
+   *
+   * Nat, 2026-08-27: *"OG and Production HIVE are on the same cadence because
+   * they meet kind of in the middle of the month."* So Production rides the
+   * CALENDAR exactly the way OG does — the last five days of the month — and
+   * the newsletter ask belongs in it, because the newsletter goes out on the
+   * 1st for every HIVE, not only OG's.
+   *
+   * Its door is the end-of-month check-in survey on Home (`flow: 'survey'`),
+   * which is Production's designed shape.
+   */
+  show: {
+    window: 'month',
+    emoji: '🗞️',
+    detail: 'The newsletter goes out on the 1st — want a shout-out, a plug, or a reminder in it?',
+    flow: 'survey',
   },
 };
 
@@ -650,9 +681,19 @@ export function getPreMeetingCheckIn(
   return PRE_MEETING_BY_SLUG[community?.slug ?? ''] ?? null;
 }
 
-/** Every title that counts as this HIVE's pre-meeting check-in. */
+/**
+ * Every title that counts as this HIVE's pre-meeting check-in.
+ *
+ * Tech joined the list on 2026-08-27. Its *"Before our first meeting"* survey
+ * has been live and working since the 25th — but only because every caller
+ * asks this question WITHOUT a community, which falls back to "any HIVE's
+ * pre-meeting title counts". The moment one asked about Tech by name the
+ * answer would have been no, and Tech's own check-in would have stopped being
+ * a check-in. A HIVE that runs the ritual belongs on the list that names it.
+ */
 export const PRE_MEETING_TITLES_BY_SLUG: Record<string, string[]> = {
   show: ['Before our first meeting', 'Before we meet'],
+  tech: ['Before our first meeting', 'Before we meet'],
 };
 
 /**
@@ -768,33 +809,108 @@ export type EndOfMonthCheckIn = {
 };
 
 /**
+ * Every answer id whose text is material for the newsletter.
+ *
+ * Nat, pointing at Admin's Newsletter box, 2026-08-27: *"the compliment, the
+ * shout-out, the plug — all of those should go in the HIVE-wide newsletter …
+ * that's where all of these populate as well, and then I use those to write
+ * the newsletter."* That box reads `survey_responses` for exactly these ids
+ * and prints each one under the member's name and their HIVE, so an id on this
+ * list is a question with a destination and an id off it is busy work.
+ *
+ * Named here, in the file that writes the check-ins, so a new HIVE's newsletter
+ * question is registered in the same breath as it is asked.
+ */
+export const NEWSLETTER_ANSWER_IDS = ['q_eom_newsletter', 'q_newsletter', 'q_shoutout'] as const;
+
+/**
+ * The one newsletter question, worded the way OG's halfway step asks it.
+ *
+ * OG's wizard offers pills — shout-out, plug an event, a reminder, compliment
+ * someone — and a HIVE whose halfway is a survey rather than a wizard has one
+ * box, so the box names all five out loud instead. `q_newsletter` is the id
+ * OG's own step writes, which is what carries the answer to Nat's Newsletter
+ * box with the member's name and their HIVE on it.
+ */
+const NEWSLETTER_QUESTION: SurveyQuestion = {
+  id: 'q_newsletter',
+  text: 'Anything for the newsletter? A shout-out, a plug, an event to come to, a reminder, or a compliment for someone — name names, they get read out. The newsletter goes out on the 1st.',
+  type: 'long',
+  required: false,
+};
+
+/**
  * The end of the month is a nudge, not a report.
  *
  * Nat, 2026-08-15, correcting where the POP belongs: *"end of the month is a
  * halfway check-in and getting stuff ready for the newsletter, just in case
- * there's anything. No obligations."* The "what did you get done" questions
- * moved to the pre-meeting deck above, which is the one a meeting runs off.
+ * there's anything. No obligations."*
  *
- * This one asks two soft things and expects blanks: how it is going and whether
- * you need a hand, and whether you have anything for the newsletter — *"you can
- * give shout-outs to people, you can give a compliment, you can say I'm
- * teaching Pilates every Wednesday at four, come join me."*
+ * **Rebuilt 2026-08-27 to OG's shape.** The three questions that stood here —
+ * "What moved this month", "What is stuck", "What has to happen before the next
+ * meeting" — were three blank prose boxes and nothing else, which is both more
+ * work than OG's and less use: *"coarse shit and unusable."* Her rule the same
+ * morning, and it is the reason every question below names where its answer
+ * goes: *"If you're going to make someone answer a question, you better damn
+ * well know what you're going to do with the answer. Having people fill out
+ * surveys and then not having their answers go anywhere is just having them do
+ * busy work, and it's bad."*
  *
- * The reminder of what is still on your list belongs in the EMAIL, not in a
- * question — you cannot answer a reminder.
+ * So this mirrors OG's `Monthly Check-in: POP + Energy` — arrival, energy, the
+ * POP, the HIVE Help recap, the newsletter ask — with Production's subject
+ * matter (the show, the venues, the deck) in place of OG's. Every id is one
+ * something already reads:
+ *
+ * - `q_feeling_today`, `q_energy_level`, `q_energy_mode` — the Arrival Board
+ *   and OG's own deck.
+ * - `q_show_progress`, `q_show_obstacles` — Production's meeting deck reads
+ *   both onto its slides by name (`checkInSays` in meeting-helper.tsx), and
+ *   the progress box arrives pre-filled with what this member already ticked
+ *   off, so nobody is asked to remember what the app knows.
+ * - `q_pop_priorities` — the POP export in Admin and the deck's POP sections.
+ * - `q_hive_help_recap` — the `focus` field: did it, plus a 1-5 score the deck
+ *   can average.
+ * - `q_newsletter` — Nat's Newsletter box in Admin, attributed to the member
+ *   and their HIVE.
+ *
+ * Their open to-dos ride ON this survey rather than in it: the carry-forward
+ * roster (`lib/hooks/useCarryForwardContext.ts`) draws them above the
+ * questions to be ticked off, archived, or kept.
  */
 const END_OF_MONTH_BY_SLUG: Record<string, EndOfMonthCheckIn> = {
   // Production-specific on purpose (Nat, 2026-08-19: "always want to make it
-  // production specific"). One shared goal, so the month closes on the show —
-  // no newsletter ask, that is an OG ritual.
+  // production specific"). One shared goal, so the month closes on the show.
+  //
+  // The TITLE is load-bearing — `END_OF_MONTH_CHECK_IN_PATTERN` in
+  // `_shared/checkInPatterns.ts` is how the cron, Home and Meetings all
+  // recognise this check-in — and the DESCRIPTION must stay clear of the words
+  // "monthly check-in", which would route it into OG's tune-up wizard instead.
   show: {
     title: 'Where the show got to this month',
     description:
-      'The month is closing. Three quick ones so nothing we learned slips between meetings. Blanks are completely fine.',
+      'A quick POP + Energy check-in so the HIVE can celebrate what moved on the show, spot what is stuck, choose what is next, and keep the right things on the roster. Blanks are completely fine.',
     questions: [
-      q('q_eom_moved', 'What moved this month — venues seen, calls made, numbers learned?'),
-      q('q_eom_stuck', 'What is stuck, or waiting on somebody?'),
-      q('q_eom_next', 'What has to happen before the next meeting?'),
+      choice('q_feeling_today', 'Arrival: how are you feeling right now?', [
+        '😊 Great — bring it on!',
+        '😌 Good & steady',
+        '🫠 Tired, but here',
+        '🤒 Under the weather — love me from a distance',
+        '💛 Sad — extra hugs please',
+        "🖤 Sad — please don't ask about it",
+        '🌀 All over the place',
+      ]),
+      { id: 'q_energy_level', text: 'Energy: what is your energy level right now?', type: 'scale', required: false },
+      choice('q_energy_mode', 'Energy: what would feel best from HIVE this month?', [
+        'I could use support',
+        'I could use space',
+        'I am steady',
+        'I have energy to offer help',
+      ]),
+      q('q_show_progress', 'Progress: what moved on the show this month — venues seen, calls made, numbers learned? Anything you ticked off is already here; add whatever else you did.'),
+      q('q_show_obstacles', 'Obstacles: what is stuck, or waiting on somebody? How can HIVE help?'),
+      q('q_pop_priorities', 'Priorities: what has to happen before the next meeting?'),
+      { id: 'q_hive_help_recap', text: "How'd this month's HIVE Help go?", type: 'focus', required: false },
+      { ...NEWSLETTER_QUESTION },
     ],
   },
 };
