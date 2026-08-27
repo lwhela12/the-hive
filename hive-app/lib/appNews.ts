@@ -29,6 +29,14 @@ export type AppNewsEntry = {
 /** Frozen legacy baseline. Preserve every id: profiles remember the last one seen. */
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-27-your-answers-get-read',
+    date: '2026-08-27',
+    title: 'What you write in a check-in actually reaches Nat now',
+    detail: 'Shout-outs, plugs and compliments were being saved and then never shown to anybody. They come through now, with your name and your HIVE, and they are what the newsletter gets written from. Your open to-dos also stop following you around once you tick them Done or Archive, and "done this cycle" counts from your last meeting instead of one further back.',
+    href: { pathname: '/monthly-tuneup' },
+    action: 'Open your check-in',
+  },
+  {
     id: '2026-08-24-second-doors',
     date: '2026-08-24',
     title: 'The Buzz and Admin are easier to find',
