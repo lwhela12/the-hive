@@ -528,6 +528,48 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
   },
 };
 
+// ---- The first HummDinger opens with introductions ----
+//
+// Nat, 2026-08-27, on Tech HIVE's first night — Brietta, Laura and Steele have
+// never been in a room together: *"Build that into the Humdinger section, so
+// people introduce themselves — like 'hi I'm so-and-so, this is my background'
+// or 'this is what I'm working on'. The first Humdinger session should always
+// have an intro."*
+//
+// It is the FIRST meeting that gets this, not Tech — a HIVE that has already
+// met does not need to be introduced to itself, and every HIVE has a first
+// night. `hiveHasMetBefore` in the screen below is what decides it: no meeting
+// on the calendar before today means tonight is the first one.
+
+/**
+ * Where a member's own words for their intro come from.
+ *
+ * The check-in already asks. Tech's *"Before our first meeting"* survey
+ * (2026-08-27) puts it plainly: **"What are you building right now? One line
+ * is plenty — it becomes your 30-second intro."** A question asked with a
+ * destination has to actually reach it, so the answer is read here and printed
+ * on the member's bubble when it is their turn.
+ *
+ * A LIST rather than one key, because the next HIVE's first check-in will word
+ * the question its own way, and a new phrasing should be a new entry here — not
+ * a member standing up with a blank card because the key changed. First
+ * non-empty answer wins; none of them is required, and a blank degrades to the
+ * prompt rather than to nothing.
+ */
+const INTRO_ANSWER_KEYS = ['q_building', 'q_intro', 'q_working_on', 'q_current_project'] as const;
+
+const getIntroWords = (answers: Parameters<typeof getTextAnswer>[0]): string => {
+  for (const key of INTRO_ANSWER_KEYS) {
+    const text = getTextAnswer(answers, key);
+    if (text) return text;
+  }
+  return '';
+};
+
+/** What the room hears when somebody has not written their line down yet. */
+const INTRO_PROMPT =
+  'Thirty seconds, out loud: who you are, what you’re building right now, and what you’d love a hand with.';
+
 // Nat's POP formula — the backbone of the HummDinger sesh.
 const POP_SECTIONS = [
   { key: 'q_pop_progress', label: 'Progress', prompt: 'credit where credit is due' },
@@ -904,6 +946,32 @@ export default function MeetingHelperScreen() {
 
   const [expandedHummdingerId, setExpandedHummdingerId] = useState<string | null>(null);
   const [hummdingerVisited, setHummdingerVisited] = useState<Set<string>>(new Set());
+  /**
+   * Has this HIVE ever held a meeting before tonight?
+   *
+   * Starts TRUE on purpose. The answer arrives with the deck data a moment
+   * after the screen does, and a HIVE that has met fifty times should never
+   * flash "nobody has met yet" while it loads. The first night is the rare
+   * case, so the rare case is the one that waits for its answer.
+   */
+  const [hiveHasMetBefore, setHiveHasMetBefore] = useState(true);
+  /** Tonight is the first night, so the HD sesh opens with introductions. */
+  const introsFirst = !hiveHasMetBefore;
+  /**
+   * Tonight's outline. On a HIVE's first night the HD sesh opens with
+   * introductions, and the agenda says so — the room reads the outline and the
+   * rail before it ever reaches the slide, so the one night the running order
+   * changes is the one night it has to be named up front.
+   */
+  const tonightAgenda = useMemo(
+    () =>
+      deck.agenda.map((item) =>
+        introsFirst && item.key === 'hummdinger'
+          ? { ...item, label: 'Intros + HummDinger Sesh' }
+          : item
+      ),
+    [deck.agenda, introsFirst]
+  );
   // Production borrows the HummDinger's readable card-and-spotlight shell, but
   // not its wishes, visited roster, pacing, or live-note semantics.
   const [expandedCheckInAnswer, setExpandedCheckInAnswer] = useState<{
@@ -1057,6 +1125,21 @@ export default function MeetingHelperScreen() {
           .single()) as { data: { meeting_helper_notes: MeetingHelperNotes | null } | null };
         setNotes(data?.meeting_helper_notes ?? {});
       })().catch((error) => console.warn('Could not load meeting notes', error)),
+
+      // Is tonight this HIVE's FIRST meeting? One meeting on the calendar
+      // before today is enough to say no, so this asks for one row rather than
+      // counting them. A meeting dated today still counts as tonight, which is
+      // what keeps the intros on screen during the first meeting itself.
+      (async () => {
+        const { data } = await supabase
+          .from('events')
+          .select('id')
+          .eq('community_id', communityId)
+          .eq('event_type', 'meeting')
+          .lt('event_date', today)
+          .limit(1);
+        setHiveHasMetBefore((data ?? []).length > 0);
+      })().catch((error) => console.warn('Could not tell whether this HIVE has met before', error)),
 
       // Meet Ups calendar: birthdays + events (incl. ongoing multi-day
       // stretches) between now and the meeting after next (~75-day horizon).
@@ -2036,7 +2119,7 @@ export default function MeetingHelperScreen() {
         <Kicker>Tonight</Kicker>
         <SlideTitle>Outline</SlideTitle>
         <View style={{ marginTop: sz(40, 22), gap: sz(20, 12) }}>
-          {deck.agenda.map((item, index) => (
+          {tonightAgenda.map((item, index) => (
             <View key={item.key} style={{ flexDirection: 'row', alignItems: 'baseline', gap: sz(24, 14) }}>
               <Text
                 style={{
@@ -3331,8 +3414,52 @@ export default function MeetingHelperScreen() {
 
   const renderHummdinger = () => (
     <View style={{ flex: 1 }}>
-      <Kicker>Obstacles · the HD sesh</Kicker>
+      <Kicker>{introsFirst ? 'Introductions · the HD sesh' : 'Obstacles · the HD sesh'}</Kicker>
       <SlideTitle>HummDinger Sesh</SlideTitle>
+      {introsFirst ? (
+        /* The first night, and only the first night. One band, in the HIVE's
+           own colour, saying the one thing the room has to do before the
+           business starts — the POP legend below it is unchanged, because
+           introductions come first and then the sesh runs as it always does. */
+        <View
+          style={{
+            backgroundColor: tintWash(0.16),
+            borderWidth: 1,
+            borderColor: GOLD_SOFT,
+            borderRadius: sz(16, 12),
+            paddingHorizontal: sz(20, 13),
+            paddingVertical: sz(14, 10),
+            marginTop: sz(14, 9),
+          }}
+        >
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 12.5), lineHeight: sz(28, 18), color: GOLD_DEEP }}>
+            Nobody has met yet — go round the room first, about 30 seconds each.
+          </Text>
+          <Text
+            style={{
+              fontFamily: 'LibreBaskerville_700Bold',
+              fontSize: sz(26, 15),
+              lineHeight: sz(36, 22),
+              color: CHARCOAL,
+              marginTop: sz(8, 5),
+            }}
+          >
+            {'“I’m ‹your name›, here’s my background, and this is what I’m building right now.”'}
+          </Text>
+          <Text
+            style={{
+              fontFamily: 'Lato_400Regular',
+              fontStyle: 'italic',
+              fontSize: sz(18, 11),
+              lineHeight: sz(26, 16),
+              color: MUTED,
+              marginTop: sz(6, 4),
+            }}
+          >
+            Everyone’s own words from the check-in are already on their bubble.
+          </Text>
+        </View>
+      ) : null}
       <Text
         style={{
           fontFamily: 'Lato_400Regular',
@@ -3386,6 +3513,9 @@ export default function MeetingHelperScreen() {
           const topWish = pickSpotlightWish(memberWishes) ?? memberWishes[0];
           const hdGoal = topWish ? getWishQuickTitle(topWish, 40) : null;
           const priorities = getTextAnswer(answers, 'q_pop_priorities');
+          // Their own answer to "what are you building right now?" — the line
+          // the check-in promised would become their 30-second intro.
+          const introWords = introsFirst ? getIntroWords(answers) : '';
           const detailSections = HUMMDINGER_DETAIL_SECTIONS
             .map((section) => ({ ...section, text: getTextAnswer(answers, section.key) }))
             .filter((section) => !!section.text);
@@ -3402,10 +3532,18 @@ export default function MeetingHelperScreen() {
           // 2026-07-24). An empty spotlight is still a live-note pad.
           const hasDetails =
             detailSections.length > 0 ||
+            !!introWords ||
             !!topWish?.description ||
             assistsForMember.length > 0 ||
             assistsByMember.length > 0 ||
             grantedThisCycle.length > 0;
+          // The bubble's second line. On the first night it is their intro in
+          // their own words; every other night it is their HD goal, unchanged.
+          // A blank never shows as a blank — it shows as the invitation.
+          const bubbleLine = introsFirst ? introWords || hdGoal : hdGoal;
+          const bubbleEmpty = introsFirst
+            ? 'introduce yourself — 30 seconds'
+            : 'open to ideas';
           return (
             <View key={member.id} style={{ width: `${100 / bubbleColumns}%`, padding: sz(8, 5) }}>
               <Pressable
@@ -3452,18 +3590,18 @@ export default function MeetingHelperScreen() {
                   </Text>
                 ) : null}
                 <Text
-                  numberOfLines={2}
+                  numberOfLines={introsFirst ? 3 : 2}
                   style={{
                     fontFamily: 'Lato_400Regular',
                     fontSize: sz(17, 11),
                     lineHeight: sz(24, 16),
-                    color: hdGoal ? GOLD_DEEP : MUTED,
-                    fontStyle: hdGoal ? 'normal' : 'italic',
+                    color: bubbleLine ? GOLD_DEEP : MUTED,
+                    fontStyle: bubbleLine ? 'normal' : 'italic',
                     textAlign: 'center',
                     marginTop: sz(6, 4),
                   }}
                 >
-                  {hdGoal ?? 'open to ideas'}
+                  {bubbleLine || bubbleEmpty}
                 </Text>
                 {priorities ? (
                   <Text
@@ -3504,6 +3642,8 @@ export default function MeetingHelperScreen() {
     const nameToday = getTextAnswer(answers, 'q_name_today') || getFirstName(member.name);
     const memberWishList = wishesByUserId.get(member.id) ?? [];
     const topWish = pickSpotlightWish(memberWishList) ?? memberWishList[0];
+    // The first night, their own line from the check-in leads the sheet.
+    const introWords = introsFirst ? getIntroWords(answers) : '';
     // The tune-up SEEDS an empty Progress answer with "Checked off: …" and
     // "Done for me 💛: …" lines. This card already renders both as their own
     // properly-formatted sections below, so echoing the seed under PROGRESS
@@ -3588,7 +3728,25 @@ export default function MeetingHelperScreen() {
             {/* The spotlight sheet's scroller — BounceScrollView so a member's
                 story bounces at both ends like every other sheet in the app. */}
             <BounceScrollView contentContainerStyle={{ paddingHorizontal: sz(28, 16), paddingVertical: sz(20, 12), gap: sz(16, 10) }}>
-              {!topWish?.description
+              {/* Introductions, on the HIVE's first night. Always drawn, even
+                  with nothing written down: a member who skipped the check-in
+                  gets their turn and the prompt, never a blank card or an
+                  error. The empty-handed note below stands down when this is
+                  showing, because this already says what the floor is for. */}
+              {introsFirst ? (
+                <View>
+                  <Text style={sectionLabel}>Introducing {nameToday} 👋</Text>
+                  {introWords ? (
+                    <Text style={sectionText}>{introWords}</Text>
+                  ) : (
+                    <Text style={{ ...sectionText, fontStyle: 'italic', color: MUTED }}>
+                      {INTRO_PROMPT}
+                    </Text>
+                  )}
+                </View>
+              ) : null}
+              {!introsFirst
+                && !topWish?.description
                 && grantedThisCycle.length === 0
                 && detailSections.length === 0
                 && assistsForMember.length === 0
@@ -4560,7 +4718,7 @@ export default function MeetingHelperScreen() {
         {/* A long roster can outgrow the rail, so it scrolls — and bounces at
             its ends like every other scroller, so a full list says so. */}
         <BounceScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-          {deck.agenda.map((item, agendaIndex) => {
+          {tonightAgenda.map((item, agendaIndex) => {
             const slidePosition = slides.findIndex((slide) => slide.key === item.key);
             const isActive = activeKey === item.key;
             return (

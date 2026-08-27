@@ -21,17 +21,71 @@ export function hiveDisplayName(name?: string | null): string {
 }
 
 /**
- * The colour of this hive's header bar. Null/blank/malformed falls back to gold.
+ * What a HIVE looks like when it has to fit in one character and one colour.
+ *
+ * Every HIVE already has a colour in the database (`communities.accent_color`),
+ * and that stays the source of truth for it — an admin can change it without a
+ * deploy. This map is the other half: the EMOJI, which has no column, and a
+ * written-down accent so a HIVE whose row lost its colour still comes back
+ * wearing its own instead of everybody's gold.
+ *
+ * Nat, 2026-08-27, looking at Tech HIVE: *"Tech HIVE has the wrong emoji — it
+ * has the director's cut board, like for movies. Tech HIVE should have the
+ * little robot, it's cute, that's what I use on my Google Calendar. Tech HIVE
+ * is the wrong colour too."* The clapperboard and the purple are
+ * **Production's** — it is the theatre HIVE — and they had been written into
+ * the check-in email by hand back when Production was the only HIVE that email
+ * went to. Hand-written branding is how one HIVE ends up wearing another's
+ * costume, so it lives here now: a fourth HIVE is a fourth ENTRY, never a
+ * fourth `if`.
+ */
+export type HiveMark = {
+  /** The HIVE's own emoji — its face in a subject line, a calendar, a header. */
+  emoji: string;
+  /** The written-down accent, used only when the database row has none. */
+  accent: string;
+};
+
+/** The HIVE default: the honeybee, in honey gold. */
+const DEFAULT_MARK: HiveMark = { emoji: '🐝', accent: HIVE_GOLD };
+
+const HIVE_MARKS: Record<string, HiveMark> = {
+  // OG HIVE still carries `default` from before there was more than one HIVE.
+  default: DEFAULT_MARK,
+  // Tech HIVE — the little robot, and Tech's dark blue.
+  tech: { emoji: '🤖', accent: '#2f4a63' },
+  // Production HIVE — the clapperboard, and Production's purple. This is the
+  // show HIVE; the clapperboard belongs here and nowhere else.
+  show: { emoji: '🎬', accent: '#6b4a8f' },
+};
+
+/** A HIVE's emoji and written-down accent, by slug. Anything else is the bee. */
+export function hiveMark(slug?: string | null): HiveMark {
+  return HIVE_MARKS[(slug ?? '').trim().toLowerCase()] ?? DEFAULT_MARK;
+}
+
+/** A HIVE's emoji. Takes the community row, or nothing, and always answers. */
+export function hiveEmoji(community?: Pick<Community, 'slug'> | null): string {
+  return hiveMark(community?.slug).emoji;
+}
+
+/**
+ * The colour of this hive's header bar. Null/blank/malformed falls back to the
+ * HIVE's own written-down accent, and only then to gold.
  *
  * Takes anything carrying an accent rather than a whole `Community`, because
  * half the callers only ever selected `name, accent_color` from the database —
  * a joined hive on a wish, a row in a list — and asking those for a full
- * community row would mean fetching columns nobody draws.
+ * community row would mean fetching columns nobody draws. `slug` is optional
+ * for the same reason: a caller that has it gets the safety net, and a caller
+ * that never selected it is no worse off than before.
  */
-export function hiveAccent(community?: Pick<Community, 'accent_color'> | null): string {
+export function hiveAccent(
+  community?: { accent_color?: string | null; slug?: string | null } | null,
+): string {
   const raw = (community?.accent_color as string | undefined)?.trim();
   if (raw && /^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
-  return HIVE_GOLD;
+  return hiveMark(community?.slug).accent;
 }
 
 /** Split a #rrggbb into its three numbers. Anything else comes back as gold's. */
