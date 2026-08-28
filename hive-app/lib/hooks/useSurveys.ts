@@ -57,6 +57,14 @@ const RETIRED_SURVEY_PATTERNS = [
 // meeting. (Was 3 back when this was a pre-meeting-only form.)
 const MONTHLY_CHECK_IN_WINDOW_DAYS = 33;
 const MONTHLY_CHECK_IN_PATTERN = /monthly\s+check-?in/i;
+/**
+ * The halfway check-in, by title — the same repeating shape as the monthly one
+ * and so the same need for a per-month answer key. Deliberately narrower than
+ * `END_OF_MONTH_CHECK_IN_PATTERN` in `_shared/checkInPatterns.ts`: that one
+ * also answers to two retired titles, and a period key is not the place to
+ * start honouring names nothing sends any more.
+ */
+const HALFWAY_CHECK_IN_PATTERN = /halfway\s+check-?in/i;
 const DEFAULT_RESPONSE_PERIOD = 'default';
 
 function isRetiredSurvey(survey: Survey) {
@@ -81,8 +89,24 @@ function getLocalDateFromSurveyDueDate(dueDate?: string | null) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+/**
+ * Which occurrence of a repeating check-in an answer belongs to.
+ *
+ * A check-in that comes round every month is ONE survey row answered many
+ * times, so the answer is keyed by month as well as by survey — otherwise
+ * September's upsert lands on August's row and the month before is gone.
+ *
+ * The HALFWAY check-in repeats exactly the same way, and was reading
+ * `'default'` — the key for a one-off survey that is answered once, ever.
+ * Nobody had noticed because Production's halfway had no answers at all until
+ * 2026-08-28, when it became a copy of OG's and started collecting the
+ * newsletter ask. Left alone, the first September shout-out would have
+ * overwritten the August one it was filed beside.
+ */
 export function getSurveyResponsePeriod(survey: Survey) {
-  if (!isMonthlyCheckInSurvey(survey)) return DEFAULT_RESPONSE_PERIOD;
+  if (!isMonthlyCheckInSurvey(survey) && !HALFWAY_CHECK_IN_PATTERN.test(survey.title ?? '')) {
+    return DEFAULT_RESPONSE_PERIOD;
+  }
 
   const periodDate = getLocalDateFromSurveyDueDate(survey.due_date) ?? new Date();
   const year = periodDate.getFullYear();
