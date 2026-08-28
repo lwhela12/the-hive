@@ -26,8 +26,27 @@ const NEWSLETTER_BULLET =
   'Want a <strong>shout-out, a plug, or a reminder</strong> in the newsletter? Say so and it lands there';
 const TODOS_BULLET =
   "Check off anything you've finished on your <strong>to-do list</strong>";
+/**
+ * HIVE Help is a COMMUNITY FOCUS, not a favour you ask for.
+ *
+ * The meeting picks one thing the whole HIVE does that month — September's is
+ * "pick up trash whenever you go on a walk", August's was a shelter donation,
+ * June's was paying for the person behind you in line — and the check-in step
+ * is where you log what you managed. Its own subtitle says it plainly: *"Little
+ * kindnesses since last meeting — no act too tiny, totally optional."*
+ *
+ * This bullet read *"Want a hand with something? Ask for it in HIVE Help"* for
+ * about an hour on 2026-08-28, which inverts it: it turns a thing you give into
+ * a thing you request. Nat, reading it: *"HIVE help is not 'asking your HIVE for
+ * help'. HIVE help is a community focus."*
+ *
+ * It replaced *"Life moved? Update your HD wish"*, which was wrong in a
+ * different way — the HD wish is a pre-meeting step and is not in this flow at
+ * all. Two wrong bullets in one slot is why the list now lives next to the flow
+ * it describes rather than inside the HTML.
+ */
 const HIVE_HELP_BULLET =
-  'Want a hand with something? Ask for it in <strong>HIVE Help</strong>';
+  "Done anything for this month's <strong>HIVE Help</strong>? Log it — no act too tiny";
 
 /** OG's three: newsletter, to-dos, HIVE Help. */
 const DEFAULT_STEPS = [NEWSLETTER_BULLET, TODOS_BULLET, HIVE_HELP_BULLET];
