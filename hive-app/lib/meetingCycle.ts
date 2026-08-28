@@ -54,8 +54,28 @@ export async function getCycleStart(communityId: string, beforeDate: string): Pr
     .pop();
 
   if (lastMeeting) {
+    /**
+     * The cycle starts the DAY AFTER the meeting, not on it.
+     *
+     * A to-do finished on meeting day was finished IN TIME for that meeting —
+     * it was read out, ticked off and celebrated there — so counting it again
+     * as "done this cycle" hands somebody last month's news as this month's.
+     *
+     * Nat, 2026-08-28, looking at her halfway check-in: *"old ones aren't
+     * falling off like they're supposed to — 'shelter donation' was due at the
+     * last meeting & is no longer relevant."* August's HIVE Help focus was due
+     * the 19th and ticked at 6:19am on the 20th, hours before the 20th's
+     * meeting; anchoring to midnight on the 20th swept it forward into
+     * September's list.
+     *
+     * Meetings are evenings, so "the meeting day belongs to the cycle it
+     * closes" is true of essentially everything ticked that day. The rare
+     * exception — something ticked late on meeting night — waits one cycle to
+     * be jogged, which is a far smaller wrong than being told about work you
+     * already stood up and reported.
+     */
     const [year, month, day] = lastMeeting.split('-').map(Number);
-    return new Date(year, month - 1, day);
+    return new Date(year, month - 1, day + 1);
   }
   const fallback = new Date();
   fallback.setDate(fallback.getDate() - 35);

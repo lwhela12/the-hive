@@ -778,6 +778,19 @@ export default function MonthlyTuneupScreen() {
    * after the switch either way.
    */
   const namedHiveId = Array.isArray(linkedHiveId) ? linkedHiveId[0] : linkedHiveId;
+  /**
+   * Did this visit begin on a link from OUTSIDE the app?
+   *
+   * Only the check-in emails name a HIVE in the URL — in-app doors pass `from`
+   * and let you keep the HIVE you are standing in — so the `hive` param is the
+   * one honest signal that somebody has just arrived, rather than come back.
+   *
+   * Captured once, on the first render, because the param is stripped from the
+   * URL a moment later (see the effect below) and the answer must not change
+   * underneath the wizard while it is being walked.
+   */
+  const arrivedFromLinkRef = useRef<boolean | null>(null);
+  if (arrivedFromLinkRef.current === null) arrivedFromLinkRef.current = !!namedHiveId;
   const requestedHiveId = namedHiveId || (wholeHive ? communityId : null);
   const isMemberOfRequested = !!requestedHiveId
     && memberships.some((membership) => membership.community_id === requestedHiveId);
@@ -1777,13 +1790,29 @@ export default function MonthlyTuneupScreen() {
         if (!cancelled && raw) {
           const draft = JSON.parse(raw) as TuneupDraft;
           if (draft && typeof draft === 'object') {
-            // Resume the saved STEP only for a fresh interruption (refresh,
-            // crash, token-refresh remount). Coming back hours or days later —
-            // e.g. from the reminder email — should start at step 1, with any
-            // drafted content still restored below.
+            /**
+             * Resume the saved STEP only for a fresh interruption — a refresh,
+             * a crash, a token-refresh remount. **Arriving on the email link
+             * always starts at step 1**, whatever the clock says.
+             *
+             * That last part used to be guessed from the clock alone: a draft
+             * saved less than an hour ago counted as an interruption. Nat opened
+             * OG's halfway email on 2026-08-28, twenty minutes after last having
+             * the wizard open on step 2, and it dropped her straight back on
+             * step 2: *"why didnt it start me at the beginning?"*
+             *
+             * An hour was never the question. "Did you just arrive, or did you
+             * come back?" is, and the link answers it outright — so it is asked
+             * of the link now, and the clock only settles the case where there
+             * is no link to ask.
+             *
+             * Drafted CONTENT is restored either way. Starting at the beginning
+             * is not the same as losing what you typed.
+             */
             const draftIsFresh = typeof draft.savedAt === 'number'
               && Date.now() - draft.savedAt < 60 * 60 * 1000;
-            if (draftIsFresh && typeof draft.stepIndex === 'number' && Number.isFinite(draft.stepIndex)) {
+            const resumeStep = draftIsFresh && !arrivedFromLinkRef.current;
+            if (resumeStep && typeof draft.stepIndex === 'number' && Number.isFinite(draft.stepIndex)) {
               setStepIndex(Math.min(Math.max(Math.trunc(draft.stepIndex), 0), steps.length - 1));
             }
             if (typeof draft.helperContent === 'string') setHelperContent(draft.helperContent);
