@@ -995,9 +995,53 @@ export default function MonthlyTuneupScreen() {
   const [doneForMe, setDoneForMe] = useState<TodoRow[]>([]);
   const [newTodoText, setNewTodoText] = useState('');
   const [todoSaving, setTodoSaving] = useState(false);
+  /**
+   * Whether this list has actually been read for the HIVE you are standing in.
+   *
+   * An empty array used to mean three different things — not loaded yet, loaded
+   * and genuinely empty, and the query failed — and the screen said the happiest
+   * of the three out loud: **"Nothing open — clean slate ✨"**.
+   *
+   * Nat, 2026-08-28, arriving from the OG email with six open to-dos: *"this
+   * says i have nothing on my to do list, which is not true."* She had opened
+   * the tune-up inside Production first (0 open), and Expo Router keeps this
+   * screen mounted after you leave it — the note on the focus effect above says
+   * so — so Production's empty list was still sitting in state when OG's
+   * check-in opened on top of it.
+   *
+   * Congratulating somebody on a clean slate is the worst possible thing to say
+   * while holding the wrong HIVE's list, so the three states are three states
+   * now, and only the middle one gets the sparkles.
+   */
+  const [todosState, setTodosState] = useState<'loading' | 'ready' | 'error'>('loading');
+  /** The HIVE the list in state belongs to — a stale reply cannot overwrite a fresh one. */
+  const todosForCommunityRef = useRef<string | null>(null);
+
+  /**
+   * A HIVE switch empties the list on the way in, not on the way out.
+   *
+   * Without this, the old HIVE's to-dos stay on screen for as long as the new
+   * HIVE's query takes — and if that query never runs, forever. Clearing here
+   * means the worst case is "checking your list", never another HIVE's answer
+   * wearing this HIVE's name.
+   */
+  useEffect(() => {
+    if (todosForCommunityRef.current === communityId) return;
+    todosForCommunityRef.current = null;
+    setOpenTodos([]);
+    setDoneTodos([]);
+    setDoneForMe([]);
+    setTodosState('loading');
+    // Step 3 holds the other per-HIVE thing on this screen: the HIVE Help focus
+    // the meeting picked. Its own effect re-reads it when the HIVE changes, but
+    // until that lands it would go on naming the last HIVE's focus — so it is
+    // emptied here beside the to-dos rather than left to be found separately.
+    setHelperThread(null);
+  }, [communityId]);
 
   const loadTodos = useCallback(async () => {
     if (!communityId || !profile) return;
+    const forCommunity = communityId;
     // Meeting-to-meeting window — same cycle anchor as the deck and hangs.
     const since = await getCycleStart(communityId, new Date().toISOString().slice(0, 10));
     const [mineRes, doneRes, forMeRes] = await Promise.all([
@@ -1038,6 +1082,21 @@ export default function MonthlyTuneupScreen() {
         .order('completed_at', { ascending: false })
         .limit(20),
     ]);
+    // Landed after a switch to somewhere else? Drop it. The newer request owns
+    // the list, and the old HIVE's answer arriving late is exactly how the
+    // wrong to-dos get shown under the right name.
+    if (forCommunity !== communityId) return;
+
+    // The open list is the one the step is ABOUT, so its error is the one that
+    // must never be dressed as a clean slate. The two "done" lists are memory
+    // joggers; missing them is a smaller loss than lying about the open ones.
+    if (mineRes.error) {
+      console.warn('Could not load your to-dos', mineRes.error);
+      setTodosState('error');
+      return;
+    }
+
+    todosForCommunityRef.current = forCommunity;
     setOpenTodos((mineRes.data ?? []) as TodoRow[]);
     setDoneTodos((doneRes.data ?? []) as TodoRow[]);
     setDoneForMe(((forMeRes.data ?? []) as any[]).map((row) => ({
@@ -1046,11 +1105,27 @@ export default function MonthlyTuneupScreen() {
       completed_at: row.completed_at,
       helperName: row.assignee?.name ?? 'Someone',
     })));
+    setTodosState('ready');
   }, [communityId, profile?.id]);
 
   useEffect(() => {
     loadTodos();
   }, [loadTodos]);
+
+  /**
+   * Read the list again every time this screen is opened.
+   *
+   * The mount effect above fires once per (HIVE, member) pair, and this screen
+   * outlives the visit — so arriving a second time, from an email or from Home,
+   * showed whatever was in state when you last walked away. Re-reading on focus
+   * costs one query and is the difference between a check-in that knows what you
+   * have done and one that quietly disagrees with your own to-do list.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      void loadTodos();
+    }, [loadTodos])
+  );
 
   const handleToggleTodo = async (todo: TodoRow, nowDone: boolean) => {
     if (!profile) return;
@@ -3812,7 +3887,23 @@ export default function MonthlyTuneupScreen() {
       />
       <View style={[cardStyle, { gap: 10 }]}>
         <BoxHeading style={{ marginBottom: 0 }}>Still open — tap to check off</BoxHeading>
-        {openTodos.length === 0 ? (
+        {todosState === 'loading' ? (
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9a8060' }}>
+            Checking your list…
+          </Text>
+        ) : todosState === 'error' ? (
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#dc2626' }}>
+              Could not load your to-dos just now — so this is not a clean slate, it is a blank page.
+            </Text>
+            <Pressable
+              onPress={() => { setTodosState('loading'); void loadTodos(); }}
+              style={({ pressed }) => ({ alignSelf: 'flex-start', opacity: pressed ? 0.7 : 1 })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>Try again</Text>
+            </Pressable>
+          </View>
+        ) : openTodos.length === 0 ? (
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9a8060' }}>
             Nothing open — clean slate ✨
           </Text>
@@ -3883,9 +3974,14 @@ export default function MonthlyTuneupScreen() {
           ))}
         </View>
       ) : null}
-      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
-        All caught up? Tap "Looks good →".
-      </Text>
+      {/* Only once the list has actually been read. "All caught up?" beside a
+          list that failed to load is the same false reassurance as the clean
+          slate above it. */}
+      {todosState === 'ready' ? (
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
+          All caught up? Tap "Looks good →".
+        </Text>
+      ) : null}
     </View>
   );
 
