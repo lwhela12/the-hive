@@ -62,3 +62,38 @@ update public.notifications
          || jsonb_build_object('check_in_superseded_on', '2026-08-28')
  where id = '409249ef-7e63-412f-b237-d0d7103f269d'
    and metadata->>'check_in_approval' = 'pending';
+
+-- Two boards Production did not have, and the halfway needs.
+--
+-- The wizard's third step posts to HIVE Helpers, and its "Compliment someone"
+-- pill posts to Compliment Corner. Production had neither, so copying OG's
+-- halfway without copying these would have handed a Production member the
+-- error message *"Could not find the HIVE Helpers board. You can log it from
+-- the Boards tab instead"* — pointing them at a board that does not exist.
+--
+-- HIVE Help in particular is the thing Nat noticed missing in the first place
+-- (*"there's no HIVE Help"*), so a step that opens onto nothing would be the
+-- same bug wearing the fix's clothes. Mirrors OG's rows; the ids and the
+-- descriptions are OG's words, and `topic_kind` is what the app matches on so
+-- renaming either board later cannot break the check-in.
+insert into public.board_categories
+  (community_id, name, description, category_type, icon, display_order,
+   is_system, requires_admin, requires_approval, audience, topic_kind,
+   goal_title, status, reach)
+select
+  '8a2b94a7-b7e2-4c79-bf32-e6467c46f4fb', v.name, v.description, 'custom',
+  v.icon, v.display_order, false, false, false, 'community', v.topic_kind,
+  v.goal_title, 'active', 'hive'
+from (values
+  ('HIVE Helpers',
+   'Log acts of help — big or tiny — so Clive can include them in meeting recaps, slide decks, and newsletters.',
+   '🤝', 120, 'helper_log', '15min HIVE Helpers'),
+  ('Compliment Corner',
+   'Say something nice, any time. @ someone and they get a little love note the moment you post. Compliments also get read out at the meeting.',
+   '💐', 126, 'compliments', null)
+) as v(name, description, icon, display_order, topic_kind, goal_title)
+where not exists (
+  select 1 from public.board_categories existing
+   where existing.community_id = '8a2b94a7-b7e2-4c79-bf32-e6467c46f4fb'
+     and existing.topic_kind = v.topic_kind
+);
