@@ -769,6 +769,45 @@ async function findPreviewProfile(
   return owner ? { id: owner.id, email: PREVIEW_EMAIL } : null;
 }
 
+/**
+ * The plain-text half of every letter this function sends.
+ *
+ * **A one-part HTML email reads as an advertisement.** Real mail from a person
+ * carries both a text and an HTML part; bulk marketing usually carries only the
+ * HTML, and Gmail treats the shape as evidence. Nat's check-in previews landed
+ * in Promotions on 2026-08-28 and she asked for them not to.
+ *
+ * It is not only a deliverability trick. The text part is what a screen reader
+ * gets when images are off, what a watch shows, and what a search index reads.
+ * The HTML has always been the only copy; now it is the pretty copy.
+ *
+ * Deliberately simple: this reads the letters THIS file writes, not arbitrary
+ * markup. Block tags become newlines, list items become dashes, links keep
+ * their address, and everything else is stripped and unescaped.
+ */
+function plainTextFrom(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, href, label) =>
+      `${String(label).replace(/<[^>]+>/g, '').trim()}: ${href}`)
+    .replace(/<li\b[^>]*>/gi, '\n- ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    // `li` is absent on purpose: `<li>` already opens its own line above, and
+    // closing it as well put a blank line between every bullet.
+    .replace(/<\/(p|div|h1|h2|h3|ul|tr|table)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&(#39|apos);/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .split('\n').map((line) => line.trim()).join('\n')
+    .trim();
+}
+
 /** A band across the top of the preview saying what pressing go would do. */
 function previewBanner(held: HeldTouch, hiveName: string): string {
   const who = `${escapeHtml(hiveName)} · ${held.recipients} ${held.recipients === 1 ? 'person' : 'people'}`;
@@ -820,6 +859,7 @@ async function holdForApproval(
   }
 
   if (RESEND_API_KEY) {
+    const previewBody = `${previewBanner(held, held.hiveName)}${personalizeHeldArtifact(held.htmlTemplate, 'there')}`;
     try {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -828,7 +868,8 @@ async function holdForApproval(
           from: FROM_EMAIL,
           to: previewTo.email,
           subject: `[Waiting on you] ${held.subject}`,
-          html: `${previewBanner(held, held.hiveName)}${personalizeHeldArtifact(held.htmlTemplate, 'there')}`,
+          html: previewBody,
+          text: plainTextFrom(previewBody),
         }),
       });
       if (!res.ok) console.error('[check-in-reminder] preview email failed:', await res.text());
@@ -1569,6 +1610,7 @@ serve(async (req) => {
                     to: member.email,
                     subject: emailSubject,
                     html: emailBody,
+                    text: plainTextFrom(emailBody),
                   }),
                 });
                 if (res.ok) {
@@ -1915,6 +1957,7 @@ serve(async (req) => {
             let emailDelivered = false;
 
             if (hasEmail) {
+              const seasonBody = personalizeHeldArtifact(htmlTemplate, escapeHtml(member.name ?? 'there'));
               try {
                 const res = await fetch('https://api.resend.com/emails', {
                   method: 'POST',
@@ -1926,7 +1969,8 @@ serve(async (req) => {
                     from: FROM_EMAIL,
                     to: member.email,
                     subject: emailSubject,
-                    html: personalizeHeldArtifact(htmlTemplate, escapeHtml(member.name ?? 'there')),
+                    html: seasonBody,
+                    text: plainTextFrom(seasonBody),
                   }),
                 });
                 if (res.ok) {
