@@ -170,14 +170,37 @@ const TECH_MIDPOINT_STEPS: Step[] = [
 ];
 
 /**
- * One flow pair per HIVE that has tailored check-ins. `hasTailoredCheckIns`
- * (lib/checkIns.ts) is the gate; this table is what opens once you're
- * through it. When Production's rhythm gets designed, it becomes a third
- * entry here — a third list, not a third tangle of slug checks.
+ * Production's halfway — OG's, minus the one ritual Production does not have.
+ *
+ * Nat, 2026-08-28: *"Pro HIVE 1/2 way check in is ALMOST beat for beat like OG
+ * HIVE, except Pro HIVE does NOT have a HIVE Help."* HIVE Help is OG's ritual
+ * — the 15-minute favour swap that has its own board and its own monthly focus
+ * thread — and Production has never run it. Offering the step anyway would ask
+ * five people to log an act of help against a ritual that does not exist, which
+ * is the same "answer with nowhere to go" Nat cut the POP questions for.
+ *
+ * So: newsletter, then to-dos. Two steps, and the letter that invites people to
+ * it lists exactly these two (`_shared/halfwaySteps.ts`).
  */
-const FLOWS: Record<'default' | 'tech', { tuneup: Step[]; midpoint: Step[] }> = {
+const SHOW_MIDPOINT_STEPS: Step[] = [
+  { key: 'newsletter', label: 'Newsletter' },
+  { key: 'todos', label: 'To-dos' },
+];
+
+/**
+ * One flow pair per HIVE that has tailored check-ins. `hasTailoredCheckIns`
+ * (lib/checkIns.ts) gates the pre-meeting tune-up and `hasHalfwayTuneup` gates
+ * the halfway one; this table is what opens once you're through either.
+ *
+ * Production reaches only the `midpoint` half of its entry — its pre-meeting
+ * survey is designed separately and closer to its meeting — so `tuneup` here is
+ * OG's list, unreachable and honest about it rather than a lie waiting to be
+ * switched on.
+ */
+const FLOWS: Record<'default' | 'tech' | 'show', { tuneup: Step[]; midpoint: Step[] }> = {
   default: { tuneup: STEPS, midpoint: MIDPOINT_STEPS },
   tech: { tuneup: TECH_STEPS, midpoint: TECH_MIDPOINT_STEPS },
+  show: { tuneup: STEPS, midpoint: SHOW_MIDPOINT_STEPS },
 };
 
 // What someone might want in the newsletter. Pills, not a blank box — the whole
@@ -789,7 +812,7 @@ export default function MonthlyTuneupScreen() {
   // member mid-wizard. Only slugs that pass `hasTailoredCheckIns` (checked
   // below, before anything renders) ever reach their FLOWS entry.
   const isTechFlow = community?.slug === 'tech';
-  const flow = FLOWS[isTechFlow ? 'tech' : 'default'];
+  const flow = FLOWS[community?.slug === 'tech' ? 'tech' : community?.slug === 'show' ? 'show' : 'default'];
   const steps = isMidpoint ? flow.midpoint : flow.tuneup;
   const privacyChoices = usePrivacyChoices();
 

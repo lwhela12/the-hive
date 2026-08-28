@@ -25,6 +25,7 @@ import {
   weekdayOf,
   type MeetingDetails,
 } from './meetingArtifact.ts';
+import { halfwayStepsFor } from '../_shared/halfwaySteps.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'H.I.V.E. <hive@yourdomain.com>';
@@ -414,14 +415,16 @@ function checkInEmailHtml(
      * The halfway letter — the one Nat calls perfect, now worn by every HIVE
      * whose halfway shape says `flow: 'tuneup'` (OG and Production, 2026-08-28).
      *
-     * The three bullets are the three steps of the wizard the button opens, in
-     * the order it walks them, so the letter is a truthful table of contents
-     * rather than a pitch: newsletter, to-dos, HIVE Help. The third bullet used
-     * to say "Life moved? Update your HD wish" — the HD wish is a PRE-MEETING
-     * step and is not in this flow at all, so it promised a door the button does
-     * not open. HIVE Help is what is actually there, and its absence is the
-     * first thing Nat noticed missing from Production's: *"there's no HIVE
-     * Help."*
+     * The bullets are the steps of the wizard the button opens, in the order it
+     * walks them, so the letter is a truthful table of contents rather than a
+     * pitch — and they come from `_shared/halfwaySteps.ts` so they cannot drift
+     * from the flow they describe. That drift is not hypothetical: the third
+     * bullet said "Life moved? Update your HD wish", which is a PRE-MEETING step
+     * and is not in this flow at all, and then briefly offered Production a HIVE
+     * Help step it does not have (Nat, 2026-08-28: *"Pro HIVE 1/2 way check in
+     * is ALMOST beat for beat like OG HIVE, except Pro HIVE does NOT have a HIVE
+     * Help"*). Both were the same mistake: the letter written by hand, beside a
+     * flow written in a list.
      *
      * Everything colour is `mark`; everything else is byte-for-byte the letter
      * OG has been sending. That is the whole of the re-skin.
@@ -435,9 +438,7 @@ function checkInEmailHtml(
       <p style="font-size: 15px;">Hi ${name},</p>
       <p style="font-size: 15px;">No meeting tonight — but the newsletter goes out soon, and this is the easy way in:</p>
       <ul style="font-size: 15px; padding-left: 20px;">
-        <li>Want a <strong>shout-out, a plug, or a reminder</strong> in the newsletter? Say so and it lands there</li>
-        <li>Check off anything you've finished on your <strong>to-do list</strong></li>
-        <li>Want a hand with something? Ask for it in <strong>HIVE Help</strong></li>
+        ${halfwayStepsFor(hiveSlug).map((step) => `<li>${step}</li>`).join('\n        ')}
       </ul>
       <div style="text-align: center; margin: 28px 0;">
         <a href="${tuneupHref('midpoint')}" style="background: ${mark.accent}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Take the 2-minute check-in</a>

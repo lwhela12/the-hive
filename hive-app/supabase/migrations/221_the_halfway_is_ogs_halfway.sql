@@ -63,19 +63,24 @@ update public.notifications
  where id = '409249ef-7e63-412f-b237-d0d7103f269d'
    and metadata->>'check_in_approval' = 'pending';
 
--- Two boards Production did not have, and the halfway needs.
+-- One board Production did not have, and the halfway needs.
 --
--- The wizard's third step posts to HIVE Helpers, and its "Compliment someone"
--- pill posts to Compliment Corner. Production had neither, so copying OG's
--- halfway without copying these would have handed a Production member the
--- error message *"Could not find the HIVE Helpers board. You can log it from
--- the Boards tab instead"* — pointing them at a board that does not exist.
+-- The newsletter step's "Compliment someone" pill posts to Compliment Corner,
+-- and Production had none, so that pill answered *"Could not find Compliment
+-- Corner. You can post it from the Boards tab instead"* — pointing a member at
+-- a board that does not exist.
 --
--- HIVE Help in particular is the thing Nat noticed missing in the first place
--- (*"there's no HIVE Help"*), so a step that opens onto nothing would be the
--- same bug wearing the fix's clothes. Mirrors OG's rows; the ids and the
--- descriptions are OG's words, and `topic_kind` is what the app matches on so
--- renaming either board later cannot break the check-in.
+-- HIVE Helpers is deliberately NOT here. A first pass created one, reasoning
+-- that OG's halfway has a HIVE Help step and Production's is a copy of it. Nat,
+-- 2026-08-28: *"Pro HIVE 1/2 way check in is ALMOST beat for beat like OG HIVE,
+-- except Pro HIVE does NOT have a HIVE Help."* It is OG's ritual — the
+-- 15-minute favour swap, with its own board and its own monthly focus thread —
+-- and Production has never run it. The board was removed the same morning, and
+-- the step went with it (`SHOW_MIDPOINT_STEPS` in monthly-tuneup.tsx,
+-- `_shared/halfwaySteps.ts` for the letter that invites people to it).
+--
+-- Mirrors OG's row; `topic_kind` is what the app matches on, so renaming the
+-- board later cannot break the check-in.
 insert into public.board_categories
   (community_id, name, description, category_type, icon, display_order,
    is_system, requires_admin, requires_approval, audience, topic_kind,
@@ -85,9 +90,6 @@ select
   v.icon, v.display_order, false, false, false, 'community', v.topic_kind,
   v.goal_title, 'active', 'hive'
 from (values
-  ('HIVE Helpers',
-   'Log acts of help — big or tiny — so Clive can include them in meeting recaps, slide decks, and newsletters.',
-   '🤝', 120, 'helper_log', '15min HIVE Helpers'),
   ('Compliment Corner',
    'Say something nice, any time. @ someone and they get a little love note the moment you post. Compliments also get read out at the meeting.',
    '💐', 126, 'compliments', null)
