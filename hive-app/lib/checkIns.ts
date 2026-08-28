@@ -36,6 +36,30 @@ export function hasTailoredCheckIns(
 }
 
 /**
+ * Whether this HIVE's HALFWAY nudge opens the tune-up wizard.
+ *
+ * **A third question, and Production is why it exists.** The screen used to
+ * ask `hasTailoredCheckIns` once, for both of its modes, so the pre-meeting
+ * tune-up and the halfway one stood behind a single door. Production needs the
+ * halfway open (it is OG's, copied, and it goes out with the newsletter) and
+ * the pre-meeting one shut — Nat, 2026-08-28: *"Pro HIVE's pre-meeting survey
+ * will be unique, so we'll talk about that closer to the meeting."*
+ *
+ * One boolean could not say that. Opening `hasTailoredCheckIns` to `show`
+ * would have handed Production OG's ARRIVAL/ENERGY/POP deck as well — the
+ * exact interview she rejected — through a door nobody meant to open.
+ *
+ * Read off `HALFWAY_BY_SLUG` rather than a fourth slug list, so a HIVE whose
+ * halfway shape says `flow: 'tuneup'` is a HIVE whose halfway wizard opens,
+ * and the two can never drift into disagreeing.
+ */
+export function hasHalfwayTuneup(
+  community: Pick<Community, 'slug'> | null | undefined,
+): boolean {
+  return getHalfwayShape(community)?.flow === 'tuneup';
+}
+
+/**
  * Whether this HIVE has a meeting deck of its own.
  *
  * This used to be the same question as `hasTailoredCheckIns()`, and the Meeting
@@ -122,14 +146,25 @@ const HALFWAY_BY_SLUG: Record<string, HalfwayShape> = {
    * the newsletter ask belongs in it, because the newsletter goes out on the
    * 1st for every HIVE, not only OG's.
    *
-   * Its door is the end-of-month check-in survey on Home (`flow: 'survey'`),
-   * which is Production's designed shape.
+   * **Its door is OG's halfway wizard, not a survey.** This said
+   * `flow: 'survey'` for one day, and that one value is what made Production's
+   * halfway diverge into an interview: Newsletter → To-dos → HIVE Help became
+   * arrival, energy, POP and three blank prose boxes. Nat, 2026-08-27, opening
+   * it: *"this looks like the three days before the meeting, and there's no
+   * HIVE Help. This is all bad."* And then the instruction this entry now
+   * obeys: *"The OG HIVE halfway check-in is perfect. Can you just do that for
+   * Production HIVE? Why can't you just copy the same thing? Why is it
+   * different?"*
+   *
+   * So it is the same shape as `default`, to the letter. The only thing
+   * Production wears of its own is its costume — purple and the clapperboard,
+   * off `hiveBrand` / `_shared/hiveMark.ts`, never a second flow.
    */
   show: {
     window: 'month',
     emoji: '🗞️',
     detail: 'The newsletter goes out on the 1st — want a shout-out, a plug, or a reminder in it?',
-    flow: 'survey',
+    flow: 'tuneup',
   },
 };
 
@@ -878,38 +913,55 @@ const NEWSLETTER_QUESTION: SurveyQuestion = {
  * questions to be ticked off, archived, or kept.
  */
 const END_OF_MONTH_BY_SLUG: Record<string, EndOfMonthCheckIn> = {
-  // Production-specific on purpose (Nat, 2026-08-19: "always want to make it
-  // production specific"). One shared goal, so the month closes on the show.
-  //
-  // The TITLE is load-bearing — `END_OF_MONTH_CHECK_IN_PATTERN` in
-  // `_shared/checkInPatterns.ts` is how the cron, Home and Meetings all
-  // recognise this check-in — and the DESCRIPTION must stay clear of the words
-  // "monthly check-in", which would route it into OG's tune-up wizard instead.
+  /**
+   * Production HIVE's halfway check-in — **OG's, copied.**
+   *
+   * This row used to hold eight questions: arrival, energy, energy mode, three
+   * blank prose boxes, the HIVE Help score and the newsletter ask. Nat opened
+   * it on 2026-08-27 and knew in one glance: *"this looks like the three days
+   * before the meeting, and there's no HIVE Help. This is all bad."* She was
+   * right — it had been built from OG's PRE-MEETING check-in (POP + Energy),
+   * which is a different survey from OG's halfway one, and the halfway is the
+   * one she loves. Her instruction: *"The OG HIVE halfway check-in is perfect.
+   * Can you just do that for Production HIVE? Why can't you just copy the same
+   * thing? Why is it different?"*
+   *
+   * **The halfway is a nudge, not an interview.** In her words: *"A lot of
+   * people have a lot of things going on in their life. If we meet every four
+   * weeks, two weeks in it's like 'hey, don't forget about me.' That way it's
+   * not the day before the meeting and you're like, fuck, I didn't go visit any
+   * of those places."*
+   *
+   * So the DOOR is OG's wizard — Newsletter → To-dos → HIVE Help, three steps,
+   * about two minutes (`MIDPOINT_STEPS` in monthly-tuneup.tsx, reached through
+   * `HALFWAY_BY_SLUG.show`). This row is no longer an interview standing in
+   * front of that wizard; it is the FILING CABINET behind it, and it holds the
+   * one answer the wizard has nowhere else to put: the newsletter ask, which
+   * Admin's Newsletter box reads under the member's name and HIVE.
+   *
+   * The other two steps already file themselves — to-dos are ticked on the
+   * member's own list, and HIVE Help posts to the Helpers board — which is why
+   * one question is the whole of it. Every question here still names where its
+   * answer goes, which is Nat's rule from the same morning: *"If you're going
+   * to make someone answer a question, you better damn well know what you're
+   * going to do with the answer."*
+   *
+   * The arrival, energy and POP questions are not lost — they are what a
+   * PRE-MEETING check-in is for, and Production's is designed separately,
+   * closer to its meeting (Nat, 2026-08-28: *"Pro HIVE's pre-meeting survey
+   * will be unique, so we'll talk about that closer to the meeting"*).
+   *
+   * The TITLE is load-bearing — `END_OF_MONTH_CHECK_IN_PATTERN` in
+   * `_shared/checkInPatterns.ts` is how the cron, Home and Meetings all
+   * recognise this check-in, and it already matches "Halfway check-in" — and
+   * the DESCRIPTION must stay clear of the words "monthly check-in", which
+   * would route it into OG's PRE-MEETING wizard instead of the halfway one.
+   */
   show: {
-    title: 'Where the show got to this month',
+    title: 'Halfway check-in',
     description:
-      'A quick POP + Energy check-in so the HIVE can celebrate what moved on the show, spot what is stuck, choose what is next, and keep the right things on the roster. Blanks are completely fine.',
+      'Halfway through the month — the newsletter goes out on the 1st. Two minutes: anything for the letter, tick off what you have done, and say if you want a hand.',
     questions: [
-      choice('q_feeling_today', 'Arrival: how are you feeling right now?', [
-        '😊 Great — bring it on!',
-        '😌 Good & steady',
-        '🫠 Tired, but here',
-        '🤒 Under the weather — love me from a distance',
-        '💛 Sad — extra hugs please',
-        "🖤 Sad — please don't ask about it",
-        '🌀 All over the place',
-      ]),
-      { id: 'q_energy_level', text: 'Energy: what is your energy level right now?', type: 'scale', required: false },
-      choice('q_energy_mode', 'Energy: what would feel best from HIVE this month?', [
-        'I could use support',
-        'I could use space',
-        'I am steady',
-        'I have energy to offer help',
-      ]),
-      q('q_show_progress', 'Progress: what moved on the show this month — venues seen, calls made, numbers learned? Anything you ticked off is already here; add whatever else you did.'),
-      q('q_show_obstacles', 'Obstacles: what is stuck, or waiting on somebody? How can HIVE help?'),
-      q('q_pop_priorities', 'Priorities: what has to happen before the next meeting?'),
-      { id: 'q_hive_help_recap', text: "How'd this month's HIVE Help go?", type: 'focus', required: false },
       { ...NEWSLETTER_QUESTION },
     ],
   },

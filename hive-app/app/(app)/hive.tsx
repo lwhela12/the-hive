@@ -16,6 +16,7 @@ import {
   SEASON_CHECK_IN_EMOJI,
   getHalfwayShape,
   getSeasonCheckInKind,
+  isEndOfMonthCheckInSurvey,
   isInHalfwayWindow,
   isSurveyOnHomeToday,
 } from '../../lib/checkIns';
@@ -2671,13 +2672,32 @@ export default function HiveScreen() {
   const todayDate = new Date();
   const halfwayShape = getHalfwayShape(community);
   const nextMeetingDate = upcomingEvents.find((event) => event.event_type === 'meeting')?.event_date;
-  // A HIVE whose halfway IS a check-in survey (`flow: 'survey'` — Production)
-  // already has that survey's own card on Home in the same window, and the
-  // wizard this card opens is OG and Tech's. Two cards for one job, one of
-  // them landing on "coming soon", is worse than the one that works.
+  // `flow: 'tuneup'` means this card is the door. Every HIVE reads that way as
+  // of 2026-08-28 — Production's halfway became a copy of OG's rather than a
+  // survey of its own — and the value is kept rather than assumed so a HIVE
+  // whose halfway is a bare survey is still one entry, not a rewrite.
   const inHalfwayWindow = !!halfwayShape
     && halfwayShape.flow === 'tuneup'
     && isInHalfwayWindow(halfwayShape, todayDate, nextMeetingDate);
+  /**
+   * ...and when it IS the door, the survey behind it does not get a second one.
+   *
+   * Production's halfway row is now the filing cabinet the wizard writes the
+   * newsletter answer into, not a screen anybody is meant to open. Left alone,
+   * Home would have offered both in the same window — "Halfway check-in · take
+   * 2 min" sitting directly above "Halfway check-in", one of them the nudge Nat
+   * approved and the other the raw survey behind it. Two cards for one job is
+   * the same trap the old `flow: 'survey'` note warned about, arrived at from
+   * the opposite direction.
+   *
+   * It is the SHAPE that decides, not today's window and not whether she has
+   * finished. Tied to the window, the raw survey would have reappeared on 1
+   * September and sat there for a week; tied to `halfwayDone`, it would have
+   * popped up the moment somebody completed the wizard — finish your check-in,
+   * and here is your check-in again. If the wizard is this HIVE's door, it is
+   * the door on every day of the month.
+   */
+  const halfwayWizardOwnsTheDoor = halfwayShape?.flow === 'tuneup';
 
   const homeTodos: HomeTodo[] = [
     ...(inHalfwayWindow && halfwayShape && !halfwayDone
@@ -2697,7 +2717,10 @@ export default function HiveScreen() {
     // appears three days before the quarter/year ends and steps back two
     // weeks after (lib/checkIns.ts), however early the survey was launched
     // from Admin. Every other survey shows the moment it exists, unchanged.
-    ...availableSurveys.filter((s) => isSurveyOnHomeToday(s, todayDate)).map(s => {
+    ...availableSurveys
+      .filter((s) => isSurveyOnHomeToday(s, todayDate))
+      .filter((s) => !(halfwayWizardOwnsTheDoor && isEndOfMonthCheckInSurvey(s, community)))
+      .map(s => {
       const response = myResponses.get(s.id);
       const submittedAt = response?.submitted_at ?? null;
       const isDone = !!submittedAt && !pendingSurveyIds.has(s.id);

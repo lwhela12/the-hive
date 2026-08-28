@@ -23,7 +23,7 @@ import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
 import { EditButton } from '../../components/ui/EditButton';
 import { confirmAction, showAlert } from '../../lib/showAlert';
-import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns, hasMeetingDeck, hasEndOfMonthCheckIn, getSeasonCheckInKind, isSurveyOnHomeToday, SEASON_CHECK_IN_EMOJI } from '../../lib/checkIns';
+import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns, hasMeetingDeck, hasEndOfMonthCheckIn, getHalfwayShape, getSeasonCheckInKind, isEndOfMonthCheckInSurvey, isSurveyOnHomeToday, SEASON_CHECK_IN_EMOJI } from '../../lib/checkIns';
 import { useSurveys, isMonthlyCheckInSurvey } from '../../lib/hooks/useSurveys';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
@@ -202,8 +202,15 @@ export default function MeetingsScreen() {
   // get a chip of its own — two doors to one set of answers read as two chores
   // (Nat, 2026-08-19: "that seems redundant, right?"). Season check-ins and
   // anything else keep theirs.
+  // The same rule, for the same reason, on the HALFWAY row: Production's is the
+  // wizard's filing cabinet as of 2026-08-28, so a chip pointing straight at it
+  // would be the second of two doors to one set of answers — and the one that
+  // skips the to-dos and HIVE Help on the way.
+  const halfwayIsAWizard = getHalfwayShape(community)?.flow === 'tuneup';
   const openCheckIns = availableSurveys.filter((s) =>
-    isSurveyOnHomeToday(s, new Date()) && !(hasTailoredCheckIns(community) && isMonthlyCheckInSurvey(s)));
+    isSurveyOnHomeToday(s, new Date())
+    && !(hasTailoredCheckIns(community) && isMonthlyCheckInSurvey(s))
+    && !(halfwayIsAWizard && isEndOfMonthCheckInSurvey(s, community)));
   // The 2026-08-07 decision gated the check-ins in Admin and on the direct
   // tune-up route, but this screen kept offering OG's tune-up pills and the
   // Meeting Helper deck inside Tech and Production as if they were theirs

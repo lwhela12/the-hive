@@ -66,7 +66,12 @@ import { EventDatePicker } from '../../components/ui/DatePicker';
 import { parseAmericanDate } from '../../lib/dateUtils';
 import { createCalendarEvent } from '../../lib/eventMutations';
 import type { Profile, Wish } from '../../types';
-import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns } from '../../lib/checkIns';
+import {
+  CHECK_INS_COMING_SOON_MESSAGE,
+  hasHalfwayTuneup,
+  hasTailoredCheckIns,
+  isEndOfMonthCheckInSurvey,
+} from '../../lib/checkIns';
 
 import { confirmAction, showAlert } from '../../lib/showAlert';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -1113,7 +1118,29 @@ export default function MonthlyTuneupScreen() {
   const [checkInSaving, setCheckInSaving] = useState(false);
   const [checkInError, setCheckInError] = useState<string | null>(null);
 
-  const monthlyCheckInSurvey = availableSurveys.find(isMonthlyCheckInSurvey) ?? null;
+  /**
+   * The row this HIVE's check-in answers are filed onto.
+   *
+   * OG's is titled "Monthly Check-in: POP + Energy", and for a long time that
+   * title WAS the question — one `find`, and every HIVE either had a monthly
+   * check-in or had nowhere to file.
+   *
+   * Production has a halfway check-in and no monthly one, so on 2026-08-28,
+   * the first time its halfway rode this wizard, the newsletter step would have
+   * answered *"Your HIVE has no check-in open right now, so there is nowhere to
+   * file this yet"* — a member typing a shout-out into a box that then refuses
+   * it. Nat's rule from the day before is the one this breaks: *"Having people
+   * fill out surveys and then not having their answers go anywhere is just
+   * having them do busy work, and it's bad."*
+   *
+   * So the question is "where does this HIVE file a check-in answer", and a
+   * HIVE's halfway row answers it just as well as a monthly one. The monthly
+   * row still wins where both exist — OG's pre-meeting deck writes seven
+   * answers onto it and must not start splitting them across two rows.
+   */
+  const monthlyCheckInSurvey = availableSurveys.find(isMonthlyCheckInSurvey)
+    ?? availableSurveys.find((survey) => isEndOfMonthCheckInSurvey(survey, community))
+    ?? null;
   const pendingSurveyIds = new Set(pendingSurveys.map((survey) => survey.id));
   const checkInResponse = monthlyCheckInSurvey ? myResponses.get(monthlyCheckInSurvey.id) : undefined;
   const checkInIsEditing = !!monthlyCheckInSurvey
@@ -3950,10 +3977,16 @@ export default function MonthlyTuneupScreen() {
   // Each HIVE that reaches this deck has a rhythm designed for it (FLOWS, at
   // the top of the file) — OG since the start, Tech since 2026-08-11. Keep the
   // route boundary here as well as in Admin so a bookmarked/deep-linked URL
-  // cannot open a wizard for a HIVE whose rhythm hasn't been designed yet:
-  // `hasTailoredCheckIns` fails closed, so Production waits behind this door.
+  // cannot open a wizard for a HIVE whose rhythm hasn't been designed yet.
   // A link that named a HIVE gets to finish arriving first (see the top of this
   // component) — otherwise the door slams on the way in.
+  //
+  // **The two modes are two doors.** Production's HALFWAY is OG's, copied, and
+  // it goes out with the newsletter; Production's PRE-MEETING is undesigned and
+  // deliberately shut until Nat designs it. Asking one boolean for both is what
+  // would hand Production the arrival/energy/POP deck it was never meant to
+  // have, so the halfway asks `hasHalfwayTuneup` and everything else still asks
+  // `hasTailoredCheckIns`. Both fail closed.
   if (switchPending) {
     return (
       <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
@@ -3963,7 +3996,7 @@ export default function MonthlyTuneupScreen() {
       </SafeAreaView>
     );
   }
-  if (!hasTailoredCheckIns(community)) {
+  if (!(isMidpoint ? hasHalfwayTuneup(community) : hasTailoredCheckIns(community))) {
     return (
       <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>

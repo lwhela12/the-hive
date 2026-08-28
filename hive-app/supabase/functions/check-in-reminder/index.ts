@@ -339,11 +339,29 @@ function checkInEmailHtml(
    * the email cannot drift from the calendar the way August's did.
    */
   meeting?: MeetingDetails,
+  /**
+   * The HIVE's own costume — its slug, and its row's accent when it has one.
+   *
+   * Only the HALFWAY letter reads these, and only because Production's halfway
+   * became a copy of OG's on 2026-08-28. Nat: *"we basically just need to copy
+   * & re-skin that exact same thing for Pro HIVE."* Copy is the letter, which
+   * is identical to the word; re-skin is these two arguments. Left off, a HIVE
+   * gets OG's honey gold, which is what every caller before Production wanted
+   * and still gets.
+   *
+   * The meeting letters above deliberately do NOT read them. They are OG's
+   * rhythm and OG's alone right now, and a colour that changes nothing is a
+   * colour that will be wrong the first time somebody else uses them.
+   */
+  hiveSlug?: string | null,
+  hiveAccent?: string | null,
 ): string {
   // Escaped once, here, so every path out of this function is safe by default.
   const name = escapeHtml(rawName);
   const hive = escapeHtml(rawHiveName);
+  const mark = hiveMark(hiveSlug, hiveAccent);
   const kicker = `<p style="text-align: center; color: #bd9348; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 0 0 2px;">${hive}</p>`;
+  const halfwayKicker = `<p style="text-align: center; color: ${mark.accent}; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 0 0 2px;">${hive}</p>`;
   const tuneupHref = (mode?: string) => {
     const params = [
       ...(communityId ? [`hive=${encodeURIComponent(communityId)}`] : []),
@@ -392,21 +410,37 @@ function checkInEmailHtml(
   `;
   }
   if (kind === 'midpoint') {
+    /**
+     * The halfway letter — the one Nat calls perfect, now worn by every HIVE
+     * whose halfway shape says `flow: 'tuneup'` (OG and Production, 2026-08-28).
+     *
+     * The three bullets are the three steps of the wizard the button opens, in
+     * the order it walks them, so the letter is a truthful table of contents
+     * rather than a pitch: newsletter, to-dos, HIVE Help. The third bullet used
+     * to say "Life moved? Update your HD wish" — the HD wish is a PRE-MEETING
+     * step and is not in this flow at all, so it promised a door the button does
+     * not open. HIVE Help is what is actually there, and its absence is the
+     * first thing Nat noticed missing from Production's: *"there's no HIVE
+     * Help."*
+     *
+     * Everything colour is `mark`; everything else is byte-for-byte the letter
+     * OG has been sending. That is the whole of the re-skin.
+     */
     return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
       ${LOGO_BLOCK}
-      ${kicker}
-      <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Halfway check-in</h1>
+      ${halfwayKicker}
+      <h1 style="color: ${mark.accent}; font-size: 22px; text-align: center; margin: 8px 0 4px;">Halfway check-in</h1>
       <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The newsletter goes out on the 1st</p>
       <p style="font-size: 15px;">Hi ${name},</p>
       <p style="font-size: 15px;">No meeting tonight — but the newsletter goes out soon, and this is the easy way in:</p>
       <ul style="font-size: 15px; padding-left: 20px;">
         <li>Want a <strong>shout-out, a plug, or a reminder</strong> in the newsletter? Say so and it lands there</li>
         <li>Check off anything you've finished on your <strong>to-do list</strong></li>
-        <li>Life moved? Update your HD wish</li>
+        <li>Want a hand with something? Ask for it in <strong>HIVE Help</strong></li>
       </ul>
       <div style="text-align: center; margin: 28px 0;">
-        <a href="${tuneupHref('midpoint')}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Take the 2-minute check-in</a>
+        <a href="${tuneupHref('midpoint')}" style="background: ${mark.accent}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Take the 2-minute check-in</a>
       </div>
     </div>
   `;
@@ -651,10 +685,21 @@ function seasonSubject(
       : `${emoji} ${from}Before we meet on ${month} ${day} — your check-in is open`;
   }
   if (kind === 'endofmonth') {
-    // Never dates the end of the month (see the letter itself for why).
+    /**
+     * **`Pro HIVE · Halfway check-in`, and nothing after it.**
+     *
+     * The tail used to read "— no obligations". Nat, 2026-08-27, cut it: an
+     * inbox shows perhaps forty characters, and those are spent apologising for
+     * an email nobody had objected to yet. The words that matter are whose HIVE
+     * it is and what it is, and both HIVEs say them the same way now.
+     *
+     * `day_of` is unreachable for this kind since 2026-08-28 — the halfway is a
+     * single letter, like OG's — and the line stays because deleting it is how
+     * a fifth touch quietly gets no subject at all.
+     */
     return touch === 'day_of'
       ? `${emoji} ${from}Last call — anything for the newsletter?`
-      : `${emoji} ${from}Halfway check-in — no obligations`;
+      : `${emoji} ${from}Halfway check-in`;
   }
   if (kind === 'quarter') {
     return touch === 'day_of'
@@ -991,13 +1036,26 @@ serve(async (req) => {
           from: FROM_EMAIL,
           to: testEmail,
           subject: `[Preview] ${seasonSubject(seasonKind, touch, kMonth, kDay, hiveName, hiveRow?.slug)}`,
-          html: seasonEmailHtml(
-            typeof body.test_name === 'string' ? body.test_name : 'there',
-            seasonKind, touch, kMonth, kDay, hiveName, match.id, match.community_id,
-            // No "closes" and no month-end date — see the end-of-month branch.
-            `${hiveName} · ${kMonth} · preview sent ${new Date().toLocaleTimeString('en-US', { timeZone: PACIFIC_TZ, hour: 'numeric', minute: '2-digit' })}`,
-            hiveRow?.slug, hiveRow?.accent_color,
-          ),
+          /**
+           * A preview that renders a different letter than the send is not a
+           * preview. The halfway left `seasonEmailHtml` on 2026-08-28 for OG's
+           * midpoint letter, so this branch follows it — otherwise Nat approves
+           * one email and her HIVE receives another, which is the entire thing
+           * the hold exists to prevent.
+           */
+          html: seasonKind === 'endofmonth'
+            ? checkInEmailHtml(
+                typeof body.test_name === 'string' ? body.test_name : 'there',
+                kMonth, kDay, 'midpoint', hiveName, match.community_id,
+                undefined, hiveRow?.slug, hiveRow?.accent_color,
+              )
+            : seasonEmailHtml(
+                typeof body.test_name === 'string' ? body.test_name : 'there',
+                seasonKind, touch, kMonth, kDay, hiveName, match.id, match.community_id,
+                // No "closes" and no month-end date — see the end-of-month branch.
+                `${hiveName} · ${kMonth} · preview sent ${new Date().toLocaleTimeString('en-US', { timeZone: PACIFIC_TZ, hour: 'numeric', minute: '2-digit' })}`,
+                hiveRow?.slug, hiveRow?.accent_color,
+              ),
         }),
       });
       if (!res.ok) return errorResponse(`Preview email failed: ${await res.text()}`, 502);
@@ -1027,7 +1085,7 @@ serve(async (req) => {
     }
     if (previewMeeting) ({ month, day } = formatMeetingDate(previewMeeting.dateOnly));
     const previewSubject = testKind === 'midpoint'
-      ? `[Preview] 🍯 ${previewFrom}Halfway check-in — the newsletter goes out on the 1st`
+      ? `[Preview] 🐝 ${previewFrom}Halfway check-in`
       : `[Preview] ${monthlyMeetingSubject(testKind, previewHiveName, previewMeeting as MeetingDetails)}`;
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -1608,12 +1666,35 @@ serve(async (req) => {
         const dueDateOnly = approving?.dueDateOnly ?? toPacificDateOnly(new Date(survey.due_date));
         if (!dueDateOnly) continue;
 
-        const windowOpen = getWindowOpenDate(dueDateOnly);
+        /**
+         * **The halfway is one touch, on the same day as OG's.**
+         *
+         * The quarter, the year and the pre-meeting all open three days before
+         * their due date and chase on the day itself, which is right for a
+         * deadline. A halfway check-in has no deadline — it is a nudge, in
+         * Nat's words *"hey, don't forget about me"* — and OG's has always been
+         * a single letter on the 3rd-to-last day of the month, timed to the
+         * newsletter that goes out on the 1st rather than to anything the
+         * survey row says.
+         *
+         * Riding `due_date` instead put Production's on its own calendar: it
+         * fired 28 August where OG fires the 29th, and then chased again on the
+         * 31st with a "Last call" OG members have never received. Two HIVEs on
+         * the same cadence — Nat, 2026-08-27: *"OG and Production HIVE are on
+         * the same cadence because they meet kind of in the middle of the
+         * month"* — were landing in the same inboxes on three different days.
+         *
+         * So the halfway asks the calendar the same question OG's does, and a
+         * due date that drifts by a day cannot move it any more.
+         */
+        const windowOpen = kind === 'endofmonth'
+          ? newsletterCheckInDate(todayStr)
+          : getWindowOpenDate(dueDateOnly);
         const touch: SeasonTouch | null = approving
           ? ((approving.touch ?? 'window') as SeasonTouch)
           : resendSurveyId || todayStr === windowOpen
             ? 'window'
-            : todayStr === dueDateOnly
+            : kind !== 'endofmonth' && todayStr === dueDateOnly
               ? 'day_of'
               : null;
         if (!touch) continue;
@@ -1725,8 +1806,12 @@ serve(async (req) => {
             },
           },
           endofmonth: {
+            // The same words the halfway EMAIL carries, minus the apology the
+            // subject line dropped on 2026-08-27. A notification and the letter
+            // it arrives beside disagreeing is how Production's halfway ended up
+            // announcing "🎉 Your end-of-year check-in is open" in August.
             window: {
-              title: '🍯 Halfway check-in — no obligations',
+              title: '🍯 Halfway check-in — anything for the newsletter?',
               body: `We're halfway through the month. How is it going, do you want a hand with anything, and have you got anything for the newsletter? It goes out on the 1st.`,
             },
             day_of: {
@@ -1749,15 +1834,43 @@ serve(async (req) => {
         const hiveName = seasonHiveRow?.name || 'Your HIVE';
         const emailSubject = approving?.subject
           ?? seasonSubject(kind, touch, month, day, hiveName, seasonHiveRow?.slug);
-        const htmlTemplate = approving?.htmlTemplate ?? seasonEmailHtml(
-          MEMBER_NAME_TOKEN, kind, touch, month, day, approving?.hiveName ?? hiveName,
-          survey.id, survey.community_id,
-          // The tail has to CHANGE between sends or Gmail folds the button
-          // away as quoted text — the month does that. It never says "closes"
-          // and never dates the end of the month (Nat, 2026-08-27).
-          `${approving?.hiveName ?? hiveName} · ${month}`,
-          seasonHiveRow?.slug, seasonHiveRow?.accent_color,
-        );
+        /**
+         * **The halfway letter is OG's letter, not this loop's.**
+         *
+         * `seasonEmailHtml` writes a survey invitation — a big emoji, a block
+         * of prose, and an "Open the check-in" button that lands on the survey.
+         * That is right for the quarter, the year and the pre-meeting, and it
+         * is exactly what Production's halfway used to be: an interview Nat
+         * opened and called *"all bad"*.
+         *
+         * Her instruction was to copy the one that works, so the halfway
+         * borrows `checkInEmailHtml`'s `midpoint` letter — the same three
+         * bullets, the same two-minute button, the same wizard behind it that
+         * OG has been getting for months — and passes its own slug and accent
+         * so it arrives in its own colours. One letter, two costumes, and no
+         * second version of the words to keep in step.
+         */
+        const htmlTemplate = approving?.htmlTemplate ?? (kind === 'endofmonth'
+          ? checkInEmailHtml(
+              MEMBER_NAME_TOKEN,
+              month,
+              day,
+              'midpoint',
+              approving?.hiveName ?? hiveName,
+              survey.community_id,
+              undefined,
+              seasonHiveRow?.slug,
+              seasonHiveRow?.accent_color,
+            )
+          : seasonEmailHtml(
+              MEMBER_NAME_TOKEN, kind, touch, month, day, approving?.hiveName ?? hiveName,
+              survey.id, survey.community_id,
+              // The tail has to CHANGE between sends or Gmail folds the button
+              // away as quoted text — the month does that. It never says "closes"
+              // and never dates the end of the month (Nat, 2026-08-27).
+              `${approving?.hiveName ?? hiveName} · ${month}`,
+              seasonHiveRow?.slug, seasonHiveRow?.accent_color,
+            ));
 
         // THE HOLD — same as the monthly loop. Nothing above this line has
         // reached a member.
