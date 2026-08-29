@@ -825,7 +825,21 @@ function previewBanner(held: HeldTouch, hiveName: string): string {
  *
  * The approval lives on the preview row's own metadata, so there is one object
  * per held touch and no second table to keep in step.
+ *
+ * **A retired preview is not a hold.** Only `pending` (waiting on Nat) and
+ * `approved` (already gone out) mean "this touch is spoken for". Anything else
+ * is a preview that was taken out of service, and it must not stand in the way
+ * of building the real one.
+ *
+ * This cost Production HIVE its halfway preview on 29 Aug 2026. The 27 Aug
+ * preview had been built from the wrong check-in and was marked `superseded`
+ * so Nat could not approve it by accident — but it kept Production's period
+ * key, `2026-08-30:season-window`, so on the morning the good letter was due
+ * this lookup found the dead row, called the touch already held, and Nat's
+ * inbox got OG's preview and nothing else. She was at the cabin, expecting two.
  */
+const LIVE_HOLD_STATES = new Set(['pending', 'approved']);
+
 async function findHold(
   admin: AdminClient,
   surveyId: string,
@@ -836,6 +850,7 @@ async function findHold(
     .select('id, metadata')
     .eq('metadata->>reminder_survey_id', surveyId)
     .eq('metadata->>reminder_period', `${period}:preview`)
+    .in('metadata->>check_in_approval', [...LIVE_HOLD_STATES])
     .limit(1);
   const row = (data ?? [])[0] as { id: string; metadata?: Record<string, unknown> } | undefined;
   if (!row) return null;
