@@ -72,7 +72,21 @@ export function ReachPill({
     ? (label?.wide ?? 'HIVE-Wide')
     : (label?.hive ?? `${hiveDisplayName(owner?.name)} only`);
 
-  const dims = size === 'md'
+  /**
+   * A pill you can PRESS is always the big one.
+   *
+   * Nat, 2026-09-01, after finding the check-in's toggle drawn smaller than
+   * the profile's: *"i think we need every toggle to look the same... make
+   * sure that all toggles between this hive and hive wide are the same
+   * everywhere."*
+   *
+   * Passing the size was the whole problem — six call sites, six chances to
+   * pick differently, and one of them eventually does. So the choice is taken
+   * away where it matters: a control is 'md', and `size` only decides how
+   * quietly a LABEL sits inside whatever card it is riding on.
+   */
+  const drawnSize = onToggle ? 'md' : size;
+  const dims = drawnSize === 'md'
     ? { mark: 15, text: 13, padX: 11, padY: 5.5, gap: 7, track: 34, knob: 15, inset: 2.5 }
     : { mark: 12, text: 10.5, padX: 8, padY: 3.5, gap: 5, track: 26, knob: 11, inset: 2 };
 
