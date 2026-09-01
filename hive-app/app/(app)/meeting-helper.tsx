@@ -195,7 +195,13 @@ type DeckDefinition = {
   plan: {
     kicker: string;
     title: string;
-    cards: { key: 'meeting' | 'help' | 'hang'; title: string; blurb: string }[];
+    /**
+     * Each card carries its own vote from the check-in, counted underneath it.
+     * Nat, 2026-08-31: *"every card shows its vote"* — the meeting day as a
+     * percentage, whether the HIVE wants a HIVE Help. The room reads where it
+     * already stands and then spends its minutes deciding.
+     */
+    cards: { key: 'meeting' | 'help' | 'hang'; title: string; blurb: string; vote?: VoteTally }[];
     /**
      * OG's Hang card opens the polls-and-ideas panel. Tech's third card is
      * HIVE Networking — tapping it arms the calendar for scheduling one,
@@ -223,7 +229,7 @@ type DeckDefinition = {
      * — the exact "where does this info end up" failure the hang voices two
      * hundred lines below exist to correct.
      */
-    voicesUnderCards?: { answerKey: string; heading: string; empty: string };
+    voicesUnderCards?: { answerKey: string; heading: string };
   };
   /**
    * Answers from the pre-meeting check-in, printed on the slide that decides
@@ -457,8 +463,26 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
       kicker: 'Ways we gather · on the calendar',
       title: 'Plan',
       cards: [
-        { key: 'meeting', title: 'HIVE Meeting', blurb: 'First Thursday evening, monthly, on Meet — built to fit around work.' },
-        { key: 'help', title: 'HIVE Help', blurb: 'A small shared kindness some HIVEs take on each month.' },
+        {
+          key: 'meeting',
+          title: 'HIVE Meeting',
+          blurb: 'First Thursday evening, monthly, on Meet — built to fit around work.',
+          vote: {
+            answerKey: 'q_meeting_day',
+            heading: 'The evening that suits us',
+            options: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'A weekend'],
+          },
+        },
+        {
+          key: 'help',
+          title: 'HIVE Help',
+          blurb: 'A small shared kindness some HIVEs take on each month.',
+          vote: {
+            answerKey: 'q_hive_help',
+            heading: 'Do we want one',
+            options: ['Yes — I’m in', 'Show me what it looks like', 'Let’s leave it for now'],
+          },
+        },
         { key: 'hang', title: 'HIVE Networking', blurb: 'Get the crew in a room with new faces — schedule one right here.' },
       ],
       hangCardExpands: false,
@@ -471,10 +495,14 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
         ],
       },
       hasHelpFocusHeader: false,
+      // The Networking card schedules rather than opening a panel, so what
+      // people named in the check-in is printed under the row. The check-in
+      // asks for it in as many words — until 2026-09-01 this box read an
+      // answer key no survey collected, and told the room a sentence about
+      // where answers land that was not true.
       voicesUnderCards: {
         answerKey: 'q_networking',
         heading: '🔗 Events on people’s radar',
-        empty: 'Nothing on the radar yet — the check-in asks, and answers land here.',
       },
     },
     wrapupReminders: [
@@ -2612,7 +2640,7 @@ export default function MeetingHelperScreen() {
    * result, and a slide that says "0 of 5" on a screen share reads as a HIVE
    * that said no — which is the opposite of "nobody has answered yet".
    */
-  const renderVoteTally = (vote: VoteTally) => {
+  const renderVoteTally = (vote: VoteTally, compact = false) => {
     const counts = new Map<string, number>(vote.options.map((option) => [option, 0]));
     let voted = 0;
     memberOrder.forEach((member) => {
@@ -2629,9 +2657,14 @@ export default function MeetingHelperScreen() {
     const rows = [...counts.entries()];
     const leader = Math.max(...rows.map(([, count]) => count));
 
+    // Compact is the version that lives inside a Plan card, beside two others:
+    // the same bars, sized to sit under a blurb instead of holding a slide.
+    const labelSize = compact ? sz(15, 11) : sz(20, 13);
+    const barHeight = compact ? sz(7, 5) : sz(10, 7);
+
     return (
-      <View style={{ alignSelf: 'stretch', gap: sz(10, 7) }}>
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
+      <View style={{ alignSelf: 'stretch', gap: compact ? sz(6, 4) : sz(10, 7), marginTop: compact ? sz(10, 7) : 0 }}>
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: compact ? sz(12, 9) : sz(15, 11), letterSpacing: compact ? 1.2 : 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
           {vote.heading} · {voted} of {members.length} answered
         </Text>
         {rows.map(([option, count]) => {
@@ -2643,20 +2676,22 @@ export default function MeetingHelperScreen() {
                   style={{
                     flex: 1,
                     fontFamily: count === leader && count > 0 ? 'Lato_700Bold' : 'Lato_400Regular',
-                    fontSize: sz(20, 13),
+                    fontSize: labelSize,
                     color: count > 0 ? CHARCOAL : MUTED,
                   }}
                 >
                   {option}
                 </Text>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 13), color: count > 0 ? GOLD_DEEP : MUTED }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: labelSize, color: count > 0 ? GOLD_DEEP : MUTED }}>
                   {share}%
                 </Text>
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), color: MUTED }}>
-                  {count} of {voted}
-                </Text>
+                {compact ? null : (
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), color: MUTED }}>
+                    {count} of {voted}
+                  </Text>
+                )}
               </View>
-              <View style={{ height: sz(10, 7), borderRadius: 999, backgroundColor: tintWash(0.18), overflow: 'hidden' }}>
+              <View style={{ height: barHeight, borderRadius: 999, backgroundColor: tintWash(0.18), overflow: 'hidden' }}>
                 <View style={{ width: `${share}%`, height: '100%', borderRadius: 999, backgroundColor: GOLD }} />
               </View>
             </View>
@@ -3235,6 +3270,10 @@ export default function MeetingHelperScreen() {
                           : expandedPlanCard === 'help' ? '▾ the conversation' : '▸ tap to talk it over'}
                   </Text>
                 )}
+                {/* Where the card's own check-in vote lands. Nothing draws
+                    until somebody has answered, so a card whose question was
+                    never asked looks exactly as it always did. */}
+                {column.vote ? renderVoteTally(column.vote, true) : null}
               </Pressable>
             );
           })}
@@ -3242,23 +3281,17 @@ export default function MeetingHelperScreen() {
 
         {/* What people wrote in their check-in, for a card that doesn't open a
             panel of its own. Tech's networking answers live here. */}
-        {underCards ? (
+        {underCards && underCardVoices.length > 0 ? (
           <View style={{ marginTop: sz(14, 8), gap: sz(4, 3) }}>
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
               {underCards.heading}
             </Text>
-            {underCardVoices.length > 0 ? (
-              underCardVoices.map((voice) => (
-                <Text key={voice.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), lineHeight: sz(24, 16), color: CHARCOAL }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>{voice.name}: </Text>
-                  {voice.text}
-                </Text>
-              ))
-            ) : (
-              <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
-                {underCards.empty}
+            {underCardVoices.map((voice) => (
+              <Text key={voice.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), lineHeight: sz(24, 16), color: CHARCOAL }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>{voice.name}: </Text>
+                {voice.text}
               </Text>
-            )}
+            ))}
           </View>
         ) : null}
 
