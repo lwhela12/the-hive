@@ -684,8 +684,7 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
    * |---|---|
    * | q_attendance | the Arrival Board, and the sealed summary |
    * | q_building | your 30-second intro bubble on the HummDinger |
-   * | q_hd_wish | a real `wishes` row, filed as your spotlight, so "This month's HD" is on your bubble before you speak |
-   * | q_pop_progress / _obstacles / _priorities | your HummDinger sheet, under the HD legend the slide already prints |
+   * | q_hd_wish | a real `wishes` row, filed as your spotlight — your profile, your member card, and "This month's HD" on your bubble |
    * | q_meeting_day | a percentage on the Plan slide's HIVE Meeting card |
    * | q_hive_help | a percentage on the Plan slide's HIVE Help card |
    * | q_networking | the events box under the Plan cards |
@@ -702,11 +701,27 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
    * Cut, deliberately: `q_who_can_know` (a Production question — that HIVE is
    * building a show in public, this one is not), `q_plate` (energy already
    * asks it), `q_cadence` + `q_when` (replaced by the day vote, which comes
-   * back as a percentage instead of prose), `q_want` + `q_stuck` +
-   * `q_biggest_question` (they are the POP block now, on the member's own
-   * bubble — Nat, 2026-08-31), and `q_learned`, which said its answer could go
-   * "straight on the Things We Learned board" while nothing posted it. That
-   * one comes back the day it does.
+   * back as a percentage instead of prose), and `q_learned`, which said its
+   * answer could go "straight on the Things We Learned board" while nothing
+   * posted it. That one comes back the day it does.
+   *
+   * **And the POP questions, which is the important one.** `q_pop_progress`,
+   * `q_pop_obstacles` and `q_pop_priorities` were in here for a day, one box
+   * each, and Nat cut them: *"the survey will help you generate some HD
+   * wishes, if you havent yet & then you pick one for this months focus & just
+   * know that the purpose of the HD sesh is to talk through it and see if
+   * anyone can help you out... so i dont think people need to type out the
+   * answers to where are you where do you want to be, etc, i think thats the
+   * purpose of the live sesh. But — they DO want to have an HD wish to focus
+   * on."*
+   *
+   * The frame is not gone; it moved to where it works. The HummDinger slide
+   * already prints it as a legend across the top of the room
+   * (`POP_SECTIONS` / `POP_ALT_PHRASING` in meeting-helper.tsx), and the live
+   * note under each bubble catches what gets said. A member arrives with one
+   * wish written down, the way OG members do, and the talking is the meeting.
+   * The deck still reads `q_pop_*` for any HIVE whose check-in asks them;
+   * Tech's simply does not, and those sections stay out of the way.
    */
   tech: {
     title: 'Before our first meeting',
@@ -721,19 +736,15 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
       note('note_what_a_hive_is', 'What a HIVE is for', [
         'We are here to get each other somewhere. A HIVE is a small group that puts real weight behind what each of us is actually chasing — the goal, and the bigger thing underneath it.',
         'The way we do that is a High Definition wish: one ask, said clearly enough that somebody in this room could grant it. "Look at my landing page and tell me why nobody signs up" is an HD.',
-        'Every meeting has a HummDinger session, where we take one person\'s HD at a time and work it together. The next few questions are the frame we use — where are you, where do you want to be, what have you tried, where are you stuck. Month to month it becomes POP: Progress, Obstacles, Priorities.',
-        'Your HD goes straight onto your profile and your member card, and it comes up on screen on the night as yours to work.',
-        'The rest you can say out loud on Thursday — in OG HIVE most people keep the wish written down and talk the rest through in the room. Write as little as you like.',
+        'Pick one below as your focus for the month. It goes on your profile and your member card, and it comes up on screen on the night as yours.',
+        'That is what a HummDinger session is. We take one HD at a time and talk it through — where are you, where do you want to be, what have you tried, where are you stuck — and find out who can help. Nothing to write for that part; it happens in the room.',
       ]),
       // Becomes the intro bubble on the HummDinger slide, word for word, so
       // the first thing the room sees about you is the thing you are making.
-      q('q_building', 'Where are you? What are you building right now — one line is plenty, and it becomes your 30-second intro.'),
+      q('q_building', 'What are you building right now? One line is plenty — it becomes your 30-second intro.'),
       // The one that becomes a real `wishes` row on submit, filed as the
       // spotlight, so the bubble has an HD on it before anybody speaks.
-      q('q_hd_wish', 'Where do you want to be? This is your High Definition wish — one thing this room could actually help you get to.'),
-      q('q_pop_progress', 'What have you tried so far?'),
-      q('q_pop_obstacles', 'Where are you stuck? This is the bit the room is for.'),
-      q('q_pop_priorities', 'What is your focus for the next month, and what could we do to help?'),
+      q('q_hd_wish', 'Your High Definition wish — the one you want this room working on this month.'),
       note('note_how_we_run', 'Now — how we run this', [
         'Tech HIVE is new, so the rest is ours to set. Your answers come back as the actual numbers on screen Thursday, and we decide from there.',
       ]),
