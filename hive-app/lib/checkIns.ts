@@ -678,6 +678,17 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
    * HIVE runs — and every answer becomes a THING on the night, never a wall of
    * quotes and never a summary.
    *
+   * **The order is the meeting's order, with one deliberate departure.** The
+   * night runs Arrivals → News → Honey Pot → Plan → HummDinger, and the votes
+   * follow it exactly, so the numbers appear on screen in the order they were
+   * asked. Arrivals opens with three quick taps.
+   *
+   * The HummDinger block does NOT wait for its slot. It is last on the night
+   * because it is the best part and wants a warmed-up room; in a survey, last
+   * means answered tired, and the HD wish is the one question here that takes
+   * real thought. Nat asked whether to match the meeting exactly
+   * (2026-09-01) — everything else does.
+   *
    * Where each one lands, which is the only reason each one is here:
    *
    * | question | where it shows up |
@@ -733,6 +744,8 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
         "🐝 Can't make this one — but I still want to be in the group",
         '🤔 Not sure yet',
       ]),
+      { id: 'q_energy_level', text: 'Energy: what is your energy level right now?', type: 'scale', required: false },
+      { ...PERSONAL_HARD_OUT_QUESTION },
       note('note_what_a_hive_is', 'What a HIVE is for', [
         'We are here to get each other somewhere. A HIVE is a small group that puts real weight behind what each of us is actually chasing — the goal, and the bigger thing underneath it.',
         'The way we do that is a High Definition wish: one ask, said clearly enough that somebody in this room could grant it. "Look at my landing page and tell me why nobody signs up" is an HD.',
@@ -746,21 +759,8 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
       // spotlight, so the bubble has an HD on it before anybody speaks.
       q('q_hd_wish', 'Your High Definition wish — the one you want this room working on this month.'),
       note('note_how_we_run', 'Now — how we run this', [
-        'Tech HIVE is new, so the rest is ours to set. Your answers come back as the actual numbers on screen Thursday, and we decide from there.',
+        'Tech HIVE is new, so the rest is ours to set. These come back as the actual numbers on screen Thursday, in this order, and we decide from there.',
       ]),
-      choice('q_meeting_day', 'Which evening suits you best for our monthly call?', [
-        'Monday',
-        'Tuesday',
-        'Wednesday',
-        'Thursday',
-        'A weekend',
-      ]),
-      choice('q_hive_help', 'Some HIVEs pick one small act of kindness to do together each month. Want one here?', [
-        'Yes — I’m in',
-        'Show me what it looks like',
-        'Let’s leave it for now',
-      ]),
-      q('q_networking', 'Any tech events or meetups on your radar we could go to together?', 'short'),
       choice(
         'q_honey_pot',
         'Some HIVEs keep a Honey Pot and some do not. OG HIVE’s is $25 a quarter per member, spent however the HIVE decides — hoodies this fall, maybe a Bumblebee Ball to close the year. Want one here?',
@@ -776,8 +776,19 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
         'Tools or subscriptions we all use',
         'I have another idea — I’ll bring it Thursday',
       ]),
-      { id: 'q_energy_level', text: 'Energy: what is your energy level right now?', type: 'scale', required: false },
-      { ...PERSONAL_HARD_OUT_QUESTION },
+      choice('q_meeting_day', 'Which evening suits you best for our monthly call?', [
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'A weekend',
+      ]),
+      choice('q_hive_help', 'Some HIVEs pick one small act of kindness to do together each month. Want one here?', [
+        'Yes — I’m in',
+        'Show me what it looks like',
+        'Let’s leave it for now',
+      ]),
+      q('q_networking', 'Any tech events or meetups on your radar we could go to together?', 'short'),
     ],
   },
 };
