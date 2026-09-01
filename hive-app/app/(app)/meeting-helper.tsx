@@ -144,6 +144,17 @@ type DeckSlideKey =
   | 'wrapup'
   | 'thanks';
 
+/**
+ * A choice question from the check-in, shown back to the room as a count.
+ *
+ * `options` is the ballot in the order it was asked, so a bar with nobody on it
+ * still holds its place and the split reads the same way every month. Anything
+ * a member typed that is not on the ballot is counted under its own name — the
+ * survey and the deck can drift, and a vote that quietly loses a voice is worse
+ * than one that shows an answer the deck did not expect.
+ */
+type VoteTally = { answerKey: string; heading: string; options: string[] };
+
 type DeckDefinition = {
   /** The slides, in show order. */
   slides: DeckSlideKey[];
@@ -158,7 +169,29 @@ type DeckDefinition = {
    */
   treasurer:
     | { kind: 'honeyPot'; kicker: string; title: string }
-    | { kind: 'duesConversation'; kicker: string; title: string; lead: string; questions: string[] };
+    | { kind: 'duesConversation'; kicker: string; title: string; lead: string; questions: string[] }
+    /**
+     * A HIVE deciding whether it wants a Honey Pot, with a worked example and
+     * its own vote already counted.
+     *
+     * Nat, 2026-09-01: *"Say that some HIVEs have it, and some dont, and for
+     * example, OG HIVE has a honey pot & dues are $25 x quarter x member & thes
+     * for community discretion & there's a chance we might use it for HIVE
+     * hoodies this fall and/or bumble bee ball at the end of the year. (just to
+     * put some good ideas in & then let peole vote)."*
+     *
+     * The example is what makes the vote answerable — "do we want dues" asked
+     * cold is a question nobody can price. And the answers come back as a
+     * count, never as quotes: *"looks like 90% of you dont want a honey pot"*.
+     */
+    | {
+        kind: 'honeyPotVote';
+        kicker: string;
+        title: string;
+        example: { heading: string; dues: string; note: string; ideas: string[] };
+        vote: VoteTally;
+        spend?: VoteTally;
+      };
   plan: {
     kicker: string;
     title: string;
@@ -381,22 +414,44 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
       { key: 'outline', label: 'Outline' },
       { key: 'rollcall', label: 'Roll call' },
       { key: 'news', label: 'News from Nat' },
-      { key: 'treasurer', label: 'Treasurer' },
+      { key: 'treasurer', label: 'Honey Pot' },
       { key: 'meetups', label: 'Plan' },
       { key: 'hummdinger', label: 'HummDinger Sesh' },
       { key: 'wrapup', label: 'Wrap-Up' },
     ],
     welcomeNudge: 'grab a drink and check in',
     treasurer: {
-      kind: 'duesConversation',
-      kicker: 'Cabinet Reports',
-      title: 'Treasurer',
-      lead: 'This one is ours to decide together.',
-      questions: [
-        'Do we want dues at all?',
-        'What would dues be for?',
-        'Who keeps the pot?',
-      ],
+      kind: 'honeyPotVote',
+      kicker: 'Some HIVEs have one',
+      title: 'Honey Pot',
+      example: {
+        heading: 'Here is how OG HIVE does it',
+        dues: '$25 a quarter, per member',
+        note: 'Spent at the community’s discretion — the HIVE picks.',
+        ideas: [
+          'HIVE hoodies this fall',
+          'A Bumblebee Ball to close out the year',
+        ],
+      },
+      vote: {
+        answerKey: 'q_honey_pot',
+        heading: 'Where Tech landed',
+        options: [
+          'Yes — count me in',
+          'Maybe — talk me through it',
+          'Let’s leave it for now',
+        ],
+      },
+      spend: {
+        answerKey: 'q_honey_pot_for',
+        heading: 'What we’d spend it on first',
+        options: [
+          'Tech HIVE hoodies',
+          'A Bumblebee Ball',
+          'Tools or subscriptions we all use',
+          'I have another idea — I’ll bring it Thursday',
+        ],
+      },
     },
     plan: {
       kicker: 'Ways we gather · on the calendar',
@@ -2544,6 +2599,73 @@ export default function MeetingHelperScreen() {
     );
   };
 
+  /**
+   * A check-in choice question, counted on the slide that decides it.
+   *
+   * Nat's rule for the whole deck is that an answer has to become a THING —
+   * *"looks like 90% of you dont want a honey pot"* is a thing; the same
+   * twelve sentences printed side by side is not. So a vote comes back as a
+   * bar and a count, and the room spends its minutes deciding rather than
+   * reading.
+   *
+   * Nothing draws until somebody has voted. A tally over zero answers is not a
+   * result, and a slide that says "0 of 5" on a screen share reads as a HIVE
+   * that said no — which is the opposite of "nobody has answered yet".
+   */
+  const renderVoteTally = (vote: VoteTally) => {
+    const counts = new Map<string, number>(vote.options.map((option) => [option, 0]));
+    let voted = 0;
+    memberOrder.forEach((member) => {
+      const answer = getTextAnswer(responsesByUser.get(member.id)?.answers ?? {}, vote.answerKey);
+      if (!answer) return;
+      voted += 1;
+      counts.set(answer, (counts.get(answer) ?? 0) + 1);
+    });
+    if (voted === 0) return null;
+
+    // Ballot order first (a zero still holds its place), then anything typed
+    // that the ballot did not offer — those only exist here because somebody
+    // said them, so they are never empty.
+    const rows = [...counts.entries()];
+    const leader = Math.max(...rows.map(([, count]) => count));
+
+    return (
+      <View style={{ alignSelf: 'stretch', gap: sz(10, 7) }}>
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
+          {vote.heading} · {voted} of {members.length} answered
+        </Text>
+        {rows.map(([option, count]) => {
+          const share = Math.round((count / voted) * 100);
+          return (
+            <View key={option} style={{ gap: sz(4, 3) }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: sz(10, 6) }}>
+                <Text
+                  style={{
+                    flex: 1,
+                    fontFamily: count === leader && count > 0 ? 'Lato_700Bold' : 'Lato_400Regular',
+                    fontSize: sz(20, 13),
+                    color: count > 0 ? CHARCOAL : MUTED,
+                  }}
+                >
+                  {option}
+                </Text>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 13), color: count > 0 ? GOLD_DEEP : MUTED }}>
+                  {share}%
+                </Text>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), color: MUTED }}>
+                  {count} of {voted}
+                </Text>
+              </View>
+              <View style={{ height: sz(10, 7), borderRadius: 999, backgroundColor: tintWash(0.18), overflow: 'hidden' }}>
+                <View style={{ width: `${share}%`, height: '100%', borderRadius: 999, backgroundColor: GOLD }} />
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
   const renderTreasurer = () => (
     <View style={{ flex: 1 }}>
       <Kicker>{deck.treasurer.kicker}</Kicker>
@@ -2587,6 +2709,76 @@ export default function MeetingHelperScreen() {
             </Text>
           </View>
         </View>
+      ) : deck.treasurer.kind === 'honeyPotVote' ? (
+        /* A HIVE voting on whether to have one, with a worked example on
+           screen so the vote is answerable. The example comes first and the
+           room's own answers come second — you read what it costs and what it
+           buys, then you see where everybody already stands. */
+        <BounceScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: sz(60, 40), gap: sz(24, 15) }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: sz(900, 620),
+              backgroundColor: CARD,
+              borderWidth: 1,
+              borderColor: GOLD_SOFT,
+              borderRadius: sz(22, 16),
+              paddingHorizontal: sz(38, 20),
+              paddingVertical: sz(26, 16),
+              gap: sz(12, 8),
+            }}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
+              {deck.treasurer.example.heading}
+            </Text>
+            <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(44, 26), lineHeight: sz(58, 34), color: GOLD }}>
+              {deck.treasurer.example.dues}
+            </Text>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(22, 14), lineHeight: sz(32, 20), color: CHARCOAL }}>
+              {deck.treasurer.example.note}
+            </Text>
+            <View style={{ gap: sz(6, 4), marginTop: sz(4, 3) }}>
+              {deck.treasurer.example.ideas.map((idea) => (
+                <Text key={idea} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(22, 14), lineHeight: sz(32, 20), color: MUTED }}>
+                  🍯 {idea}
+                </Text>
+              ))}
+            </View>
+          </View>
+          <View style={{ width: '100%', maxWidth: sz(900, 620), gap: sz(22, 14) }}>
+            {renderVoteTally(deck.treasurer.vote)}
+            {deck.treasurer.spend ? renderVoteTally(deck.treasurer.spend) : null}
+          </View>
+          {/* Somewhere to put the answer while the room is still talking —
+              Tech meets entirely remotely, so there is no notebook going round
+              the table (Nat, 2026-08-12). */}
+          <View style={{ width: '100%', maxWidth: sz(900, 620), alignItems: 'center', gap: sz(8, 5) }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(10, 6) }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 11), color: GOLD_DEEP }}>
+                Whatever we land on goes in tonight's wrap-up.
+              </Text>
+              <EditPill noteKey="treasurer" />
+            </View>
+            {notes.treasurer?.trim() ? (
+              <View
+                style={{
+                  alignSelf: 'stretch',
+                  backgroundColor: CARD,
+                  borderWidth: 1,
+                  borderColor: GOLD_SOFT,
+                  borderRadius: sz(16, 12),
+                  paddingHorizontal: sz(22, 14),
+                  paddingVertical: sz(14, 9),
+                }}
+              >
+                <NoteBody noteKey="treasurer" emptyText="" />
+              </View>
+            ) : null}
+          </View>
+        </BounceScrollView>
       ) : (
         /* The dues conversation — this slide exists ON PURPOSE for a HIVE with
            no Honey Pot yet. Nat: "leave the treasurer slide in there, because
@@ -4582,10 +4774,15 @@ export default function MeetingHelperScreen() {
       Math.max(280, Math.max(1, videoPeople) * (sideVideoWidth - sz(16, 11)) * 0.5625 + sz(174, 142)),
     ),
   );
-  // The plan slide's name is per-deck ("Plan the Meet Ups" / "Plan"), so its
-  // edit modal says whichever name is on the slide being edited.
+  // The plan and treasurer slides are named per-deck ("Plan the Meet Ups" /
+  // "Plan", "Treasurer Report — Ollie" / "Honey Pot"), so the edit modal says
+  // whichever name is on the slide being edited.
   const editMeta = editKey
-    ? { ...EDIT_SLIDE_META[editKey], ...(editKey === 'meetups' ? { title: deck.plan.title } : null) }
+    ? {
+        ...EDIT_SLIDE_META[editKey],
+        ...(editKey === 'meetups' ? { title: deck.plan.title } : null),
+        ...(editKey === 'treasurer' ? { title: deck.treasurer.title } : null),
+      }
     : null;
 
   // The frozen agenda rail (wide screens): analog clock + countdown on top,
