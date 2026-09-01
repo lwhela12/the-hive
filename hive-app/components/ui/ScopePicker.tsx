@@ -117,6 +117,23 @@ export function ScopePicker<K extends string>({
           // the badge had stopped using. `look.accent` asks `lib/scopeLook.ts`
           // instead, so a rung can change colour in one place again.
           const tint = look.accent;
+          /**
+           * The stay-home rung names the HIVE you are standing in.
+           *
+           * Nat, 2026-09-01: *"i think title the HIVE 'OG HIVE only', 'Tech
+           * HIVE only'."* The pill has named it since August — her reason then
+           * was "so you know where you wrote it" — and these cards were still
+           * saying a generic "This HIVE only", so the same decision read two
+           * ways depending on whether you were making a thing or flipping one.
+           *
+           * Substituted here rather than in each option list, so a new picker
+           * cannot reintroduce the generic wording by copying an old one.
+           */
+          // `option.label` stays as the fallback for the moment before the
+          // HIVE has loaded — "HIVE only" would name a HIVE nobody is in.
+          const optionLabel = option.rung === 'hive' && community?.name
+            ? `${hiveDisplayName(community.name)} only`
+            : option.label;
 
           return (
             <Pressable
@@ -124,7 +141,7 @@ export function ScopePicker<K extends string>({
               onPress={() => onChange(option.key)}
               accessibilityRole="button"
               accessibilityState={{ selected }}
-              accessibilityLabel={`${option.label} — ${option.hint}`}
+              accessibilityLabel={`${optionLabel} — ${option.hint}`}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -150,7 +167,7 @@ export function ScopePicker<K extends string>({
                     color: selected ? tint : '#6b7280',
                   }}
                 >
-                  {option.label}
+                  {optionLabel}
                 </Text>
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#a09585' }}>
                   {option.hint}
