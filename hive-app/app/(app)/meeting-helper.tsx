@@ -1272,7 +1272,17 @@ export default function MeetingHelperScreen() {
         const { data } = await (supabase as any)
           .from('wishes')
           .select('id, title, description, status, is_active, is_spotlight, user_id, user:profiles!user_id(id, name)')
-          .eq('community_id', communityId)
+          // This HIVE's wishes plus every wish that travels. A wish is the one
+          // thing on the ladder that picks its own rung, so a member's
+          // HIVE-Wide wish belongs on their bubble in whichever HIVE they are
+          // sitting in. The member card learned this on 2026-08-19 and the
+          // profile panel on 2026-08-28 — the deck was the screen that fix
+          // never reached, and it is the one the room is looking at.
+          //
+          // Wishes belonging to people who are not in this HIVE come back too
+          // and are never read: `wishesByUserId` is only ever looked up by a
+          // member of this HIVE.
+          .or(`community_id.eq.${communityId},share_scope.eq.all_hives`)
           .eq('status', 'public')
           // Newest first, so a member who never starred a wish still leads with
           // their most recent one.

@@ -412,12 +412,15 @@ export function SurveyModal({
     const hdWish = typeof finalAnswers.q_hd_wish === 'string' ? finalAnswers.q_hd_wish.trim() : '';
     if (hdWish && viewerProfile?.id) {
       try {
-        const { data: existing } = await supabase
+        // The same reach the picker offers: this HIVE's wishes plus every one
+        // of yours that travels. Matching only on this HIVE would file a
+        // second copy of a HIVE-Wide wish every time somebody picked one.
+        const { data: existing } = await (supabase as any)
           .from('wishes')
           .select('id, description')
           .eq('user_id', viewerProfile.id)
-          .eq('community_id', survey.community_id)
-          .eq('is_active', true);
+          .eq('is_active', true)
+          .or(`community_id.eq.${survey.community_id},share_scope.eq.all_hives`);
         const already = (existing ?? []).find(
           (wish: { description?: string }) => (wish.description ?? '').trim() === hdWish
         ) as { id: string } | undefined;

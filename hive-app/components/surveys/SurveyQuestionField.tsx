@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ComposerBar } from '../ui/ComposerBar';
 import type { SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
-import { useWishes } from '../../lib/hooks/useWishes';
+import { supabase } from '../../lib/supabase';
 
 export function ScaleInput({ value, onChange }: { value: number | null; onChange: (v: number) => void }) {
   return (
@@ -406,10 +406,55 @@ export function SurveyQuestionField({
    * picker starts earning its keep from the second meeting on.
    */
   const isHdWish = question.id === 'q_hd_wish';
-  const { wishes: ownWishes } = useWishes({ loadWishes: isHdWish });
-  const pickableWishes = isHdWish
-    ? ownWishes.filter((wish) => wish.is_active && wish.status !== 'fulfilled' && !!wish.description?.trim())
-    : [];
+  const [pickableWishes, setPickableWishes] = useState<
+    { id: string; description: string; fromHive: string | null }[]
+  >([]);
+  useEffect(() => {
+    if (!isHdWish || !profile?.id || !communityId) return;
+    let live = true;
+    (async () => {
+      /**
+       * This HIVE's wishes, plus every wish of yours that travels — whichever
+       * HIVE it was written in.
+       *
+       * A wish is the one thing on the scope ladder that picks its own rung, so
+       * a wish marked HIVE-Wide belongs on its owner's screen everywhere. The
+       * member card learned this on 2026-08-19 and the profile panel on
+       * 2026-08-28; the check-in is the third screen the fix had never reached.
+       * Nat, 2026-09-01: *"this is tricky, because it might be across hives,
+       * but i have my wishes marked as HIVE wide, so they should show up here,
+       * right?"* Right.
+       *
+       * A wish that stayed home stays home. That is the ladder doing its job,
+       * not a gap.
+       */
+      const { data, error } = await (supabase as any)
+        .from('wishes')
+        .select('id, description, community_id, community:communities(name)')
+        .eq('user_id', profile.id)
+        .eq('status', 'public')
+        .eq('is_active', true)
+        .or(`community_id.eq.${communityId},share_scope.eq.all_hives`)
+        .order('created_at', { ascending: false });
+      if (!live) return;
+      if (error) {
+        console.warn('Could not load your wishes for the check-in', error);
+        return;
+      }
+      setPickableWishes(
+        ((data ?? []) as any[])
+          .filter((wish) => !!String(wish.description ?? '').trim())
+          .map((wish) => ({
+            id: String(wish.id),
+            description: String(wish.description).trim(),
+            // Only says so when it came from somewhere else — a wish written
+            // here does not need telling you where you are standing.
+            fromHive: wish.community_id === communityId ? null : (wish.community?.name ?? null),
+          }))
+      );
+    })();
+    return () => { live = false; };
+  }, [isHdWish, profile?.id, communityId]);
   const miqEntries = question.id === 'q_quarter_miq'
     ? ([
         ['Experiences', (profile as any)?.miq_experiences],
@@ -535,11 +580,11 @@ export function SurveyQuestionField({
               </Text>
               <View style={{ gap: 6 }}>
                 {pickableWishes.map((wish) => {
-                  const description = String(wish.description).trim();
+                  const description = wish.description;
                   const chosen = textValue.trim() === description;
                   return (
                     <Pressable
-                      key={String(wish.id)}
+                      key={wish.id}
                       onPress={() => onChange(chosen ? '' : description)}
                       accessibilityRole="button"
                       accessibilityLabel={`Make this your focus: ${description}`}
@@ -555,6 +600,11 @@ export function SurveyQuestionField({
                       <Text style={{ fontFamily: chosen ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: chosen ? 'white' : '#5c5648', lineHeight: 19 }}>
                         {description}
                       </Text>
+                      {wish.fromHive ? (
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10.5, letterSpacing: 0.6, textTransform: 'uppercase', color: chosen ? 'rgba(255,255,255,0.85)' : '#9b8a6b', marginTop: 3 }}>
+                          from {wish.fromHive}
+                        </Text>
+                      ) : null}
                     </Pressable>
                   );
                 })}
