@@ -4007,6 +4007,53 @@ export default function MeetingHelperScreen() {
                   <Text style={sectionText}>{section.text}</Text>
                 </View>
               ))}
+              {/* Your own sheet, and only yours, offers the last step: the
+                  thing you wrote in the check-in becomes a real HD wish.
+                  Nat, 2026-08-31, on the HummDinger: it is *"the destination
+                  for everything"* — and the refine-with-Clive flow already
+                  existed on the profile and the tune-up, it had simply never
+                  been put on the slide where the room is looking at the words.
+
+                  Only yours, because Clive writes wishes under the name of
+                  whoever is holding the phone. A presenter tapping this on
+                  somebody else's sheet would file their wish as her own. What
+                  the room catches for you goes through the live note below,
+                  which already addresses the right person. */}
+              {member.id === profile?.id && (introWords || detailSections.length > 0) ? (
+                <Pressable
+                  onPress={() => {
+                    const words = [introWords, ...detailSections.map((section) => `${section.label}: ${section.text}`)]
+                      .filter(Boolean)
+                      .join('\n');
+                    setExpandedHummdingerId(null);
+                    router.push({
+                      pathname: '/(app)',
+                      params: {
+                        prefill: `This is what I wrote in my HIVE check-in:\n\n${words}\n\nHelp me turn it into one high-definition wish the HIVE can actually grant.`,
+                      },
+                    });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Refine what you wrote into a wish with Clive"
+                  style={({ pressed }) => ({
+                    alignSelf: 'flex-start',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: sz(8, 5),
+                    backgroundColor: tintWash(0.18),
+                    borderWidth: 1,
+                    borderColor: GOLD_SOFT,
+                    borderRadius: 999,
+                    paddingHorizontal: sz(20, 13),
+                    paddingVertical: sz(10, 7),
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 12), color: GOLD_DEEP }}>
+                    Make this a wish — refine it with Clive ✨
+                  </Text>
+                </Pressable>
+              ) : null}
               {assistsForMember.length > 0 ? (
                 <View style={{ gap: sz(6, 4) }}>
                   <Text style={sectionLabel}>Done for {getFirstName(member.name)} this cycle 💛</Text>
