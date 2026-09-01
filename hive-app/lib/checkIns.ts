@@ -757,8 +757,8 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
         'We are here to get each other somewhere. A HIVE is a small group that puts real weight behind what each of us is actually chasing — the goal, and the bigger thing underneath it.',
         'The way we do that is a High Definition wish: one ask, said clearly enough that somebody in this room could grant it. "Look at my landing page and tell me why nobody signs up" is an HD.',
         'Pick one below as your focus for the month. It goes on your profile and your member card, and it comes up on screen on the night as yours.',
-        'That is what a HummDinger session is. We take one HD at a time and talk it through — where are you, where do you want to be, what have you tried, where are you stuck — and find out who can help. Nothing to write for that part; it happens in the room.',
-        'Thursday opens with introductions, so bring thirty seconds on who you are and what you are building. Say it out loud rather than writing it here.',
+        'That is what a HummDinger session is. We take one HD at a time and talk it through — where are you, where do you want to be, what have you tried, where are you stuck — and find out who can help.',
+        'Thursday opens with introductions. We will go round, and then we get into the HummDingers.',
       ]),
       // The one that becomes a real `wishes` row on submit, filed as the
       // spotlight, so the bubble has an HD on it before anybody speaks.
