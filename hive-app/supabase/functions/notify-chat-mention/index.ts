@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { sendReachEmail, sendReachEmails, deepLink } from '../_shared/reachMail.ts';
 import { verifySupabaseJwt, isAuthError, isCommunityMember, isOwner } from '../_shared/auth.ts';
 
 // One person by id, or a whole group resolved here. The sender may stand
@@ -273,9 +274,31 @@ serve(async (req) => {
         }
       }
 
+      // Emails go to exactly the people whose row was just written. Somebody
+      // inside the dedupe window has already had their letter; two about one
+      // sentence teaches a person to ignore both.
+      const freshRecipients = recipientIds.filter((userId) => !alreadyTold.has(userId));
+      const { data: chatHive } = await supabaseAdmin
+        .from('communities')
+        .select('name, slug, accent_color')
+        .eq('id', targetCommunityId)
+        .maybeSingle();
+      const groupHive = chatHive as { name?: string; slug?: string; accent_color?: string } | null;
+      const emailsSent = await sendReachEmails(supabaseAdmin, freshRecipients, 'mention', {
+        subject: `${groupHive?.name ?? 'HIVE'} · ${title}`,
+        hiveName: groupHive?.name ?? 'Your HIVE',
+        hiveSlug: groupHive?.slug ?? null,
+        hiveAccent: groupHive?.accent_color ?? null,
+        heading: title,
+        where: room_name ? String(room_name) : 'In your messages',
+        said: preview,
+        buttonLabel: 'Go and see',
+        href: deepLink(`/messages?roomId=${encodeURIComponent(room_id)}`, targetCommunityId),
+      });
+
       // Pushes only for the people whose row was just written — a recipient in
       // the dedupe window was already pushed by whichever call wrote their row.
-      const pushTargets = recipientIds.filter((userId) => !alreadyTold.has(userId));
+      const pushTargets = freshRecipients;
       let pushesSent = 0;
       if (pushTargets.length > 0) {
         const { data: recipients } = await supabaseAdmin
@@ -308,6 +331,7 @@ serve(async (req) => {
         recipients: recipientIds.length,
         notifications_created: notificationsCreated,
         pushes_sent: pushesSent,
+        emails_sent: emailsSent,
       });
     }
 
@@ -373,7 +397,7 @@ serve(async (req) => {
     const roomLabel = room_name || 'chat';
     const title = `${sender.name} mentioned you in ${roomLabel}`;
 
-    const results: { push_sent: boolean; notification_created: boolean } = {
+    const results: { push_sent: boolean; notification_created: boolean; email_sent?: boolean } = {
       push_sent: false,
       notification_created: false,
     };
@@ -402,6 +426,27 @@ serve(async (req) => {
       results.notification_created = true;
     } else {
       console.error('Failed to create notification:', notifError);
+    }
+
+    {
+      const { data: soloHive } = await supabaseAdmin
+        .from('communities')
+        .select('name, slug, accent_color')
+        .eq('id', community_id)
+        .maybeSingle();
+      const hiveRow = soloHive as { name?: string; slug?: string; accent_color?: string } | null;
+      const emailResult = await sendReachEmail(supabaseAdmin, recipient_id, 'mention', {
+        subject: `${hiveRow?.name ?? 'HIVE'} · ${title}`,
+        hiveName: hiveRow?.name ?? 'Your HIVE',
+        hiveSlug: hiveRow?.slug ?? null,
+        hiveAccent: hiveRow?.accent_color ?? null,
+        heading: title,
+        where: room_name ? String(room_name) : 'In your messages',
+        said: preview,
+        buttonLabel: 'Go and see',
+        href: deepLink(`/messages?roomId=${encodeURIComponent(room_id)}`, community_id),
+      });
+      results.email_sent = emailResult.sent;
     }
 
     if (recipient.push_token) {

@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { sendReachEmail, deepLink } from '../_shared/reachMail.ts';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 
 interface NotifyDMPayload {
@@ -146,9 +147,10 @@ serve(async (req) => {
       return errorResponse('Recipient not found', 404);
     }
 
-    const results: { push_sent: boolean; notification_created: boolean } = {
+    const results: { push_sent: boolean; notification_created: boolean; email_sent: boolean } = {
       push_sent: false,
       notification_created: false,
+      email_sent: false,
     };
 
     // Create in-app notification
@@ -166,6 +168,60 @@ serve(async (req) => {
       results.notification_created = true;
     } else {
       console.error('Failed to create notification:', notifError);
+    }
+
+    /**
+     * One email per conversation, then quiet until they open it.
+     *
+     * Nat spotted this before it could bite: a back-and-forth of eleven lines
+     * would otherwise be eleven emails for one conversation. So the rule is
+     * exactly what a phone does — tell you once, go quiet, speak up again
+     * after you have looked. `email_notified_at` is when we last wrote; they
+     * have caught up when `last_read_at` has passed it.
+     *
+     * Boards deliberately do NOT work this way. A message thread nags until
+     * you open it; a board post is one event and gets one email.
+     */
+    const { data: seat } = await supabaseAdmin
+      .from('chat_room_members')
+      .select('last_read_at, email_notified_at, muted')
+      .eq('room_id', room_id)
+      .eq('user_id', recipient_id)
+      .maybeSingle();
+    const seatRow = seat as { last_read_at?: string | null; email_notified_at?: string | null; muted?: boolean } | null;
+    const told = seatRow?.email_notified_at ? Date.parse(seatRow.email_notified_at) : null;
+    const seen = seatRow?.last_read_at ? Date.parse(seatRow.last_read_at) : null;
+    // Never told about this one, or told and they have since caught up.
+    const mayTellAgain = !told || (!!seen && seen >= told);
+
+    if (mayTellAgain && !seatRow?.muted) {
+      const { data: dmHive } = await supabaseAdmin
+        .from('communities')
+        .select('name, slug, accent_color')
+        .eq('id', community_id)
+        .maybeSingle();
+      const hiveRow = dmHive as { name?: string; slug?: string; accent_color?: string } | null;
+      const emailResult = await sendReachEmail(supabaseAdmin, recipient_id, 'message', {
+        subject: `${hiveRow?.name ?? 'HIVE'} · ${sender.name} sent you a message`,
+        hiveName: hiveRow?.name ?? 'Your HIVE',
+        hiveSlug: hiveRow?.slug ?? null,
+        hiveAccent: hiveRow?.accent_color ?? null,
+        heading: `${sender.name} sent you a message`,
+        where: 'In your messages',
+        said: message_preview,
+        buttonLabel: 'Read it and reply',
+        href: deepLink(`/messages?roomId=${encodeURIComponent(room_id)}`, community_id),
+      });
+      results.email_sent = emailResult.sent;
+      // Stamped only when one actually went. Stamping on a refusal would make
+      // the next message look like a duplicate and silence the conversation.
+      if (emailResult.sent) {
+        await supabaseAdmin
+          .from('chat_room_members')
+          .update({ email_notified_at: new Date().toISOString() })
+          .eq('room_id', room_id)
+          .eq('user_id', recipient_id);
+      }
     }
 
     // Send push notification if recipient has a push token

@@ -66,10 +66,22 @@ const MUTED = '#8e7f6b';
  * members to "turn it off in Settings" and Settings had no such switch. A
  * promise pointing at nothing.
  *
- * Replies and @s are not here. Those arrive as a nudge on your phone —
- * notify-board-reply, notify-board-mention, notify-chat-mention and
- * notify-wish-mention all push, none of them mail — so the Notifications card
- * further down this page is the one that governs them.
+ * **Replies and @s joined the list on 2026-09-01.** They used to be absent
+ * with a note saying they "arrive as a nudge on your phone" — which was true
+ * of the code and false of the world. Expo push reaches an installed app, and
+ * HIVE is a browser tab, so those nudges had been landing where nobody was
+ * standing since June. Nat: *"we don't have any means of pushing. It's not an
+ * app. It's a web app... nobody knows any of those things. So I think an email
+ * could be nice, because then people could know to go back into the HIVE web
+ * app. And the usage has really fallen off."*
+ *
+ * The three new ones are email only, deliberately: *"the only thing we have
+ * available to ourselves right now is email... When it is an app, then they can
+ * toggle those on."* A push switch goes beside each the day there is an app to
+ * push to.
+ *
+ * `scripts/lint-reach-mail.mjs` holds the three halves together — column,
+ * sender, and a row on this page — so a switch can never govern nothing.
  */
 
 type EmailSetting = {
@@ -109,6 +121,21 @@ const EMAIL_SETTINGS: EmailSetting[] = [
     column: 'email_post_meeting_recap_enabled',
     label: 'Recap email if I miss a meeting',
     hint: 'After Wrap-Up confirms you were away, two direct ways to catch up: the sealed summary or Clive.',
+  },
+  {
+    column: 'email_mention_enabled',
+    label: 'When somebody writes my name',
+    hint: 'An @mention on a board, in a room, or on a wish — with what they said and a way straight to it.',
+  },
+  {
+    column: 'email_message_enabled',
+    label: 'When a message lands for me',
+    hint: 'One email per conversation, then quiet until you have opened it.',
+  },
+  {
+    column: 'email_board_reply_enabled',
+    label: 'When somebody replies to my post',
+    hint: 'A reply on something you put on a board.',
   },
 ];
 

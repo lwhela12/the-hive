@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { sendReachEmail, deepLink } from '../_shared/reachMail.ts';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 
 interface NotifyBoardReplyPayload {
@@ -153,9 +154,10 @@ serve(async (req) => {
       return errorResponse('Post author not found', 404);
     }
 
-    const results: { push_sent: boolean; notification_created: boolean } = {
+    const results: { push_sent: boolean; notification_created: boolean; email_sent: boolean } = {
       push_sent: false,
       notification_created: false,
+      email_sent: false,
     };
 
     // Create in-app notification
@@ -174,6 +176,39 @@ serve(async (req) => {
     } else {
       console.error('Failed to create notification:', notifError);
     }
+
+    /**
+     * And the email, which is the one that actually arrives.
+     *
+     * The Expo push above reaches an installed app; HIVE is a browser tab, so
+     * until there is an app to push to, this is the channel. Nat, 2026-09-01:
+     * *"an email could be nice, because then people could know to go back into
+     * the HIVE web app. And the usage has really fallen off."*
+     *
+     * A board post is one event and gets one email, however many replies it
+     * gathers — the same shape as a comment thread anywhere. The
+     * once-until-you-read rule belongs to messages, which nag.
+     *
+     * Sent AFTER the in-app row is written and never awaited into failure: a
+     * letter that cannot go must not take the notification down with it.
+     */
+    const { data: replyHive } = await supabaseAdmin
+      .from('communities')
+      .select('name, slug, accent_color')
+      .eq('id', community_id)
+      .maybeSingle();
+    const hiveRow = replyHive as { name?: string; slug?: string; accent_color?: string } | null;
+    const emailResult = await sendReachEmail(supabaseAdmin, post.author_id, 'boardReply', {
+      subject: `${hiveRow?.name ?? 'HIVE'} · ${replyAuthor.name} replied to your post`,
+      hiveName: hiveRow?.name ?? 'Your HIVE',
+      hiveSlug: hiveRow?.slug ?? null,
+      hiveAccent: hiveRow?.accent_color ?? null,
+      heading: `${replyAuthor.name} replied to your post`,
+      where: post.title ? String(post.title) : 'On the boards',
+      said: reply_preview,
+      buttonLabel: 'Read the reply',
+      href: deepLink(`/board?postId=${encodeURIComponent(post_id)}`, community_id),
+    });
 
     // Send push notification if post author has a push token
     if (postAuthor.push_token) {
@@ -194,6 +229,8 @@ serve(async (req) => {
         console.error('Push notification failed:', pushError);
       }
     }
+
+    results.email_sent = emailResult.sent;
 
     return jsonResponse(results);
 
