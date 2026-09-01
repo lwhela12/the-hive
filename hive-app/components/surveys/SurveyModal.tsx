@@ -410,6 +410,10 @@ export function SurveyModal({
      * never told their answers were lost when they were not.
      */
     const hdWish = typeof finalAnswers.q_hd_wish === 'string' ? finalAnswers.q_hd_wish.trim() : '';
+    // How far it travels, chosen on the question itself. The safe end of the
+    // ladder is the default, always: a wish only leaves its HIVE because
+    // somebody said so.
+    const hdReach = finalAnswers.q_hd_wish_reach === 'all_hives' ? 'all_hives' : 'hive';
     if (hdWish && viewerProfile?.id) {
       try {
         // The same reach the picker offers: this HIVE's wishes plus every one
@@ -425,7 +429,10 @@ export function SurveyModal({
           (wish: { description?: string }) => (wish.description ?? '').trim() === hdWish
         ) as { id: string } | undefined;
         if (already) {
-          await supabase.from('wishes').update({ is_spotlight: true }).eq('id', already.id);
+          await (supabase as any)
+            .from('wishes')
+            .update({ is_spotlight: true, share_scope: hdReach })
+            .eq('id', already.id);
         } else {
           await supabase.from('wishes').insert({
             user_id: viewerProfile.id,
@@ -435,6 +442,7 @@ export function SurveyModal({
             status: 'public',
             is_active: true,
             is_spotlight: true,
+            share_scope: hdReach,
             extracted_from: 'onboarding',
           } as never);
         }
@@ -597,6 +605,11 @@ export function SurveyModal({
       index={index}
       value={answers[q.id]}
       onChange={(value) => setAnswer(q.id, value)}
+      // A question that carries a second decision beside its answer — the HD
+      // wish and how far it travels — writes that one itself, under its own
+      // key, so it draft-saves and submits with everything else.
+      answers={answers}
+      onSetAnswer={setAnswer}
       communityId={survey.community_id}
     />
   );

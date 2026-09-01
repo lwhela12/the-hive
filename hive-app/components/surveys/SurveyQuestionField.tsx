@@ -6,6 +6,7 @@ import type { SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { supabase } from '../../lib/supabase';
+import { ReachPill } from '../ui/ReachPill';
 
 export function ScaleInput({ value, onChange }: { value: number | null; onChange: (v: number) => void }) {
   return (
@@ -379,6 +380,8 @@ export function SurveyQuestionField({
   onChange,
   hangEvents,
   communityId,
+  answers,
+  onSetAnswer,
 }: {
   question: SurveyQuestion;
   index: number;
@@ -386,6 +389,10 @@ export function SurveyQuestionField({
   onChange: (value: any) => void;
   hangEvents?: HangRecapEvent[];
   communityId?: string | null;
+  /** Every answer so far, for a question that carries more than one decision. */
+  answers?: Record<string, any>;
+  /** Write an answer under a key other than this question's own. */
+  onSetAnswer?: (id: string, value: any) => void;
 }) {
   const textValue = typeof value === 'string' ? value : '';
 
@@ -393,7 +400,7 @@ export function SurveyQuestionField({
   // "peek at your profile". Nat, 2026-08-13: "if you tell someone 'leave
   // this screen, navigate to this other screen & come back', it'll never
   // work. Ever."
-  const { profile } = useAuth();
+  const { profile, community } = useAuth();
   const router = useRouter();
   const [miqLaterDismissed, setMiqLaterDismissed] = useState(false);
   /**
@@ -406,8 +413,9 @@ export function SurveyQuestionField({
    * picker starts earning its keep from the second meeting on.
    */
   const isHdWish = question.id === 'q_hd_wish';
+  const hdReach: 'hive' | 'all_hives' = answers?.q_hd_wish_reach === 'all_hives' ? 'all_hives' : 'hive';
   const [pickableWishes, setPickableWishes] = useState<
-    { id: string; description: string; fromHive: string | null }[]
+    { id: string; description: string; fromHive: string | null; reach: 'hive' | 'all_hives' }[]
   >([]);
   useEffect(() => {
     if (!isHdWish || !profile?.id || !communityId) return;
@@ -430,7 +438,7 @@ export function SurveyQuestionField({
        */
       const { data, error } = await (supabase as any)
         .from('wishes')
-        .select('id, description, community_id, community:communities(name)')
+        .select('id, description, share_scope, community_id, community:communities(name)')
         .eq('user_id', profile.id)
         .eq('status', 'public')
         .eq('is_active', true)
@@ -450,6 +458,7 @@ export function SurveyQuestionField({
             // Only says so when it came from somewhere else — a wish written
             // here does not need telling you where you are standing.
             fromHive: wish.community_id === communityId ? null : (wish.community?.name ?? null),
+            reach: (wish.share_scope === 'all_hives' ? 'all_hives' : 'hive') as 'hive' | 'all_hives',
           }))
       );
     })();
@@ -585,7 +594,13 @@ export function SurveyQuestionField({
                   return (
                     <Pressable
                       key={wish.id}
-                      onPress={() => onChange(chosen ? '' : description)}
+                      onPress={() => {
+                        onChange(chosen ? '' : description);
+                        // A wish you already have arrives with its own reach.
+                        // Without this, picking a HIVE-Wide wish and pressing
+                        // submit would quietly pull it back home.
+                        if (!chosen) onSetAnswer?.('q_hd_wish_reach', wish.reach);
+                      }}
                       accessibilityRole="button"
                       accessibilityLabel={`Make this your focus: ${description}`}
                       style={{
@@ -611,9 +626,22 @@ export function SurveyQuestionField({
               </View>
             </>
           ) : null}
+          {/* Nat, 2026-09-01, opening her own profile mid-check-in and finding
+              HD Wishes (0): *"i think then maybe the survey should say
+              something like, looks like you dont have one yet, would you like
+              to write one now or refine with clive."* A picker with nothing in
+              it explains nothing; the same space can say where you are and
+              offer the two ways forward. */}
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a5a16', lineHeight: 18 }}>
-            {pickableWishes.length > 0 ? 'Or make a new one' : 'Not sure how to word it?'}
+            {pickableWishes.length > 0
+              ? 'Or make a new one'
+              : 'This will be your first HD wish'}
           </Text>
+          {pickableWishes.length === 0 ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 19 }}>
+              Write it in the box below, or let Clive ask you the questions that find it.
+            </Text>
+          ) : null}
           <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
             <Pressable
               onPress={() => router.push({
@@ -632,6 +660,22 @@ export function SurveyQuestionField({
               </Text>
             </Pressable>
           </View>
+          {/* How far it travels, decided here rather than hunted for on the
+              profile afterwards. THE pill, the same shape as everywhere else,
+              and it starts at the safe end of the ladder. A HIVE whose ceiling
+              stops at its own walls is never offered the choice. */}
+          {onSetAnswer && community?.max_share_scope !== 'hive' ? (
+            <View style={{ gap: 5, marginTop: 2 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a5a16', lineHeight: 18 }}>
+                Who sees it
+              </Text>
+              <ReachPill
+                reach={hdReach}
+                onToggle={() => onSetAnswer('q_hd_wish_reach', hdReach === 'all_hives' ? 'hive' : 'all_hives')}
+                communityId={communityId}
+              />
+            </View>
+          ) : null}
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: '#9b8a6b' }}>
             Your answers here are saved — you can hop to Clive and come right back. Whatever ends up in the box becomes your HD.
           </Text>
