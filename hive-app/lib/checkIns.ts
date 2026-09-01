@@ -722,7 +722,8 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
         'We are here to get each other somewhere. A HIVE is a small group that puts real weight behind what each of us is actually chasing — the goal, and the bigger thing underneath it.',
         'The way we do that is a High Definition wish: one ask, said clearly enough that somebody in this room could grant it. "Look at my landing page and tell me why nobody signs up" is an HD.',
         'Every meeting has a HummDinger session, where we take one person\'s HD at a time and work it together. The next few questions are the frame we use — where are you, where do you want to be, what have you tried, where are you stuck. Month to month it becomes POP: Progress, Obstacles, Priorities.',
-        'Whatever you write comes back on screen on the night, on your own card. Short answers are perfect.',
+        'Your HD goes straight onto your profile and your member card, and it comes up on screen on the night as yours to work.',
+        'The rest you can say out loud on Thursday — in OG HIVE most people keep the wish written down and talk the rest through in the room. Write as little as you like.',
       ]),
       // Becomes the intro bubble on the HummDinger slide, word for word, so
       // the first thing the room sees about you is the thing you are making.
