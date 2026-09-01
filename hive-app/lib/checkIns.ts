@@ -639,6 +639,101 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
       q('q_biggest_question', "Your biggest question right now — ask it here and we'll answer it in the room."),
     ],
   },
+  /**
+   * Tech HIVE's first night, rebuilt on 2026-09-01.
+   *
+   * The version this replaced asked twelve questions and only four of them
+   * reached the room. Nat stopped the send over it: *"where do those all go?
+   * are they all populating on the meeting helper? cos remember our strict
+   * rule: we dont ask questions unless we're doing something with the
+   * answers."* Eight were readable in Admin and nowhere else, and two made a
+   * promise in their own wording that nothing kept.
+   *
+   * Then she named what this actually is: *"maybe the first meeting survey
+   * walks you through filling out your profile and stuff?"* It is ONBOARDING.
+   * It fills your honeycomb, it seeds your HummDinger, and it votes on how the
+   * HIVE runs — and every answer becomes a THING on the night, never a wall of
+   * quotes and never a summary.
+   *
+   * Where each one lands, which is the only reason each one is here:
+   *
+   * | question | where it shows up |
+   * |---|---|
+   * | q_attendance | the Arrival Board, and the sealed summary |
+   * | q_building | your 30-second intro bubble on the HummDinger |
+   * | q_pop_progress / _obstacles / _priorities | your HummDinger sheet, under the HD legend the slide already prints |
+   * | q_meeting_day | a percentage on the Plan slide's HIVE Meeting card |
+   * | q_hive_help | a percentage on the Plan slide's HIVE Help card |
+   * | q_networking | the events box under the Plan cards |
+   * | q_honey_pot / q_honey_pot_for | the two vote bars on the Honey Pot slide |
+   * | q_energy_level | the energy dots on your arrival card |
+   * | q_hard_out | your arrival card, and the summary |
+   *
+   * **The choice options here are copied verbatim from the deck.** The deck
+   * counts an answer by matching its text, so a comma or a straight quote in
+   * the wrong place splits one vote into two. `scripts/lint-tech-check-in.mjs`
+   * compares the two files character by character and fails the build if they
+   * ever drift.
+   *
+   * Cut, deliberately: `q_who_can_know` (a Production question — that HIVE is
+   * building a show in public, this one is not), `q_plate` (energy already
+   * asks it), `q_cadence` + `q_when` (replaced by the day vote, which comes
+   * back as a percentage instead of prose), `q_want` + `q_stuck` +
+   * `q_biggest_question` (they are the POP block now, on the member's own
+   * bubble — Nat, 2026-08-31), and `q_learned`, which said its answer could go
+   * "straight on the Things We Learned board" while nothing posted it. That
+   * one comes back the day it does.
+   */
+  tech: {
+    title: 'Before our first meeting',
+    description:
+      'Thursday September 3rd, 5–7pm, on Google Meet — our first Tech HIVE. What you write here fills your spot in the room: your intro, what you are working on, and how we run this thing. Short answers are perfect, and blanks are completely fine.',
+    questions: [
+      choice('q_attendance', 'Will we see you Thursday?', [
+        "💻 I'll be on the call",
+        "🐝 Can't make this one — but I still want to be in the group",
+        '🤔 Not sure yet',
+      ]),
+      // Becomes the intro bubble on the HummDinger slide, word for word, so
+      // the first thing the room sees about you is the thing you are making.
+      q('q_building', 'What are you building right now? One line is plenty — it becomes your 30-second intro.'),
+      // The HummDinger's own legend, in the order the slide prints it:
+      // where are you · what have you tried · where are you stuck · what next.
+      q('q_pop_progress', 'What have you tried so far?'),
+      q('q_pop_obstacles', 'Where are you stuck? This is the bit the room is for.'),
+      q('q_pop_priorities', "What are you focused on next, and how could this room help?"),
+      choice('q_meeting_day', 'Which evening suits you best for our monthly call?', [
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'A weekend',
+      ]),
+      choice('q_hive_help', 'Some HIVEs pick one small act of kindness to do together each month. Want one here?', [
+        'Yes — I’m in',
+        'Show me what it looks like',
+        'Let’s leave it for now',
+      ]),
+      q('q_networking', 'Any tech events or meetups on your radar we could go to together?', 'short'),
+      choice(
+        'q_honey_pot',
+        'Some HIVEs keep a Honey Pot and some do not. OG HIVE’s is $25 a quarter per member, spent however the HIVE decides — hoodies this fall, maybe a Bumblebee Ball to close the year. Want one here?',
+        [
+          'Yes — count me in',
+          'Maybe — talk me through it',
+          'Let’s leave it for now',
+        ],
+      ),
+      choice('q_honey_pot_for', 'If we had one, what should it go toward first?', [
+        'Tech HIVE hoodies',
+        'A Bumblebee Ball',
+        'Tools or subscriptions we all use',
+        'I have another idea — I’ll bring it Thursday',
+      ]),
+      { id: 'q_energy_level', text: 'Energy: what is your energy level right now?', type: 'scale', required: false },
+      { ...PERSONAL_HARD_OUT_QUESTION },
+    ],
+  },
 };
 
 /** The title a NEW pre-meeting occurrence is launched under. */
