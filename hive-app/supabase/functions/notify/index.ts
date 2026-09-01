@@ -249,10 +249,19 @@ serve(async (req) => {
 
     const emailResults = await Promise.all(
       users
-        .filter(
-          (user: { email?: string; preferred_contact?: string }) =>
-            !!RESEND_API_KEY && user.preferred_contact === 'email' && !!user.email
-        )
+        /**
+         * `preferred_contact` is gone (2026-09-01). It offered Email, Phone and
+         * Text on the profile, and the app has never had a phone or a text
+         * channel — so the six people who picked Text had quietly opted
+         * themselves out of every email this function would ever send, and
+         * nothing on screen said so. Nat: *"this 'preferred contact method' is
+         * silly, because we dont have those options."*
+         *
+         * The column still exists and nothing reads it. Do not gate mail on it
+         * again: the real per-kind email switches are the work that replaces
+         * it, and a switch has to be one somebody set on purpose.
+         */
+        .filter((user: { email?: string }) => !!RESEND_API_KEY && !!user.email)
         .map((user: { id: string; email: string }) =>
           fetch('https://api.resend.com/emails', {
             method: 'POST',

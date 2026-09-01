@@ -669,8 +669,15 @@ export function SurveyQuestionField({
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a5a16', lineHeight: 18 }}>
                 Who sees it
               </Text>
+              {/* The same pill the profile wears, at the same size. Nat,
+                  2026-09-01: *"i think we need every toggle to look the same."*
+                  It was drawing at 'sm' beside a full-width question, which
+                  read as a different control rather than the one she already
+                  knows. Her own rule, from the day this component was made:
+                  one toggle, one pill, one shape everywhere. */}
               <ReachPill
                 reach={hdReach}
+                size="md"
                 onToggle={() => onSetAnswer('q_hd_wish_reach', hdReach === 'all_hives' ? 'hive' : 'all_hives')}
                 communityId={communityId}
               />

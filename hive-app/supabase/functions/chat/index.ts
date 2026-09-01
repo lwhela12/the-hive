@@ -492,7 +492,6 @@ const tools: Anthropic.Tool[] = [
         name: { type: "string", description: "User's name (only if they want to correct it)" },
         birthday: { type: "string", description: "User's birthday in YYYY-MM-DD format" },
         phone: { type: "string", description: "User's phone number" },
-        preferred_contact: { type: "string", description: "Preferred contact method: 'email' or 'phone'" },
       }
     }
   },
@@ -1837,17 +1836,15 @@ serve(async (req) => {
           }
 
           case 'update_profile': {
-            const { name, birthday, phone, preferred_contact } = toolUse.input as {
+            const { name, birthday, phone } = toolUse.input as {
               name?: string;
               birthday?: string;
               phone?: string;
-              preferred_contact?: string;
             };
             const updates: Record<string, unknown> = {};
             if (name) updates.name = name;
             if (birthday) updates.birthday = birthday;
             if (phone) updates.phone = phone;
-            if (preferred_contact) updates.preferred_contact = preferred_contact;
 
             if (Object.keys(updates).length > 0) {
               const { error } = await supabaseClient

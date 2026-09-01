@@ -694,7 +694,6 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
    * | question | where it shows up |
    * |---|---|
    * | q_attendance | the Arrival Board, and the sealed summary |
-   * | q_building | your 30-second intro bubble on the HummDinger |
    * | q_hd_wish | a real `wishes` row, filed as your spotlight — your profile, your member card, and "This month's HD" on your bubble |
    * | q_meeting_day | a percentage on the Plan slide's HIVE Meeting card |
    * | q_hive_help | a percentage on the Plan slide's HIVE Help card |
@@ -715,6 +714,14 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
    * back as a percentage instead of prose), and `q_learned`, which said its
    * answer could go "straight on the Things We Learned board" while nothing
    * posted it. That one comes back the day it does.
+   *
+   * **And `q_building`.** It fed the intro bubble, and Nat cut it the same
+   * afternoon: *"I think we should just say that we'll do intro's. Or i can
+   * just tell everyone to give us a 30sec. elevator pitch of who they are
+   * before going into their HD; i dont think you need to write down who you
+   * are? we all know that answer."* The bubble already falls back to
+   * "introduce yourself — 30 seconds" with nothing written, which is exactly
+   * the prompt she wants on screen while somebody talks.
    *
    * **And the POP questions, which is the important one.** `q_pop_progress`,
    * `q_pop_obstacles` and `q_pop_priorities` were in here for a day, one box
@@ -751,10 +758,8 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
         'The way we do that is a High Definition wish: one ask, said clearly enough that somebody in this room could grant it. "Look at my landing page and tell me why nobody signs up" is an HD.',
         'Pick one below as your focus for the month. It goes on your profile and your member card, and it comes up on screen on the night as yours.',
         'That is what a HummDinger session is. We take one HD at a time and talk it through — where are you, where do you want to be, what have you tried, where are you stuck — and find out who can help. Nothing to write for that part; it happens in the room.',
+        'Thursday opens with introductions, so bring thirty seconds on who you are and what you are building. Say it out loud rather than writing it here.',
       ]),
-      // Becomes the intro bubble on the HummDinger slide, word for word, so
-      // the first thing the room sees about you is the thing you are making.
-      q('q_building', 'What are you building right now? One line is plenty — it becomes your 30-second intro.'),
       // The one that becomes a real `wishes` row on submit, filed as the
       // spotlight, so the bubble has an HD on it before anybody speaks.
       q('q_hd_wish', 'Your High Definition wish — the one you want this room working on this month.'),

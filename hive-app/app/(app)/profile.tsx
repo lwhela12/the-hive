@@ -54,7 +54,6 @@ import { FIELD_LOOK } from '../../components/ui/Input';
 import { confirmAction } from '../../lib/showAlert';
 import { isSurveyOnHomeToday, getSeasonCheckInKind, SEASON_CHECK_IN_EMOJI } from '../../lib/checkIns';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
-const CONTACT_OPTIONS = ['email', 'phone', 'text'] as const;
 
 /**
  * The hairline every field in the app wears — the same value `ComposerBar` uses.
@@ -236,7 +235,7 @@ type ProfileFormDraftFields = {
   birthday: string;
   occupation: string;
   profileTitle: string;
-  preferredContact: string;
+  currentlyReading: string;
   bio: string;
   currentProject: string;
   hometown: string;
@@ -575,7 +574,7 @@ export default function ProfileScreen() {
   const [editBirthdayInvitedScope, setEditBirthdayInvitedScope] = useState<EventAudience>('members');
   const [editOccupation, setEditOccupation] = useState('');
   const [editProfileTitle, setEditProfileTitle] = useState('');
-  const [editPreferredContact, setEditPreferredContact] = useState('email');
+  const [editCurrentlyReading, setEditCurrentlyReading] = useState('');
   const [editBio, setEditBio] = useState('');
   const [editCurrentProject, setEditCurrentProject] = useState('');
   const [editHometown, setEditHometown] = useState('');
@@ -823,7 +822,7 @@ export default function ProfileScreen() {
       setEditBirthdayInvitedScope((((profile as any).birthday_invited_scope as EventAudience) || 'members'));
       setEditOccupation(profile.occupation || '');
       setEditProfileTitle((card as any).profile_title || '');
-      setEditPreferredContact(profile.preferred_contact || 'email');
+      setEditCurrentlyReading((profile as any).currently_reading || '');
       setEditBio((card as any).bio || '');
       setEditCurrentProject((card as any).current_project || '');
       setEditHometown((card as any).hometown || '');
@@ -848,7 +847,7 @@ export default function ProfileScreen() {
       setEditBirthdayInvitedScope((((profile as any).birthday_invited_scope as EventAudience) || 'members'));
       setEditOccupation(profile.occupation || '');
       setEditProfileTitle((card as any).profile_title || '');
-      setEditPreferredContact(profile.preferred_contact || 'email');
+      setEditCurrentlyReading((profile as any).currently_reading || '');
       setEditBio((card as any).bio || '');
       setEditCurrentProject((card as any).current_project || '');
       setEditHometown((card as any).hometown || '');
@@ -870,7 +869,7 @@ export default function ProfileScreen() {
     birthday: editBirthday,
     occupation: editOccupation,
     profileTitle: editProfileTitle,
-    preferredContact: editPreferredContact,
+    currentlyReading: editCurrentlyReading,
     bio: editBio,
     currentProject: editCurrentProject,
     hometown: editHometown,
@@ -891,7 +890,7 @@ export default function ProfileScreen() {
     setEditBirthday(fields.birthday);
     setEditOccupation(fields.occupation);
     setEditProfileTitle(fields.profileTitle);
-    setEditPreferredContact(fields.preferredContact);
+    setEditCurrentlyReading(fields.currentlyReading);
     setEditBio(fields.bio);
     setEditCurrentProject(fields.currentProject);
     setEditHometown(fields.hometown);
@@ -1051,7 +1050,7 @@ export default function ProfileScreen() {
     editName,
     editOccupation,
     editPhone,
-    editPreferredContact,
+    editCurrentlyReading,
     editProfileTitle,
     isEditing,
     profile?.id,
@@ -1111,7 +1110,11 @@ export default function ProfileScreen() {
         birthday_visibility: editBirthdayVisibility,
         birthday_invited_scope: editBirthdayInvitedScope,
         occupation: editOccupation.trim() || null,
-        preferred_contact: editPreferredContact,
+        // The book lives on `profiles`, not on the per-HIVE card, so it reads
+        // the same wherever you are. The monthly check-in still fills it in;
+        // this is the second door, for the eleven months you finish a book
+        // between check-ins.
+        currently_reading: editCurrentlyReading.trim() || null,
         // How far each piece goes (migration 190, vestigial). Only the pieces
         // that still exist are kept: deleting your third fun fact takes its
         // reach with it.
@@ -3124,61 +3127,39 @@ export default function ProfileScreen() {
               )}
             </View>
 
-            {/* Currently reading — a cell you fill in somewhere else.
-                It comes from the monthly check-in rather than from this form,
-                because it changes too often to be something you'd remember to
-                come back and edit. It is still a cell on your card, so it still
-                gets to say how far it goes; there is just nothing to type. */}
-            <View className="p-4 border-b border-cream">
-              {pieceLabelRow(PIECE_KEYS.reading, 'Currently reading')}
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
-                {(profile as any).currently_reading || 'Not set'}
-              </Text>
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-1">
-                This one comes from your monthly check-in.
-              </Text>
-            </View>
-
-            {/* Preferred Contact Method */}
+            {/* Currently reading — filled in by the monthly check-in AND
+                editable here.
+                It was read-only until 2026-09-01 on the theory that it changes
+                too often to be worth a form field. Nat, finding she had
+                finished the book: *"i also don't like that i cant update the
+                book i'm reading."* A cell on your own card that you cannot
+                write in is a cell that goes stale between check-ins, and the
+                check-in is monthly. Both doors now. */}
             <View className="p-4">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-2">
-                Preferred Contact Method
-              </Text>
+              {pieceLabelRow(PIECE_KEYS.reading, 'Currently reading')}
               {isEditing ? (
-                <View className="flex-row flex-wrap gap-2">
-                  {CONTACT_OPTIONS.map((option) => (
-                    <Pressable
-                      key={option}
-                      onPress={() => setEditPreferredContact(option)}
-                      className={`px-4 py-2 rounded-full ${
-                        editPreferredContact === option
-                          ? 'bg-gold'
-                          : 'bg-cream'
-                      }`} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                    >
-                      <Text
-                        style={{ fontFamily: 'Lato_700Bold' }}
-                        className={`capitalize ${
-                          editPreferredContact === option
-                            ? 'text-white'
-                            : 'text-charcoal'
-                        }`}
-                      >
-                        {option}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
+                <ComposerBar
+                  tone="light"
+                  variant="form"
+                  value={editCurrentlyReading}
+                  onChangeText={(next) => setEditCurrentlyReading(
+                    typeof next === 'function' ? next(editCurrentlyReading) : next
+                  )}
+                  placeholder="What's on the nightstand?"
+                  submitOnEnterKey={false}
+                />
               ) : (
-                <View className="flex-row">
-                  <View className="bg-gold-light px-3 py-1 rounded-full">
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold capitalize">
-                      {profile.preferred_contact || 'email'}
-                    </Text>
-                  </View>
-                </View>
+                <>
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                    {(profile as any).currently_reading || 'Not set'}
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-1">
+                    Your monthly check-in fills this in too.
+                  </Text>
+                </>
               )}
             </View>
+
           </View>
           )}
         </View>
