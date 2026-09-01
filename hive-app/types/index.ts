@@ -829,8 +829,13 @@ export interface SurveyQuestion extends Record<string, unknown> {
   // with a 1-5 score. Both have been rendered by SurveyQuestionField and stored
   // on live surveys since long before this list caught up with them, and
   // `lib/hooks/useSurveys.ts` has always named all six.
-  type: 'short' | 'long' | 'scale' | 'choice' | 'hangs' | 'focus';
+  // 'note' asks nothing. It is a block of explanation standing between
+  // questions — what a HIVE is for, what an HD wish is — and it stores no
+  // answer, takes no number, and can never be required.
+  type: 'short' | 'long' | 'scale' | 'choice' | 'hangs' | 'focus' | 'note';
   options?: string[];
+  /** A 'note' block's paragraphs. */
+  body?: string[];
   required: boolean;
 }
 

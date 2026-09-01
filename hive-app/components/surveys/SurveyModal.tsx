@@ -393,12 +393,58 @@ export function SurveyModal({
         normalizeCarryForwardResponse(finalAnswers[CARRY_FORWARD_ANSWER_KEY]),
       );
     }
+    /**
+     * The HD wish becomes a real wish, not a sentence in a survey.
+     *
+     * Nat's rule for the whole check-in is that an answer has to become a
+     * THING. "This month's HD" on the HummDinger bubble reads the `wishes`
+     * table, so an HD typed into a box and left there would show the room a
+     * blank card over a member who had already written the answer.
+     *
+     * It is filed as the spotlight — that is what "your focus" means — and
+     * only when it is new. Picking one you already have selects it; it does
+     * not make a second copy of it.
+     *
+     * Everything above this line is already saved. A wish that fails to file
+     * costs a warning and nothing else: the check-in is in, and the member is
+     * never told their answers were lost when they were not.
+     */
+    const hdWish = typeof finalAnswers.q_hd_wish === 'string' ? finalAnswers.q_hd_wish.trim() : '';
+    if (hdWish && viewerProfile?.id) {
+      try {
+        const { data: existing } = await supabase
+          .from('wishes')
+          .select('id, description')
+          .eq('user_id', viewerProfile.id)
+          .eq('community_id', survey.community_id)
+          .eq('is_active', true);
+        const already = (existing ?? []).find(
+          (wish: { description?: string }) => (wish.description ?? '').trim() === hdWish
+        ) as { id: string } | undefined;
+        if (already) {
+          await supabase.from('wishes').update({ is_spotlight: true }).eq('id', already.id);
+        } else {
+          await supabase.from('wishes').insert({
+            user_id: viewerProfile.id,
+            community_id: survey.community_id,
+            description: hdWish,
+            raw_input: hdWish,
+            status: 'public',
+            is_active: true,
+            is_spotlight: true,
+            extracted_from: 'onboarding',
+          } as never);
+        }
+      } catch (wishError) {
+        console.warn('Could not file the HD wish from the check-in', wishError);
+      }
+    }
     setSubmitting(false);
     AsyncStorage.removeItem(DRAFT_KEY(survey.id)).catch(() => {});
     setSubmitted(true);
   };
 
-  const answeredCount = survey.questions.filter(q => answers[q.id] !== undefined && answers[q.id] !== '').length;
+  const answeredCount = survey.questions.filter(q => q.type !== 'note' && answers[q.id] !== undefined && answers[q.id] !== '').length;
   const hasDraft = answeredCount > 0;
 
   const updateCarryForwardItem = (
@@ -693,7 +739,15 @@ export function SurveyModal({
 
               {draftLoaded && renderCarryForwardContext()}
 
-              {draftLoaded && survey.questions.map((q, i) => renderQuestion(q, i))}
+              {/* A note block explains; it does not ask. So the numbers count
+                  only the questions, and a person who reads "3 of 12" and then
+                  counts the boxes finds twelve boxes. */}
+              {draftLoaded && (() => {
+                let asked = 0;
+                return survey.questions.map((q) =>
+                  renderQuestion(q, q.type === 'note' ? -1 : asked++)
+                );
+              })()}
 
               {error && (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#ef4444', marginBottom: 14 }}>{error}</Text>

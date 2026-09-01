@@ -586,6 +586,29 @@ export type PreMeetingCheckIn = {
   questions: SurveyQuestion[];
 };
 
+/**
+ * A block that explains instead of asking.
+ *
+ * Nat, 2026-09-01, scrolling Tech's rebuilt check-in and finding four prose
+ * boxes in a row: *"I want it more obvious, like, explaining how the HIVE's
+ * work. Like saying that the purpose of the HIVE is helping all of us achieve
+ * our goals/higher purpose. Explain what a Highdefinition wish is & that we go
+ * over them in our 'hummdinger sessions' and we use formulas like POP &
+ * where are you where do you want to be/where are you stuck/what have you
+ * tried to help aid you in your quest."*
+ *
+ * A question with no context is a chore. The same question under a paragraph
+ * saying what it is for is a conversation. It stores no answer and takes no
+ * number.
+ */
+const note = (id: string, text: string, body: string[]): SurveyQuestion => ({
+  id,
+  text,
+  type: 'note',
+  body,
+  required: false,
+});
+
 const choice = (id: string, text: string, options: string[]): SurveyQuestion => ({
   id,
   text,
@@ -661,6 +684,7 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
    * |---|---|
    * | q_attendance | the Arrival Board, and the sealed summary |
    * | q_building | your 30-second intro bubble on the HummDinger |
+   * | q_hd_wish | a real `wishes` row, filed as your spotlight, so "This month's HD" is on your bubble before you speak |
    * | q_pop_progress / _obstacles / _priorities | your HummDinger sheet, under the HD legend the slide already prints |
    * | q_meeting_day | a percentage on the Plan slide's HIVE Meeting card |
    * | q_hive_help | a percentage on the Plan slide's HIVE Help card |
@@ -694,14 +718,24 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
         "🐝 Can't make this one — but I still want to be in the group",
         '🤔 Not sure yet',
       ]),
+      note('note_what_a_hive_is', 'What a HIVE is for', [
+        'We are here to get each other somewhere. A HIVE is a small group that puts real weight behind what each of us is actually chasing — the goal, and the bigger thing underneath it.',
+        'The way we do that is a High Definition wish: one ask, said clearly enough that somebody in this room could grant it. "Look at my landing page and tell me why nobody signs up" is an HD.',
+        'Every meeting has a HummDinger session, where we take one person\'s HD at a time and work it together. The next few questions are the frame we use — where are you, where do you want to be, what have you tried, where are you stuck. Month to month it becomes POP: Progress, Obstacles, Priorities.',
+        'Whatever you write comes back on screen on the night, on your own card. Short answers are perfect.',
+      ]),
       // Becomes the intro bubble on the HummDinger slide, word for word, so
       // the first thing the room sees about you is the thing you are making.
-      q('q_building', 'What are you building right now? One line is plenty — it becomes your 30-second intro.'),
-      // The HummDinger's own legend, in the order the slide prints it:
-      // where are you · what have you tried · where are you stuck · what next.
+      q('q_building', 'Where are you? What are you building right now — one line is plenty, and it becomes your 30-second intro.'),
+      // The one that becomes a real `wishes` row on submit, filed as the
+      // spotlight, so the bubble has an HD on it before anybody speaks.
+      q('q_hd_wish', 'Where do you want to be? This is your High Definition wish — one thing this room could actually help you get to.'),
       q('q_pop_progress', 'What have you tried so far?'),
       q('q_pop_obstacles', 'Where are you stuck? This is the bit the room is for.'),
-      q('q_pop_priorities', "What are you focused on next, and how could this room help?"),
+      q('q_pop_priorities', 'What is your focus for the next month, and what could we do to help?'),
+      note('note_how_we_run', 'Now — how we run this', [
+        'Tech HIVE is new, so the rest is ours to set. Your answers come back as the actual numbers on screen Thursday, and we decide from there.',
+      ]),
       choice('q_meeting_day', 'Which evening suits you best for our monthly call?', [
         'Monday',
         'Tuesday',

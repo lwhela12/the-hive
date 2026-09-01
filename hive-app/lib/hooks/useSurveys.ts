@@ -8,9 +8,14 @@ export interface SurveyQuestion {
   // 'hangs' auto-populates the month's hang events as went/didn't-go chips
   // plus a thoughts box; the answer is stored as plain text.
   // 'focus' does the same for the month's HIVE Help focus: did it + a 1-5
-  // score, so the deck can average it instead of only quoting paragraphs
-  type: 'short' | 'long' | 'scale' | 'choice' | 'hangs' | 'focus';
+  // score, so the deck can average it instead of only quoting paragraphs.
+  // 'note' asks nothing — it explains the questions around it, and stores no
+  // answer. Nat, 2026-09-01, looking at four blank boxes in a row: *"I want it
+  // more obvious, like, explaining how the HIVE's work."*
+  type: 'short' | 'long' | 'scale' | 'choice' | 'hangs' | 'focus' | 'note';
   options?: string[];
+  /** A 'note' block's paragraphs. Nothing else reads it. */
+  body?: string[];
   required: boolean;
 }
 

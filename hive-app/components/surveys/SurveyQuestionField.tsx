@@ -5,6 +5,7 @@ import { ComposerBar } from '../ui/ComposerBar';
 import type { SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useWishes } from '../../lib/hooks/useWishes';
 
 export function ScaleInput({ value, onChange }: { value: number | null; onChange: (v: number) => void }) {
   return (
@@ -395,6 +396,20 @@ export function SurveyQuestionField({
   const { profile } = useAuth();
   const router = useRouter();
   const [miqLaterDismissed, setMiqLaterDismissed] = useState(false);
+  /**
+   * Your own HD wishes, offered back to you inside the check-in.
+   *
+   * The same rule as the 3MIQ block above: never tell somebody to leave the
+   * screen, go and look something up, and come back. On a HIVE's first night
+   * this list is empty for everybody — nobody has made a wish yet — so the
+   * Clive door and the box beside it are what the room actually uses, and the
+   * picker starts earning its keep from the second meeting on.
+   */
+  const isHdWish = question.id === 'q_hd_wish';
+  const { wishes: ownWishes } = useWishes({ loadWishes: isHdWish });
+  const pickableWishes = isHdWish
+    ? ownWishes.filter((wish) => wish.is_active && wish.status !== 'fulfilled' && !!wish.description?.trim())
+    : [];
   const miqEntries = question.id === 'q_quarter_miq'
     ? ([
         ['Experiences', (profile as any)?.miq_experiences],
@@ -402,6 +417,46 @@ export function SurveyQuestionField({
         ['Contribution', (profile as any)?.miq_contribution],
       ] as const).filter(([, answer]) => typeof answer === 'string' && answer.trim().length > 0)
     : [];
+
+  /**
+   * A block that explains rather than asks.
+   *
+   * Nat, 2026-09-01, scrolling her own check-in: *"I want it more obvious,
+   * like, explaining how the HIVE's work. Like saying that the purpose of the
+   * HIVE is helping all of us achieve our goals/higher purpose. Explain what a
+   * High Definition wish is & that we go over them in our HummDinger
+   * sessions."* Four prose boxes in a row are four chores; the same four
+   * behind a paragraph saying what they are for are the shape of a
+   * conversation.
+   *
+   * It wears the HIVE's own tint, carries no number and no input, and stores
+   * nothing — so it can never be a question whose answer goes nowhere.
+   */
+  if (question.type === 'note') {
+    return (
+      <View
+        style={{
+          marginBottom: 24,
+          backgroundColor: '#fdf3dc',
+          borderWidth: 1,
+          borderColor: 'rgba(222,193,129,0.5)',
+          borderRadius: 14,
+          paddingHorizontal: 16,
+          paddingVertical: 14,
+          gap: 8,
+        }}
+      >
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#8a5a16', lineHeight: 22 }}>
+          {question.text}
+        </Text>
+        {(question.body ?? []).map((paragraph) => (
+          <Text key={paragraph} style={{ fontFamily: 'Lato_400Regular', fontSize: 13.5, color: '#5c5648', lineHeight: 20 }}>
+            {paragraph}
+          </Text>
+        ))}
+      </View>
+    );
+  }
 
   return (
     <View style={{ marginBottom: 24 }}>
@@ -468,6 +523,68 @@ export function SurveyQuestionField({
               </Text>
             </>
           )}
+        </View>
+      )}
+
+      {isHdWish && (
+        <View style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10, gap: 8 }}>
+          {pickableWishes.length > 0 ? (
+            <>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a5a16', lineHeight: 18 }}>
+                One you already have
+              </Text>
+              <View style={{ gap: 6 }}>
+                {pickableWishes.map((wish) => {
+                  const description = String(wish.description).trim();
+                  const chosen = textValue.trim() === description;
+                  return (
+                    <Pressable
+                      key={String(wish.id)}
+                      onPress={() => onChange(chosen ? '' : description)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Make this your focus: ${description}`}
+                      style={{
+                        backgroundColor: chosen ? '#bd9348' : '#fffdf5',
+                        borderWidth: 1,
+                        borderColor: chosen ? '#bd9348' : 'rgba(222,193,129,0.5)',
+                        borderRadius: 10,
+                        paddingVertical: 9,
+                        paddingHorizontal: 12,
+                      }}
+                    >
+                      <Text style={{ fontFamily: chosen ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: chosen ? 'white' : '#5c5648', lineHeight: 19 }}>
+                        {description}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          ) : null}
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a5a16', lineHeight: 18 }}>
+            {pickableWishes.length > 0 ? 'Or make a new one' : 'Not sure how to word it?'}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+            <Pressable
+              onPress={() => router.push({
+                pathname: '/(app)',
+                params: {
+                  prefill: textValue.trim()
+                    ? `Help me turn this into a High Definition wish for my HIVE — specific enough that somebody could actually grant it: "${textValue.trim()}"`
+                    : 'Help me find my High Definition wish for this HIVE. Ask me where I am, where I want to be, what I have tried and where I am stuck.',
+                },
+              })}
+              accessibilityRole="button"
+              style={{ backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14 }}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', fontSize: 13 }}>
+                Shape it with Clive ✨
+              </Text>
+            </Pressable>
+          </View>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: '#9b8a6b' }}>
+            Your answers here are saved — you can hop to Clive and come right back. Whatever ends up in the box becomes your HD.
+          </Text>
         </View>
       )}
 
