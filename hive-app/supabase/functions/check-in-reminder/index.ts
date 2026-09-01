@@ -8,6 +8,7 @@ import {
   QUARTERLY_CHECK_IN_PATTERN,
   END_OF_YEAR_CHECK_IN_PATTERN,
   PRE_MEETING_CHECK_IN_PATTERN,
+  FIRST_MEETING_CHECK_IN_PATTERN,
   END_OF_MONTH_CHECK_IN_PATTERN,
 } from '../_shared/checkInPatterns.ts';
 import {
@@ -527,6 +528,22 @@ function seasonEmailHtml(
    */
   hiveSlug?: string | null,
   hiveAccent?: string | null,
+  /**
+   * Whether this is the HIVE's FIRST meeting.
+   *
+   * "Before we meet" is written for a room that has met. On a first night it
+   * describes a rhythm nobody has been part of yet, and the check-in behind it
+   * is a different thing entirely: onboarding, not a status report. Nat,
+   * 2026-08-31: it *"walks you through filling out your profile and stuff"* —
+   * it fills your intro, it seeds your HummDinger, and it votes on how the
+   * HIVE will run.
+   *
+   * The letter that reached her inbox on 27 Aug promised "how often you want
+   * to meet, what day works, how you feel about a Honey Pot, and who is
+   * allowed to know" — three of those four are not questions any more. A
+   * letter is a promise about what is behind the button.
+   */
+  firstMeeting?: boolean,
 ): string {
   const name = escapeHtml(rawName);
   const mark = hiveMark(hiveSlug, hiveAccent);
@@ -584,10 +601,16 @@ function seasonEmailHtml(
     `;
   }
   if (kind === 'premeeting') {
-    const heading = touch === 'day_of' ? "It's today" : 'Before we meet';
-    const body = touch === 'day_of'
-      ? `We meet today and your answers aren't in yet — it takes about <strong>3 minutes</strong>, and it means we can spend the hour deciding together instead of asking each other questions.`
-      : `Our check-in is open — about <strong>3 minutes</strong>. How often you want to meet, what day works, how you feel about a Honey Pot, and who is allowed to know you are part of this. Answering beforehand means the meeting gets to decide. Short answers are perfect.`;
+    const heading = touch === 'day_of'
+      ? "It's today"
+      : firstMeeting ? 'Before our first meeting' : 'Before we meet';
+    const body = firstMeeting
+      ? (touch === 'day_of'
+          ? `We meet tonight and your answers aren't in yet — about <strong>3 minutes</strong>. It is what fills your spot in the room: your intro, what you are building, and your say in how we run this.`
+          : `The check-in is open — about <strong>3 minutes</strong>, and it sets up your spot in the room. Your intro, what you are building, where you are stuck, and your say in how we run this: the evening that suits you, whether we want a HIVE Help, and whether we keep a Honey Pot. Everything you write comes back on screen on the night. Short answers are perfect.`)
+      : (touch === 'day_of'
+          ? `We meet today and your answers aren't in yet — it takes about <strong>3 minutes</strong>, and it means we can spend the hour deciding together instead of asking each other questions.`
+          : `Our check-in is open — about <strong>3 minutes</strong>. Where your jobs got to, what is stuck, and how much you can take on. Answering beforehand means the meeting gets to decide. Short answers are perfect.`);
     return `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
         <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">${mark.emoji}</span></div>
@@ -676,13 +699,16 @@ function seasonSubject(
   /** The HIVE's slug, so its own emoji leads the subject line rather than
    *  Production's clapperboard (see `_shared/hiveMark.ts`). */
   hiveSlug?: string | null,
+  /** A first meeting cannot be announced as "before we meet". */
+  firstMeeting?: boolean,
 ): string {
   const from = `${shortHiveName(hiveName)} · `;
   const month = SHORT_MONTHS[fullMonth] ?? fullMonth;
   const emoji = hiveMark(hiveSlug).emoji;
   if (kind === 'premeeting') {
-    return touch === 'day_of'
-      ? `${emoji} ${from}We meet today — 3 minutes before we do`
+    if (touch === 'day_of') return `${emoji} ${from}We meet today — 3 minutes before we do`;
+    return firstMeeting
+      ? `${emoji} ${from}Our first meeting is ${month} ${day} — your check-in is open`
       : `${emoji} ${from}Before we meet on ${month} ${day} — your check-in is open`;
   }
   if (kind === 'endofmonth') {
@@ -1092,7 +1118,7 @@ serve(async (req) => {
         body: JSON.stringify({
           from: FROM_EMAIL,
           to: testEmail,
-          subject: `[Preview] ${seasonSubject(seasonKind, touch, kMonth, kDay, hiveName, hiveRow?.slug)}`,
+          subject: `[Preview] ${seasonSubject(seasonKind, touch, kMonth, kDay, hiveName, hiveRow?.slug, FIRST_MEETING_CHECK_IN_PATTERN.test(match.title || ''))}`,
           /**
            * A preview that renders a different letter than the send is not a
            * preview. The halfway left `seasonEmailHtml` on 2026-08-28 for OG's
@@ -1112,6 +1138,7 @@ serve(async (req) => {
                 // No "closes" and no month-end date — see the end-of-month branch.
                 `${hiveName} · ${kMonth} · preview sent ${new Date().toLocaleTimeString('en-US', { timeZone: PACIFIC_TZ, hour: 'numeric', minute: '2-digit' })}`,
                 hiveRow?.slug, hiveRow?.accent_color,
+                FIRST_MEETING_CHECK_IN_PATTERN.test(match.title || ''),
               ),
         }),
       });
@@ -1890,8 +1917,11 @@ serve(async (req) => {
           .maybeSingle();
         const seasonHiveRow = seasonHive as { name?: string; slug?: string; accent_color?: string } | null;
         const hiveName = seasonHiveRow?.name || 'Your HIVE';
+        // A first meeting cannot be announced as "before we meet", and the
+        // check-in behind it is onboarding rather than a status report.
+        const isFirstMeeting = FIRST_MEETING_CHECK_IN_PATTERN.test(survey.title || '');
         const emailSubject = approving?.subject
-          ?? seasonSubject(kind, touch, month, day, hiveName, seasonHiveRow?.slug);
+          ?? seasonSubject(kind, touch, month, day, hiveName, seasonHiveRow?.slug, isFirstMeeting);
         /**
          * **The halfway letter is OG's letter, not this loop's.**
          *
@@ -1928,6 +1958,7 @@ serve(async (req) => {
               // and never dates the end of the month (Nat, 2026-08-27).
               `${approving?.hiveName ?? hiveName} · ${month}`,
               seasonHiveRow?.slug, seasonHiveRow?.accent_color,
+              isFirstMeeting,
             ));
 
         // THE HOLD — same as the monthly loop. Nothing above this line has

@@ -38,6 +38,17 @@ export const END_OF_YEAR_CHECK_IN_PATTERN = /end[-\s]of[-\s]year\s+check-?in/i;
 export const PRE_MEETING_CHECK_IN_PATTERN = /before (our first meeting|we meet)/i;
 
 /**
+ * The first one a HIVE ever runs.
+ *
+ * A first-meeting check-in is not the same letter as a monthly one, and it
+ * cannot be: "before we meet" assumes we have met. Tech's is onboarding — it
+ * fills your intro, seeds your HummDinger and votes on how the HIVE will run —
+ * so the email that carries it says that, and says it once. Recognised by
+ * title, the way every other check-in is.
+ */
+export const FIRST_MEETING_CHECK_IN_PATTERN = /before our first meeting/i;
+
+/**
  * Production's end-of-month check-in. It is a "Halfway check-in" as of
  * 2026-08-15 — a gentle nudge and a newsletter ask, after the POP questions
  * moved to the pre-meeting deck where a meeting can actually use them. Both
