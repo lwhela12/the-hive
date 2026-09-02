@@ -217,15 +217,22 @@ function TopBox({ label, wide, children }: { label: string; wide: boolean; child
         // at the same width rather than reflowing the lot.
         flexGrow: 0,
         flexBasis: wide ? '48%' : 'auto',
-        // All of them the same height (Nat 2026-08-04: "why are these bottom
-        // boxes shorter than the top ones? they should all be equal"). A
-        // wrapping row sizes each ROW to its own tallest child, so a short
-        // second row sat shorter than a full first one. `alignItems: stretch`
-        // cannot fix that across a wrap — it only equalises within a row — so
-        // the boxes are given a floor instead, and the tallest content still
-        // grows past it. A shut box drops the floor, because the whole point of
-        // shutting one is to get the space back.
-        minHeight: open && wide ? 270 : undefined,
+        /**
+         * An open box is as tall as what is in it, and no taller.
+         *
+         * There used to be a 270-point floor here, from 2026-08-04: *"why are
+         * these bottom boxes shorter than the top ones? they should all be
+         * equal."* Back then every box held a list. It reads differently now
+         * that a box can hold one thing — Nat, 2026-09-01, looking at a single
+         * wish sitting at the top of a well: *"this is too ugly."*
+         *
+         * Same instinct both times, and the floor was the wrong tool for it.
+         * What she wanted in August was two boxes side by side looking like a
+         * PAIR; a fixed number gives that only while their contents happen to
+         * be that size, and turns into a hole the moment one of them is short.
+         * So the height comes from the content and the pairing comes from the
+         * shell they share.
+         */
       }}
     >
       {children}
