@@ -44,6 +44,19 @@ if (!buzzArchiveMigration.includes('HIVE members locate the Buzz archive')
 }
 
 /**
+ * The newsletter question ids are declared once, in the file that writes the
+ * check-ins, and read everywhere else.
+ *
+ * `lib/checkIns.ts` says it out loud: *"an id on this list is a question with a
+ * destination and an id off it is busy work."* A second copy in the panel that
+ * SHOWS the answers is how a HIVE ends up being asked a question whose answer
+ * nobody ever sees.
+ */
+if (!panels.includes('NEWSLETTER_ANSWER_IDS,') || /const NEWSLETTER_ANSWER_IDS\s*=/.test(panels)) {
+  failures.push('Admin must import NEWSLETTER_ANSWER_IDS from lib/checkIns, never declare its own');
+}
+
+/**
  * A picture in the letter has to render in all three surfaces, or in none.
  *
  * Nat's rule for the letter, 2026-08-12: *"whatever is in the email [is] on

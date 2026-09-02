@@ -23,6 +23,7 @@ import {
   hasTailoredCheckIns,
   hasPreMeetingCheckIn,
   hasEndOfMonthCheckIn,
+  NEWSLETTER_ANSWER_IDS,
   type SeasonKind,
   type SeasonOccurrence,
 } from '../../lib/checkIns';
@@ -599,7 +600,12 @@ export function NewsletterPanel({
      * Tech's halfway is the tune-up wizard and it still posts what it collects
      * to a board. Nothing already written is thrown away while that moves.
      */
-    const NEWSLETTER_ANSWER_IDS = ['q_eom_newsletter', 'q_newsletter', 'q_shoutout'];
+    // The list is `lib/checkIns.ts`'s, imported rather than written out again.
+    // It lived here as its own copy until 2026-09-01, which meant a HIVE could
+    // be given a newsletter question in the file that writes the check-ins and
+    // this box would go on not showing the answers — the exact shape of Nat's
+    // rule that a question without a destination is busy work. One list, and
+    // adding an id registers it in both places at once.
     const hiveNames = new Map(
       (((await supabase.from('communities').select('id, name')).data ?? []) as {
         id: string; name: string;
