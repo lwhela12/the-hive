@@ -14,6 +14,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { clearSpotlight } from '../../lib/spotlight';
 import { userFacingError } from '../../lib/userFacingError';
 import { invalidateWishQueries, queryClient, queryKeys } from '../../lib/queryClient';
 import {
@@ -1353,13 +1354,8 @@ export default function MonthlyTuneupScreen() {
 
   const setSpotlightWish = useCallback(async (wishId: string) => {
     if (!profile) return;
-    // Clear first, then set — the partial unique index allows exactly one
-    // starred wish per member, so the order matters.
-    const { error: clearError } = await (supabase as any)
-      .from('wishes')
-      .update({ is_spotlight: false })
-      .eq('user_id', profile.id)
-      .eq('is_spotlight', true);
+    // Clear first, then set. `lib/spotlight.ts` holds why.
+    const { error: clearError } = await clearSpotlight(profile.id);
     if (clearError) {
       showAlert('Hmm', 'Could not update your HD spotlight — try again.');
       return;

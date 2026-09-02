@@ -23,6 +23,8 @@ import {
   isPreMeetingCheckInSurvey,
 } from '../../lib/checkIns';
 import { supabase } from '../../lib/supabase';
+import { clearSpotlight } from '../../lib/spotlight';
+import { showAlert } from '../../lib/showAlert';
 import { getCycleStart } from '../../lib/meetingCycle';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -414,6 +416,7 @@ export function SurveyModal({
     // ladder is the default, always: a wish only leaves its HIVE because
     // somebody said so.
     const hdReach = finalAnswers.q_hd_wish_reach === 'all_hives' ? 'all_hives' : 'hive';
+    let hdWishFiled: boolean | null = null;
     if (hdWish && viewerProfile?.id) {
       try {
         // The same reach the picker offers: this HIVE's wishes plus every one
@@ -428,31 +431,53 @@ export function SurveyModal({
         const already = (existing ?? []).find(
           (wish: { description?: string }) => (wish.description ?? '').trim() === hdWish
         ) as { id: string } | undefined;
-        if (already) {
-          await (supabase as any)
-            .from('wishes')
-            .update({ is_spotlight: true, share_scope: hdReach })
-            .eq('id', already.id);
-        } else {
-          await supabase.from('wishes').insert({
-            user_id: viewerProfile.id,
-            community_id: survey.community_id,
-            description: hdWish,
-            raw_input: hdWish,
-            status: 'public',
-            is_active: true,
-            is_spotlight: true,
-            share_scope: hdReach,
-            extracted_from: 'onboarding',
-          } as never);
-        }
+        // Unstar whatever holds the star first. One per member, enforced by a
+        // partial unique index — see `lib/spotlight.ts`. Skipping this is what
+        // made the very first one of these fail silently: a fulfilled wish
+        // from July still held Nat's star, and the insert was refused.
+        await clearSpotlight(viewerProfile.id);
+        const { error: wishWriteError } = already
+          ? await (supabase as any)
+              .from('wishes')
+              .update({ is_spotlight: true, share_scope: hdReach })
+              .eq('id', already.id)
+          : await (supabase as any).from('wishes').insert({
+              user_id: viewerProfile.id,
+              community_id: survey.community_id,
+              description: hdWish,
+              raw_input: hdWish,
+              status: 'public',
+              is_active: true,
+              is_spotlight: true,
+              share_scope: hdReach,
+              extracted_from: 'onboarding',
+            });
+        if (wishWriteError) console.warn('Could not file the HD wish', wishWriteError);
+        hdWishFiled = !wishWriteError;
       } catch (wishError) {
         console.warn('Could not file the HD wish from the check-in', wishError);
+        hdWishFiled = false;
       }
     }
     setSubmitting(false);
     AsyncStorage.removeItem(DRAFT_KEY(survey.id)).catch(() => {});
     setSubmitted(true);
+    /**
+     * If the wish did not file, SAY so.
+     *
+     * The first version of this swallowed the failure into a console warning
+     * and showed the same cheerful confirmation. Nat submitted an HD, was told
+     * everything was in, and found "HD Wishes (0)" on her own profile — the
+     * app had lost something she wrote and reported success. The check-in
+     * really is saved, so that is what the message leads with; the second
+     * sentence is the honest half, and it says where to put it instead.
+     */
+    if (hdWishFiled === false) {
+      showAlert(
+        'Your check-in is in',
+        'Your HD wish did not save with it. Add it on your profile and it will be there for the meeting.'
+      );
+    }
   };
 
   const answeredCount = survey.questions.filter(q => q.type !== 'note' && answers[q.id] !== undefined && answers[q.id] !== '').length;
