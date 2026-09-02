@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { View, Text, Pressable, RefreshControl } from 'react-native';
 import { SafeAreaView } from '../../components/ui/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
@@ -57,7 +57,17 @@ type Buzz = {
   community?: Pick<Community, 'id' | 'name' | 'accent_color'> | null;
   /** Written but never sent or published — owners only (2026-08-12). */
   unsent?: boolean;
+  /** When it was actually emailed to the list, if it ever was. */
+  sentAt?: string | null;
 };
+
+/**
+ * How long a letter counts as new.
+ *
+ * A month's letter has a month to be read, so a fortnight is generous without
+ * ever letting two issues wear the badge at once.
+ */
+const JUST_OUT_DAYS = 14;
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -145,6 +155,21 @@ export default function BuzzScreen() {
   // always dressed for space rather than following whoever opened it.
   const skin = SPACE_SKIN;
   const [items, setItems] = useState<Buzz[]>([]);
+  /**
+   * The one letter that gets to say it is new — the most recently SENT issue,
+   * and only while it is still fresh.
+   *
+   * Sent, not written: an owner's unsent draft is already labelled as a draft,
+   * and an issue imported from the Wix years has a `created_at` from 2024 and
+   * was never new here at all.
+   */
+  const newestSentId = useMemo(() => {
+    const cutoff = Date.now() - JUST_OUT_DAYS * 24 * 60 * 60 * 1000;
+    const fresh = items
+      .filter((item) => !item.unsent && item.sentAt && Date.parse(item.sentAt) >= cutoff)
+      .sort((a, b) => Date.parse(b.sentAt!) - Date.parse(a.sentAt!));
+    return fresh[0]?.id ?? null;
+  }, [items]);
   /** This month's collecting thread, kept out of the archive of sent letters. */
   const [collecting, setCollecting] = useState<Buzz | null>(null);
   const [loading, setLoading] = useState(true);
@@ -575,6 +600,7 @@ export default function BuzzScreen() {
           ) : items.map((item) => {
             const open = openId === item.id;
             const accent = hiveAccent(item.community as Community | null);
+            const justOut = item.id === newestSentId;
 
             return (
               <CollapsiblePanel
@@ -583,7 +609,22 @@ export default function BuzzScreen() {
                 // A draft says so, and says who can see it — the whole point of
                 // it being here is that Nat can read hers back while knowing
                 // nobody else can (2026-08-12).
-                eyebrow={item.unsent ? 'Draft · only you can see this' : undefined}
+                // A newsletter used to arrive here in total silence — the row
+                // simply appeared, and a member who did not read their email
+                // had no way of knowing a new one was out. Nat, 2026-09-01,
+                // asking the question that found it: *"check whether members
+                // can tell a new issue exists."*
+                //
+                // So the newest issue says so for its first fortnight. It
+                // clears itself rather than waiting to be dismissed, because a
+                // badge nobody can put down stops meaning anything.
+                eyebrow={
+                  item.unsent
+                    ? 'Draft · only you can see this'
+                    : justOut
+                      ? 'Just out'
+                      : undefined
+                }
                 // The same dashed edge the collecting thread wears, for the
                 // same reason: unfinished. Nat, 2026-08-12: *"i want that
                 // dotted outline, like before, that made it super obvious, i

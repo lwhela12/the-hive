@@ -14,6 +14,8 @@ import { useAppNews } from '../../lib/hooks/useAppNews';
 import { PARDON_OUR_DUST } from '../../lib/hiveWide';
 import { SummarySections, type SummarySection } from '../../components/meetings/SummarySections';
 import { readLetter } from '../../lib/newsletterHeaders';
+import { pickSingleImage } from '../../lib/imagePicker';
+import { uploadSingleImage } from '../../lib/attachmentUpload';
 import { LinkifiedText } from '../../components/ui/LinkifiedText';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -79,6 +81,58 @@ export const PAPER_LETTER: LetterPalette = {
  * `<LetterProse text={item.content} palette={...} />` with the space skin's
  * colours is the whole fix there.
  */
+/**
+ * A picture, written into the letter as a line of its own.
+ *
+ * `[[IMAGE:https://…/leo.jpg|Leo in his bee costume]]` on its own line becomes
+ * the photo, right where it sits in the text — the same shape as
+ * `[[BUTTON:tech]]` and for the same reason: the letter stays ONE source of
+ * truth, so a picture Nat places once shows up in the email, in The Buzz and
+ * on the public site without any of the three keeping its own copy.
+ *
+ * Nat asked for this on 2026-09-01, writing September's issue: *"i want to be
+ * able to add pics to the newsletters i think."*
+ *
+ * **https only.** The marker is written by a person into a body of text that
+ * three renderers turn into markup, so the one thing that must never happen is
+ * a `javascript:` or `data:` URL travelling that path. Anything else renders as
+ * nothing rather than as a broken picture.
+ *
+ * The alt text after the pipe is optional and encouraged — a good many people
+ * read their mail with images turned off.
+ */
+export const LETTER_IMAGE = /^\[\[IMAGE:(https:\/\/[^\]|\s]+)(?:\|([^\]]*))?\]\]$/;
+
+/**
+ * One photo, sized from the picture itself.
+ *
+ * The height is not knowable before the file loads, so it opens at the shape of
+ * a phone photo and corrects itself on `onLoad` rather than reserving a square
+ * and jumping. Full width of the letter's column, never wider.
+ */
+function LetterImage({ src, alt }: { src: string; alt: string }) {
+  const [ratio, setRatio] = useState(4 / 3);
+  return (
+    <Image
+      source={{ uri: src }}
+      accessibilityLabel={alt || undefined}
+      alt={alt || undefined}
+      onLoad={(event) => {
+        const { width, height } = event.source ?? {};
+        if (width && height) setRatio(width / height);
+      }}
+      style={{
+        width: '100%',
+        aspectRatio: ratio,
+        borderRadius: 14,
+        marginVertical: 14,
+        backgroundColor: 'rgba(189,147,72,0.08)',
+      }}
+      contentFit="cover"
+    />
+  );
+}
+
 /** The letter's join buttons — same keys, labels and colours as the email. */
 const LETTER_BUTTONS: Record<string, { label: string; colour: string; slug: string }> = {
   tech: { label: "I'm interested in Tech HIVE", colour: '#2f4a63', slug: 'tech' },
@@ -114,6 +168,11 @@ export function LetterProse({
         // opens the same interested page the email version points at, with
         // your own address already on it.
         if (block.kind === 'paragraph') {
+          const picture = LETTER_IMAGE.exec(block.text.trim());
+          if (picture) {
+            return <LetterImage key={i} src={picture[1]} alt={(picture[2] ?? '').trim()} />;
+          }
+
           const marker = /^\[\[BUTTON:([a-z]+)\]\]$/.exec(block.text.trim());
           if (marker) {
             const button = LETTER_BUTTONS[marker[1]];
@@ -307,6 +366,8 @@ export default function NewsletterScreen() {
   const [view, setView] = useState<'letter' | 'facts'>('letter');
   const [writing, setWriting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [pictureBusy, setPictureBusy] = useState(false);
+  const [pictureNote, setPictureNote] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
   const [postedTo, setPostedTo] = useState<string | null>(null);
   const [postError, setPostError] = useState<string | null>(null);
@@ -440,6 +501,45 @@ export default function NewsletterScreen() {
       ...(section.lines ?? []).map((line) => (line.startsWith('    ') ? `    - ${line.trim()}` : `- ${line}`)),
     ].join('\n'))
     .join('\n\n');
+
+  /**
+   * Put a photograph in the letter.
+   *
+   * Nat writes the letter as text, so a picture has to be a line of text too —
+   * this uploads the photo and hands back the `[[IMAGE:…]]` line for it,
+   * already on the clipboard. She pastes it where she wants the picture and it
+   * renders in the email, in The Buzz and on the public site from that one
+   * line.
+   *
+   * The clipboard rather than an insertion point because the letter is not
+   * edited on this screen — it is written and edited as the post itself. One
+   * paste is the shortest honest path between a photo on her phone and a photo
+   * in the letter.
+   */
+  const addPicture = async () => {
+    if (!profile || pictureBusy) return;
+    setPictureBusy(true);
+    setPictureNote(null);
+    try {
+      const image = await pickSingleImage();
+      if (!image) return;
+      const uploaded = await uploadSingleImage(profile.id, image);
+      if (!uploaded?.url) {
+        setPictureNote('That picture did not upload. Try it again in a moment.');
+        return;
+      }
+      // The alt text is a placeholder on purpose: she is about to paste this
+      // line into a letter she is writing, and describing her own photo is one
+      // small edit. A blank one would have shipped with nothing to read.
+      const marker = `[[IMAGE:${uploaded.url}|Describe the picture here]]`;
+      await Clipboard.setStringAsync(marker);
+      setPictureNote('Copied. Paste it into the letter on its own line, where you want the picture.');
+    } catch (pictureError) {
+      setPictureNote(userFacingError(pictureError, 'That picture did not upload.'));
+    } finally {
+      setPictureBusy(false);
+    }
+  };
 
   const copyAll = async () => {
     // Copy what you're looking at — the letter goes to Wix, the outline is for
@@ -761,6 +861,40 @@ export default function NewsletterScreen() {
               // renders the same component without it — see SummarySections.
               <SummarySections sections={sections} art />
             )}
+            {/* A picture is a line of text in the letter, so getting one is
+                getting that line — see `addPicture`. Sits under the letter
+                because that is where she is looking when she decides a
+                paragraph wants a photograph beside it. */}
+            <Pressable
+              onPress={() => void addPicture()}
+              disabled={pictureBusy}
+              style={({ pressed }) => ({
+                alignSelf: 'center',
+                marginTop: 10,
+                paddingHorizontal: 18,
+                paddingVertical: 10,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: 'rgba(189,147,72,0.45)',
+                backgroundColor: pressed ? '#fbf4e3' : 'transparent',
+                opacity: pictureBusy ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>
+                {pictureBusy ? 'Adding…' : '🖼️ Add a picture'}
+              </Text>
+            </Pressable>
+            {pictureNote ? (
+              <Text
+                style={{
+                  fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 18,
+                  color: '#8a7a5e', textAlign: 'center', marginTop: 8, paddingHorizontal: 24,
+                }}
+              >
+                {pictureNote}
+              </Text>
+            ) : null}
+
             {existingDraft ? (
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 18, color: '#8a7a5e', textAlign: 'center', marginTop: 6, marginBottom: 10 }}>
                 This is the letter in progress — it is already saved. When it is

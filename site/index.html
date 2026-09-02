@@ -1185,7 +1185,24 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
            a broken button. The marker may name a HIVE by slug — [[BUTTON:show]]
            — or say [[BUTTON:og]], which is what the newsletters already wrote
            before OG's real slug (`default`) was ever public. */
-        (n.content || '').split(/\n(\[\[BUTTON:[a-z0-9-]+\]\])\n/).forEach(function (piece) {
+        /* A line reading [[IMAGE:https://…|alt]] is a photograph, the same
+           marker the email and the app render (LETTER_IMAGE in the app's
+           newsletter screen). https only: this string is written by hand and
+           comes out the other side as an src. */
+        (n.content || '').split(/\n(\[\[(?:BUTTON:[a-z0-9-]+|IMAGE:[^\]]+)\]\])\n/).forEach(function (piece) {
+          var pic = /^\[\[IMAGE:(https:\/\/[^\]|\s]+)(?:\|([^\]]*))?\]\]$/.exec(piece.trim());
+          if (pic) {
+            var figure = document.createElement('span');
+            figure.style.cssText = 'display:block;text-align:center;padding:14px 0;';
+            var img = document.createElement('img');
+            img.src = pic[1];
+            img.alt = (pic[2] || '').trim();
+            img.loading = 'lazy';
+            img.style.cssText = 'max-width:100%;height:auto;border-radius:12px;display:inline-block;';
+            figure.appendChild(img);
+            body.appendChild(figure);
+            return;
+          }
           var m = /^\[\[BUTTON:([a-z0-9-]+)\]\]$/.exec(piece.trim());
           var btn = m && hiveButton(m[1]);
           if (btn) {

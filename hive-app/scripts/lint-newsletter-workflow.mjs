@@ -8,6 +8,10 @@ const panels = fs.readFileSync(path.join(root, 'components/admin/GodModePanels.t
 const writer = fs.readFileSync(path.join(root, 'app/(app)/newsletter.tsx'), 'utf8');
 const buzz = fs.readFileSync(path.join(root, 'app/(app)/buzz.tsx'), 'utf8');
 const buzzArchiveMigration = fs.readFileSync(path.join(root, 'supabase/migrations/210_the_buzz_is_one_archive.sql'), 'utf8');
+// The three places a letter is drawn. A marker that only some of them know is
+// a picture in the email and the literal text `[[IMAGE:…]]` on the website.
+const email = fs.readFileSync(path.join(root, 'supabase/functions/send-newsletter/index.ts'), 'utf8');
+const publicSite = fs.readFileSync(path.join(root, '../site/index.html'), 'utf8');
 const failures = [];
 
 if (!admin.includes("accessibilityLabel={direction < 0 ? 'Show earlier tabs' : 'Show more tabs'}")) {
@@ -39,10 +43,36 @@ if (!buzzArchiveMigration.includes('HIVE members locate the Buzz archive')
   failures.push('Every HIVE member must be able to locate and read the completed Buzz archive');
 }
 
+/**
+ * A picture in the letter has to render in all three surfaces, or in none.
+ *
+ * Nat's rule for the letter, 2026-08-12: *"whatever is in the email [is] on
+ * HIVE wide & public site... nothing gets lost."* The `[[BUTTON:…]]` marker is
+ * duplicated across these same three files for the same reason, and this is
+ * what stops the next marker being added to one of them and forgotten in the
+ * other two.
+ *
+ * `https:` is asserted in each one on purpose: the marker is written by hand
+ * into text that three renderers turn into markup, and a `javascript:` src is
+ * the one thing that path must never carry.
+ */
+const imageSurfaces = [
+  ['the writer and The Buzz (app/(app)/newsletter.tsx)', writer],
+  ['the email (supabase/functions/send-newsletter/index.ts)', email],
+  ['the public site (site/index.html)', publicSite],
+];
+for (const [where, source] of imageSurfaces) {
+  if (!source.includes('IMAGE:')) {
+    failures.push(`A [[IMAGE:…]] line must render as a picture in ${where}`);
+  } else if (!source.includes('https:')) {
+    failures.push(`The picture marker in ${where} must accept https URLs only`);
+  }
+}
+
 if (failures.length) {
   console.error('Newsletter workflow: one ideas tab, reversible overflow, one draft, one history.\n');
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exit(1);
 }
 
-console.log('Newsletter workflow: combined ideas, two-way tabs, shared draft policy, immediate history.');
+console.log('Newsletter workflow: combined ideas, two-way tabs, shared draft policy, immediate history, pictures on all three surfaces.');

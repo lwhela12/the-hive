@@ -110,6 +110,29 @@ const HIVE_BUTTONS: Record<string, { label: string; colour: string; slug: string
 
 const BUTTON_LINE = /^\[\[BUTTON:([a-z]+)\]\]$/;
 
+/**
+ * A picture, written into the letter as a line of its own.
+ *
+ * `[[IMAGE:https://…/leo.jpg|Leo in his bee costume]]`. The same marker the app
+ * and the public site render — see `LETTER_IMAGE` in `app/(app)/newsletter.tsx`,
+ * and keep the three in step.
+ *
+ * **https only**, because this string is written by a person and comes out the
+ * other side as an `src` attribute in mail sent to everybody on the list.
+ *
+ * `width` as an attribute as well as in the style: Outlook ignores CSS sizing on
+ * images, the same reason the masthead logo carries both. 548 is the letter card's
+ * inner width, so a photo fills the column and no more.
+ */
+const IMAGE_LINE = /^\[\[IMAGE:(https:\/\/[^\]|\s]+)(?:\|([^\]]*))?\]\]$/;
+
+function imageHtml(src: string, alt: string): string {
+  return `<div style="text-align:center;padding:14px 0;">
+    <img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" width="548"
+         style="width:100%;max-width:548px;height:auto;border-radius:12px;display:block;margin:0 auto;border:0;outline:none;text-decoration:none;" />
+  </div>`;
+}
+
 function buttonHtml(key: string, recipient: Recipient): string {
   const button = HIVE_BUTTONS[key];
   if (!button) return '';
@@ -147,6 +170,10 @@ function blockHtml(block: LetterBlock): string {
 function issueHtml(title: string, content: string, footerHtml: string, recipient: Recipient): string {
   const body = readLetter(content)
     .map((block) => {
+      if (block.kind === 'paragraph') {
+        const picture = IMAGE_LINE.exec(block.text);
+        if (picture) return imageHtml(picture[1], (picture[2] ?? '').trim());
+      }
       const button = block.kind === 'paragraph' ? BUTTON_LINE.exec(block.text) : null;
       return button ? buttonHtml(button[1], recipient) : blockHtml(block);
     })
