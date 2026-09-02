@@ -170,6 +170,15 @@ const TECH_STEPS: Step[] = [
   { key: 'todos', label: 'To-dos' },
   { key: 'profile', label: 'Your profile' },
   { key: 'privacy', label: 'Your settings' },
+  /**
+   * Here as well as in the halfway flows, and only here among the pre-meeting
+   * ones, because Tech HIVE has never met. Nat texts these eight people the
+   * night before their first meeting, and this survey is the only thing of
+   * ours any of them will have opened — so it is the only place to ask them
+   * how they want to be reached. OG's pre-meeting deck is nine steps already
+   * and OG gets the question through its halfway link instead.
+   */
+  { key: 'reach', label: 'How we reach you' },
 ];
 
 // Tech's halfway touch, per Nat's design (2026-08-11): a quick pulse — still
