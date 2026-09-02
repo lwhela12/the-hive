@@ -833,6 +833,19 @@ export default function HiveWideScreen() {
                 // side-by-side boxes on a wide screen, which is a different job.
                 rowGap: 18,
                 columnGap: 12,
+                /**
+                 * Each cube is its own height.
+                 *
+                 * A wrapping row stretches everything on a line to match the
+                 * tallest thing on it, so one open panel dragged the box beside
+                 * it out into a matching field of nothing. Nat, 2026-09-01:
+                 * *"this just looks so bad... like when one is collapsed and
+                 * one is open."*
+                 *
+                 * `flex-start` lets a shut panel stay a title bar and an open
+                 * one be as tall as what is in it.
+                 */
+                alignItems: wide ? 'flex-start' : 'stretch',
               }}
             >
               {/* The door is one of the cubes now.
