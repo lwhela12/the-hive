@@ -576,6 +576,16 @@ export default function AppLayout() {
             href: null,
           }}
         />
+        {/* The same door for the HALFWAY check-in — /halfway/og. A separate
+            name because it is a separate flow, and because the name in the
+            address has to be the one Nat says out loud. */}
+        <Tabs.Screen
+          name="halfway/[hive]"
+          options={{
+            title: 'Halfway check-in',
+            href: null,
+          }}
+        />
         <Tabs.Screen
           name="monthly-tuneup"
           options={{

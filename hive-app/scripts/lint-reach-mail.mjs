@@ -23,7 +23,9 @@ const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const failures = [];
 
 const reachMail = read('supabase/functions/_shared/reachMail.ts');
-const settings = read('app/(app)/settings.tsx');
+// The switch list moved to lib/emailSettings.ts on 2026-09-02 so the halfway
+// check-in could show the same rows; this guard follows it there.
+const settings = read('lib/emailSettings.ts');
 const senders = [
   'supabase/functions/notify-board-mention/index.ts',
   'supabase/functions/notify-board-reply/index.ts',
@@ -67,7 +69,7 @@ for (const kind of kinds.keys()) {
 // --- Half three: a member can turn it off.
 for (const [kind, column] of kinds) {
   if (!new RegExp(`column: '${column}'`).test(settings)) {
-    failures.push(`"${kind}" sends mail with no row on the Settings page — nobody can turn ${column} off.`);
+    failures.push(`"${kind}" sends mail with no row in lib/emailSettings.ts — nobody can turn ${column} off.`);
   }
 }
 

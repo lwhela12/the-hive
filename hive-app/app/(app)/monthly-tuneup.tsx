@@ -47,6 +47,8 @@ import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { usePrivacyChoices } from '../../lib/hooks/usePrivacyChoices';
+import { useReachChoices, type ContactPref } from '../../lib/hooks/useReachChoices';
+import { Switch } from '../../components/ui/Switch';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { WhoCanSeeYouToggle } from '../../components/ui/WhoCanSeeYouToggle';
 import {
@@ -86,7 +88,7 @@ const hiveBeeMark = require('../../assets/BEE ONLY IN GOLD BG.png');
 // same wherever you pick it.
 const hiveCrest = require('../../assets/HIVE Logo Transparent  BG.png');
 
-type StepKey = 'wishes' | 'hangs' | 'calendar' | 'helpers' | 'todos' | 'checkin' | 'newsletter' | 'reading' | 'profile' | 'privacy' | 'pulse' | 'shoutouts';
+type StepKey = 'wishes' | 'hangs' | 'calendar' | 'helpers' | 'todos' | 'checkin' | 'newsletter' | 'reading' | 'profile' | 'privacy' | 'reach' | 'pulse' | 'shoutouts';
 type Step = { key: StepKey; label: string };
 
 // OG HIVE's pre-meeting flow, exactly as Nat walked it. Each HIVE that has a
@@ -140,6 +142,15 @@ const MIDPOINT_STEPS: Step[] = [
   { key: 'newsletter', label: 'Newsletter' },
   { key: 'todos', label: 'To-dos' },
   { key: 'helpers', label: 'HIVE Help' },
+  /**
+   * Last, in every halfway flow. Nat, 2026-09-02, about to text three groups
+   * by hand: *"maybe include in the survey a question if they like emails or
+   * texts better & a short cut to toggle off their email settings if they
+   * want."* It goes at the END because it is housekeeping, not the ask — the
+   * newsletter or the pulse is why the link arrived, and nobody should have to
+   * walk past their own mail settings to get to it.
+   */
+  { key: 'reach', label: 'How we reach you' },
 ];
 
 /**
@@ -168,6 +179,7 @@ const TECH_STEPS: Step[] = [
 const TECH_MIDPOINT_STEPS: Step[] = [
   { key: 'pulse', label: 'Quick pulse' },
   { key: 'shoutouts', label: 'Shout-outs' },
+  { key: 'reach', label: 'How we reach you' },
 ];
 
 /**
@@ -186,6 +198,7 @@ const TECH_MIDPOINT_STEPS: Step[] = [
 const SHOW_MIDPOINT_STEPS: Step[] = [
   { key: 'newsletter', label: 'Newsletter' },
   { key: 'todos', label: 'To-dos' },
+  { key: 'reach', label: 'How we reach you' },
 ];
 
 /**
@@ -829,6 +842,7 @@ export default function MonthlyTuneupScreen() {
   const flow = FLOWS[community?.slug === 'tech' ? 'tech' : community?.slug === 'show' ? 'show' : 'default'];
   const steps = isMidpoint ? flow.midpoint : flow.tuneup;
   const privacyChoices = usePrivacyChoices();
+  const reachChoices = useReachChoices();
 
   // Reading + the quarterly profile pass both write to `profiles`, so they
   // share one dirty flag and one save that runs when the tune-up finishes.
@@ -3903,6 +3917,102 @@ export default function MonthlyTuneupScreen() {
     );
   };
 
+  /**
+   * How you hear from us — one question and seven switches.
+   *
+   * The question is the new part, and the reason it is safe to ask again is
+   * that it has a destination: Nat reads it in Admin and decides who to text.
+   * Nothing here decides who gets an email. The switches below do, one per
+   * kind, and each one is something a member set on purpose — which is exactly
+   * what `preferred_contact` was not (migration 223).
+   *
+   * The screen says both of those out loud, because a question that looks like
+   * it turns something off, and doesn't, is worse than not asking.
+   */
+  const renderReachStep = () => {
+    const accent = hiveAccent(community);
+    const { EMAIL_SETTINGS: settings, emailIsOn, setEmail, contactPref, setContactPref, busyKey: reachBusyKey } = reachChoices;
+    const options: { value: ContactPref; label: string; icon: string }[] = [
+      { value: 'email', label: 'Email', icon: '\u2709\ufe0f' },
+      { value: 'text', label: 'Text', icon: '\ud83d\udcac' },
+      { value: 'either', label: 'Either is fine', icon: '\ud83d\udc4d' },
+    ];
+
+    return (
+      <View>
+        <StepHeader
+          title="How do you like to hear from us?"
+          icon={<Text style={{ fontSize: 20 }}>📬</Text>}
+          subtitle="Nat asks so she knows how to reach you. The HIVE itself only sends email for now — your answer here changes what she does, not what lands in your inbox."
+        />
+        <View style={[cardStyle, { gap: 10 }]}>
+          <BoxHeading style={{ marginBottom: 0 }}>Emails or texts?</BoxHeading>
+          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+            {options.map((option) => {
+              const chosen = contactPref === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => setContactPref(option.value)}
+                  disabled={reachBusyKey === 'contact_pref'}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingVertical: 9,
+                    paddingHorizontal: 14,
+                    borderRadius: 999,
+                    borderWidth: chosen ? 2 : 1,
+                    borderColor: chosen ? accent : 'rgba(154,128,96,0.35)',
+                    backgroundColor: chosen ? `${accent}1f` : 'transparent',
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Text style={{ fontSize: 14 }}>{option.icon}</Text>
+                  <Text
+                    style={{
+                      fontFamily: chosen ? 'Lato_700Bold' : 'Lato_400Regular',
+                      fontSize: 14,
+                      color: chosen ? accent : '#2d2d2d',
+                    }}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
+            {contactPref
+              ? 'Saved \u2014 change it any time.'
+              : 'Nobody has asked you this before, so nothing is chosen yet.'}
+          </Text>
+        </View>
+
+        <View style={[cardStyle, { gap: 0, marginTop: 12 }]}>
+          <BoxHeading style={{ marginBottom: 8 }}>Turn any of these off</BoxHeading>
+          {settings.map((setting, index) => (
+            <View key={setting.column}>
+              {index > 0 ? (
+                <View style={{ height: 1, backgroundColor: 'rgba(154,128,96,0.18)' }} />
+              ) : null}
+              <Switch
+                on={emailIsOn(setting)}
+                busy={reachBusyKey === setting.column}
+                label={setting.label}
+                hint={setting.hint}
+                onToggle={(next) => setEmail(setting, next)}
+              />
+            </View>
+          ))}
+        </View>
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
+          Saves the moment you tap it — nothing to submit here.
+        </Text>
+      </View>
+    );
+  };
+
   const renderTodosStep = () => (
     <View>
       <StepHeader
@@ -4109,6 +4219,8 @@ export default function MonthlyTuneupScreen() {
         return renderProfileReviewStep();
       case 'privacy':
         return renderPrivacyStep();
+      case 'reach':
+        return renderReachStep();
       case 'pulse':
         return renderPulseStep();
       case 'shoutouts':

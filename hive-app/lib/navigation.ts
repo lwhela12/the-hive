@@ -305,8 +305,9 @@ export function routeLivesAtWholeHive(pathname: string | null | undefined): bool
   if (dest && dest.atWholeHive === 'wide' && !dest.wideRoute) return true;
 
   // The short check-in links pick their own HIVE and hand over — they are a
-  // door rather than a page, so they are left to do their job.
-  if (path.startsWith('/checkin')) return true;
+  // door rather than a page, so they are left to do their job. `/halfway/og`
+  // is the same door onto the halfway flow (2026-09-02).
+  if (path.startsWith('/checkin') || path.startsWith('/halfway')) return true;
 
   return false;
 }

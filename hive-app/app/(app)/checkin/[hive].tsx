@@ -3,6 +3,7 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../../../lib/hooks/useAuth';
 import { usePageSkin } from '../../../lib/pageSkin';
+import { shortLinkSlug } from '../../../lib/hiveShortLink';
 
 /**
  * The short way in: app.the-hive.app/checkin/og
@@ -15,7 +16,8 @@ import { usePageSkin } from '../../../lib/pageSkin';
  * it wraps into three lines of noise that looks like a scam.
  *
  * So the HIVE gets a name in the address instead of an id. The name is the one
- * she says out loud — `og`, `tech`, `show` — because a link she has to look up
+ * she says out loud — `og`, `tech`, `show`, `pro` (`lib/hiveShortLink.ts`,
+ * shared with `/halfway/<hive>`) — because a link she has to look up
  * is a link she will not use (the same reason the URL, the screen and the words
  * for a thing all have to match).
  *
@@ -25,31 +27,13 @@ import { usePageSkin } from '../../../lib/pageSkin';
  * above carries `/checkin/og` through login and lands here afterward.
  */
 
-/**
- * What people call each HIVE, mapped to the slug the database has.
- *
- * `og` is the odd one: OG HIVE still carries `default` from before there was
- * more than one HIVE, and that slug is load-bearing in `lib/checkIns.ts`, so
- * it is aliased here rather than renamed. `pro` is here because Production
- * answers to both.
- */
-const SLUG_ALIASES: Record<string, string> = {
-  og: 'default',
-  default: 'default',
-  tech: 'tech',
-  show: 'show',
-  pro: 'show',
-  production: 'show',
-};
-
 export default function CheckInShortLinkScreen() {
   const router = useRouter();
   const { hive } = useLocalSearchParams<{ hive?: string | string[] }>();
   const { memberships, loading } = useAuth();
   const skin = usePageSkin();
 
-  const asked = (Array.isArray(hive) ? hive[0] : hive)?.trim().toLowerCase() ?? '';
-  const wantedSlug = SLUG_ALIASES[asked] ?? asked;
+  const { asked, slug: wantedSlug } = shortLinkSlug(hive);
 
   useEffect(() => {
     if (loading) return;

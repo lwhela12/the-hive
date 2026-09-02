@@ -47,7 +47,18 @@ import { QuickAdd } from '../navigation/QuickAdd';
  * Plus the newsletter, which belongs to nobody's HIVE in particular.
  */
 
-type Row = { id: string; name: string; email: string; role: string };
+type Row = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  /**
+   * How this person said they like to hear from the HIVE. `null` means nobody
+   * has asked them yet, and it has to stay tellable-apart from an answer —
+   * "not asked" and "wants email" are different facts (migration 223).
+   */
+  contactPref: 'email' | 'text' | 'either' | null;
+};
 type Subscriber = { id: string; email: string; name: string | null; unsubscribed_at: string | null };
 
 /** An issue of The Buzz, with whatever the send log knows about it. */
@@ -1348,12 +1359,16 @@ export function HiveMemberPanels({
     await Promise.all(memberships.map(async (m) => {
       const { data } = await supabase
         .from('community_memberships')
-        .select('role, user:profiles!user_id(id, name, email)')
+        .select('role, user:profiles!user_id(id, name, email, contact_pref)')
         .eq('community_id', m.community_id);
 
       next[m.community_id] = ((data ?? []) as any[])
         .map((r) => ({
-          id: r.user?.id, name: r.user?.name ?? 'Someone', email: r.user?.email ?? '', role: r.role,
+          id: r.user?.id,
+          name: r.user?.name ?? 'Someone',
+          email: r.user?.email ?? '',
+          role: r.role,
+          contactPref: r.user?.contact_pref ?? null,
         }))
         .filter((r) => r.id)
         .sort((a, b) => a.name.localeCompare(b.name));
@@ -2143,6 +2158,21 @@ export function HiveMemberPanels({
                       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(246,244,229,0.55)' }}>
                         {r.email}
                       </Text>
+                      {/* Where the halfway check-in's "emails or texts?" answer
+                          comes out. Nat, 2026-09-02, hand-writing three group
+                          texts: she needed to know who to text and had nowhere
+                          to look. Silent when nobody has answered — an unasked
+                          member must not read as one who chose email. */}
+                      {r.contactPref && r.contactPref !== 'email' ? (
+                        <Text
+                          style={{
+                            fontFamily: 'Lato_700Bold', fontSize: 10.5, marginTop: 2,
+                            color: 'rgba(246,244,229,0.75)',
+                          }}
+                        >
+                          {r.contactPref === 'text' ? '💬 Prefers a text' : '👍 Email or text'}
+                        </Text>
+                      ) : null}
                     </View>
                     {/* Everyone says what they are, including plain members —
                         "each one should show what they are" (Nat 2026-08-03).

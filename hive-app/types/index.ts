@@ -254,7 +254,14 @@ export interface Profile extends Record<string, unknown> {
   name: string;
   email: string;
   phone?: string;
+  /** Dead since 2026-09-01 — nothing reads it. `contact_pref` is the live one. */
   preferred_contact: string;
+  /**
+   * How this member likes to hear from the HIVE: 'email' | 'text' | 'either'.
+   * `null` means nobody has asked them yet. Read by Admin so Nat knows who to
+   * text — never a gate on mail (migration 223).
+   */
+  contact_pref?: 'email' | 'text' | 'either' | null;
   birthday?: string;
   occupation?: string;
   profile_title?: string | null;
