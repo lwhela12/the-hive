@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { SpaceGlobe, SPACE_BLACK } from '../../components/ui/SpaceGlobe';
 import { CollapsiblePanel } from '../../components/ui/CollapsiblePanel';
 import { HiveMark } from '../../components/ui/HiveMark';
+import { Avatar } from '../../components/ui/Avatar';
 import { HiveWideWelcome } from '../../components/ui/HiveWideWelcome';
 import { PendingInviteDoor } from '../../components/ui/PendingInviteDoor';
 import { markJustJoinedHive } from '../_layout';
@@ -980,22 +981,38 @@ export default function HiveWideScreen() {
                           borderColor: CARD_EDGE, backgroundColor: CARD_FILL,
                         }}
                       >
-                        <View style={{ paddingTop: 3 }}>
-                          <HiveMark size={12} colour={accentOnDark(hiveAccent(wish.community))} />
-                        </View>
+                        {/* The same card the profile draws, in the night's
+                            colours. Nat put the two side by side, 2026-09-01:
+                            the profile's has a face, a name, a title in bold
+                            and the ask underneath in ordinary type; this one
+                            had the whole ask set in bold with a grey hexagon
+                            beside it, so the longest thing on screen shouted
+                            and the person who wrote it whispered. Same wish,
+                            same shape. */}
+                        <Avatar name={wish.user?.name ?? ''} url={wish.user?.avatar_url ?? null} size={30} />
                         <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: INK }}>
+                              {wish.user?.name?.split(/\s+/)[0] ?? 'Someone'}
+                            </Text>
+                            <HiveMark size={11} colour={accentOnDark(hiveAccent(wish.community))} />
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: INK_FAINT }}>
+                              {wish.community?.name ? hiveDisplayName(wish.community.name) : ''}
+                            </Text>
+                          </View>
+                          {wish.title?.trim() ? (
+                            <Text
+                              style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: INK, lineHeight: 19, marginTop: 3 }}
+                              numberOfLines={1}
+                            >
+                              {wish.title.trim()}
+                            </Text>
+                          ) : null}
                           <Text
-                            style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: INK, lineHeight: 19 }}
+                            style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: INK_SOFT, lineHeight: 19, marginTop: 2 }}
                             numberOfLines={2}
                           >
-                            {wish.title?.trim() || wish.description}
-                          </Text>
-                          <Text
-                            style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: INK_FAINT, marginTop: 2 }}
-                          >
-                            {[wish.user?.name?.split(/\s+/)[0], wish.community?.name ? hiveDisplayName(wish.community.name) : null]
-                              .filter(Boolean)
-                              .join(' · ')}
+                            {wish.description}
                           </Text>
                         </View>
                       </Pressable>

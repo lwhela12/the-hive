@@ -299,6 +299,22 @@ export function CollapsiblePanel({
           gap: 10,
           padding: 16,
           backgroundColor: pressed ? pressedFill : 'transparent',
+          /**
+           * The focus ring wears the HIVE's colour, not Chrome's blue.
+           *
+           * Every panel in the app is this component, so every one of them has
+           * been drawing a bright browser-default outline the moment you click
+           * its header — a colour no HIVE owns, on the one page whose whole
+           * point is looking like the night sky. Nat, 2026-09-01: *"but also, i
+           * mean, its ugly, right?"* It was.
+           *
+           * Kept rather than removed: somebody moving through this page on a
+           * keyboard needs to see where they are. Drawn just inside the edge so
+           * it never sticks out past the card it belongs to.
+           */
+          outlineColor: accent,
+          outlineWidth: 2,
+          outlineOffset: -2,
         })}
       >
         {icon ? (
