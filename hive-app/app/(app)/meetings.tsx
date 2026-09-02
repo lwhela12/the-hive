@@ -488,8 +488,22 @@ export default function MeetingsScreen() {
     const savedDraft = readMeetingFormDraft<NotesImportForm>(notesImportDraftKey);
     if (!savedDraft) return;
 
-    // Older drafts predate audioFiles — normalize so .map/.length never crash.
-    setNotesImportForm({ ...savedDraft.form, audioFiles: savedDraft.form.audioFiles ?? [] });
+    /**
+     * A saved draft was written by an OLDER build of this screen, so it is
+     * laid ON TOP of today's defaults rather than used in their place. A field
+     * this build has and that build did not comes back missing otherwise, and
+     * the next `.map` or `.length` on it takes the page down.
+     *
+     * The `audioFiles ?? []` line this replaces was that exact bug, patched
+     * one field at a time. Profile learned the same lesson the hard way on
+     * 2026-09-01, when a renamed field crashed the whole page on load.
+     */
+    setNotesImportForm((current) => ({
+      ...getDefaultNotesImportForm(null),
+      ...current,
+      ...savedDraft.form,
+      audioFiles: savedDraft.form.audioFiles ?? [],
+    }));
     if (savedDraft.active) {
       setShowNotesImport(true);
     }
@@ -677,7 +691,8 @@ export default function MeetingsScreen() {
 
   const handleEditEvent = (event: Event) => {
     const savedDraft = readMeetingFormDraft<EventEditForm>(getEventEditDraftKey(event.id));
-    setEditForm(savedDraft?.form ?? {
+    // Same rule: the event's own values first, whatever was drafted on top.
+    setEditForm({
       title: normalizeHiveBrandText(event.title),
       description: event.description || '',
       location: event.location || '',
@@ -687,6 +702,7 @@ export default function MeetingsScreen() {
       })(),
       event_time: event.event_time || '',
       end_time: event.end_time || '',
+      ...(savedDraft?.form ?? {}),
     });
     setEditingEvent(event);
     if (activeMeetingEditKey) setStoredItem(activeMeetingEditKey, event.id);
@@ -745,7 +761,11 @@ export default function MeetingsScreen() {
     const matchesRequestedMeeting =
       savedDraft?.form.linkedEventId === (event?.id ?? null)
       || (!event && !!savedDraft?.form);
-    setNotesImportForm(matchesRequestedMeeting ? savedDraft.form : getDefaultNotesImportForm(event));
+    // Laid over the defaults, never used in their place — see the restore
+    // effect above for what that costs when a field is added or renamed.
+    setNotesImportForm(matchesRequestedMeeting
+      ? { ...getDefaultNotesImportForm(event), ...savedDraft.form }
+      : getDefaultNotesImportForm(event));
     setShowMeetingPicker(false);
     setShowNotesImport(true);
   };

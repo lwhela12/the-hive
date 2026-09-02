@@ -884,27 +884,51 @@ export default function ProfileScreen() {
     pieceReach: editPieceReach,
   });
 
+  /**
+   * A saved draft was written by an OLDER version of this screen.
+   *
+   * `ProfileFormDraftFields` types what THIS build writes; the JSON sitting in
+   * the browser was written by whatever build the person last had open, and no
+   * compiler has ever seen it. So every field here is read as "possibly
+   * missing" whatever the type promises.
+   *
+   * That is not theoretical. On 2026-09-01 the Preferred Contact Method field
+   * was removed and a Currently Reading one took its place in this list. Every
+   * browser holding a draft from an hour earlier restored `undefined` into the
+   * new box, the box asked it for its `.length`, and the whole profile page
+   * died with "Cannot read properties of undefined" — on load, because the
+   * effect below reopens a saved draft by itself. Nat found it in Tech HIVE
+   * within the hour.
+   *
+   * A missing field means the draft is silent about it, and silence is not an
+   * instruction: what the profile already holds stands.
+   */
   const applyProfileDraftFields = (fields: ProfileFormDraftFields) => {
-    setEditName(fields.name);
-    setEditPhone(fields.phone);
-    setEditBirthday(fields.birthday);
-    setEditOccupation(fields.occupation);
-    setEditProfileTitle(fields.profileTitle);
-    setEditCurrentlyReading(fields.currentlyReading);
-    setEditBio(fields.bio);
-    setEditCurrentProject(fields.currentProject);
-    setEditHometown(fields.hometown);
-    setEditFavBook(fields.favoriteBook);
-    setEditFavFood(fields.favoriteFood);
-    setEditFavHobby(fields.favoriteHobby);
-    setEditKnownFor(fields.knownFor);
-    setEditMiqExperiences(fields.miqExperiences);
-    setEditMiqGrowth(fields.miqGrowth);
-    setEditMiqContribution(fields.miqContribution);
-    setEditFunFacts(fields.funFacts.length > 0 ? fields.funFacts : ['', '', '']);
-    // A draft written before these controls existed says nothing about reach,
-    // and silence is not an instruction — what the profile holds stands.
-    if (fields.pieceReach) setEditPieceReach(fields.pieceReach);
+    const draft = (fields ?? {}) as Partial<ProfileFormDraftFields>;
+    const text = (value: unknown, fallback = '') =>
+      typeof value === 'string' ? value : fallback;
+
+    setEditName(text(draft.name, profile?.name ?? ''));
+    setEditPhone(text(draft.phone));
+    setEditBirthday(text(draft.birthday));
+    setEditOccupation(text(draft.occupation));
+    setEditProfileTitle(text(draft.profileTitle));
+    setEditCurrentlyReading(text(draft.currentlyReading, (profile as any)?.currently_reading ?? ''));
+    setEditBio(text(draft.bio));
+    setEditCurrentProject(text(draft.currentProject));
+    setEditHometown(text(draft.hometown));
+    setEditFavBook(text(draft.favoriteBook));
+    setEditFavFood(text(draft.favoriteFood));
+    setEditFavHobby(text(draft.favoriteHobby));
+    setEditKnownFor(text(draft.knownFor));
+    setEditMiqExperiences(text(draft.miqExperiences));
+    setEditMiqGrowth(text(draft.miqGrowth));
+    setEditMiqContribution(text(draft.miqContribution));
+    const funFacts = Array.isArray(draft.funFacts)
+      ? draft.funFacts.filter((fact): fact is string => typeof fact === 'string')
+      : [];
+    setEditFunFacts(funFacts.length > 0 ? funFacts : ['', '', '']);
+    if (draft.pieceReach) setEditPieceReach(draft.pieceReach);
   };
 
   const readProfileFormDraft = (): ProfileFormDraft | null => {
