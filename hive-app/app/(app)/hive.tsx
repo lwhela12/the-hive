@@ -722,9 +722,14 @@ export default function HiveScreen() {
   // email's link landed and the check-in never got a chance. A link that names
   // a HIVE and a check-in is a request to be IN that HIVE; the handler below
   // takes you down out of Whole HIVE and opens it.
+  //
+  // **And a link that names a HIVE counts too, even with no survey on it**
+  // (2026-09-01). Naming a HIVE is a request to be IN it — the app's oldest
+  // rule about deep links — but only `openSurveyId` was holding this redirect
+  // back, so any other `?hive=` link bounced straight back up to HIVE-Wide.
   useEffect(() => {
-    if (wholeHive && !openSurveyId) router.replace('/hive-wide' as never);
-  }, [wholeHive, router, openSurveyId]);
+    if (wholeHive && !openSurveyId && !linkedHiveId) router.replace('/hive-wide' as never);
+  }, [wholeHive, router, openSurveyId, linkedHiveId]);
   const { width } = useWindowDimensions();
   const useMobileLayout = width < 768;
   const homeScrollRef = useRef<ScrollView>(null);
@@ -2175,24 +2180,48 @@ export default function HiveScreen() {
    * the wrong HIVE we move them first and this effect runs again on arrival.
    */
   const handledSurveyIdRef = useRef<string | null>(null);
+  /**
+   * The ASK, remembered — because the URL will not hold still.
+   *
+   * Opening the check-in takes several steps: come down out of HIVE-Wide,
+   * switch to the named HIVE, wait for that HIVE's surveys to load, then open
+   * the right one. The address bar changes underneath all of that — switching
+   * HIVEs replaces the route, and this effect clears the params itself when it
+   * is done — so reading the ask off the URL each time means any one of those
+   * steps can drop it, and the member lands on Home, or back at HIVE-Wide,
+   * with no idea why the button did nothing.
+   *
+   * Nat, 2026-09-01, clicking the button in her own preview and arriving at
+   * HIVE-Wide: *"cant send it out until its good, mate."* Quite. So the ask is
+   * captured the first time it is seen and kept until it is carried out. The
+   * URL is where the request arrives; it is not where the request lives.
+   */
+  const surveyAskRef = useRef<{ surveyId: string; hiveId: string | null } | null>(null);
+  const askedSurveyId = Array.isArray(openSurveyId) ? openSurveyId[0] : openSurveyId;
+  const askedHiveId = Array.isArray(linkedHiveId) ? linkedHiveId[0] : linkedHiveId;
+  if (askedSurveyId && handledSurveyIdRef.current !== askedSurveyId) {
+    surveyAskRef.current = { surveyId: askedSurveyId, hiveId: askedHiveId ?? null };
+  }
+
   useEffect(() => {
-    if (!openSurveyId || handledSurveyIdRef.current === openSurveyId) return;
-    const wantedHive = Array.isArray(linkedHiveId) ? linkedHiveId[0] : linkedHiveId;
+    const ask = surveyAskRef.current;
+    if (!ask || handledSurveyIdRef.current === ask.surveyId) return;
     // Standing above the HIVEs counts as being in the wrong one: picking a HIVE
     // by name is how you come down out of Whole HIVE (see switchCommunity).
-    if (wantedHive && (wantedHive !== communityId || wholeHive)) {
-      void switchCommunity(wantedHive);
+    if (ask.hiveId && (ask.hiveId !== communityId || wholeHive)) {
+      void switchCommunity(ask.hiveId);
       return;
     }
     if (!communityId || wholeHive) return;
     // Surveys arrive a moment after the screen does; wait for the real row
     // rather than giving up and leaving them on Home wondering.
-    const match = availableSurveys.find((s) => s.id === openSurveyId);
+    const match = availableSurveys.find((s) => s.id === ask.surveyId);
     if (!match) return;
-    handledSurveyIdRef.current = openSurveyId;
+    handledSurveyIdRef.current = ask.surveyId;
+    surveyAskRef.current = null;
     openSurvey(match);
     router.setParams({ openSurveyId: undefined, hive: undefined } as any);
-  }, [openSurveyId, linkedHiveId, communityId, wholeHive, availableSurveys, openSurvey, switchCommunity, router]);
+  }, [askedSurveyId, askedHiveId, communityId, wholeHive, availableSurveys, openSurvey, switchCommunity, router]);
 
   const closeSurvey = useCallback(() => {
     setActiveSurvey(null);
