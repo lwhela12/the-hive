@@ -16,6 +16,7 @@ import { SpaceGlobe, SPACE_BLACK } from '../../components/ui/SpaceGlobe';
 import { CollapsiblePanel } from '../../components/ui/CollapsiblePanel';
 import { HiveMark } from '../../components/ui/HiveMark';
 import { Avatar } from '../../components/ui/Avatar';
+import { getWishQuickTitle, getWishDetailText, hasSeparateWishTitle } from '../../lib/wishDisplay';
 import { HiveWideWelcome } from '../../components/ui/HiveWideWelcome';
 import { PendingInviteDoor } from '../../components/ui/PendingInviteDoor';
 import { markJustJoinedHive } from '../_layout';
@@ -238,6 +239,91 @@ function TopBox({ label, wide, children }: { label: string; wide: boolean; child
     >
       {children}
     </CollapsiblePanel>
+  );
+}
+
+/**
+ * A travelling wish: a header you can read at a glance, and the ask underneath
+ * when you want it.
+ *
+ * Nat, 2026-09-01, on the version that put the whole thing on the card:
+ * *"we want there to be a header & then expand for details, not everything in
+ * one line."* Four wishes each spilling two lines of prose is a wall; four
+ * names and four asks, each one line, is a list you can scan — and the one you
+ * care about opens where it sits.
+ *
+ * The title comes from `getWishQuickTitle`, the same helper the profile and
+ * the member cards use. Almost no wish has a title of its own written down, so
+ * everywhere in the app derives one from the ask itself; this box was the one
+ * place reading the raw column and finding nothing.
+ */
+function WideWishCard({ wish, onOpenMembers }: { wish: WideWish; onOpenMembers: () => void }) {
+  const [open, setOpen] = useState(false);
+  const title = getWishQuickTitle(wish as never, 56);
+  const detail = getWishDetailText(wish as never);
+  // Nothing to open when the ask IS the title — a chevron that reveals the
+  // line you just read is a promise of more that has none.
+  const expandable = !!detail && hasSeparateWishTitle(wish as never);
+
+  return (
+    <View
+      style={{
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: CARD_EDGE,
+        backgroundColor: CARD_FILL,
+        overflow: 'hidden',
+      }}
+    >
+      <Pressable
+        onPress={() => (expandable ? setOpen((was) => !was) : onOpenMembers())}
+        accessibilityRole="button"
+        accessibilityState={expandable ? { expanded: open } : undefined}
+        accessibilityLabel={
+          expandable
+            ? `${wish.user?.name ?? 'Someone'}: ${title}. ${open ? 'Open' : 'Shut'}.`
+            : `${wish.user?.name ?? 'Someone'}: ${title}`
+        }
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 9,
+          paddingVertical: 10,
+          paddingHorizontal: 12,
+          backgroundColor: pressed ? PANEL_COLOURS.pressed : 'transparent',
+          outlineWidth: 0,
+        })}
+      >
+        <Avatar name={wish.user?.name ?? ''} url={wish.user?.avatar_url ?? null} size={28} />
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: INK_FAINT }}>
+              {wish.user?.name?.split(/\s+/)[0] ?? 'Someone'}
+            </Text>
+            <HiveMark size={10} colour={accentOnDark(hiveAccent(wish.community))} />
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: INK_FAINT }}>
+              {wish.community?.name ? hiveDisplayName(wish.community.name) : ''}
+            </Text>
+          </View>
+          <Text
+            style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: INK, lineHeight: 19, marginTop: 1 }}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+        </View>
+        {expandable ? (
+          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={15} color={GOLD_ON_SPACE} />
+        ) : null}
+      </Pressable>
+      {expandable && open ? (
+        <View style={{ paddingHorizontal: 12, paddingBottom: 11, paddingLeft: 49 }}>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: INK_SOFT, lineHeight: 20 }}>
+            {detail}
+          </Text>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -971,51 +1057,11 @@ export default function HiveWideScreen() {
                 {wideWishes.length > 0 ? (
                   <View style={{ gap: 9 }}>
                     {wideWishes.slice(0, 4).map((wish) => (
-                      <Pressable
+                      <WideWishCard
                         key={wish.id}
-                        onPress={() => router.push('/members' as never)}
-                        style={{
-                          flexDirection: 'row', alignItems: 'flex-start', gap: 9,
-                          paddingVertical: 10, paddingHorizontal: 12,
-                          borderRadius: 12, borderWidth: 1,
-                          borderColor: CARD_EDGE, backgroundColor: CARD_FILL,
-                        }}
-                      >
-                        {/* The same card the profile draws, in the night's
-                            colours. Nat put the two side by side, 2026-09-01:
-                            the profile's has a face, a name, a title in bold
-                            and the ask underneath in ordinary type; this one
-                            had the whole ask set in bold with a grey hexagon
-                            beside it, so the longest thing on screen shouted
-                            and the person who wrote it whispered. Same wish,
-                            same shape. */}
-                        <Avatar name={wish.user?.name ?? ''} url={wish.user?.avatar_url ?? null} size={30} />
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: INK }}>
-                              {wish.user?.name?.split(/\s+/)[0] ?? 'Someone'}
-                            </Text>
-                            <HiveMark size={11} colour={accentOnDark(hiveAccent(wish.community))} />
-                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: INK_FAINT }}>
-                              {wish.community?.name ? hiveDisplayName(wish.community.name) : ''}
-                            </Text>
-                          </View>
-                          {wish.title?.trim() ? (
-                            <Text
-                              style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: INK, lineHeight: 19, marginTop: 3 }}
-                              numberOfLines={1}
-                            >
-                              {wish.title.trim()}
-                            </Text>
-                          ) : null}
-                          <Text
-                            style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: INK_SOFT, lineHeight: 19, marginTop: 2 }}
-                            numberOfLines={2}
-                          >
-                            {wish.description}
-                          </Text>
-                        </View>
-                      </Pressable>
+                        wish={wish}
+                        onOpenMembers={() => router.push('/members' as never)}
+                      />
                     ))}
                   </View>
                 ) : (
@@ -1029,6 +1075,7 @@ export default function HiveWideScreen() {
                   </Text>
                 )}
               </TopBox>
+
 
               {/* HIVE-Wide Chat came out (Nat 2026-08-04): "when we're ready
                   for the chat, we'll just add that into the vertical nav bar."
