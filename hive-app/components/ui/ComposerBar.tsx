@@ -34,13 +34,17 @@ import { VoiceMicButton } from './VoiceMicButton';
  *
  *   variant="chat"        the pill. attach · text · send · mic, all one line.
  *                         Enter sends, Shift+Enter starts a new line.
- *   variant="form"        a labelled prose box. The mic lives on a footer strip
- *                         INSIDE the box's own border, with the counter.
+ *   variant="form"        a labelled prose box. text · mic on one line.
  *   variant="inlineEdit"  edit-in-place. Same box, plus Cancel and Save.
  *
- * A React Native TextInput cannot have children, which is why the mic in the
- * form and inline-edit boxes is a footer row inside the SAME bordered container
- * as the field rather than literally inside the field. To the eye it is one box.
+ * A React Native TextInput cannot have children, so the mic sits BESIDE the
+ * field in a row rather than literally inside it — same bordered container,
+ * same line. It used to live on a footer strip under the field, which is the
+ * wrong axis and which people read as a second box: Lucas tried to type in it
+ * (Nat, 2026-09-02, on where the mic goes — *"the answer is: inline"*).
+ *
+ * A box with no attachments, no counter and no Save button now has no footer at
+ * all. One box, one place to type, nothing under it.
  *
  * Everything a call site used to hand-roll lives here now: mentions, dictation,
  * drafts (pass a draft-backed setter), attachments, drag-and-drop, the character
@@ -508,7 +512,14 @@ export function ComposerBar({
   // ---- the box (form + inline edit) ---------------------------------------
   // The footer only exists if it has something to hold. On a phone the mic is
   // not drawn at all, so without this the box would grow an empty shelf.
-  const showFooter = isDictationSupported() || showAttach || showCounter || isInlineEdit;
+  /**
+   * The shelf now holds only things that are not the mic.
+   *
+   * With the mic on the text line, a box with no attachments, no counter and no
+   * Save button has no footer at all — which is Quick Add, the check-in prose
+   * fields, and most of the app. One box, one place to type, nothing under it.
+   */
+  const showFooter = showAttach || showCounter || isInlineEdit;
 
   return (
     <View className={containerClassName} {...dragDropProps}>
@@ -531,7 +542,29 @@ export function ComposerBar({
         }}
         {...enterCaptureProps}
       >
-        {textInputNode}
+        {/**
+          * The mic sits ON the line you are typing, not under it.
+          *
+          * Nat, 2026-09-02, after watching Lucas: *"the answer is: inline."*
+          * The footer strip was inside the field's border so the two would read
+          * as one box, and they did not — they read as two, and he tapped the
+          * lower one to type. Giving the empty half of the shelf a focus
+          * handler patched the symptom; this removes the second box.
+          *
+          * It is what this file's own opening note always said: *"the mic is a
+          * thing you do TO the line you are typing, so it belongs on that line,
+          * not on a shelf below it."* The chat pill has always had it right.
+          * Form boxes now do too.
+          *
+          * `items-end` because a prose box grows downward — the mic stays with
+          * the last line you wrote rather than floating beside the first.
+          */}
+        <View className="flex-row items-end">
+          <View className="flex-1">{textInputNode}</View>
+          {isDictationSupported() ? (
+            <View className="pr-2 pb-2 pl-1">{micNode}</View>
+          ) : null}
+        </View>
 
         {showFooter && (
           <View
@@ -562,9 +595,9 @@ export function ComposerBar({
                 disabled={submitting || !editable}
               />
             )}
-            {micNode}
-            {/* The empty half of the shelf is where Lucas kept tapping. It
-                gives the cursor back now instead of doing nothing. */}
+            {/* Tapping the shelf still gives the cursor back — it is a smaller
+                shelf now, but a dead tap inside something that looks like a
+                field is the app saying "not here" without saying where. */}
             <Pressable
               onPress={handBackTheCursor}
               accessibilityLabel="Keep typing"
