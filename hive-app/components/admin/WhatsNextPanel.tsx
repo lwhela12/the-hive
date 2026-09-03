@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useWhatsNext, type WhatsNextItem } from '../../lib/hooks/useWhatsNext';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { hiveAccent } from '../../lib/hiveBrand';
+import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { useHiveGrid, type GridHive } from '../../lib/hooks/useHiveGrid';
+import { HIVE_RULES } from '../../lib/hiveRules';
 
 /**
  * What's next — every HIVE, in date order, at the top of HIVE-Wide Admin.
@@ -43,6 +46,9 @@ export function WhatsNextPanel({
   const router = useRouter();
   const { memberships } = useAuth();
   const { items, state, today } = useWhatsNext();
+  const grid = useHiveGrid();
+  // The title is the first tab, the way every other folder in Admin works.
+  const [tab, setTab] = useState('next');
 
   const waiting = items.filter((item) => item.holdId).length;
 
@@ -63,10 +69,23 @@ export function WhatsNextPanel({
     <View style={[cellStyle, { order } as any]}>
       <Panel
         title={waiting > 0 ? `What's next · ${waiting} waiting on you` : "What's next"}
+        titleTabKey="next"
+        tabs={[
+          { key: 'grid', label: 'The grid' },
+          { key: 'rules', label: 'The rules' },
+        ]}
+        activeTab={tab}
+        onTabChange={setTab}
         style={panelStyle}
         bodyStyle={bodyStyle}
       >
         <ScrollView style={scrollStyle} contentContainerStyle={{ paddingBottom: 4 }}>
+        {tab === 'rules' ? (
+          <RulesTab />
+        ) : tab === 'grid' ? (
+          <GridTab grid={grid} />
+        ) : (
+        <>
         {state === 'loading' ? (
           <View style={{ padding: 20, alignItems: 'center' }}>
             <ActivityIndicator size="small" color="#fffdf5" />
@@ -96,6 +115,8 @@ export function WhatsNextPanel({
               onPress={item.holdId ? () => router.push(`/approve/${item.holdId}` as never) : undefined}
             />
           ))
+        )}
+        </>
         )}
         </ScrollView>
       </Panel>
@@ -180,4 +201,191 @@ function said(dateOnly: string, today: string): string {
   if (days < 0) return `${-days} days late`;
   const [y, m, d] = dateOnly.split('-').map(Number);
   return `${DAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${MONTHS[m - 1]} ${d}`;
+}
+
+/* ------------------------------------------------------------------ the grid */
+
+/**
+ * Every HIVE side by side. Scrolls sideways in half a column rather than
+ * squeezing four columns into it — a table that wraps is a table nobody reads.
+ */
+function GridTab({ grid }: { grid: ReturnType<typeof useHiveGrid> }) {
+  if (grid.state === 'loading') {
+    return (
+      <View style={{ padding: 20, alignItems: 'center' }}>
+        <ActivityIndicator size="small" color="#fffdf5" />
+      </View>
+    );
+  }
+  if (grid.state === 'error') {
+    return (
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#ffb4a8', padding: 14, lineHeight: 19 }}>
+        This did not load, so none of it is being shown as true. Pull down to try again.
+      </Text>
+    );
+  }
+
+  const rows: { label: string; hint?: string; cell: (hive: GridHive) => React.ReactNode }[] = [
+    { label: 'Members', cell: (h) => <Plain>{String(h.members)}</Plain> },
+    {
+      label: 'Next meeting',
+      cell: (h) => h.nextMeeting
+        ? (
+          <>
+            <Plain bold>{pretty(h.nextMeeting.date)}</Plain>
+            <Quiet>
+              {[h.nextMeeting.time, h.nextMeeting.location].filter(Boolean).join(' · ')}
+              {h.nextMeeting.onMeet ? ' + Meet' : ''}
+            </Quiet>
+          </>
+        )
+        : <Quiet>nothing booked</Quiet>,
+    },
+    {
+      label: 'Before we meet',
+      hint: 'who has answered',
+      cell: (h) => h.beforeWeMeet
+        ? (
+          <>
+            <Plain bold>{h.beforeWeMeet.answered} of {h.beforeWeMeet.of}</Plain>
+            <Quiet>due {pretty(h.beforeWeMeet.due)}</Quiet>
+          </>
+        )
+        : <Quiet>none open</Quiet>,
+    },
+    {
+      label: 'End of the month',
+      hint: 'who has answered',
+      cell: (h) => !h.endOfMonthCounted
+        // Never a zero here. Nothing counted it, which is a different and much
+        // kinder claim than "nobody did it".
+        ? <Quiet>not counted — ticked off in their own browser</Quiet>
+        : h.endOfMonth
+          ? (
+            <>
+              <Plain bold>{h.endOfMonth.answered} of {h.endOfMonth.of}</Plain>
+              <Quiet>due {pretty(h.endOfMonth.due)}</Quiet>
+            </>
+          )
+          : <Quiet>none open</Quiet>,
+    },
+    {
+      label: 'A member can share',
+      cell: (h) => h.ceiling === 'hive'
+        ? (
+          <>
+            <Plain bold>this HIVE only</Plain>
+            <Quiet>nothing leaves it</Quiet>
+          </>
+        )
+        : <Plain>this HIVE · HIVE-Wide · public</Plain>,
+    },
+    { label: 'Honey Pot', cell: (h) => h.honeyPot ? <Plain>yes · $25 a quarter</Plain> : <Quiet>no</Quiet> },
+  ];
+
+  return (
+    <View>
+      <View style={{ paddingHorizontal: 14, paddingTop: 10, paddingBottom: 4 }}>
+        <Quiet>
+          {grid.peopleAcrossAllHives} people across every HIVE — several are in more than one, so
+          the columns add up to more than that.
+        </Quiet>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={{ paddingHorizontal: 14, paddingBottom: 8 }}>
+          <View style={{ flexDirection: 'row', paddingVertical: 8, gap: 12 }}>
+            <View style={{ width: 118 }} />
+            {grid.hives.map((hive) => (
+              <View key={hive.communityId} style={{ width: 150 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#F6F4E5' }}>
+                  {hiveDisplayName(hive.name)}
+                </Text>
+              </View>
+            ))}
+          </View>
+          {rows.map((row) => (
+            <View
+              key={row.label}
+              style={{
+                flexDirection: 'row', gap: 12, paddingVertical: 9,
+                borderTopWidth: 1, borderTopColor: 'rgba(246,244,229,0.12)',
+              }}
+            >
+              <View style={{ width: 118 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11.5, color: 'rgba(246,244,229,0.6)' }}>
+                  {row.label}
+                </Text>
+                {row.hint ? <Quiet>{row.hint}</Quiet> : null}
+              </View>
+              {grid.hives.map((hive) => (
+                <View key={hive.communityId} style={{ width: 150 }}>{row.cell(hive)}</View>
+              ))}
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+/* ----------------------------------------------------------------- the rules */
+
+function RulesTab() {
+  return (
+    <View style={{ paddingBottom: 6 }}>
+      {HIVE_RULES.map((group) => (
+        <View key={group.heading}>
+          <Text
+            style={{
+              fontFamily: 'Lato_700Bold', fontSize: 10.5, letterSpacing: 1,
+              textTransform: 'uppercase', color: '#e8c583',
+              paddingHorizontal: 14, paddingTop: 14, paddingBottom: 2,
+            }}
+          >
+            {group.heading}
+          </Text>
+          {group.rules.map((rule) => (
+            <View
+              key={rule.text}
+              style={{
+                paddingHorizontal: 14, paddingVertical: 9,
+                borderTopWidth: 1, borderTopColor: 'rgba(246,244,229,0.12)',
+              }}
+            >
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#F6F4E5' }}>
+                {rule.text}
+              </Text>
+              {/* Named so a rule that changes in code and not here is findable,
+                  rather than quietly becoming a lie on a page Nat trusts. */}
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10.5, color: 'rgba(246,244,229,0.45)', marginTop: 3 }}>
+                {rule.source}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function Plain({ children, bold }: { children: React.ReactNode; bold?: boolean }) {
+  return (
+    <Text style={{ fontFamily: bold ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 12.5, color: '#F6F4E5' }}>
+      {children}
+    </Text>
+  );
+}
+
+function Quiet({ children }: { children: React.ReactNode }) {
+  return (
+    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, lineHeight: 15, color: 'rgba(246,244,229,0.55)', marginTop: 2 }}>
+      {children}
+    </Text>
+  );
+}
+
+const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function pretty(dateOnly: string): string {
+  const [, m, d] = dateOnly.split('-').map(Number);
+  return `${M[m - 1]} ${d}`;
 }
