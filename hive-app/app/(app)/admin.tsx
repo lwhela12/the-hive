@@ -46,6 +46,7 @@ import {
   PANEL_INSET,
   hivePanelSkin,
 } from '../../components/admin/GodModePanels';
+import { WhatsNextPanel } from '../../components/admin/WhatsNextPanel';
 import { HIVE_GOLD, accentOnDark, accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 // Admin is always seen from the cosmos, whichever HIVE you happen to belong to,
 // so its boxes take the space skin's ink and card values rather than asking
@@ -1586,6 +1587,26 @@ export default function AdminScreen() {
               preview email IS the interface: she reads it, says go, and the
               send is fired for her. A box here was a second place to look for
               something already sitting in her inbox. */}
+
+          {/* WHAT'S NEXT — every HIVE, in date order, nothing falls off it.
+              Nat, 2026-09-02: *"this is what I've been missing... can we just
+              fold that into the HIVE app, somewhere in HIVE-Wide admin?"*
+
+              **This is not the "waiting on you" box coming back.** That one
+              (removed 2026-08-17) was offered INSTEAD of a preview email, and
+              her objection was exactly that: *"it shouldn't live in admin, it
+              should send me a preview email."* It now does — with a button in
+              it, as of today — and this list is the standing second door beside
+              it, holding meetings, open check-ins and the end of the month as
+              well. A held send here is a row that links to the same approve
+              screen the email does, never a second interface for it. */}
+          {isAdmin && (
+            <WhatsNextPanel
+              panelStyle={dashboardPanelStyle}
+              bodyStyle={dashboardPanelBodyStyle}
+              Panel={AdminPanel}
+            />
+          )}
 
           {isOwner && (
             <NewsletterPanel
