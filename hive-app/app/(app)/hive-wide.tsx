@@ -26,14 +26,13 @@ import { supabase } from '../../lib/supabase';
 import { useAuth, type HiveMembership } from '../../lib/hooks/useAuth';
 import { useAppNews } from '../../lib/hooks/useAppNews';
 import { accentOnDark, accentWash, hiveAccent, hiveDisplayName, normalizeHiveBrandText } from '../../lib/hiveBrand';
-import { formatDateLong, formatTimeRange } from '../../lib/dateUtils';
+import { formatDateLong } from '../../lib/dateUtils';
 import { getLocalIsoDate } from '../../lib/hooks/useArrivalBoard';
 import { useOpenFeedback } from '../../lib/openFeedback';
 import type { Community } from '../../types';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
-import { HiveWideCalendar } from '../../components/hive/HiveWideCalendar';
 /**
  * HIVE-Wide — the shared high street.
  *
@@ -413,17 +412,42 @@ const TITLE_EMS = (6.27 + 9 * TITLE_TRACKING) * 1.06;
  * all. See the note above `PANEL_COLOURS` for the two attempts at making it
  * stand out and why both were undone.
  */
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "Thu Sep 3 · 5pm" — the whole answer to "when do we meet", in one line. */
+function whenItMeets(meeting: { date: string; time: string | null }): string {
+  const [y, m, d] = meeting.date.split('-').map(Number);
+  const day = `${WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${MONTHS[m - 1]} ${d}`;
+  if (!meeting.time) return day;
+  const [hh, mm] = meeting.time.split(':').map(Number);
+  const suffix = hh >= 12 ? 'pm' : 'am';
+  const hour = hh % 12 === 0 ? 12 : hh % 12;
+  return `${day} · ${mm ? `${hour}:${String(mm).padStart(2, '0')}` : hour}${suffix}`;
+}
+
 function WayIntoYourHive({
   memberships,
   firstName,
   firstVisit,
   onEnter,
+  nextMeetingByHive,
 }: {
   memberships: HiveMembership[];
   firstName: string | null;
   /** Shown the long explanation, until they have opened the welcome once. */
   firstVisit: boolean;
   onEnter: (communityId: string) => void;
+  /**
+   * When each of your HIVEs next meets, by community id.
+   *
+   * Nat, 2026-09-02, looking at "Your HIVEs" and "Your Meetings" sitting side
+   * by side: *"I think these two can be rolled into one box showing your HIVEs
+   * and when the next meeting is."* They were two panels answering one question
+   * per HIVE — which ones am I in, and when do we meet — so the answer now
+   * arrives on the same row as the door into it.
+   */
+  nextMeetingByHive: Record<string, { date: string; time: string | null } | undefined>;
 }) {
   if (memberships.length === 0) return null;
 
@@ -565,15 +589,29 @@ function WayIntoYourHive({
               }}
             >
               <HiveMark size={14} colour={colour} />
-              <Text
-                style={{
-                  flex: 1, fontFamily: 'Lato_700Bold', fontSize: 14.5,
-                  lineHeight: 19, color: INK,
-                }}
-                numberOfLines={2}
-              >
-                {name}
-              </Text>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{ fontFamily: 'Lato_700Bold', fontSize: 14.5, lineHeight: 19, color: INK }}
+                  numberOfLines={2}
+                >
+                  {name}
+                </Text>
+                {/* The second line the merge bought. A HIVE with nothing on the
+                    books says so rather than going quiet — "no date yet" is a
+                    fact you can act on; a blank row is one you have to go and
+                    check. */}
+                <Text
+                  style={{
+                    fontFamily: 'Lato_400Regular', fontSize: 11.5, lineHeight: 16,
+                    color: INK_SOFT, marginTop: 1,
+                  }}
+                  numberOfLines={1}
+                >
+                  {nextMeetingByHive[m.community_id]
+                    ? `Meets ${whenItMeets(nextMeetingByHive[m.community_id]!)}`
+                    : 'No date on the books yet'}
+                </Text>
+              </View>
               <Ionicons name="arrow-forward" size={16} color={colour} />
             </Pressable>
           );
@@ -779,6 +817,23 @@ export default function HiveWideScreen() {
       .slice(0, 5);
   }, [upcoming, memberships]);
 
+  /**
+   * The soonest meeting for each HIVE you are in, so the door into a HIVE can
+   * say when it next meets. Same source as the list that used to sit in its own
+   * box beside it (2026-09-02).
+   */
+  const nextMeetingByHive = useMemo(() => {
+    const soonest: Record<string, { date: string; time: string | null } | undefined> = {};
+    for (const event of myMeetings) {
+      if (soonest[event.community_id]) continue;
+      soonest[event.community_id] = {
+        date: event.event_date,
+        time: (event as any).event_time?.slice(0, 5) ?? null,
+      };
+    }
+    return soonest;
+  }, [myMeetings]);
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: SPACE_BLACK }} edges={['top']}>
       {/* The hero IS the header here. A pale wash behind a cream page was
@@ -959,6 +1014,7 @@ export default function HiveWideScreen() {
                   // HIVE-Wide — `switchCommunity` clears the HIVE-Wide standing
                   // and lands you on that HIVE's home page.
                   onEnter={(id) => { void switchCommunity(id); }}
+                  nextMeetingByHive={nextMeetingByHive}
                 />
               </View>
               {/* The wishes that travel — the home they never had.
@@ -967,91 +1023,27 @@ export default function HiveWideScreen() {
                   RESULT was missing. HIVE Help and HIVE Hangs came out to make
                   room: both were three lines of "tbd" repeated per HIVE, and
                   neither is a thing you can act on from up here. */}
-              {/* Your meetings, wherever they are. Tapping one steps you into
-                  that HIVE and opens its Meetings page, because that is where
-                  the deck, the notes and the check-in for it live. */}
-              <TopBox label="Your Meetings" wide={wide}>
-                {myMeetings.length > 0 ? (
-                  <View style={{ gap: 9 }}>
-                    {myMeetings.map((event) => {
-                      const hive = hives.find((h) => h.id === event.community_id);
-                      return (
-                        <Pressable
-                          key={event.id}
-                          onPress={() => {
-                            void switchCommunity(event.community_id);
-                            router.push('/meetings' as never);
-                          }}
-                          style={{
-                            flexDirection: 'row', alignItems: 'flex-start', gap: 9,
-                            paddingVertical: 10, paddingHorizontal: 12,
-                            borderRadius: 12, borderWidth: 1,
-                            borderColor: CARD_EDGE, backgroundColor: CARD_FILL,
-                          }}
-                        >
-                          <View style={{ paddingTop: 3 }}>
-                            <HiveMark size={12} colour={accentOnDark(hiveAccent(hive))} />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text
-                              style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: INK, lineHeight: 19 }}
-                              numberOfLines={2}
-                            >
-                              {normalizeHiveBrandText(event.title)}
-                            </Text>
-                            <Text
-                              style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: INK_FAINT, marginTop: 2 }}
-                            >
-                              {[
-                                formatDateLong(event.event_date),
-                                // "5:00 – 7:00 PM" once the meeting has an end
-                                // time — Nat: "i couldnt add window, like
-                                // 5-7, i could only put in 5pm" (migration
-                                // 202). Null end time reads exactly as before.
-                                event.event_time ? formatTimeRange(event.event_time, event.end_time) : null,
-                                hive?.name ? hiveDisplayName(hive.name) : null,
-                              ].filter(Boolean).join(' · ')}
-                            </Text>
-                          </View>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ) : (
-                  <Text
-                    style={{
-                      fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 14,
-                      lineHeight: 21, color: INK_SOFT,
-                    }}
-                  >
-                    Nothing on the books yet. When a HIVE you&rsquo;re in schedules its next
-                    meeting, it turns up here.
-                  </Text>
-                )}
-              </TopBox>
+              {/* "YOUR MEETINGS" AND THE HIVE-WIDE CALENDAR ARE GONE (2026-09-02).
+                  Nat: *"I think these two can be rolled into one box showing
+                  your HIVEs and when the next meeting is"*, and *"this HIVE-Wide
+                  calendar should be merged with"* What's next.
 
-              {/* The whole month of HIVE life, at a glance.
-                  Nat's parked idea, her words: "A genuinely HIVE-Wide
-                  calendar, with a coloured bee per HIVE's meeting day."
-                  The box above answers "when am I expected somewhere?"; this
-                  one answers "when is everybody meeting?" — every HIVE's
-                  meeting days, yours or not, each wearing its own colour.
-                  The days come through migration 176's narrow window: day,
-                  time, title, whose — never a Meet link, notes or recordings,
-                  which stay inside their own HIVE. */}
-              <TopBox label="HIVE-Wide Calendar" wide={wide}>
-                <HiveWideCalendar
-                  hives={hives}
-                  myHiveIds={memberships.map((m) => m.community_id)}
-                  colours={PANEL_COLOURS}
-                  onOpenMeetings={(id) => {
-                    // The same walk the meetings box above takes: step into
-                    // that HIVE, then open its Meetings page.
-                    void switchCommunity(id);
-                    router.push('/meetings' as never);
-                  }}
-                />
-              </TopBox>
+                  Both are now said in places that already existed. Each HIVE's
+                  own row in Your HIVEs carries when it next meets — one row,
+                  one HIVE, both facts — and every dated thing across every HIVE
+                  is the scrolling What's next list, which is the shape she
+                  actually reads: *"I really like the scrolling to see what's
+                  next."*
+
+                  The month grid was offered as a second view and she turned it
+                  down: *"if the calendar view makes it more complicated, just
+                  ditch it."* It would have been the only thing in this change
+                  that ADDED — and a grid has nowhere to put "3 days late",
+                  which is the exact failure that made her own calendar useless
+                  to her. `HiveWideCalendar` and `useHiveWideMeetings` stay in
+                  the tree, unrendered, because migration 224's narrow window is
+                  the only safe way to ask "who else is meeting" and that is
+                  worth keeping built. */}
 
               <TopBox label="HIVE-Wide Wishes" wide={wide}>
                 {wideWishes.length > 0 ? (
