@@ -837,13 +837,42 @@ function plainTextFrom(html: string): string {
 }
 
 /** A band across the top of the preview saying what pressing go would do. */
-function previewBanner(held: HeldTouch, hiveName: string): string {
+/**
+ * The banner on Nat's preview, and the way in.
+ *
+ * Nat, 2026-09-02: *"I need to be able to approve it from inside the email."*
+ * Until now she could not — the approve endpoint existed and nothing called it,
+ * so every check-in that has ever gone out went out because somebody ran the
+ * function for her.
+ *
+ * **The link does not send anything.** That distinction is the whole design,
+ * and the reason there was no link here before (2026-08-17): a one-tap
+ * send-to-everyone address in an inbox is a members-wide blast that a mail
+ * scanner, a link preview or a forward can trip on its own. This one opens a
+ * screen inside the app that shows what will go and to whom, behind her login,
+ * with the button there. Anything that follows the URL out of curiosity sees a
+ * page and sends nothing.
+ */
+function previewBanner(held: HeldTouch, hiveName: string, holdId: string | null): string {
   const who = `${escapeHtml(hiveName)} · ${held.recipients} ${held.recipients === 1 ? 'person' : 'people'}`;
+  const door = holdId
+    ? `
+        <p style="margin: 12px 0 0;">
+          <a href="${APP_URL}/approve/${encodeURIComponent(holdId)}"
+             style="display: inline-block; background: #bd9348; color: #fffdf5; text-decoration: none; font-weight: 700; font-size: 14px; padding: 11px 20px; border-radius: 999px;">
+            Open it in HIVE
+          </a>
+        </p>
+        <p style="margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: #8a7550;">
+          That link only opens the app. You will see who it goes to and press Send there.
+        </p>`
+    : '';
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto 18px;">
       <div style="background: #fdf3dc; border: 1px solid #e6d2a4; border-radius: 14px; padding: 14px 16px; color: #6b5220;">
         <p style="margin: 0 0 6px; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700;">Waiting for your go-ahead</p>
         <p style="margin: 0; font-size: 14px; line-height: 1.5;">Nobody has this yet. Below is exactly what <strong>${who}</strong> will get. Say the word and it goes out — if you do nothing, nothing sends.</p>
+        ${door}
       </div>
     </div>`;
 }
@@ -901,32 +930,22 @@ async function holdForApproval(
     return false;
   }
 
-  if (RESEND_API_KEY) {
-    const previewBody = `${previewBanner(held, held.hiveName)}${personalizeHeldArtifact(held.htmlTemplate, 'there')}`;
-    try {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: FROM_EMAIL,
-          to: previewTo.email,
-          subject: `[Waiting on you] ${held.subject}`,
-          html: previewBody,
-          text: plainTextFrom(previewBody),
-        }),
-      });
-      if (!res.ok) console.error('[check-in-reminder] preview email failed:', await res.text());
-    } catch (previewError) {
-      console.error('[check-in-reminder] preview email error:', previewError);
-    }
-  }
-
-  const { error } = await admin.from('notifications').insert({
+  /**
+   * The hold is parked FIRST, and the email is sent second.
+   *
+   * It used to be the other way round, which was fine while the email carried
+   * no link — but the door in it is `/approve/<hold id>`, and that id does not
+   * exist until the row does. Parking first also fails in the safer direction:
+   * a hold with no email is a check-in Nat can still find waiting in the app,
+   * whereas an email pointing at a row that was never written is a dead button
+   * on the one screen that has to work.
+   */
+  const { data: heldRow, error } = await admin.from('notifications').insert({
     user_id: previewTo.id,
     community_id: survey.community_id,
     notification_type: 'general',
     title: `✋ ${held.hiveName} check-in is waiting on you`,
-    content: `${held.recipients} ${held.recipients === 1 ? 'person' : 'people'} get "${held.subject}" once you say go. The preview is in your inbox.`,
+    content: `${held.recipients} ${held.recipients === 1 ? 'person' : 'people'} get "${held.subject}" once you say go. Tap to read it and send it.`,
     email_sent: !!RESEND_API_KEY,
     metadata: {
       reminder_survey_id: survey.id,
@@ -945,8 +964,38 @@ async function holdForApproval(
       check_in_meeting: held.meeting ?? null,
       check_in_copy_version: 1,
     },
-  });
-  if (error) console.error('[check-in-reminder] could not park the hold:', error);
+  })
+    .select('id')
+    .single();
+  if (error) {
+    console.error('[check-in-reminder] could not park the hold:', error);
+    // No hold means no way to approve, so there is nothing honest to email
+    // about. Better silent than a preview nobody can act on.
+    return false;
+  }
+
+  const holdId = (heldRow as { id?: string } | null)?.id ?? null;
+
+  if (RESEND_API_KEY) {
+    const previewBody = `${previewBanner(held, held.hiveName, holdId)}${personalizeHeldArtifact(held.htmlTemplate, 'there')}`;
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: FROM_EMAIL,
+          to: previewTo.email,
+          subject: `[Waiting on you] ${held.subject}`,
+          html: previewBody,
+          text: plainTextFrom(previewBody),
+        }),
+      });
+      if (!res.ok) console.error('[check-in-reminder] preview email failed:', await res.text());
+    } catch (previewError) {
+      console.error('[check-in-reminder] preview email error:', previewError);
+    }
+  }
+
   return true;
 }
 

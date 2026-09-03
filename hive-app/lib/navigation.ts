@@ -309,6 +309,10 @@ export function routeLivesAtWholeHive(pathname: string | null | undefined): bool
   // is the same door onto the halfway flow (2026-09-02).
   if (path.startsWith('/checkin') || path.startsWith('/halfway')) return true;
 
+  // Approving a held check-in belongs to whichever HIVE the preview was built
+  // for, and the screen reads that off the hold itself — so it is a door too.
+  if (path.startsWith('/approve')) return true;
+
   return false;
 }
 

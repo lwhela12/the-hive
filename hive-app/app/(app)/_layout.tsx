@@ -586,6 +586,16 @@ export default function AppLayout() {
             href: null,
           }}
         />
+        {/* Where a check-in preview gets its go-ahead. Reached from the link
+            in Nat's preview email — the link only opens this page; the send
+            lives behind her login and behind a confirm. Never a tab. */}
+        <Tabs.Screen
+          name="approve/[hold]"
+          options={{
+            title: 'Send this check-in?',
+            href: null,
+          }}
+        />
         <Tabs.Screen
           name="monthly-tuneup"
           options={{

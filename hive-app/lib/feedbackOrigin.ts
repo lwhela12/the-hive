@@ -8,6 +8,7 @@ const DEEP_ORIGINS: ReadonlyArray<readonly [prefix: string, label: string]> = [
   ['/newsletter', 'The Buzz'],
   ['/checkin', 'Monthly Check-in'],
   ['/halfway', 'Halfway Check-in'],
+  ['/approve', 'Approving a check-in'],
   ['/join', 'Joining a HIVE'],
   ['/login', 'Signing in'],
   ['/board', 'Boards'],
