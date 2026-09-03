@@ -400,6 +400,9 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
       title: 'Plan the Meet Ups',
       cards: [
         { key: 'meeting', title: 'HIVE Meeting', blurb: 'Second Wednesday — dinner, business, and the HummDinger.' },
+        // Nat, 2026-09-03, moving Tech: *"all HIVEs meet on the 2nd week of the
+        // month (ish)"* — so every one of these blurbs names a day in the
+        // second week, and none of them names a HIVE that is not this one.
         { key: 'help', title: 'HIVE Help', blurb: 'Fifteen-minute favors — small asks, quick wins.' },
         { key: 'hang', title: 'HIVE Hang', blurb: 'Casual get-togethers between meetings. Anyone can host.' },
       ],
@@ -467,7 +470,7 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
           'Tech HIVE hoodies',
           'A Bumblebee Ball',
           'Tools or subscriptions we all use',
-          'I have another idea — I’ll bring it Thursday',
+          'I have another idea — I’ll bring it Tuesday',
         ],
       },
     },
@@ -478,7 +481,7 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
         {
           key: 'meeting',
           title: 'HIVE Meeting',
-          blurb: 'First Thursday evening, monthly, on Meet — built to fit around work.',
+          blurb: 'Second Tuesday evening, monthly, on Meet — built to fit around work.',
           vote: {
             answerKey: 'q_meeting_day',
             heading: 'The evening that suits us',
@@ -518,7 +521,7 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
       },
     },
     wrapupReminders: [
-      'Next meeting — first Thursday of the month',
+      'Next meeting — second Tuesday of the month',
       'Before we meet — POP + what you learned',
     ],
   },

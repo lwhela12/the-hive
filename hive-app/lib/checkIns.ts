@@ -21,13 +21,17 @@ export const CHECK_INS_COMING_SOON_MESSAGE =
  * talk about WHETHER Tech wants dues at all. Production still waits for its
  * own monthly design.
  *
- * The days, confirmed by Nat 2026-08-27: **Tech meets the FIRST Thursday,
- * 5-7pm, on Google Meet**, and it is a recurring series on her calendar.
- * **Production takes the SECOND Thursday, 5-7pm, in person** — deliberately
- * not recurring, because each month's date is set during the meeting before
- * it. OG lands mid-to-late month and its date moves the same way, meeting to
- * meeting. No day of the week is hardcoded anywhere in this file; everything
- * below reads the real meeting date.
+ * The days, reset by Nat on 2026-09-03: **every HIVE now meets in the second
+ * week of the month.** Tech takes the SECOND TUESDAY, 6-8pm on Google Meet;
+ * OG the second Wednesday; the third the second Thursday. Her reason was one
+ * calendar to hold in her head — *"it helps me streamline communication if all
+ * HIVEs meet the 2nd week of the month (ish)"*.
+ *
+ * Tech was the first Thursday, 5-7pm until that morning, which is what its
+ * first-ever meeting was scheduled for before it moved. No day of the week is
+ * hardcoded anywhere in this file; everything below reads the real meeting
+ * date, which is what made moving a HIVE a calendar edit rather than a
+ * code change.
  */
 export function hasTailoredCheckIns(
   community: Pick<Community, 'slug'> | null | undefined,
@@ -92,14 +96,15 @@ export function hasMeetingDeck(
  * talks about the newsletter. That was the only shape until 2026-08-12.
  *
  * **Tech doesn't meet on a rhythm the calendar month describes.** Tech sits on
- * the FIRST Thursday, 5-7pm on Google Meet (confirmed 2026-08-27), which makes
- * the end of the month about the worst possible moment to call something
- * "halfway" — the nudge would land three or four days before the meeting, not
+ * the SECOND TUESDAY, 6-8pm on Google Meet (moved there 2026-09-03), which
+ * makes the end of the month about the worst possible moment to call something
+ * "halfway" — the nudge would land nearly three weeks after the meeting, not
  * midway between two. So Tech's window is measured from its own next meeting,
- * whatever date that turns out to be, and it keeps working if the day moves
- * again. That last part earns its keep right across the HIVEs: Production's
- * second Thursday and OG's mid-to-late-month date are both set meeting to
- * meeting, so the real meeting date is the only thing worth measuring from.
+ * whatever date that turns out to be, and it keeps working when the day moves.
+ *
+ * That last part earned its keep the morning Tech moved: the day of the week
+ * changed, the hour changed, and nothing in this file needed touching except
+ * the words a member reads.
  * Tech's halfway also has no newsletter step at all (pulse and shout-outs
  * only), so OG's copy promised Tech members something that isn't in their flow.
  *
@@ -776,9 +781,9 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
   tech: {
     title: 'Before our first meeting',
     description:
-      'Thursday September 3rd, 5–7pm, on Google Meet — our first Tech HIVE. What you write here fills your spot in the room: your intro, what you are working on, and how we run this thing. Short answers are perfect, and blanks are completely fine.',
+      'Tuesday September 8th, 6–8pm, on Google Meet — our first Tech HIVE. What you write here fills your spot in the room: your intro, what you are working on, and how we run this thing. Short answers are perfect, and blanks are completely fine.',
     questions: [
-      choice('q_attendance', 'Will we see you Thursday?', [
+      choice('q_attendance', 'Will we see you Tuesday?', [
         "💻 I'll be on the call",
         "🐝 Can't make this one — but I still want to be in the group",
         '🤔 Not sure yet',
@@ -790,13 +795,13 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
         'The way we do that is a High Definition wish: one ask, said clearly enough that somebody in this room could grant it. "Look at my landing page and tell me why nobody signs up" is an HD.',
         'Pick one below as your focus for the month. It goes on your profile and your member card, and it comes up on screen on the night as yours.',
         'That is what a HummDinger session is. We take one HD at a time and talk it through — where are you, where do you want to be, what have you tried, where are you stuck — and find out who can help.',
-        'Thursday opens with introductions. We will go round, and then we get into the HummDingers.',
+        'Tuesday opens with introductions. We will go round, and then we get into the HummDingers.',
       ]),
       // The one that becomes a real `wishes` row on submit, filed as the
       // spotlight, so the bubble has an HD on it before anybody speaks.
       q('q_hd_wish', 'Your High Definition wish — the one you want this room working on this month.'),
       note('note_how_we_run', 'Now — how we run this', [
-        'Tech HIVE is new, so the rest is ours to set. These come back as the actual numbers on screen Thursday, in this order, and we decide from there.',
+        'Tech HIVE is new, so the rest is ours to set. These come back as the actual numbers on screen Tuesday, in this order, and we decide from there.',
       ]),
       choice(
         'q_honey_pot',
@@ -811,7 +816,7 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
         'Tech HIVE hoodies',
         'A Bumblebee Ball',
         'Tools or subscriptions we all use',
-        'I have another idea — I’ll bring it Thursday',
+        'I have another idea — I’ll bring it Tuesday',
       ]),
       choice('q_meeting_day', 'Which evening suits you best for our monthly call?', [
         'Monday',
