@@ -16,6 +16,7 @@ import {
   eligibleEmailRecipientCount,
   formatClock,
   formatMeetingDate,
+  getMeetingWindowOpenDate,
   getWindowOpenDate,
   meetingTimeWindow,
   monthlyMeetingDedupPeriod,
@@ -176,7 +177,8 @@ function upcomingSeasonEndDateOnly(kind: SeasonKind, todayDateOnly: string): str
 
 // Three touches per cycle, all fired by the same daily cron:
 //   midpoint — 3rd-to-last day of the month: the newsletter check-in
-//   window   — 3 days before: the full check-in invitation (legacy behavior)
+//   window   — a three-day run that ENDS on the meeting day (so a Wednesday
+//              meeting opens on the Monday): the full check-in invitation
 //   day_of   — meeting day: last call, only to people not yet checked in
 //
 // The midpoint touch is pinned to the CALENDAR, not to the meeting. Meetings
@@ -1373,7 +1375,7 @@ serve(async (req) => {
           ? (approving.kind as ReminderKind)
           : resendSurveyId || forceSend
             ? 'window'
-            : meetingDetails && todayStr === getWindowOpenDate(meetingDetails.dateOnly)
+            : meetingDetails && todayStr === getMeetingWindowOpenDate(meetingDetails.dateOnly)
               ? 'window'
               : meetingDetails && todayStr === meetingDetails.dateOnly
                 ? 'day_of'
@@ -1772,9 +1774,28 @@ serve(async (req) => {
          * So the halfway asks the calendar the same question OG's does, and a
          * due date that drifts by a day cannot move it any more.
          */
+        /**
+         * Three kinds of date, and they do not count the same way.
+         *
+         * `endofmonth` — the halfway — rides the calendar: the 3rd-to-last day,
+         * timed to the newsletter that goes out on the 1st.
+         *
+         * `premeeting` is a MEETING, and a meeting day is a day people use.
+         * Nat, 2026-09-02: *"if Production HIVE meets on September 10th, then
+         * three days before that is 10, 9, 8... so they have 8, 9, 10 to do it,
+         * because they can also do it day-of."* Its `due_date` is the meeting
+         * date, so counting inclusively puts the letter on the 8th.
+         *
+         * The quarter and the year are DEADLINES. Nobody fills in a check-in on
+         * the 1st of October; the three days that matter are the three before
+         * it. Counting exclusively also lands the quarterly on the same day as
+         * the halfway, which is the pairing Nat asked for.
+         */
         const windowOpen = kind === 'endofmonth'
           ? newsletterCheckInDate(todayStr)
-          : getWindowOpenDate(dueDateOnly);
+          : kind === 'premeeting'
+            ? getMeetingWindowOpenDate(dueDateOnly)
+            : getWindowOpenDate(dueDateOnly);
         const touch: SeasonTouch | null = approving
           ? ((approving.touch ?? 'window') as SeasonTouch)
           : resendSurveyId || todayStr === windowOpen

@@ -69,8 +69,36 @@ export function addDaysToDateOnly(dateOnly: string, days: number): string {
   return date.toISOString().split('T')[0];
 }
 
-export function getWindowOpenDate(meetingDateOnly: string): string {
-  return addDaysToDateOnly(meetingDateOnly, -REMINDER_WINDOW_DAYS);
+/**
+ * Three clear days BEFORE a deadline — the quarter, the year.
+ *
+ * October 1st is not a day anybody does anything on, it is the day the thing is
+ * already due. So the window is the three days that come before it: 28, 29, 30.
+ */
+export function getWindowOpenDate(deadlineDateOnly: string): string {
+  return addDaysToDateOnly(deadlineDateOnly, -REMINDER_WINDOW_DAYS);
+}
+
+/**
+ * Three days INCLUDING the meeting day — which is a different question.
+ *
+ * Nat, 2026-09-02: *"I want it to go out three days before but counting the
+ * day... if Production HIVE meets on September 10th, then three days before
+ * that is 10, 9, 8, so the survey should go out on the 8th. So they have 8, 9,
+ * 10 to do it, because they can also do it day-of."*
+ *
+ * That is the whole difference between a meeting and a deadline. Nobody fills
+ * in a check-in on the 1st of October; plenty of people fill one in on the way
+ * to the meeting, and June proved it — 5 of 7 arrived within fifteen minutes of
+ * each other during the meeting itself. Counting the meeting day is counting
+ * the day most of them actually use.
+ *
+ * A deadline keeps `getWindowOpenDate` above. Do not merge these two back into
+ * one: the quarterly opens on the same day as the halfway BECAUSE it counts
+ * exclusively, and that pairing is deliberate.
+ */
+export function getMeetingWindowOpenDate(meetingDateOnly: string): string {
+  return addDaysToDateOnly(meetingDateOnly, -(REMINDER_WINDOW_DAYS - 1));
 }
 
 export function responsePeriodForMeeting(meeting: MeetingDetails): string {

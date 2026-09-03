@@ -88,7 +88,7 @@ export function hasMeetingDeck(
  * When Home nudges a member about the halfway check-in, and what it says.
  *
  * OG's halfway feeds the newsletter, which goes out on the 1st, so OG's
- * window rides the CALENDAR — the last five days of the month — and the copy
+ * window rides the CALENDAR — the last three days of the month — and the copy
  * talks about the newsletter. That was the only shape until 2026-08-12.
  *
  * **Tech doesn't meet on a rhythm the calendar month describes.** Tech sits on
@@ -107,7 +107,7 @@ export function hasMeetingDeck(
  * flows are third lists rather than third slug checks.
  */
 export type HalfwayShape = {
-  /** `month` = last 5 days of the calendar month. `cycle` = ~2 weeks out. */
+  /** `month` = last 3 days of the calendar month. `cycle` = ~2 weeks out. */
   window: 'month' | 'cycle';
   emoji: string;
   detail: string;
@@ -189,7 +189,16 @@ export function isInHalfwayWindow(
   if (shape.window === 'month') {
     const daysLeftInMonth =
       new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() - today.getDate();
-    return daysLeftInMonth <= 4;
+    // The LAST THREE DAYS — 28, 29, 30 in September. Nat, 2026-09-02, reading
+    // the grid: *"that should be three... 28, 29, 30 is when that should go
+    // out. And then I use that information to inform what I'm going to add to
+    // the Buzz, and then the Buzz goes out on the 1st."*
+    //
+    // This said five days until then, and the EMAIL never did — the halfway
+    // letter has always fired on the 3rd-to-last day (`newsletterCheckInDate`,
+    // check-in-reminder). So the card on Home appeared two days before the
+    // letter that explains it. Three here means the two now agree.
+    return daysLeftInMonth <= 2;
   }
 
   if (!nextMeetingDate) return false;
