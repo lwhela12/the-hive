@@ -14,7 +14,7 @@ import { CelebrationOverlay } from '../../components/ui/CelebrationOverlay';
 import { HivePicker } from '../../components/hive/HivePicker';
 import { SideRail } from '../../components/navigation';
 import { getLastAppPathAsync, getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
-import { routeLivesAtWholeHive } from '../../lib/navigation';
+import { routeDemandsWholeHive, routeLivesAtWholeHive } from '../../lib/navigation';
 import { currentReturnTo } from '../../lib/authReturnTo';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
@@ -98,7 +98,7 @@ function TabIcon({
 }
 
 export default function AppLayout() {
-  const { session, communityId, communityRole, profile, loading, hivePickerOpen, wholeHive, switchCommunity, openHivePicker } = useAuth();
+  const { session, communityId, communityRole, profile, loading, hivePickerOpen, wholeHive, switchCommunity, openHivePicker, enterWholeHive } = useAuth();
   // The colour of wherever this reader is standing. The layout needs it as much
   // as the pages do — see the note on `sceneStyle` further down.
   const skin = usePageSkin();
@@ -140,6 +140,27 @@ export default function AppLayout() {
       openHivePicker();
     }
   }, [loading, session, wholeHive, pathname, communityId, switchCommunity, openHivePicker]);
+
+  /**
+   * And the same rescue standing UP.
+   *
+   * The guard above only ever handled one direction. Admin lives above the
+   * HIVEs — its header says HIVE-Wide and it manages all of them — but arriving
+   * from inside Tech HIVE left `wholeHive` false, so the rail highlighted Tech
+   * and the footer read "Tech HIVE › Admin" beneath a page titled HIVE-Wide.
+   * Nat, 2026-09-02: *"I should be in HIVE-Wide admin and it still looks like
+   * I'm in Tech HIVE on the left."*
+   *
+   * The rail had always stepped up before opening Admin. A link, a bookmark,
+   * the back button and `router.push` do not pass the rail — exactly the hole
+   * the guard above was written to close, in the other direction.
+   */
+  useEffect(() => {
+    if (loading || !session) return;
+    if (wholeHive) return;
+    if (!routeDemandsWholeHive(pathname)) return;
+    enterWholeHive();
+  }, [loading, session, wholeHive, pathname, enterWholeHive]);
 
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const { width, height } = useWindowDimensions();

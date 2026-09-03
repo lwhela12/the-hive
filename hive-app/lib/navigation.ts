@@ -316,6 +316,35 @@ export function routeLivesAtWholeHive(pathname: string | null | undefined): bool
   return false;
 }
 
+/**
+ * Routes you have to be standing ABOVE the HIVEs to read honestly.
+ *
+ * The mirror of `routeLivesAtWholeHive`, and much narrower on purpose. That one
+ * answers "is it alright to be up here?" — which is true of the check-in doors,
+ * because they are about to put you down inside a HIVE themselves. This one
+ * answers "must I be up here?", and only `atWholeHive: 'only'` says yes.
+ *
+ * Admin is the whole reason it exists. Its header reads HIVE-WIDE Admin and it
+ * manages every HIVE, but arriving from inside Tech left `wholeHive` false, so
+ * the rail highlighted Tech HIVE and the footer said "Tech HIVE › Admin" under
+ * a page titled HIVE-Wide. Nat, 2026-09-02: *"I should be in HIVE-Wide admin
+ * and it still looks like I'm in Tech HIVE on the left, and according to the
+ * breadcrumbs at the bottom."*
+ *
+ * The rail had always stepped up before opening Admin. A link, a bookmark, the
+ * back button and `router.push` do not pass the rail — the same hole the
+ * step-DOWN guard was written to close, in the other direction.
+ *
+ * `'same'` deliberately does not qualify: a page that means the same thing
+ * wherever you stand should leave you standing where you were.
+ */
+export function routeDemandsWholeHive(pathname: string | null | undefined): boolean {
+  const path = (pathname ?? '').split('?')[0].replace(/\/+$/, '') || '/';
+  if (path === HIVE_WIDE_ROUTE) return true;
+  const dest = [...NAV_DESTINATIONS, ADMIN_DESTINATION].find((d) => d.route === path);
+  return dest?.atWholeHive === 'only';
+}
+
 export function activeKeyForPath(pathname: string | null | undefined): string | null {
   if (!pathname) return null;
   // The shared boards are Boards — they just happen to live at a wide door, so

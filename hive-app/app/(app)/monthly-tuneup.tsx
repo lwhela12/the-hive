@@ -74,6 +74,7 @@ import {
   hasHalfwayTuneup,
   hasTailoredCheckIns,
   isEndOfMonthCheckInSurvey,
+  isPreMeetingCheckInSurvey,
 } from '../../lib/checkIns';
 
 import { confirmAction, showAlert } from '../../lib/showAlert';
@@ -1275,6 +1276,24 @@ export default function MonthlyTuneupScreen() {
    */
   const monthlyCheckInSurvey = availableSurveys.find(isMonthlyCheckInSurvey)
     ?? availableSurveys.find((survey) => isEndOfMonthCheckInSurvey(survey, community))
+    /**
+     * And a HIVE whose check-in is named after the MEETING rather than the month.
+     *
+     * Nat, 2026-09-02, standing in Tech HIVE's Before we meet: the Check-in step
+     * said *"no monthly check-in is open right now"* while Tech's own check-in
+     * was open, due the next day, with three people already through it.
+     *
+     * The step was hunting for `/monthly check-?in/` and only OG's row is
+     * called that. Tech designed its check-in as the MAIN EVENT of its
+     * before-we-meet flow (Nat, 2026-08-11) and then could not reach it,
+     * because its survey is titled "Before our first meeting".
+     *
+     * This is the naming mess in miniature, and the real cure is the merge that
+     * makes one name mean one thing. Until then the question this line is
+     * actually asking — *where does THIS HIVE file a check-in answer* — is
+     * answered by its pre-meeting row just as well.
+     */
+    ?? availableSurveys.find((survey) => isPreMeetingCheckInSurvey(survey, community))
     ?? null;
   const pendingSurveyIds = new Set(pendingSurveys.map((survey) => survey.id));
   const checkInResponse = monthlyCheckInSurvey ? myResponses.get(monthlyCheckInSurvey.id) : undefined;
@@ -4174,7 +4193,7 @@ export default function MonthlyTuneupScreen() {
         <View style={[cardStyle, { alignItems: 'center', paddingVertical: 28 }]}>
           <Text style={{ fontSize: 32, marginBottom: 8 }}>🌙</Text>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9a8060', textAlign: 'center' }}>
-            No monthly check-in is open right now. Tap Finish to wrap up your tune-up.
+            Nothing to answer here right now — tap Finish and you're done.
           </Text>
         </View>
       ) : (

@@ -1602,9 +1602,12 @@ export default function AdminScreen() {
               screen the email does, never a second interface for it. */}
           {isAdmin && (
             <WhatsNextPanel
+              cellStyle={dashboardCellStyle}
               panelStyle={dashboardPanelStyle}
               bodyStyle={dashboardPanelBodyStyle}
+              scrollStyle={panelScrollStyle}
               Panel={AdminPanel}
+              order={0}
             />
           )}
 

@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useWhatsNext, type WhatsNextItem } from '../../lib/hooks/useWhatsNext';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -26,13 +26,19 @@ import { hiveAccent } from '../../lib/hiveBrand';
 const LATE = '#c0392b';
 
 export function WhatsNextPanel({
+  cellStyle,
   panelStyle,
   bodyStyle,
+  scrollStyle,
   Panel,
+  order,
 }: {
+  cellStyle: any;
   panelStyle: any;
   bodyStyle: any;
+  scrollStyle: any;
   Panel: React.ComponentType<any>;
+  order?: number;
 }) {
   const router = useRouter();
   const { memberships } = useAuth();
@@ -41,11 +47,26 @@ export function WhatsNextPanel({
   const waiting = items.filter((item) => item.holdId).length;
 
   return (
-    <Panel
-      title={waiting > 0 ? `What's next · ${waiting} waiting on you` : "What's next"}
-      style={panelStyle}
-    >
-      <View style={bodyStyle}>
+    /**
+     * The CELL, then the panel.
+     *
+     * Admin's dashboard is a wrapping row of half-width cells, and every panel
+     * carries its own — `cellStyle` is what makes it half a column with gutters
+     * and a bottom margin. This one was handed `panelStyle` and `bodyStyle` and
+     * nothing else, so it laid itself out beside the grid rather than inside
+     * it, and sat on top of OG HIVE's members. Nat, 2026-09-02: *"it looks like
+     * this, which violates our Build doc that says nothing ever overlaps."*
+     *
+     * `order` puts it first; the fixed `panelStyle` height is why the body has
+     * to be a scroller rather than growing.
+     */
+    <View style={[cellStyle, { order } as any]}>
+      <Panel
+        title={waiting > 0 ? `What's next · ${waiting} waiting on you` : "What's next"}
+        style={panelStyle}
+        bodyStyle={bodyStyle}
+      >
+        <ScrollView style={scrollStyle} contentContainerStyle={{ paddingBottom: 4 }}>
         {state === 'loading' ? (
           <View style={{ padding: 20, alignItems: 'center' }}>
             <ActivityIndicator size="small" color="#fffdf5" />
@@ -76,8 +97,9 @@ export function WhatsNextPanel({
             />
           ))
         )}
-      </View>
-    </Panel>
+        </ScrollView>
+      </Panel>
+    </View>
   );
 }
 
