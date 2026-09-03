@@ -195,10 +195,24 @@ const surveysQueryKey = (communityId?: string, userId?: string) =>
   ['surveys', communityId ?? '', userId ?? ''] as const;
 
 async function fetchSurveys(communityId: string, userId?: string): Promise<SurveysSnapshot> {
+    /**
+     * This HIVE's check-ins, **and the ones that belong to no HIVE at all**.
+     *
+     * `community_id is null` means HIVE-Wide — one survey for everybody, the
+     * same thing NULL means everywhere else in this app (migration 225). Nat,
+     * 2026-09-02: *"maybe we make one survey that goes out to everyone
+     * HIVE-Wide, and if you're in multiple HIVEs you only get one email...
+     * fewer surveys."*
+     *
+     * Every other reader in the app still filters to one HIVE and therefore
+     * still cannot see it, which is the point of NULL over a pretend
+     * "HIVE-Wide community" row: seeing it is opt-in, one caller at a time,
+     * rather than a fourth HIVE turning up in lists nobody thought to guard.
+     */
     const surveysQuery = supabase
       .from('surveys')
       .select('*')
-      .eq('community_id', communityId)
+      .or(`community_id.eq.${communityId},community_id.is.null`)
       .order('created_at', { ascending: false });
 
     const responsesQuery = userId
@@ -206,7 +220,7 @@ async function fetchSurveys(communityId: string, userId?: string): Promise<Surve
           .from('survey_responses')
           .select('*')
           .eq('user_id', userId)
-          .eq('community_id', communityId)
+          .or(`community_id.eq.${communityId},community_id.is.null`)
       : Promise.resolve({ data: [] });
 
     const [surveysRes, responsesRes] = await Promise.all([surveysQuery, responsesQuery]);
@@ -279,7 +293,11 @@ export function useSurveys(communityId?: string, userId?: string) {
     const payload = {
       survey_id: surveyId,
       user_id: userId,
-      community_id: communityId,
+      // An answer belongs where its QUESTION belongs. A HIVE-Wide check-in
+      // filed under whichever HIVE you happened to be standing in would count
+      // three ways for a member of three HIVEs, and would be invisible to the
+      // one policy that lets Nat read it (migration 225).
+      community_id: survey && survey.community_id == null ? null : communityId,
       answers,
       response_period: responsePeriod,
       submitted_at: new Date().toISOString(),

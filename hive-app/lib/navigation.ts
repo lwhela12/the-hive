@@ -313,6 +313,10 @@ export function routeLivesAtWholeHive(pathname: string | null | undefined): bool
   // for, and the screen reads that off the hold itself — so it is a door too.
   if (path.startsWith('/approve')) return true;
 
+  // End of the month belongs to no HIVE, so standing above them is exactly
+  // right for it (migration 225).
+  if (path.startsWith('/endofmonth')) return true;
+
   return false;
 }
 

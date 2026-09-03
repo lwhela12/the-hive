@@ -610,6 +610,16 @@ export default function AppLayout() {
         {/* Where a check-in preview gets its go-ahead. Reached from the link
             in Nat's preview email — the link only opens this page; the send
             lives behind her login and behind a confirm. Never a tab. */}
+        {/* One link for everybody, whichever HIVEs they are in. It looks the
+            survey up rather than carrying its id, so next month's row answers
+            the same address Nat already texted people. */}
+        <Tabs.Screen
+          name="endofmonth/index"
+          options={{
+            title: 'End of the month',
+            href: null,
+          }}
+        />
         <Tabs.Screen
           name="approve/[hold]"
           options={{
