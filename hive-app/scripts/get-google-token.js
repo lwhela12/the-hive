@@ -23,6 +23,13 @@
  *
  *     node scripts/get-google-token.js --expect natwalstead@gmail.com
  *
+ * `--hermes` borrows Nat's own published Google client instead of the app's.
+ * The app's own client lives in a Google Cloud project she does not own and
+ * sits in Testing, so Google refuses her outright and only its owner can let
+ * her in. Hers is published and hers, which unblocks all of it:
+ *
+ *     node scripts/get-google-token.js --expect natwalstead@gmail.com --hermes
+ *
  * THE TOKEN IS NEVER PRINTED. It is written to `.google-refresh-token` beside
  * this repo, mode 600, and the file is deleted the moment it is handed to
  * Supabase. The last one went into a chat transcript in plaintext because this
@@ -44,6 +51,7 @@ const http = require('http');
 const url = require('url');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, '.google-refresh-token');
@@ -66,8 +74,51 @@ function fromEnvFile(key) {
   return null;
 }
 
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || fromEnvFile('GOOGLE_CLIENT_ID');
-const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || fromEnvFile('GOOGLE_CLIENT_SECRET');
+/**
+ * A client_secret.json from Google, as `--client <path>`.
+ *
+ * The HIVE app's own OAuth client lives in a Google Cloud project Nat does not
+ * own, and it sits in Testing — so Google refuses her outright, and only its
+ * owner can publish it or add her as a tester. On 2026-09-03 that owner was
+ * unavailable and this was blocking everything.
+ *
+ * She has her own published Google client already (the one Hermes uses), so
+ * this lets the flow borrow it. Same account, same scopes, no Cloud console,
+ * nobody else's permission needed.
+ */
+/** Nat's own published Google client, the one Hermes uses. `--hermes`. */
+const HERMES_CLIENT = path.join(os.homedir(), '.hermes', 'google_client_secret.json');
+
+function fromClientFile() {
+  let file = null;
+  if (process.argv.includes('--hermes')) {
+    file = HERMES_CLIENT;
+  } else {
+    const at = process.argv.indexOf('--client');
+    if (at === -1) return {};
+    file = process.argv[at + 1];
+    // A pasted command that wrapped onto two lines leaves --client with
+    // nothing after it, and reading `undefined` threw a stack trace at
+    // somebody who just wanted to sign in. Say the useful thing instead.
+    if (!file) {
+      console.error('❌ --client needs a path after it. Or just use --hermes.');
+      process.exit(1);
+    }
+  }
+  file = file.replace(/^~/, os.homedir());
+  if (!fs.existsSync(file)) {
+    console.error(`❌ No client file at ${file}`);
+    process.exit(1);
+  }
+  const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+  // Google wraps it under "installed" (desktop) or "web".
+  const body = raw.installed ?? raw.web ?? raw;
+  return { id: body.client_id, secret: body.client_secret };
+}
+
+const fromFile = fromClientFile();
+const CLIENT_ID = fromFile.id || process.env.GOOGLE_CLIENT_ID || fromEnvFile('GOOGLE_CLIENT_ID');
+const CLIENT_SECRET = fromFile.secret || process.env.GOOGLE_CLIENT_SECRET || fromEnvFile('GOOGLE_CLIENT_SECRET');
 
 const expectAt = process.argv.indexOf('--expect');
 const EXPECT = expectAt !== -1 ? (process.argv[expectAt + 1] || '').toLowerCase() : null;
@@ -162,7 +213,17 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Never printed. Written where only this user can read it.
+    //
+    // The CLIENT travels with it. A refresh token only works against the
+    // client_id and client_secret that issued it, so handing Supabase the
+    // token without the client it belongs to produces `invalid_client` and a
+    // very confusing afternoon.
     fs.writeFileSync(OUT, tokens.refresh_token, { mode: 0o600 });
+    fs.writeFileSync(
+      OUT + '.client',
+      JSON.stringify({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET }),
+      { mode: 0o600 }
+    );
 
     console.log(`\n✅ Token saved for ${who ?? 'that account'}. It was not printed anywhere.`);
     console.log('\nNow, from hive-app/:\n');

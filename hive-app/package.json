@@ -19,7 +19,8 @@
     "verify:web-export": "node scripts/verify-web-export.mjs dist",
     "build:web": "npm run lint:page-headers && npm run lint:feedback-door && npm run lint:newsletter-workflow && expo export --platform web && npm run verify:web-export && node scripts/write-web-version.mjs",
     "release:check": "npm run typecheck && npm run doctor",
-    "lint:survey-colour": "node scripts/lint-survey-colour.mjs"
+    "lint:survey-colour": "node scripts/lint-survey-colour.mjs",
+    "gtoken": "node scripts/get-google-token.js --hermes --expect natwalstead@gmail.com"
   },
   "dependencies": {
     "@daily-co/daily-js": "^0.92.0",

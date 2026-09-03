@@ -52,3 +52,4 @@ supabase/.temp/
 
 # The Google refresh token, on its way to a Supabase secret. Never committed.
 .google-refresh-token
+.google-refresh-token.client
