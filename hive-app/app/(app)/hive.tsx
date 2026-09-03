@@ -4976,6 +4976,7 @@ export default function HiveScreen() {
           carryForwardItems={carryForwardItems}
           carryForwardLoading={carryForwardLoading}
           carryForwardError={carryForwardError}
+          hiveAccent={hiveAccent(community)}
           onSubmit={handleSurveySubmit}
           onClose={closeSurvey}
         />

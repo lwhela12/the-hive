@@ -10,12 +10,27 @@ const failures = [];
 // Nat, 2026-08-24, after the Room slide's ordering was quietly moved once
 // (removed 2026-07-22, put back with a visible second door 2026-08-24 by a
 // session she never asked): "arrivals should be the 1st page of the meeting
-// helper. that is non negotiable." Every deck's slide list must open
-// 'room', 'outline', 'rollcall' — count, don't just spot-check one deck.
-const roomFirstCount = meetingHelper.split("slides: ['room', 'outline', 'rollcall'").length - 1;
-if (roomFirstCount !== 3) {
-  failures.push(`Every deck must open on the Room slide (arrivals) first — expected 3 decks, found ${roomFirstCount}.`);
+// helper. that is non negotiable." Every deck's slide list must OPEN on the
+// room — read each deck's list, don't just spot-check one.
+//
+// This used to match the literal string `slides: ['room', 'outline',
+// 'rollcall'`, which quietly made ROLL CALL non-negotiable too. It is not:
+// Nat took it out of Tech's deck on 2026-09-01 because eight remote faces
+// already wear their names, and the guard failed the build for obeying her.
+// Arrivals first is the rule; what a deck does third is that deck's business.
+const deckSlides = [...meetingHelper.matchAll(/slides: \[([^\]]*)\]/g)].map((match) =>
+  match[1].split(',').map((slide) => slide.trim().replace(/^'|'$/g, ''))
+);
+if (deckSlides.length !== 3) {
+  failures.push(`Expected 3 decks with a slide list, found ${deckSlides.length}.`);
 }
+deckSlides.forEach((slides, index) => {
+  if (slides[0] !== 'room' || slides[1] !== 'outline') {
+    failures.push(
+      `Deck ${index + 1} must open on the Room slide (arrivals) then the Outline — found '${slides[0]}', '${slides[1]}'.`
+    );
+  }
+});
 
 // The Arrival Board has one door: the long-press deck-actions sheet. A
 // second, visible pill on the Meetings page was added and removed once

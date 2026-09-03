@@ -16,7 +16,7 @@ import { FadeIn } from '../../components/ui/FadeIn';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { UpcomingMeetingsSkeleton, PastRecordingsSkeleton } from '../../components/meetings/MeetingsSkeleton';
 import { formatDateLong, formatTimeRange, parseAmericanDate } from '../../lib/dateUtils';
-import { normalizeHiveBrandText } from '../../lib/hiveBrand';
+import { hiveAccent, normalizeHiveBrandText } from '../../lib/hiveBrand';
 import { openAddToCalendar } from '../../lib/addToCalendar';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { ComposerBar } from '../../components/ui/ComposerBar';
@@ -1966,6 +1966,7 @@ export default function MeetingsScreen() {
           survey={activeSeasonSurvey}
           initialAnswers={myResponses.get(activeSeasonSurvey.id)?.answers}
           isEditingResponse={!!myResponses.get(activeSeasonSurvey.id)}
+          hiveAccent={hiveAccent(community)}
           onSubmit={(answers) => submitSeasonSurvey(activeSeasonSurvey.id, answers)}
           onClose={() => setActiveSeasonSurvey(null)}
         />

@@ -7,8 +7,10 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { supabase } from '../../lib/supabase';
 import { ReachPill } from '../ui/ReachPill';
+import { accentPalette, HIVE_GOLD } from '../../lib/hiveBrand';
 
-export function ScaleInput({ value, onChange }: { value: number | null; onChange: (v: number) => void }) {
+export function ScaleInput({ value, onChange, accent = HIVE_GOLD }: { value: number | null; onChange: (v: number) => void; accent?: string }) {
+  const tint = accentPalette(accent);
   return (
     <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
       {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
@@ -17,9 +19,9 @@ export function ScaleInput({ value, onChange }: { value: number | null; onChange
           onPress={() => onChange(n)}
           style={{
             width: 42, height: 42, borderRadius: 21,
-            backgroundColor: value === n ? '#bd9348' : '#faf8f3',
+            backgroundColor: value === n ? tint.accent : '#faf8f3',
             borderWidth: 1,
-            borderColor: value === n ? '#bd9348' : 'rgba(222,193,129,0.4)',
+            borderColor: value === n ? tint.accent : tint.line(0.4),
             alignItems: 'center', justifyContent: 'center',
           }}
         >
@@ -30,7 +32,8 @@ export function ScaleInput({ value, onChange }: { value: number | null; onChange
   );
 }
 
-export function ChoiceInput({ options, value, onChange, multi }: { options: string[]; value: string | string[]; onChange: (v: string | string[]) => void; multi?: boolean }) {
+export function ChoiceInput({ options, value, onChange, multi, accent = HIVE_GOLD }: { options: string[]; value: string | string[]; onChange: (v: string | string[]) => void; multi?: boolean; accent?: string }) {
+  const tint = accentPalette(accent);
   const selected = multi ? (value as string[]) : [value as string];
   const toggle = (opt: string) => {
     if (multi) {
@@ -50,16 +53,16 @@ export function ChoiceInput({ options, value, onChange, multi }: { options: stri
             onPress={() => toggle(opt)}
             style={{
               flexDirection: 'row', alignItems: 'center', gap: 12,
-              backgroundColor: active ? '#fdf3dc' : '#faf8f3',
-              borderWidth: 1, borderColor: active ? 'rgba(222,193,129,0.6)' : 'rgba(222,193,129,0.2)',
+              backgroundColor: active ? tint.wash : '#faf8f3',
+              borderWidth: 1, borderColor: active ? tint.line(0.6) : tint.line(0.2),
               borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
             }}
           >
             <View style={{
               width: 18, height: 18,
               borderRadius: multi ? 4 : 9,
-              borderWidth: 2, borderColor: active ? '#bd9348' : '#d1d5db',
-              backgroundColor: active ? '#bd9348' : 'transparent',
+              borderWidth: 2, borderColor: active ? tint.accent : '#d1d5db',
+              backgroundColor: active ? tint.accent : 'transparent',
               alignItems: 'center', justifyContent: 'center',
             }}>
               {active && <Text style={{ color: 'white', fontSize: 11 }}>{multi ? '✓' : '●'}</Text>}
@@ -226,10 +229,13 @@ const composeFocusAnswer = (choice: string | null, instead: string, note: string
 export function FocusRecapInput({
   value,
   onChange,
+  accent = HIVE_GOLD,
 }: {
   value: string;
   onChange: (value: string) => void;
+  accent?: string;
 }) {
+  const tint = accentPalette(accent);
   const { choice, instead, note } = parseFocusAnswer(value);
 
   return (
@@ -249,9 +255,9 @@ export function FocusRecapInput({
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 8,
-                backgroundColor: active ? '#fdf3dc' : '#faf8f3',
+                backgroundColor: active ? tint.wash : '#faf8f3',
                 borderWidth: 1,
-                borderColor: active ? 'rgba(222,193,129,0.7)' : 'rgba(222,193,129,0.25)',
+                borderColor: active ? tint.line(0.7) : tint.line(0.25),
                 borderRadius: 14,
                 paddingHorizontal: 14,
                 paddingVertical: 10,
@@ -289,11 +295,14 @@ export function HangsRecapInput({
   value,
   onChange,
   hangs,
+  accent = HIVE_GOLD,
 }: {
   value: string;
   onChange: (value: string) => void;
   hangs: HangRecapEvent[];
+  accent?: string;
 }) {
+  const tint = accentPalette(accent);
   const { attended, note } = parseHangsAnswer(value);
 
   if (hangs.length === 0) {
@@ -337,9 +346,9 @@ export function HangsRecapInput({
             style={{
               alignSelf: 'flex-start',
               maxWidth: '100%',
-              backgroundColor: entry ? '#fdf3dc' : '#faf8f3',
+              backgroundColor: entry ? tint.wash : '#faf8f3',
               borderWidth: 1,
-              borderColor: entry ? 'rgba(222,193,129,0.7)' : 'rgba(222,193,129,0.25)',
+              borderColor: entry ? tint.line(0.7) : tint.line(0.25),
               borderRadius: 14,
               paddingHorizontal: 14,
               paddingVertical: 10,
@@ -406,6 +415,7 @@ export function SurveyQuestionField({
   communityId,
   answers,
   onSetAnswer,
+  accent = HIVE_GOLD,
 }: {
   question: SurveyQuestion;
   index: number;
@@ -417,7 +427,14 @@ export function SurveyQuestionField({
   answers?: Record<string, any>;
   /** Write an answer under a key other than this question's own. */
   onSetAnswer?: (id: string, value: any) => void;
+  /**
+   * The colour this survey wears. Handed down by `SurveyModal`, which reads it
+   * off the SURVEY rather than off wherever the member happens to be standing —
+   * the HIVE-Wide End of the month belongs to no HIVE and stays gold.
+   */
+  accent?: string;
 }) {
+  const tint = accentPalette(accent);
   const textValue = typeof value === 'string' ? value : '';
 
   // The 3MIQ question brings the member's own answers TO them — never
@@ -515,16 +532,16 @@ export function SurveyQuestionField({
       <View
         style={{
           marginBottom: 24,
-          backgroundColor: '#fdf3dc',
+          backgroundColor: tint.wash,
           borderWidth: 1,
-          borderColor: 'rgba(222,193,129,0.5)',
+          borderColor: tint.line(0.5),
           borderRadius: 14,
           paddingHorizontal: 16,
           paddingVertical: 14,
           gap: 8,
         }}
       >
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#8a5a16', lineHeight: 22 }}>
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: tint.ink, lineHeight: 22 }}>
           {question.text}
         </Text>
         {(question.body ?? []).map((paragraph) => (
@@ -541,22 +558,22 @@ export function SurveyQuestionField({
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
         {/* index -1 = question embedded in another step; no number chip */}
         {index >= 0 && (
-          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fdf3dc', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>{index + 1}</Text>
+          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: tint.wash, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: tint.accent }}>{index + 1}</Text>
           </View>
         )}
         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', flex: 1, lineHeight: 22 }}>
           {question.text}
-          {question.required && <Text style={{ color: '#bd9348' }}> *</Text>}
+          {question.required && <Text style={{ color: tint.accent }}> *</Text>}
         </Text>
       </View>
 
       {question.id === 'q_quarter_miq' && (
-        <View style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10, gap: 4 }}>
+        <View style={{ backgroundColor: tint.wash, borderWidth: 1, borderColor: tint.line(0.5), borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10, gap: 4 }}>
           {miqEntries.length > 0 ? (
             miqEntries.map(([label, answer]) => (
               <Text key={label} style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 18 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', color: '#8a5a16' }}>{label}: </Text>
+                <Text style={{ fontFamily: 'Lato_700Bold', color: tint.ink }}>{label}: </Text>
                 {String(answer).trim()}
               </Text>
             ))
@@ -568,7 +585,7 @@ export function SurveyQuestionField({
             <>
               {/* No 3MIQ yet: a fork, not homework. Answers draft-save, so
                   stepping out to Clive loses nothing. (Nat, 2026-08-13.) */}
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a5a16', lineHeight: 18 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink, lineHeight: 18 }}>
                 No 3MIQ yet?
               </Text>
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
@@ -580,7 +597,7 @@ export function SurveyQuestionField({
                     },
                   })}
                   accessibilityRole="button"
-                  style={{ backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14 }}
+                  style={{ backgroundColor: tint.accent, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14 }}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', fontSize: 13 }}>
                     Figure it out with Clive now ✨
@@ -605,10 +622,10 @@ export function SurveyQuestionField({
       )}
 
       {isHdWish && (
-        <View style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10, gap: 8 }}>
+        <View style={{ backgroundColor: tint.wash, borderWidth: 1, borderColor: tint.line(0.5), borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10, gap: 8 }}>
           {pickableWishes.length > 0 ? (
             <>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a5a16', lineHeight: 18 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink, lineHeight: 18 }}>
                 One you already have
               </Text>
               <View style={{ gap: 6 }}>
@@ -628,9 +645,9 @@ export function SurveyQuestionField({
                       accessibilityRole="button"
                       accessibilityLabel={`Make this your focus: ${description}`}
                       style={{
-                        backgroundColor: chosen ? '#bd9348' : '#fffdf5',
+                        backgroundColor: chosen ? tint.accent : '#fffdf5',
                         borderWidth: 1,
-                        borderColor: chosen ? '#bd9348' : 'rgba(222,193,129,0.5)',
+                        borderColor: chosen ? tint.accent : tint.line(0.5),
                         borderRadius: 10,
                         paddingVertical: 9,
                         paddingHorizontal: 12,
@@ -656,7 +673,7 @@ export function SurveyQuestionField({
               to write one now or refine with clive."* A picker with nothing in
               it explains nothing; the same space can say where you are and
               offer the two ways forward. */}
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a5a16', lineHeight: 18 }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink, lineHeight: 18 }}>
             {pickableWishes.length > 0
               ? 'Or make a new one'
               : 'This will be your first HD wish'}
@@ -677,7 +694,7 @@ export function SurveyQuestionField({
                 },
               })}
               accessibilityRole="button"
-              style={{ backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14 }}
+              style={{ backgroundColor: tint.accent, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14 }}
             >
               <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', fontSize: 13 }}>
                 Shape it with Clive ✨
@@ -690,7 +707,7 @@ export function SurveyQuestionField({
               stops at its own walls is never offered the choice. */}
           {onSetAnswer && community?.max_share_scope !== 'hive' ? (
             <View style={{ gap: 5, marginTop: 2 }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a5a16', lineHeight: 18 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink, lineHeight: 18 }}>
                 Who sees it
               </Text>
               {/* The same pill the profile wears, at the same size. Nat,
@@ -722,16 +739,16 @@ export function SurveyQuestionField({
         />
       )}
       {question.type === 'scale' && (
-        <ScaleInput value={value ?? null} onChange={onChange} />
+        <ScaleInput value={value ?? null} onChange={onChange} accent={accent} />
       )}
       {question.type === 'choice' && question.options && (
-        <ChoiceInput options={question.options} value={value ?? ''} onChange={onChange} />
+        <ChoiceInput options={question.options} value={value ?? ''} onChange={onChange} accent={accent} />
       )}
       {question.type === 'hangs' && (
-        <HangsRecapInput value={textValue} onChange={onChange} hangs={hangEvents ?? []} />
+        <HangsRecapInput value={textValue} onChange={onChange} hangs={hangEvents ?? []} accent={accent} />
       )}
       {question.type === 'focus' && (
-        <FocusRecapInput value={textValue} onChange={onChange} />
+        <FocusRecapInput value={textValue} onChange={onChange} accent={accent} />
       )}
     </View>
   );

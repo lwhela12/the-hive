@@ -413,12 +413,24 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
       'Dues: $25 / quarter · CashApp $HiveLV',
     ],
   },
+  /**
+   * Tech HIVE has NO roll call, and that is deliberate.
+   *
+   * Nat, 2026-09-01: all eight members are remote, so the room is a grid of
+   * faces with names printed under them — a roll call reads out a list
+   * everybody is already looking at. And the HummDinger sesh opens with
+   * introductions on a HIVE's first night (see `introsFirst` below), so on the
+   * one night a roll call would have earned its place it was the second
+   * go-round of the same names.
+   *
+   * OG and Production keep theirs: those rooms are in person, where knowing
+   * who actually walked in is a real question.
+   */
   tech: {
-    slides: ['room', 'outline', 'rollcall', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
+    slides: ['room', 'outline', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
     agenda: [
       { key: 'room', label: 'Arrivals' },
       { key: 'outline', label: 'Outline' },
-      { key: 'rollcall', label: 'Roll call' },
       { key: 'news', label: 'News from Nat' },
       { key: 'treasurer', label: 'Honey Pot' },
       { key: 'meetups', label: 'Plan' },
@@ -610,6 +622,31 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
     ],
   },
 };
+
+/**
+ * The app tour, for a HIVE that has never met.
+ *
+ * "New in the app since last meeting" has no answer on a first night — there
+ * is no last meeting to count from, so the cycle falls back to 35 days and the
+ * slide hands a brand-new room thirty entries of OUR build log. Nat, looking
+ * at Tech HIVE's deck on 2026-09-01: it should be a TOUR, not a changelog.
+ *
+ * A first night is the one night the honest version of this slide is "here is
+ * what this thing does". Written as what a MEMBER can do, in their words, not
+ * as a list of what we shipped. Nat still gets the note box above it for
+ * whatever she wants to say on top.
+ *
+ * Six, because the room has to be able to hold them. Everything else they
+ * find by using it.
+ */
+const APP_TOUR: { what: string; line: string }[] = [
+  { what: 'Wishes', line: 'Say what you actually want, in enough detail that somebody can help.' },
+  { what: 'Boards', line: 'Threads for anything worth keeping after tonight.' },
+  { what: 'Messages', line: 'Your HIVE\u2019s room, and one-to-one.' },
+  { what: 'Members', line: 'What everyone is good at, so you know who to ask.' },
+  { what: 'Clive', line: 'Ask him anything about your HIVE \u2014 he has read all of it.' },
+  { what: 'Check-ins', line: 'A few minutes before each meeting. It fills your spot in the room.' },
+];
 
 // ---- The first HummDinger opens with introductions ----
 //
@@ -1011,6 +1048,17 @@ export default function MeetingHelperScreen() {
   const [sealState, setSealState] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
   // This is an explicit Wrap-Up roll call, never inferred from somebody's
   // pre-meeting "can't make it" answer. Empty means nobody is confirmed away.
+  /**
+   * The "who missed it" picker starts SHUT.
+   *
+   * Nat, 2026-09-01: *"Wrap-Up is too busy."* It carried five stacked blocks —
+   * her notes, the auto recap, Seal, a wrap of a chip per member, and a card of
+   * standing reminders — on the one slide the deck asks to fit a single screen.
+   * The chip wrap was the biggest of them and it is the SECOND question, asked
+   * after sealing; a question nobody has reached yet does not need to be on
+   * screen. Tap the row and it opens.
+   */
+  const [absenteePickerOpen, setAbsenteePickerOpen] = useState(false);
   const [confirmedAbsenteeIds, setConfirmedAbsenteeIds] = useState<Set<string>>(new Set());
 
   // HummDinger: which member's full check-in is expanded on the bubbles grid,
@@ -2407,7 +2455,7 @@ export default function MeetingHelperScreen() {
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: sz(8, 5) }}>
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), letterSpacing: 1.4, textTransform: 'uppercase', color: '#8e7a5e' }}>
-              ✨ New in the app since last meeting
+              {introsFirst ? '✨ What HIVE does' : '✨ New in the app since last meeting'}
             </Text>
             <EditPill noteKey="appnews" />
           </View>
@@ -2418,13 +2466,29 @@ export default function MeetingHelperScreen() {
               *"it says 'no app news, smooth sailing' and then below it its
               listing app news, whcih seems silly."* Two claims, one slide —
               now the shipped list answers for both. */}
-          {notes.appnews?.trim() || recentAppNews.length === 0 ? (
+          {introsFirst ? (
+            <>
+              <NoteBody noteKey="appnews" emptyText="" />
+              <View style={{ marginTop: notes.appnews?.trim() ? sz(10, 7) : 0, gap: sz(7, 5) }}>
+                {APP_TOUR.map((entry) => (
+                  <Text
+                    key={entry.what}
+                    style={{ fontFamily: 'Lato_400Regular', fontSize: sz(20, 13), lineHeight: sz(29, 19), color: CHARCOAL }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>{entry.what}  </Text>
+                    {entry.line}
+                  </Text>
+                ))}
+              </View>
+            </>
+          ) : null}
+          {!introsFirst && (notes.appnews?.trim() || recentAppNews.length === 0) ? (
             <NoteBody
               noteKey="appnews"
               emptyText="No app news this cycle — smooth sailing."
             />
           ) : null}
-          {recentAppNews.length > 0 ? (
+          {!introsFirst && recentAppNews.length > 0 ? (
             <View style={{ marginTop: notes.appnews?.trim() ? sz(10, 7) : 0, borderTopWidth: notes.appnews?.trim() ? 1 : 0, borderTopColor: GOLD_SOFT, paddingTop: notes.appnews?.trim() ? sz(9, 6) : 0, gap: sz(3, 2) }}>
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(11, 9), letterSpacing: 1.2, textTransform: 'uppercase', color: MUTED }}>
                 Shipped this cycle
@@ -4354,9 +4418,31 @@ export default function MeetingHelperScreen() {
           the record afterwards. Asking second reads as the second question. */}
       {isAdmin ? (
         <View style={{ marginTop: sz(18, 11), gap: sz(8, 5) }}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: CHARCOAL }}>
-            Anyone who did not make it tonight?
-          </Text>
+          <Pressable
+            onPress={() => setAbsenteePickerOpen((open) => !open)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: absenteePickerOpen }}
+            accessibilityLabel="Anyone who did not make it tonight?"
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: sz(8, 6),
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: CHARCOAL }}>
+              Anyone who did not make it tonight?
+            </Text>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), color: GOLD_DEEP }}>
+              {absenteePickerOpen
+                ? 'Hide'
+                : confirmedAbsenteeIds.size > 0
+                  ? `${confirmedAbsenteeIds.size} picked`
+                  : 'Pick them'}
+            </Text>
+          </Pressable>
+          {absenteePickerOpen ? (
+          <>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(14, 10), color: MUTED }}>
             Tap them and they get tonight&rsquo;s summary. Nobody is guessed from the pre-meeting check-in, and nothing is sent until Nat has seen the preview and said yes.
           </Text>
@@ -4390,23 +4476,28 @@ export default function MeetingHelperScreen() {
               );
             })}
           </View>
+          </>
+          ) : null}
         </View>
       ) : null}
 
+      {/* Standing reminders, quietly.
+          Two or three lines that are true every month do not need the biggest
+          type on the slide. Halved padding, body type rather than headline
+          type — part of thinning Wrap-Up (Nat, 2026-09-01). */}
       <View
         style={{
-          // Was 40/22 of top margin — the reminders card is what nudged this
-          // slide past one screen (one-page rule).
-          marginTop: sz(26, 16),
+          marginTop: sz(20, 13),
           backgroundColor: CARD,
           borderWidth: 1,
           borderColor: GOLD_SOFT,
-          borderRadius: sz(22, 16),
-          padding: sz(30, 16),
-          gap: sz(14, 9),
+          borderRadius: sz(18, 13),
+          paddingHorizontal: sz(20, 13),
+          paddingVertical: sz(15, 10),
+          gap: sz(8, 6),
         }}
       >
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(19, 12), letterSpacing: 2, textTransform: 'uppercase', color: MUTED }}>
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), letterSpacing: 1.4, textTransform: 'uppercase', color: MUTED }}>
           Standing reminders
         </Text>
         {deck.wrapupReminders.map((reminder) => {
@@ -4414,13 +4505,13 @@ export default function MeetingHelperScreen() {
           // 2026-08-14: *"if that could be a hyperlink, that's even better."*
           const url = reminder.match(/[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/[^\s]*)?/i)?.[0] ?? null;
           const body = (
-            <Text style={{ flex: 1, fontFamily: 'Lato_400Regular', fontSize: sz(24, 14), lineHeight: sz(34, 21), color: url ? GOLD_DEEP : CHARCOAL, textDecorationLine: url ? 'underline' : 'none' }}>
+            <Text style={{ flex: 1, fontFamily: 'Lato_400Regular', fontSize: sz(18, 12), lineHeight: sz(26, 18), color: url ? GOLD_DEEP : CHARCOAL, textDecorationLine: url ? 'underline' : 'none' }}>
               {reminder}
             </Text>
           );
           return (
             <View key={reminder} style={{ flexDirection: 'row', alignItems: 'baseline', gap: sz(12, 8) }}>
-              <View style={{ width: sz(9, 6), height: sz(9, 6), borderRadius: 999, backgroundColor: GOLD, transform: [{ translateY: -2 }] }} />
+              <View style={{ width: sz(7, 5), height: sz(7, 5), borderRadius: 999, backgroundColor: GOLD, transform: [{ translateY: -2 }] }} />
               {url ? (
                 <Pressable
                   style={{ flex: 1 }}

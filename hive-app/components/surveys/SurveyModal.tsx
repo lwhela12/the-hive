@@ -33,6 +33,7 @@ import { CloseButton } from '../ui/CloseButton';
 
 import { ComposerBar } from '../ui/ComposerBar';
 import { ThinkingBee } from '../ui/ThinkingBee';
+import { accentPalette, HIVE_GOLD } from '../../lib/hiveBrand';
 interface SurveyModalProps {
   survey: Survey;
   initialAnswers?: SurveyAnswers;
@@ -42,6 +43,15 @@ interface SurveyModalProps {
   carryForwardError?: string | null;
   onSubmit: (answers: SurveyAnswers) => Promise<{ error: any }>;
   onClose: () => void;
+  /**
+   * The accent of the HIVE this modal was opened from.
+   *
+   * Whether it is USED is decided here, not by the caller: a survey that
+   * belongs to no HIVE — the HIVE-Wide End of the month, `community_id` null —
+   * stays honey gold however blue the page behind it is. Encoding that once
+   * means no caller can get it wrong by passing the HIVE it happens to be on.
+   */
+  hiveAccent?: string;
 }
 
 const DRAFT_KEY = (surveyId: string) => `survey-draft:${surveyId}`;
@@ -136,7 +146,18 @@ export function SurveyModal({
   carryForwardError = null,
   onSubmit,
   onClose,
+  hiveAccent = HIVE_GOLD,
 }: SurveyModalProps) {
+  /**
+   * Nat, 2026-09-01: every survey still wore honey gold inside Tech HIVE and
+   * Production HIVE — the number chips, the selected answers, the submit
+   * button — in a HIVE whose whole shell is blue or purple.
+   *
+   * Read off the SURVEY, not off the screen behind it. Gold returns its exact
+   * hand-tuned family, so OG HIVE does not move a pixel.
+   */
+  const accent = survey.community_id == null ? HIVE_GOLD : hiveAccent;
+  const tint = accentPalette(accent);
   const { width: recapWidth } = useWindowDimensions();
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -513,7 +534,7 @@ export function SurveyModal({
   const renderCarryForwardContext = () => {
     if (carryForwardLoading) {
       return (
-        <View style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 16, padding: 16, marginBottom: 24, alignItems: 'center' }}>
+        <View style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: tint.line(0.45), borderRadius: 16, padding: 16, marginBottom: 24, alignItems: 'center' }}>
           <ThinkingBee />
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#7f715f', marginTop: 8 }}>
             Gathering your open HIVE things...
@@ -535,7 +556,7 @@ export function SurveyModal({
     if (carryForwardItems.length === 0) return null;
 
     return (
-      <View style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: 'rgba(222,193,129,0.55)', borderRadius: 18, padding: 16, marginBottom: 24 }}>
+      <View style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: tint.line(0.55), borderRadius: 18, padding: 16, marginBottom: 24 }}>
         <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 6 }}>
           Still on your roster
         </Text>
@@ -554,13 +575,13 @@ export function SurveyModal({
                 style={{
                   backgroundColor: '#faf8f3',
                   borderWidth: 1,
-                  borderColor: 'rgba(222,193,129,0.38)',
+                  borderColor: tint.line(0.38),
                   borderRadius: 14,
                   padding: 12,
                 }}
               >
                 <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
-                  <View style={{ backgroundColor: '#fdf3dc', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, flexShrink: 0 }}>
+                  <View style={{ backgroundColor: tint.wash, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, flexShrink: 0 }}>
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8a6b30' }}>
                       {item.sourceLabel}
                     </Text>
@@ -587,7 +608,7 @@ export function SurveyModal({
                         onPress={() => updateCarryForwardItem(item, { status: option.value })}
                         style={({ pressed }) => ({
                           backgroundColor: active ? activeStyle.backgroundColor : pressed ? '#fbf0d7' : '#fffdf5',
-                          borderColor: active ? activeStyle.borderColor : 'rgba(222,193,129,0.42)',
+                          borderColor: active ? activeStyle.borderColor : tint.line(0.42),
                           borderWidth: 1,
                           borderRadius: 999,
                           paddingHorizontal: 10,
@@ -636,6 +657,7 @@ export function SurveyModal({
       answers={answers}
       onSetAnswer={setAnswer}
       communityId={survey.community_id}
+      accent={accent}
     />
   );
 
@@ -651,8 +673,8 @@ export function SurveyModal({
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 8 }}>
             {hasDraft ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Ionicons name="cloud-done-outline" size={13} color="#bd9348" />
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#bd9348' }}>Progress saved</Text>
+                <Ionicons name="cloud-done-outline" size={13} color={tint.accent} />
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: tint.accent }}>Progress saved</Text>
               </View>
             ) : <View style={{ width: 80 }} />}
             <CloseButton
@@ -672,7 +694,7 @@ export function SurveyModal({
                   ? 'Your updated answers are saved. HIVE will be working from the latest version.'
                   : 'Your answers are saved for the meeting.'}
               </Text>
-              <Pressable onPress={onClose} style={{ backgroundColor: '#bd9348', borderRadius: 14, paddingHorizontal: 32, paddingVertical: 14 }}>
+              <Pressable onPress={onClose} style={{ backgroundColor: tint.accent, borderRadius: 14, paddingHorizontal: 32, paddingVertical: 14 }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>Back to HIVE</Text>
               </Pressable>
             </View>
@@ -690,13 +712,13 @@ export function SurveyModal({
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#6b7280', lineHeight: 21 }}>{survey.description}</Text>
                 )}
                 {survey.due_date && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, backgroundColor: '#fdf3dc', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, backgroundColor: tint.wash, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: tint.accent }}>
                       📅 Due {formatSurveyDueDate(survey.due_date)}
                     </Text>
                   </View>
                 )}
-                <View style={{ height: 1, backgroundColor: 'rgba(222,193,129,0.3)', marginTop: 20 }} />
+                <View style={{ height: 1, backgroundColor: tint.line(0.3), marginTop: 20 }} />
               </View>
 
               {seasonRecap && (seasonRecap.hangCount > 0 || seasonRecap.granted.length > 0) && (() => {
@@ -713,17 +735,17 @@ export function SurveyModal({
                 const collapsible = total > SEASON_RECAP_COLLAPSE_THRESHOLD;
                 const showFull = !collapsible || seasonRecapExpanded;
                 return (
-                  <View style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 14, padding: 14, marginBottom: 22, gap: 10 }}>
+                  <View style={{ backgroundColor: tint.wash, borderWidth: 1, borderColor: tint.line(0.5), borderRadius: 14, padding: 14, marginBottom: 22, gap: 10 }}>
                     <Pressable
                       onPress={() => collapsible && setSeasonRecapExpanded((v) => !v)}
                       disabled={!collapsible}
                       style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
                     >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, letterSpacing: 0.6, textTransform: 'uppercase', color: '#8a5a16' }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, letterSpacing: 0.6, textTransform: 'uppercase', color: tint.ink }}>
                         A little jog for your memory
                       </Text>
                       {collapsible && (
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: tint.accent }}>
                           {showFull ? 'Hide ▲' : `${seasonRecap.hangCount} hangs · ${grantedCount} granted ▾`}
                         </Text>
                       )}
@@ -739,7 +761,7 @@ export function SurveyModal({
                             <View style={{ flexDirection: monthsSideBySide ? 'row' : 'column', flexWrap: 'wrap', gap: monthsSideBySide ? 16 : 10 }}>
                               {seasonRecap.hangMonths.map((month) => (
                                 <View key={month.label} style={monthsSideBySide ? { minWidth: 150, flexGrow: 1 } : undefined}>
-                                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11.5, color: '#8a5a16', marginBottom: 2 }}>
+                                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11.5, color: tint.ink, marginBottom: 2 }}>
                                     {month.label}
                                   </Text>
                                   {month.hangs.map((hang) => (
@@ -797,7 +819,7 @@ export function SurveyModal({
               <Pressable
                 onPress={handleSubmit}
                 disabled={submitting}
-                style={{ backgroundColor: '#bd9348', borderRadius: 16, paddingVertical: 16, alignItems: 'center', opacity: submitting ? 0.7 : 1 }}
+                style={{ backgroundColor: tint.accent, borderRadius: 16, paddingVertical: 16, alignItems: 'center', opacity: submitting ? 0.7 : 1 }}
               >
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: 'white' }}>
                   {submitting ? 'Saving...' : isEditingResponse ? 'Update answers' : 'Submit answers'}

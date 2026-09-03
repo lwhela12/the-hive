@@ -13,12 +13,13 @@
     "lint:meeting-arrivals": "node scripts/lint-meeting-arrivals.mjs",
     "lint:tech-check-in": "node scripts/lint-tech-check-in.mjs",
     "lint:reach-mail": "node scripts/lint-reach-mail.mjs",
-    "typecheck": "npm run lint:page-headers && npm run lint:feedback-door && npm run lint:newsletter-workflow && npm run lint:meeting-arrivals && npm run lint:tech-check-in && npm run lint:reach-mail && tsc --noEmit",
+    "typecheck": "npm run lint:page-headers && npm run lint:feedback-door && npm run lint:newsletter-workflow && npm run lint:meeting-arrivals && npm run lint:tech-check-in && npm run lint:reach-mail && npm run lint:survey-colour && tsc --noEmit",
     "doctor": "npx expo-doctor",
     "export:ios": "expo export --platform ios --output-dir .expo-export/ios",
     "verify:web-export": "node scripts/verify-web-export.mjs dist",
     "build:web": "npm run lint:page-headers && npm run lint:feedback-door && npm run lint:newsletter-workflow && expo export --platform web && npm run verify:web-export && node scripts/write-web-version.mjs",
-    "release:check": "npm run typecheck && npm run doctor"
+    "release:check": "npm run typecheck && npm run doctor",
+    "lint:survey-colour": "node scripts/lint-survey-colour.mjs"
   },
   "dependencies": {
     "@daily-co/daily-js": "^0.92.0",

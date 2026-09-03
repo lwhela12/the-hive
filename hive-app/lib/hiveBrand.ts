@@ -153,3 +153,60 @@ export function accentOnDark(hex: string): string {
  */
 export const normalizeHiveBrandText = (text?: string | null) =>
   (text ?? '').replace(/\bHive\b/g, 'HIVE');
+
+/**
+ * The accent, darkened until it can be read as a heading on cream.
+ *
+ * The opposite job to `accentOnDark`. Gold sits at 0.61 luminance — bright
+ * enough that a heading in it on `#fffdf5` reads as a highlight rather than
+ * words, which is why gold's deep ink `#8a5a16` was written by hand in a dozen
+ * places. Tech's blue and Production's purple are already dark enough to read
+ * as-is, so they come back untouched.
+ */
+export function accentInk(hex: string): string {
+  const [r, g, b] = channels(hex);
+  if (luminance(hex) <= 0.45) return hex;
+  const drop = (c: number) => Math.round(c * 0.58);
+  return `rgb(${drop(r)},${drop(g)},${drop(b)})`;
+}
+
+/**
+ * One HIVE's accent, in the four weights a form needs.
+ *
+ * Nat, 2026-09-01: surveys still wore honey gold inside Tech HIVE and
+ * Production HIVE — every number chip, every selected answer, every button,
+ * in a HIVE whose whole shell is blue or purple.
+ *
+ * Gold returns its EXACT hand-tuned family rather than anything computed, so
+ * OG HIVE — where gold is correct and every one of these values was chosen by
+ * eye over six months — does not shift by a single pixel. Only a HIVE that was
+ * wearing somebody else's colour changes.
+ *
+ *  - `accent` — solid fills, chips, buttons, the required star
+ *  - `ink`    — a heading sitting on `wash`
+ *  - `wash`   — the soft panel behind a hint or a picker
+ *  - `line`   — borders, at whatever alpha the caller already used
+ */
+export function accentPalette(accent: string): {
+  accent: string;
+  ink: string;
+  wash: string;
+  line: (alpha: number) => string;
+} {
+  if (accent.trim().toLowerCase() === HIVE_GOLD) {
+    return {
+      accent: HIVE_GOLD,
+      ink: '#8a5a16',
+      wash: '#fdf3dc',
+      line: (alpha) => `rgba(222,193,129,${alpha})`,
+    };
+  }
+  return {
+    accent,
+    ink: accentInk(accent),
+    wash: accentWash(accent, 0.1),
+    // The gold line is a LIGHTER gold than the accent itself, so matching its
+    // weight means easing off the alpha rather than reusing it raw.
+    line: (alpha) => accentWash(accent, alpha * 0.72),
+  };
+}
