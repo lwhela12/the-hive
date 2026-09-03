@@ -55,13 +55,26 @@ async function getAccessToken(): Promise<string> {
 }
 
 /**
+ * Which calendar to write to. `primary` is exactly what this did before
+ * `communities.google_calendar_id` existed, so a HIVE with none behaves the
+ * way it always has. See migration 227.
+ */
+function calendarTarget(calendarId?: string | null): string {
+  const id = (calendarId ?? '').trim();
+  return id || 'primary';
+}
+
+/**
  * Delete a Google Calendar event
  */
 async function deleteCalendarEvent(
   accessToken: string,
-  googleEventId: string
+  googleEventId: string,
+  calendarId?: string | null
 ): Promise<void> {
-  const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${googleEventId}?sendUpdates=all`;
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${
+    encodeURIComponent(calendarTarget(calendarId))
+  }/events/${googleEventId}?sendUpdates=all`;
 
   const response = await fetch(url, {
     method: 'DELETE',
@@ -147,7 +160,18 @@ Deno.serve(async (req) => {
     if (event.google_event_id) {
       try {
         const accessToken = await getAccessToken();
-        await deleteCalendarEvent(accessToken, event.google_event_id);
+        // The event has to be deleted from the calendar it actually lives on;
+        // asking `primary` to delete somebody else's row is a silent 404.
+        const { data: hiveRow } = await adminSupabase
+          .from('communities')
+          .select('google_calendar_id')
+          .eq('id', event.community_id)
+          .maybeSingle();
+        await deleteCalendarEvent(
+          accessToken,
+          event.google_event_id,
+          (hiveRow as { google_calendar_id?: string | null } | null)?.google_calendar_id ?? null
+        );
         console.log('Deleted from Google Calendar:', event.google_event_id);
       } catch (calendarError) {
         // Log but don't fail - still delete from database

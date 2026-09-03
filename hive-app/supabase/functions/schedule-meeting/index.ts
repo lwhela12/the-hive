@@ -115,6 +115,23 @@ async function getAccessToken(): Promise<string> {
 /**
  * Create a Google Calendar event with Meet link and attendees
  */
+/**
+ * Which calendar to write to.
+ *
+ * Nat, 2026-09-03: *"I can schedule something inside the app or from my Google
+ * Cal and it's one and the same."* She keeps a calendar per HIVE and owns all
+ * of them, so a meeting made in the app belongs on that HIVE's calendar rather
+ * than piling into whoever's personal one.
+ *
+ * `primary` is the fallback and it is not a guess — it is exactly what every
+ * one of these functions did before `communities.google_calendar_id` existed,
+ * so a HIVE with no calendar set behaves the way it always has.
+ */
+function calendarTarget(calendarId?: string | null): string {
+  const id = (calendarId ?? '').trim();
+  return id || 'primary';
+}
+
 async function createCalendarEvent(
   accessToken: string,
   params: {
@@ -127,9 +144,15 @@ async function createCalendarEvent(
     location?: string;
     /** Does this HIVE meet on Meet? `communities.meets_on_google_meet`. */
     onGoogleMeet?: boolean;
+    /**
+     * Which calendar this HIVE's meetings live on
+     * (`communities.google_calendar_id`). Blank means the token owner's own
+     * calendar, which is what this did before there was a column.
+     */
+    calendarId?: string | null;
   }
 ): Promise<GoogleCalendarEvent> {
-  const { title, description, startDateTime, endDateTime, timeZone, attendees, location, onGoogleMeet } = params;
+  const { title, description, startDateTime, endDateTime, timeZone, attendees, location, onGoogleMeet, calendarId } = params;
 
   // A Meet link only where the HIVE actually meets on Meet.
   //
@@ -178,7 +201,9 @@ async function createCalendarEvent(
     requestBody.sendUpdates = 'all';
   }
 
-  const url = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events');
+  const url = new URL(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarTarget(calendarId))}/events`
+  );
   url.searchParams.set('sendUpdates', 'all'); // Ensure invites are sent
   // Google ignores conferenceData entirely without this, and says nothing
   // about having done so — the event comes back looking fine, with no link.
@@ -423,10 +448,14 @@ Deno.serve(async (req) => {
     // Does this HIVE meet on Meet? Its own row says (migration 191).
     const { data: hiveRow } = await supabaseAdmin
       .from('communities')
-      .select('meets_on_google_meet')
+      .select('meets_on_google_meet, google_calendar_id')
       .eq('id', communityId)
       .maybeSingle();
-    const onGoogleMeet = !!(hiveRow as { meets_on_google_meet?: boolean } | null)?.meets_on_google_meet;
+    const hive = hiveRow as {
+      meets_on_google_meet?: boolean;
+      google_calendar_id?: string | null;
+    } | null;
+    const onGoogleMeet = !!hive?.meets_on_google_meet;
 
     // Get Google access token
     const accessToken = await getAccessToken();
@@ -440,6 +469,7 @@ Deno.serve(async (req) => {
       attendees,
       location,
       onGoogleMeet,
+      calendarId: hive?.google_calendar_id ?? null,
     });
 
     // A HIVE that meets in the app has one door and this stays null on purpose,

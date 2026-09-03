@@ -49,3 +49,6 @@ supabase/.temp/
 /ios
 /android
 .vercel
+
+# The Google refresh token, on its way to a Supabase secret. Never committed.
+.google-refresh-token

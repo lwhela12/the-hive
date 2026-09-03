@@ -123,6 +123,16 @@ async function getAccessToken(): Promise<string> {
 /**
  * Update a Google Calendar event
  */
+/**
+ * Which calendar to write to. `primary` is exactly what this did before
+ * `communities.google_calendar_id` existed, so a HIVE with none behaves the
+ * way it always has. See migration 227.
+ */
+function calendarTarget(calendarId?: string | null): string {
+  const id = (calendarId ?? '').trim();
+  return id || 'primary';
+}
+
 async function updateCalendarEvent(
   accessToken: string,
   googleEventId: string,
@@ -143,6 +153,12 @@ async function updateCalendarEvent(
      * delete a meeting people have already accepted and make it again.
      */
     addMeetLink?: boolean;
+    /**
+     * Which calendar this HIVE's meetings live on
+     * (`communities.google_calendar_id`). Blank means the token owner's own
+     * calendar, which is what this did before there was a column.
+     */
+    calendarId?: string | null;
   }
 ): Promise<string | null> {
   const { title, description, location, startDateTime, endDateTime, timeZone, addMeetLink } = params;
@@ -191,7 +207,9 @@ async function updateCalendarEvent(
 
   // Google ignores conferenceData without this and says nothing about having
   // done so — the event comes back looking fine, with no link on it.
-  const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(googleEventId)}?sendUpdates=all`
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${
+    encodeURIComponent(calendarTarget(params.calendarId))
+  }/events/${encodeURIComponent(googleEventId)}?sendUpdates=all`
     + (addMeetLink ? '&conferenceDataVersion=1' : '');
 
   const response = await fetch(url, {
@@ -396,10 +414,14 @@ Deno.serve(async (req) => {
         // deleting a meeting people have already accepted.
         const { data: hiveRow } = await adminSupabase
           .from('communities')
-          .select('meets_on_google_meet')
+          .select('meets_on_google_meet, google_calendar_id')
           .eq('id', event.community_id)
           .maybeSingle();
-        const addMeetLink = !!(hiveRow as { meets_on_google_meet?: boolean } | null)?.meets_on_google_meet
+        const hive = hiveRow as {
+          meets_on_google_meet?: boolean;
+          google_calendar_id?: string | null;
+        } | null;
+        const addMeetLink = !!hive?.meets_on_google_meet
           && event.event_type === 'meeting'
           && !event.meet_link;
 
@@ -411,6 +433,7 @@ Deno.serve(async (req) => {
           endDateTime,
           timeZone,
           addMeetLink,
+          calendarId: hive?.google_calendar_id ?? null,
         });
         if (addMeetLink && meetLink) dbUpdate.meet_link = meetLink;
         console.log('Updated Google Calendar event:', event.google_event_id);
