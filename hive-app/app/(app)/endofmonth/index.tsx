@@ -32,12 +32,26 @@ import type { Survey } from '../../../types';
  */
 export default function EndOfMonthScreen() {
   const router = useRouter();
-  const { loading: authLoading, profile } = useAuth();
+  /**
+   * `useSurveys` NEEDS its arguments, and the failure without them is silent.
+   *
+   * This called `useSurveys()` bare for its first hour. The query is
+   * `enabled: !!communityId`, so with no arguments it never fired — no request,
+   * no console error — and `submitResponse` returned "Not authenticated"
+   * before touching the database. Every member who filled this in would have
+   * been told "Could not save your responses. Please try again", and trying
+   * again would never have worked. Caught by an audit before anybody saw it.
+   *
+   * `communityId` is only for the CACHE KEY and for a HIVE's own check-ins;
+   * this survey belongs to no HIVE and `submitResponse` now files it as such
+   * whatever HIVE the reader happens to be standing in.
+   */
+  const { loading: authLoading, profile, communityId } = useAuth();
   const skin = usePageSkin();
-  const { availableSurveys, myResponses, submitResponse, loading: surveysLoading } = useSurveys();
+  const { myResponses, submitResponse } = useSurveys(communityId ?? undefined, profile?.id);
 
   const [survey, setSurvey] = useState<Survey | null>(null);
-  const [state, setState] = useState<'looking' | 'ready' | 'none'>('looking');
+  const [state, setState] = useState<'looking' | 'ready' | 'none' | 'broken'>('looking');
 
   useEffect(() => {
     if (authLoading || !profile) return;
@@ -47,7 +61,7 @@ export default function EndOfMonthScreen() {
       // The open HIVE-Wide check-in. Looked UP rather than carried in the
       // address, so next month's row answers the link she has already texted
       // people — an id in a URL is a link that expires quietly.
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('surveys')
         .select('*')
         .is('community_id', null)
@@ -56,6 +70,11 @@ export default function EndOfMonthScreen() {
         .limit(1);
 
       if (cancelled) return;
+      // Not-loaded, empty and failed are three different states, and only one
+      // of them gets the reassuring copy. Dropping `error` collapsed a network
+      // failure into "nothing has gone wrong", which is the worst of the three
+      // things this screen could say.
+      if (error) { setState('broken'); return; }
       const found = (data ?? [])[0] as Survey | undefined;
       if (!found) { setState('none'); return; }
       setSurvey(found);
@@ -72,8 +91,32 @@ export default function EndOfMonthScreen() {
 
   const onSubmit = useCallback(async (answers: SurveyAnswers) => {
     if (!survey) return { error: 'No check-in open' };
-    return submitResponse(survey.id, answers);
-  }, [survey, submitResponse]);
+    const result = await submitResponse(survey.id, answers);
+    if (result.error) return result;
+
+    /**
+     * The email-or-text answer has a real destination, and it is not this
+     * survey's answer blob.
+     *
+     * `profiles.contact_pref` (migration 223) is what Admin reads to tell Nat
+     * who wants a text. Left in `answers.q_contact` it would be a display
+     * string nobody reads — the "question with nowhere to go" this project
+     * keeps having to delete. So the answer is copied to the column it belongs
+     * in, and a failure there does not fail the check-in: the rest of what
+     * they wrote matters more than this one field.
+     */
+    const said = answers.q_contact;
+    const pref = typeof said === 'string'
+      ? ({ Email: 'email', Text: 'text', 'Either is fine': 'either' } as Record<string, string>)[said]
+      : undefined;
+    if (pref && profile?.id) {
+      await (supabase as any)
+        .from('profiles')
+        .update({ contact_pref: pref })
+        .eq('id', profile.id);
+    }
+    return result;
+  }, [survey, submitResponse, profile?.id]);
 
   if (state === 'ready' && survey) {
     const mine = myResponses.get(survey.id);
@@ -90,7 +133,14 @@ export default function EndOfMonthScreen() {
 
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: skin.page, padding: 24 }}>
-      {state === 'none' ? (
+      {state === 'broken' ? (
+        <Text
+          style={{ fontFamily: 'Lato_700Bold', fontSize: 14, lineHeight: 21, color: '#c0392b', textAlign: 'center' }}
+        >
+          This did not load, so it is not telling you there is nothing here. Have another go in a
+          minute.
+        </Text>
+      ) : state === 'none' ? (
         <Text
           style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: skin.inkSoft, textAlign: 'center' }}
         >

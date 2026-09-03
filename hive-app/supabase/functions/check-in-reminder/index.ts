@@ -235,7 +235,7 @@ async function loadMeetingDetails(
   try {
     const { data, error } = await admin
       .from('events')
-      .select('id, title, event_date, event_time, end_time, location, description')
+      .select('id, title, event_date, event_time, end_time, location, description, meet_link')
       .eq('community_id', communityId)
       .eq('event_type', 'meeting')
       .gte('event_date', fromDateOnly)
@@ -253,6 +253,7 @@ async function loadMeetingDetails(
           end_time: string | null;
           location: string | null;
           description: string | null;
+          meet_link: string | null;
         }
       | undefined;
     if (!row?.id || !row.event_date) return null;
@@ -269,6 +270,7 @@ async function loadMeetingDetails(
       endTimeLabel: formatClock(row.end_time),
       location: row.location?.trim() || null,
       note: row.description?.trim() || null,
+      meetLink: row.meet_link?.trim() || null,
     };
   } catch (err) {
     console.error('[check-in-reminder] could not read the next meeting row:', err);
@@ -436,7 +438,7 @@ function checkInEmailHtml(
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
       ${LOGO_BLOCK}
       ${halfwayKicker}
-      <h1 style="color: ${mark.accent}; font-size: 22px; text-align: center; margin: 8px 0 4px;">Halfway check-in</h1>
+      <h1 style="color: ${mark.accent}; font-size: 22px; text-align: center; margin: 8px 0 4px;">End of the month</h1>
       <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The newsletter goes out on the 1st</p>
       <p style="font-size: 15px;">Hi ${name},</p>
       <p style="font-size: 15px;">No meeting tonight — but the newsletter goes out soon, and this is the easy way in:</p>
@@ -464,7 +466,7 @@ function checkInEmailHtml(
       <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Your check-in is open</h1>
       <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">${escapeHtml(whenLine)}</p>
       <p style="font-size: 15px;">Hi ${name},</p>
-      <p style="font-size: 15px;">The monthly check-in before <strong>${meetingTitle}</strong> is open — one walkthrough, about <strong>5 minutes</strong>:</p>
+      <p style="font-size: 15px;">Before we meet — the check-in for <strong>${meetingTitle}</strong> is open — one walkthrough, about <strong>5 minutes</strong>:</p>
       <ul style="font-size: 15px; padding-left: 20px;">
         <li>Your HD wishes — anything change? Anyone help?</li>
         <li>Hang ideas &amp; the calendar (out of town? add the stretch!)</li>
@@ -546,6 +548,19 @@ function seasonEmailHtml(
    * letter is a promise about what is behind the button.
    */
   firstMeeting?: boolean,
+  /**
+   * The meeting this letter is about, for the `premeeting` kinds.
+   *
+   * It said *"It's today"* and *"September 3"* and stopped there — no hour, no
+   * address, no Meet link, on the morning of Tech HIVE's first ever meeting.
+   * The MONTHLY letter has carried weekday, time window, place and Nat's note
+   * since August (`checkInEmailHtml`); Tech runs on the season path, so its
+   * members had never once been told when or where in an email.
+   *
+   * Same rule as the monthly one: everything here comes off the meeting ROW.
+   * The letter says nothing the calendar has not said first.
+   */
+  meeting?: MeetingDetails | null,
 ): string {
   const name = escapeHtml(rawName);
   const mark = hiveMark(hiveSlug, hiveAccent);
@@ -582,7 +597,7 @@ function seasonEmailHtml(
      * *"'A gentle one, halfway through' does not parse. Say something like
      * 'we're halfway through the month'."*
      */
-    const heading = touch === 'day_of' ? 'Last call' : 'Halfway there';
+    const heading = touch === 'day_of' ? 'Last call' : 'End of the month';
     const body = touch === 'day_of'
       ? `Last call for the newsletter — it goes out on the 1st. Nothing owed: just a quick one if you want a hand with anything, or you have something to put in.`
       : `We're halfway through the month. How is it going? Is there anything you want a hand with? And have you got anything for the newsletter — a shout-out, a plug, an event to come to, a reminder, or a compliment for someone? Blanks are completely fine, and whatever is still on your list is on your to-do list in the app.`;
@@ -613,13 +628,28 @@ function seasonEmailHtml(
       : (touch === 'day_of'
           ? `We meet today and your answers aren't in yet — it takes about <strong>3 minutes</strong>, and it means we can spend the hour deciding together instead of asking each other questions.`
           : `Our check-in is open — about <strong>3 minutes</strong>. Where your jobs got to, what is stuck, and how much you can take on. Answering beforehand means the meeting gets to decide. Short answers are perfect.`);
+    // When and where, off the meeting row — never asserted from the due date.
+    const when = meeting ? `${meeting.weekday}, ${meeting.dateLabel}` : `${month} ${day}`;
+    const timeWindow = meeting ? meetingTimeWindow(meeting) : null;
+    const whenLine = timeWindow ? `${when} · from ${timeWindow}` : when;
+    const where = meeting?.location
+      ? `<p style="font-size: 15px; color: #6b6b6b; margin: 0 0 6px;">📍 ${escapeHtml(meeting.location)}</p>`
+      : '';
+    // A HIVE that meets on Meet needs the door, not just the address.
+    const joinLine = meeting?.meetLink
+      ? `<p style="font-size: 15px; margin: 0 0 18px;"><a href="${escapeHtml(meeting.meetLink)}" style="color: ${mark.accent};">Join on Google Meet</a></p>`
+      : '';
+    const note = meeting?.note ? noteHtml(meeting.note) : '';
     return `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
         <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">${mark.emoji}</span></div>
         ${kicker}
         <h1 style="color: ${mark.accent}; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
-        <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">${month} ${day}</p>
+        <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">${whenLine}</p>
         <p style="font-size: 15px;">Hi ${name},</p>
+        ${where}
+        ${joinLine}
+        ${note}
         <p style="font-size: 15px;">${body}</p>
         <div style="text-align: center; margin: 28px 0;">
           ${openButton}
@@ -715,7 +745,7 @@ function seasonSubject(
   }
   if (kind === 'endofmonth') {
     /**
-     * **`Pro HIVE · Halfway check-in`, and nothing after it.**
+     * **`Pro HIVE · End of the month`, and nothing after it.**
      *
      * The tail used to read "— no obligations". Nat, 2026-08-27, cut it: an
      * inbox shows perhaps forty characters, and those are spent apologising for
@@ -728,7 +758,7 @@ function seasonSubject(
      */
     return touch === 'day_of'
       ? `${emoji} ${from}Last call — anything for the newsletter?`
-      : `${emoji} ${from}Halfway check-in`;
+      : `${emoji} ${from}End of the month`;
   }
   if (kind === 'quarter') {
     return touch === 'day_of'
@@ -1220,7 +1250,7 @@ serve(async (req) => {
     }
     if (previewMeeting) ({ month, day } = formatMeetingDate(previewMeeting.dateOnly));
     const previewSubject = testKind === 'midpoint'
-      ? `[Preview] 🐝 ${previewFrom}Halfway check-in`
+      ? `[Preview] 🐝 ${previewFrom}End of the month`
       : `[Preview] ${monthlyMeetingSubject(testKind, previewHiveName, previewMeeting as MeetingDetails)}`;
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -1606,18 +1636,18 @@ serve(async (req) => {
           kind === 'day_of'
             ? `🐝 ${meetingName} tonight — last call to check in`
             : kind === 'midpoint'
-              ? '🍯 Halfway check-in — anything for the newsletter?'
+              ? '🍯 End of the month — anything for the newsletter?'
               : '🐝 Monthly check-in is open';
         const notificationBody =
           kind === 'day_of'
             ? `Just a reminder — ${meetingName} is tonight, ${month} ${day}. Your pre-meeting check-in isn't in yet: about 2 minutes, and it lights you up on the Arrival Board.`
             : kind === 'midpoint'
-              ? `The newsletter's brewing 🗞️ — want a shout-out, a plug, or a reminder in it? The 2-minute halfway check-in walks you there.`
+              ? `The newsletter's brewing 🗞️ — want a shout-out, a plug, or a reminder in it? The 2-minute End of the month check-in walks you there.`
               : `Take 5 minutes before ${meetingName} on ${month} ${day} — update your HDs and check in. ` +
                 `It shows up on the Arrival Board and helps set the room.`;
         const from = `${shortHiveName(monthlyHiveName)} · `;
         const emailSubject = approving?.subject ?? (kind === 'midpoint'
-          ? `🍯 ${from}Halfway check-in — the newsletter goes out on the 1st`
+          ? `🍯 ${from}End of the month — the newsletter goes out on the 1st`
           : monthlyMeetingSubject(kind, monthlyHiveName, meetingDetails as MeetingDetails));
         const htmlTemplate = approving?.htmlTemplate ?? checkInEmailHtml(
           MEMBER_NAME_TOKEN,
@@ -1966,7 +1996,7 @@ serve(async (req) => {
             // it arrives beside disagreeing is how Production's halfway ended up
             // announcing "🎉 Your end-of-year check-in is open" in August.
             window: {
-              title: '🍯 Halfway check-in — anything for the newsletter?',
+              title: '🍯 End of the month — anything for the newsletter?',
               body: `We're halfway through the month. How is it going, do you want a hand with anything, and have you got anything for the newsletter? It goes out on the 1st.`,
             },
             day_of: {
@@ -1990,6 +2020,19 @@ serve(async (req) => {
         // A first meeting cannot be announced as "before we meet", and the
         // check-in behind it is onboarding rather than a status report.
         const isFirstMeeting = FIRST_MEETING_CHECK_IN_PATTERN.test(survey.title || '');
+        /**
+         * The meeting row, for a `premeeting` letter that has to say when and
+         * where.
+         *
+         * Read once here rather than inside the template, and only for the kind
+         * that needs it — the quarter and the year are deadlines, not places.
+         * An approved send replays the snapshot it was held with so the letter
+         * Nat read is the letter that goes.
+         */
+        const seasonMeeting = kind === 'premeeting'
+          ? (approving?.meeting
+              ?? await loadMeetingDetails(supabaseAdmin, survey.community_id, todayStr))
+          : null;
         const emailSubject = approving?.subject
           ?? seasonSubject(kind, touch, month, day, hiveName, seasonHiveRow?.slug, isFirstMeeting);
         /**
@@ -2029,6 +2072,9 @@ serve(async (req) => {
               `${approving?.hiveName ?? hiveName} · ${month}`,
               seasonHiveRow?.slug, seasonHiveRow?.accent_color,
               isFirstMeeting,
+              // When and where. A `premeeting` letter that cannot say the hour
+              // or the address is the one thing this email is FOR.
+              seasonMeeting,
             ));
 
         // THE HOLD — same as the monthly loop. Nothing above this line has
@@ -2052,6 +2098,10 @@ serve(async (req) => {
               subject: emailSubject,
               recipients: eligibleEmailRecipientCount('window', members as MemberProfile[]),
               htmlTemplate,
+              // Frozen with the hold, so approving tomorrow morning sends the
+              // letter Nat read tonight rather than one rebuilt from a meeting
+              // row that may have moved in between.
+              meeting: seasonMeeting ?? undefined,
             },
           );
           if (parked) heldForApproval++;

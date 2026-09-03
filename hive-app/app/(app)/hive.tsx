@@ -2772,7 +2772,7 @@ export default function HiveScreen() {
         // One mark per rhythm: the clipboard for the monthly, the season
         // marks for the quarter and the year.
         emoji: seasonKind ? SEASON_CHECK_IN_EMOJI[seasonKind] : '📋',
-        title: isMonthlyTuneUp ? `${tuneUpMonthName} tune-up + check-in` : s.title,
+        title: isMonthlyTuneUp ? `Before we meet · ${tuneUpMonthName}` : s.title,
         detail: isDone
           ? `Submitted ${formatDateShort(submittedAt)} · Tap to edit`
           : s.due_date

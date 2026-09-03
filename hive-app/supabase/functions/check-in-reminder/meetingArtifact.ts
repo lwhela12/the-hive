@@ -53,6 +53,14 @@ export interface MeetingDetails {
   endTimeLabel: string | null;
   location: string | null;
   note: string | null;
+  /**
+   * The Google Meet door, for a HIVE that meets on one.
+   *
+   * Only ever put in front of that HIVE's own members — the meet link is the
+   * one field migration 176 names as something that must never travel between
+   * HIVEs, and nothing here sends it anywhere else.
+   */
+  meetLink: string | null;
 }
 
 export interface EmailPreferenceProfile {

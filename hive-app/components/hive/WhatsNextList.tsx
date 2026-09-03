@@ -34,7 +34,7 @@ export function WhatsNextList({
 }) {
   const router = useRouter();
   const { memberships } = useAuth();
-  const { items, state, today } = useWhatsNext();
+  const { items, state, today, refresh } = useWhatsNext();
 
   if (state === 'loading') {
     return (
@@ -48,9 +48,19 @@ export function WhatsNextList({
     // An empty list reads as a clear diary. That is the one thing this may not
     // claim when it does not know.
     return (
-      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#ffb4a8', lineHeight: 19 }}>
-        This did not load, so it is not telling you the diary is clear. Pull down to try again.
-      </Text>
+      <View style={{ gap: 8 }}>
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#ffb4a8', lineHeight: 19 }}>
+          This did not load, so it is not telling you the diary is clear.
+        </Text>
+        {/* It used to say "pull down to try again", and pulling down did
+            nothing — the page's refresh never reached this hook. A button that
+            works beats an instruction that does not. */}
+        <Pressable onPress={() => void refresh()} accessibilityRole="button">
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#e8c583' }}>
+            Try again
+          </Text>
+        </Pressable>
+      </View>
     );
   }
 
@@ -75,7 +85,27 @@ export function WhatsNextList({
               ? accentOnDark(hiveAccent(memberships.find((m) => m.community_id === item.communityId)?.community))
               : 'transparent'
           }
-          onPress={item.holdId ? () => router.push(`/approve/${item.holdId}` as never) : undefined}
+          /**
+           * A held send opens the approve screen; a check-in of your own opens
+           * the HIVE it lives in, where the survey card is.
+           *
+           * Without the second branch the ONE row a member can act on was flat
+           * text with nowhere to tap — and tomorrow that is five Tech members
+           * who have not answered before their first meeting.
+           */
+          onPress={
+            item.holdId
+              ? () => router.push(`/approve/${item.holdId}` as never)
+              : item.key.startsWith('survey_')
+                ? () => router.push(
+                    item.communityId
+                      // Naming a HIVE is how you ask to be IN it.
+                      ? `/hive?hive=${item.communityId}` as never
+                      // A check-in belonging to no HIVE has its own door.
+                      : '/endofmonth' as never
+                  )
+                : undefined
+          }
         />
       ))}
     </View>

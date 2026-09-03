@@ -66,7 +66,7 @@ export type EmailSetting = {
 export const EMAIL_SETTINGS: EmailSetting[] = [
   {
     column: 'email_meeting_checkin_enabled',
-    label: 'Before-a-meeting check-in',
+    label: 'Before we meet',
     hint: 'Three days before the meeting, an email walks you through getting ready — your wishes, your to-dos, and how you are doing.',
   },
   {

@@ -562,7 +562,23 @@ export function ComposerBar({
         <View className="flex-row items-end">
           <View className="flex-1">{textInputNode}</View>
           {isDictationSupported() ? (
-            <View className="pr-2 pb-2 pl-1">{micNode}</View>
+            /**
+             * The whole column hands the cursor back, not just the button.
+             *
+             * `items-end` keeps the mic with the last line you wrote, which
+             * leaves the space ABOVE it — 44 points wide by the height of a
+             * 200-point board composer — belonging to nothing. That is the same
+             * dead tap inside a field that this file spent the morning removing
+             * from the shelf below, moved to the other axis. The mic's own
+             * Pressable still wins where it actually sits.
+             */
+            <Pressable
+              onPress={handBackTheCursor}
+              accessibilityLabel="Keep typing"
+              className="pr-2 pb-2 pl-1 self-stretch justify-end"
+            >
+              {micNode}
+            </Pressable>
           ) : null}
         </View>
 
@@ -600,7 +616,12 @@ export function ComposerBar({
                 field is the app saying "not here" without saying where. */}
             <Pressable
               onPress={handBackTheCursor}
-              accessibilityLabel="Keep typing"
+              // A place to click, never a thing to land on. react-native-web
+              // gives every Pressable a tabIndex, so without this, tabbing out
+              // of the box stopped on an invisible element announced as "Keep
+              // typing" before it ever reached Cancel or Save.
+              focusable={false}
+              importantForAccessibility="no"
               className="flex-1 self-stretch"
             />
             {showCounter && (

@@ -1795,13 +1795,13 @@ export function HiveMemberPanels({
         const checkInSchedule: CheckInScheduleRow[] = [
           {
             key: 'monthly',
-            when: 'Pre-Meeting',
+            when: 'Before we meet',
             what: tailored
               ? 'open Before we meet'
               : preMeeting ? 'how we run, and where everyone stands' : 'coming soon',
             live: preMeeting,
             ...(tailored ? {
-              actionLabel: 'Test or fill out the monthly check-in',
+              actionLabel: 'Test or fill out Before we meet',
               onPress: () => void openMemberCheckIn(m.community_id),
             } : preMeeting ? {
               actionLabel: 'Read it or fill it out on Home',
@@ -1810,7 +1810,7 @@ export function HiveMemberPanels({
           },
           {
             key: 'halfway',
-            when: 'End of Month',
+            when: 'End of the month',
             what: tailored
               ? 'shout-outs for the newsletter'
               : endOfMonth ? 'what moved, what is stuck, what is next' : 'coming soon',

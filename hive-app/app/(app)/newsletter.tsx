@@ -765,7 +765,7 @@ export default function NewsletterScreen() {
             <Text style={{ fontSize: 34 }}>🗞️</Text>
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#6f6559', textAlign: 'center' }}>
               Nothing's landed since the last meeting yet. Shout-outs and compliments
-              show up here as people add them at the halfway check-in.
+              show up here as people add them at End of the month.
             </Text>
           </View>
         ) : (

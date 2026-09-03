@@ -143,10 +143,10 @@ export default function ArrivalBoardScreen() {
           >
             <Text style={{ fontSize: 40, marginBottom: 12 }}>🌙</Text>
             <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: isTV ? 26 : 18, color: '#2d2d2d', textAlign: 'center' }}>
-              No monthly check-in is live right now
+              No check-in is live right now
             </Text>
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: isTV ? 17 : 14, color: '#9a8060', textAlign: 'center', marginTop: 8, lineHeight: 22 }}>
-              Once the monthly check-in survey is active, arrivals will glow here.
+              Once a check-in is open, arrivals will glow here.
             </Text>
           </View>
         ) : (

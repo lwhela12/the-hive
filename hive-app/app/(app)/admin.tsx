@@ -1179,7 +1179,10 @@ export default function AdminScreen() {
         .from('survey_responses')
         .select('*, user:profiles(id, name, email, avatar_url)')
         .eq('survey_id', survey.id)
-        .eq('community_id', communityId)
+        // A HIVE-Wide check-in files its answers with no community_id, so an
+        // `eq` can never match them — Admin showed zero answers, silently, in
+        // all three HIVE tabs (found by audit, 2026-09-02).
+        .or(`community_id.eq.${communityId},community_id.is.null`)
         .order('submitted_at', { ascending: false });
 
       if (error) {
@@ -1187,7 +1190,10 @@ export default function AdminScreen() {
           .from('survey_responses')
           .select('*')
           .eq('survey_id', survey.id)
-          .eq('community_id', communityId)
+          // A HIVE-Wide check-in files its answers with no community_id, so an
+        // `eq` can never match them — Admin showed zero answers, silently, in
+        // all three HIVE tabs (found by audit, 2026-09-02).
+        .or(`community_id.eq.${communityId},community_id.is.null`)
           .order('submitted_at', { ascending: false });
         data = fallback.data;
         error = fallback.error;
@@ -1250,7 +1256,7 @@ export default function AdminScreen() {
         && /monthly\s+check-?in/i.test(survey.title)
       ));
       if (!checkIn) {
-        showAlert('No monthly check-in yet', 'This HIVE does not have a monthly check-in to review.');
+        showAlert('Nothing to review yet', 'This HIVE has no Before we meet check-in to review.');
         return;
       }
 

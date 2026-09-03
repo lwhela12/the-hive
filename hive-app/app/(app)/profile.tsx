@@ -3178,7 +3178,7 @@ export default function ProfileScreen() {
                     {(profile as any).currently_reading || 'Not set'}
                   </Text>
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-1">
-                    Your monthly check-in fills this in too.
+                    Your check-ins fill this in too.
                   </Text>
                 </>
               )}

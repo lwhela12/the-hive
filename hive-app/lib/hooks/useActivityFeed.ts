@@ -248,7 +248,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
         id: `survey_open_${monthlyCheckIn.id}_${period}`,
         type: 'survey_open',
         emoji: '📝',
-        text: `Monthly check-in is open — answer before the ${monthName} meeting! 🐝`,
+        text: `Before we meet is open — answer before the ${monthName} meeting! 🐝`,
         timestamp: windowOpensAt.toISOString(),
         sourceId: monthlyCheckIn.id,
         navigatesTo: 'tuneup',

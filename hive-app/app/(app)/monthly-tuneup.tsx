@@ -3592,7 +3592,7 @@ export default function MonthlyTuneupScreen() {
         <StepHeader
           title="Quick pulse"
           icon={<Text style={{ fontSize: 20 }}>⚡</Text>}
-          subtitle="Halfway to the next meeting. Where are you at — no wrong answer."
+          subtitle="How the month went. Where are you at — no wrong answer."
         />
         <View style={[cardStyle, { gap: 12 }]}>
           <BoxHeading style={{ marginBottom: 0 }}>How's the month going?</BoxHeading>
@@ -4457,7 +4457,7 @@ export default function MonthlyTuneupScreen() {
         </Pressable>
         <CloseButton
           onPress={leaveTuneup}
-          accessibilityLabel={`Leave the tune-up and go back to ${exit.label}`}
+          accessibilityLabel={`Leave this check-in and go back to ${exit.label}`}
           color="#8a6b30"
         />
       </View>

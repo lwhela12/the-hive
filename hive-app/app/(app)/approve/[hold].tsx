@@ -98,7 +98,10 @@ export default function ApproveCheckInScreen() {
             body: { approve_notification_id: hold.id },
           });
           if (error) throw error;
-          const sent = (data as any)?.sent;
+          // `check-in-reminder` returns `emails_sent`; `sent` is what the RECAP
+          // function returns, and this was copy-pasted from there — so the
+          // count was always undefined and Nat only ever saw a bare "Gone."
+          const sent = (data as any)?.emails_sent;
           showAlert(
             'Sent',
             typeof sent === 'number'
@@ -107,6 +110,21 @@ export default function ApproveCheckInScreen() {
           );
           await load();
         } catch (sendError) {
+          console.error('Could not approve the check-in:', sendError);
+          /**
+           * "Everybody already answered" is a SUCCESS wearing an error's
+           * clothes. The function 409s with "no longer has anyone to send to"
+           * when the last non-responder answers between the 6am preview and
+           * this press — and `userFacingError` throws the message away, so Nat
+           * would have retried a thing that had already finished.
+           */
+          const raw = String((sendError as any)?.message ?? '');
+          const everyoneAnswered = /no longer has anyone|nobody|no recipients/i.test(raw);
+          if (everyoneAnswered) {
+            showAlert('Nothing to send', 'Everybody has answered since this was written, so there is nobody left to nudge. Nothing went out.');
+            await load();
+            return;
+          }
           console.error('Could not approve the check-in:', sendError);
           showAlert('Not sent', userFacingError(sendError, 'That did not go through. Nothing was sent — try again.'));
         } finally {
@@ -138,10 +156,14 @@ export default function ApproveCheckInScreen() {
     if (state === 'missing') {
       return (
         <Card>
-          <Heading>Nothing is waiting under that link.</Heading>
+          <Heading>Nothing is waiting under that link on this account.</Heading>
           <Body>
-            It may already have gone out, or the preview may have been replaced by a newer one.
-            Nothing was sent by opening this.
+            {/* A hold Nat cannot READ comes back as null with no error, which
+                is indistinguishable from one that already sent — and she often
+                has Lucas's login open. Naming the account is the difference
+                between "it went" and "you are looking from the wrong seat". */}
+            Check you are signed in as whoever the preview was emailed to. Otherwise it may already
+            have gone out, or been replaced by a newer preview. Nothing was sent by opening this.
           </Body>
         </Card>
       );
@@ -152,9 +174,14 @@ export default function ApproveCheckInScreen() {
         <Card tone="bad">
           <Heading>This did not load.</Heading>
           <Body>
-            So it is not telling you everything is fine. Nothing has been sent. Pull down to try
-            again, or come back in a minute.
+            So it is not telling you everything is fine. Nothing has been sent.
           </Body>
+          {/* It said "pull down to try again" and there was no pull-to-refresh
+              on this screen at all. A button that works beats an instruction
+              that does not. */}
+          <Pressable onPress={() => { setState('loading'); void load(); }} style={{ marginTop: 12 }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: GOLD }}>Try again</Text>
+          </Pressable>
         </Card>
       );
     }

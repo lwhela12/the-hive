@@ -55,7 +55,7 @@ export default function HalfwayShortLinkScreen() {
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: skin.page }}>
       <ActivityIndicator color={skin.gold} />
       <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft, fontSize: 14, marginTop: 12 }}>
-        Opening your halfway check-in…
+        Opening End of the month…
       </Text>
     </View>
   );

@@ -13,7 +13,7 @@ import { useRouter } from 'expo-router';
 // across the top would put you back inside a HIVE (Nat 2026-08-03). The import
 // hung around after the header came out.
 import { SpaceGlobe, SPACE_BLACK } from '../../components/ui/SpaceGlobe';
-import { getStoredItemAsync, setStoredItemAsync } from '../../lib/webStorage';
+import { useRememberedPanel } from '../../lib/hooks/useRememberedPanel';
 import { CollapsiblePanel } from '../../components/ui/CollapsiblePanel';
 import { WhatsNextList } from '../../components/hive/WhatsNextList';
 import { HiveMark } from '../../components/ui/HiveMark';
@@ -199,32 +199,13 @@ function TopBox({ label, wide, children }: { label: string; wide: boolean; child
    * Keyed by label rather than by index, so adding a panel in the middle does
    * not hand one drawer another one's memory.
    */
-  const rememberKey = `the-hive:wide-panel:${label}`;
-  const [open, setOpen] = useState(false);
-  const [remembered, setRemembered] = useState(false);
-
-  // Read once, then stop — the stored answer must not fight a later tap.
-  useEffect(() => {
-    if (remembered) return;
-    let cancelled = false;
-    void getStoredItemAsync(rememberKey).then((was) => {
-      if (cancelled) return;
-      if (was === 'open') setOpen(true);
-      setRemembered(true);
-    });
-    return () => { cancelled = true; };
-  }, [rememberKey, remembered]);
-
-  const rememberAndSet = (next: boolean) => {
-    setOpen(next);
-    void setStoredItemAsync(rememberKey, next ? 'open' : 'shut');
-  };
+  const { open, setOpen } = useRememberedPanel(`the-hive:wide-panel:${label}`);
 
   return (
     <CollapsiblePanel
       title={label}
       open={open}
-      onToggle={rememberAndSet}
+      onToggle={setOpen}
       colours={PANEL_COLOURS}
       // One line, always, at whatever size that takes — the panel measures its
       // own column and shrinks to suit. "What We've Been Building" is the
@@ -479,6 +460,7 @@ function WayIntoYourHive({
    */
   nextMeetingByHive: Record<string, { date: string; time: string | null } | undefined>;
 }) {
+  const { open: doorOpen, setOpen: setDoorOpen } = useRememberedPanel('the-hive:wide-panel:Your HIVEs');
   if (memberships.length === 0) return null;
 
   const names = memberships.map((m) => hiveDisplayName(m.community?.name));
@@ -490,6 +472,9 @@ function WayIntoYourHive({
 
   return (
     <CollapsiblePanel
+      // Remembers, like every other drawer on this page (2026-09-02).
+      open={doorOpen}
+      onToggle={setDoorOpen}
       title={firstVisit
         ? `Welcome${firstName ? `, ${firstName}` : ''} 🐝`
         : many ? 'Your HIVEs' : 'Your HIVE'}

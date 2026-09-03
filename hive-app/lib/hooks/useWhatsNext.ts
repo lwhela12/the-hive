@@ -50,12 +50,22 @@ const lastDayOfMonth = (dateOnly: string) => {
 
 export function useWhatsNext() {
   const { memberships, profile } = useAuth();
+  /**
+   * The ROW is a fact and the fact is the same for everybody — that is Nat's
+   * own design for this list. The WORDING is not. Three rows described jobs
+   * only she can do, in the second person, to all sixteen members: *"previews
+   * to you at 6am, nothing sends until you say go"* would have taught five
+   * Production members that their check-in emails wait on somebody's approval.
+   */
+  const isOwner = profile?.is_owner === true;
   const [items, setItems] = useState<WhatsNextItem[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
 
   const load = useCallback(async () => {
     const hiveIds = memberships.map((m) => m.community_id);
-    if (hiveIds.length === 0) { setItems([]); setState('ready'); return; }
+    // An empty string against a uuid column is a hard 400, and the one on the
+    // responses query would have made every answered check-in look outstanding.
+    if (!profile?.id || hiveIds.length === 0) { setItems([]); setState('ready'); return; }
 
     const today = pacificToday();
     const found: WhatsNextItem[] = [];
@@ -74,7 +84,17 @@ export function useWhatsNext() {
         supabase
           .from('surveys')
           .select('id, community_id, title, due_date')
-          .in('community_id', hiveIds)
+          /**
+           * Your HIVEs' check-ins, AND the ones belonging to no HIVE.
+           *
+           * `.in()` against a nullable column yields NULL rather than true, so
+           * a HIVE-Wide row can never come back from it — which meant the two
+           * branches below written for exactly that row were unreachable, and
+           * Nat's own End of the month never appeared on the list she had just
+           * asked to see it on. `.or()` and `.in()` cannot both address one
+           * column, so the `in` moves inside the `or`.
+           */
+          .or(`community_id.in.(${hiveIds.join(',')}),community_id.is.null`)
           .eq('is_active', true)
           .order('due_date', { ascending: true }),
         // Only Nat ever has one of these; for anybody else it comes back empty
@@ -82,7 +102,7 @@ export function useWhatsNext() {
         supabase
           .from('notifications')
           .select('id, created_at, metadata')
-          .eq('user_id', profile?.id ?? '')
+          .eq('user_id', profile.id)
           .eq('metadata->>check_in_approval', 'pending')
           .order('created_at', { ascending: false }),
       ]);
@@ -136,11 +156,12 @@ export function useWhatsNext() {
         const { data: mine } = await supabase
           .from('survey_responses')
           .select('survey_id')
-          .eq('user_id', profile?.id ?? '')
+          .eq('user_id', profile.id)
           .in('survey_id', surveys.map((s) => s.id));
         const answered = new Set((mine ?? []).map((r: any) => r.survey_id));
         for (const survey of surveys) {
           if (answered.has(survey.id)) continue;
+          if (!survey.due_date) continue;
           const due = String(survey.due_date).slice(0, 10);
           /**
            * Only once it is actually open — a check-in sitting in your list for
@@ -172,14 +193,18 @@ export function useWhatsNext() {
         key: 'end_of_month',
         date: shift(endOfMonth, -2),
         what: 'End of the month goes out',
-        detail: 'What you want in the Buzz, and how the month went. The quarterly rides along the same day.',
+        detail: isOwner
+          ? 'What you want in the Buzz, and how the month went. The quarterly rides along the same day.'
+          : 'A couple of minutes: what you want in the Buzz, and how the month went.',
         communityId: null,
       });
       push({
         key: 'buzz',
         date: shift(endOfMonth, 1),
         what: 'The Buzz goes out',
-        detail: 'The 1st, every month, one letter for everybody. It recaps the month just gone.',
+        detail: isOwner
+          ? 'The 1st, every month, one letter for everybody. It recaps the month just gone.'
+          : 'The 1st, every month. It recaps the month just gone.',
         communityId: null,
       });
 
@@ -195,7 +220,7 @@ export function useWhatsNext() {
       // Loud, never an empty list that looks like a clear diary.
       setState('error');
     }
-  }, [memberships, profile?.id]);
+  }, [memberships, profile?.id, isOwner]);
 
   useEffect(() => { void load(); }, [load]);
 

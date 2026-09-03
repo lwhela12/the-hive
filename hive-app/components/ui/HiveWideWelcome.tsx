@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
+import { useRememberedPanel } from '../../lib/hooks/useRememberedPanel';
 import { View, Text } from 'react-native';
 import { HIVE_WIDE_WELCOME, HIVE_WIDE_WELCOME_VERSION } from '../../lib/hiveWide';
 import { CollapsiblePanel, type CollapsiblePanelColours } from './CollapsiblePanel';
@@ -74,17 +75,37 @@ export function HiveWideWelcome({
   onDismiss: (version: string) => void;
 }) {
   const alreadySeen = seenVersion === HIVE_WIDE_WELCOME_VERSION;
-  const [open, setOpen] = useState(defaultOpen);
+  /**
+   * **This is the panel Nat was talking about.**
+   *
+   * *"I always have to shut the 'what is HIVE-Wide' and I'd like it to remember
+   * that choice."* The memory was built the same evening — inside HIVE-Wide's
+   * local `TopBox` — and this panel is not a TopBox, so the one drawer that
+   * prompted the whole thing kept springing open on every visit to any screen
+   * wide enough to default it open. Caught by an audit an hour later.
+   *
+   * `defaultOpen` is now only what it does the FIRST time somebody meets it.
+   */
+  const { open, setOpen, remembered } = useRememberedPanel(
+    'the-hive:wide-panel:What is HIVE-Wide?',
+    defaultOpen,
+  );
 
   // Opening it is how you say you have read it (below, on a manual toggle).
   // Landing on a wide screen with it already open is the same thing by
   // another door — nobody taps a panel that greeted them already open — so it
   // marks itself read the same way, once, rather than leaving `firstVisit`
   // stuck true for every desktop visit after this.
+  //
+  // Waits for the remembered answer. Firing before it arrives would mark the
+  // welcome read on an arrival where it never actually opened, because the
+  // stored "shut" was still in flight.
+  const markedRef = useRef(false);
   useEffect(() => {
-    if (defaultOpen && !alreadySeen) onDismiss(HIVE_WIDE_WELCOME_VERSION);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!remembered || markedRef.current) return;
+    markedRef.current = true;
+    if (open && !alreadySeen) onDismiss(HIVE_WIDE_WELCOME_VERSION);
+  }, [remembered, open, alreadySeen, onDismiss]);
 
   // The body's own type takes the same ink and the same gold as the header, so
   // an open panel is the shut panel with more of it rather than a second design.

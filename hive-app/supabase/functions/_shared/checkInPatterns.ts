@@ -54,4 +54,5 @@ export const FIRST_MEETING_CHECK_IN_PATTERN = /before our first meeting/i;
  * moved to the pre-meeting deck where a meeting can actually use them. Both
  * earlier titles stay so rows created before either rename still answer.
  */
-export const END_OF_MONTH_CHECK_IN_PATTERN = /(where the show got to this month|pro hive pop|halfway check-?in)/i;
+export const END_OF_MONTH_CHECK_IN_PATTERN =
+  /(end of the month|where the show got to this month|pro hive pop|halfway check-?in)/i;

@@ -507,7 +507,7 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
     },
     wrapupReminders: [
       'Next meeting — first Thursday of the month',
-      'Monthly check-in — POP + what you learned, before we meet',
+      'Before we meet — POP + what you learned',
     ],
   },
   /**
@@ -2167,7 +2167,7 @@ export default function MeetingHelperScreen() {
         </View>
       ) : !survey ? (
         <EmptyNote>
-          No monthly check-in is live right now — once one opens, arrivals will glow here.
+          No check-in is live right now — once one opens, arrivals will glow here.
         </EmptyNote>
       ) : (
         <View>

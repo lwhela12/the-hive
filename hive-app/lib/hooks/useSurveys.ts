@@ -63,13 +63,21 @@ const RETIRED_SURVEY_PATTERNS = [
 const MONTHLY_CHECK_IN_WINDOW_DAYS = 33;
 const MONTHLY_CHECK_IN_PATTERN = /monthly\s+check-?in/i;
 /**
- * The halfway check-in, by title — the same repeating shape as the monthly one
- * and so the same need for a per-month answer key. Deliberately narrower than
- * `END_OF_MONTH_CHECK_IN_PATTERN` in `_shared/checkInPatterns.ts`: that one
- * also answers to two retired titles, and a period key is not the place to
- * start honouring names nothing sends any more.
+ * The end-of-month check-in, by title — the same repeating shape as the monthly
+ * one and so the same need for a per-month answer key.
+ *
+ * **"End of the month" had to be added, and the cost of missing it was silent.**
+ * The row Nat created on 2026-09-02 carries the new name, matched neither
+ * pattern, and so keyed every answer to `'default'` — one row per person for
+ * ever, with October's answers landing on top of September's and nothing on
+ * screen saying so. Exactly the bug the note on `getSurveyResponsePeriod`
+ * records being fixed once already for Production.
+ *
+ * Still narrower than `END_OF_MONTH_CHECK_IN_PATTERN` in
+ * `_shared/checkInPatterns.ts`: that one also answers to two retired titles,
+ * and a period key is not the place to start honouring names nothing sends.
  */
-const HALFWAY_CHECK_IN_PATTERN = /halfway\s+check-?in/i;
+const HALFWAY_CHECK_IN_PATTERN = /halfway\s+check-?in|end of the month/i;
 const DEFAULT_RESPONSE_PERIOD = 'default';
 
 function isRetiredSurvey(survey: Survey) {
@@ -285,19 +293,40 @@ export function useSurveys(communityId?: string, userId?: string) {
     surveyId: string,
     answers: SurveyAnswers
   ) => {
-    if (!communityId || !userId) return { error: 'Not authenticated' };
+    if (!userId) return { error: 'Not authenticated' };
 
-    const survey = allSurveys.find(s => s.id === surveyId);
-    const responsePeriod = survey ? getSurveyResponsePeriod(survey) : DEFAULT_RESPONSE_PERIOD;
+    /**
+     * Which check-in this is, fetched if the cache has not got it.
+     *
+     * The cached list is normally enough, and when it is not the guess is
+     * dangerous rather than merely wrong: a HIVE-Wide answer filed under
+     * whichever HIVE the person happened to be standing in counts three times
+     * for a member of three HIVEs, and is invisible to the one policy that lets
+     * Nat read it (migration 225). One extra round trip in a race beats that.
+     */
+    let survey = allSurveys.find(s => s.id === surveyId) ?? null;
+    if (!survey) {
+      const { data: fetched } = await supabase
+        .from('surveys')
+        .select('*')
+        .eq('id', surveyId)
+        .maybeSingle();
+      survey = (fetched as Survey | null) ?? null;
+    }
+    if (!survey) return { error: 'That check-in could not be found.' };
+
+    // A HIVE-Wide check-in has no HIVE, and needs none. Only a HIVE's own
+    // check-in requires you to be standing in it.
+    const isWide = survey.community_id == null;
+    if (!isWide && !communityId) return { error: 'Not authenticated' };
+
+    const responsePeriod = getSurveyResponsePeriod(survey);
 
     const payload = {
       survey_id: surveyId,
       user_id: userId,
-      // An answer belongs where its QUESTION belongs. A HIVE-Wide check-in
-      // filed under whichever HIVE you happened to be standing in would count
-      // three ways for a member of three HIVEs, and would be invisible to the
-      // one policy that lets Nat read it (migration 225).
-      community_id: survey && survey.community_id == null ? null : communityId,
+      // An answer belongs where its QUESTION belongs.
+      community_id: isWide ? null : communityId,
       answers,
       response_period: responsePeriod,
       submitted_at: new Date().toISOString(),
