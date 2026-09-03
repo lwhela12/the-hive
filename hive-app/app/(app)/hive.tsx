@@ -57,7 +57,7 @@ import {
 import { AppHeader } from '../../components/navigation';
 import { userFacingError } from '../../lib/userFacingError';
 import { hiveAccent } from '../../lib/hiveBrand';
-import { openAddToCalendar } from '../../lib/addToCalendar';
+import { useAddToCalendar } from '../../components/ui/AddToCalendarDialog';
 import { ScopeBadge } from '../../components/ui/ScopeBadge';
 import { EventScopeFields, saveBirthdayScope, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { SignedAvatarImage } from '../../components/ui/Avatar';
@@ -245,6 +245,9 @@ const isQuarterlyDuesActionItem = (
 };
 
 function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (event: Event) => void }) {
+  // Half the members keep Apple Calendar and half keep Google, so the button
+  // asks rather than guessing (Nat, 2026-09-03).
+  const addToCalendar = useAddToCalendar();
   // Who you are, so an event you can only SEE does not hand you the address and
   // the joining link (migration 148).
   const { memberships, profile, refreshProfile } = useAuth();
@@ -482,7 +485,7 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
               <Pressable
                 onPress={(e) => {
                   e.stopPropagation();
-                  openAddToCalendar(event);
+                  addToCalendar.open(event);
                 }}
                 className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10"
               >
@@ -501,6 +504,7 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
         </Pressable>
         );
       })}
+      {addToCalendar.dialog}
     </View>
   );
 }

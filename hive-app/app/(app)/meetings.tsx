@@ -17,7 +17,7 @@ import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { UpcomingMeetingsSkeleton, PastRecordingsSkeleton } from '../../components/meetings/MeetingsSkeleton';
 import { formatDateLong, formatTimeRange, parseAmericanDate } from '../../lib/dateUtils';
 import { hiveAccent, normalizeHiveBrandText } from '../../lib/hiveBrand';
-import { openAddToCalendar } from '../../lib/addToCalendar';
+import { useAddToCalendar } from '../../components/ui/AddToCalendarDialog';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
@@ -173,6 +173,9 @@ export default function MeetingsScreen() {
   const router = useRouter();
   const { hive: linkedHiveId, meeting: linkedMeetingId } = useLocalSearchParams<{ hive?: string; meeting?: string }>();
   const { profile, communityId, session, communityRole, community, refreshProfile, memberships, switchCommunity, wholeHive } = useAuth();
+  // Half the members keep Apple Calendar and half keep Google, so the button
+  // asks rather than guessing (Nat, 2026-09-03).
+  const addToCalendar = useAddToCalendar();
   const requestedHiveId = Array.isArray(linkedHiveId) ? linkedHiveId[0] : linkedHiveId;
   const requestedMeetingId = Array.isArray(linkedMeetingId) ? linkedMeetingId[0] : linkedMeetingId;
   const { width } = useWindowDimensions();
@@ -1570,7 +1573,7 @@ export default function MeetingsScreen() {
                           to add a meeting to a phone's calendar was to go find
                           it again from Home (Nat, 2026-08-25). */}
                       <Pressable
-                        onPress={() => openAddToCalendar(event)}
+                        onPress={() => addToCalendar.open(event)}
                         className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10 self-start"
                       >
                         <Text className="text-xs mr-1.5">📅</Text>
@@ -1971,6 +1974,7 @@ export default function MeetingsScreen() {
           onClose={() => setActiveSeasonSurvey(null)}
         />
       ) : null}
+      {addToCalendar.dialog}
     </SafeAreaView>
   );
 }

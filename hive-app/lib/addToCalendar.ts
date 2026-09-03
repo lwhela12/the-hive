@@ -147,31 +147,74 @@ const downloadIcsFile = (event: Event) => {
   Linking.openURL(dataUrl);
 };
 
+export type CalendarChoice = {
+  key: string;
+  label: string;
+  note?: string;
+  open: () => void;
+};
+
+/**
+ * The calendars a HIVE member actually keeps, for any event.
+ *
+ * Nat, 2026-09-03, on who is in the room: *"1/2 use apple cal & 1/2 use google
+ * cal, you know? and I'm sure some just use a notebook or whatever."* So none
+ * of these is the default and none of them is the refusal — see
+ * `AddToCalendarDialog`, which draws them.
+ *
+ * The .ics is the one that covers everything else, including the notebook: it
+ * opens in Apple Calendar, imports into anything, and can just be kept.
+ */
+export const calendarChoices = (event: Event): CalendarChoice[] => {
+  const links = createCalendarLinks(event);
+  return [
+    {
+      key: 'google',
+      label: 'Google Calendar',
+      open: () => { void Linking.openURL(links.google); },
+    },
+    {
+      key: 'apple',
+      label: 'Apple Calendar',
+      note: 'Downloads a file that opens straight into it',
+      open: () => downloadIcsFile(event),
+    },
+    {
+      key: 'outlook',
+      label: 'Outlook',
+      open: () => { void Linking.openURL(links.outlook); },
+    },
+  ];
+};
+
 /**
  * The one "Add to Calendar" action for any HIVE event — the meeting card on a
  * HIVE's own Meetings screen and the event card on Home both call this rather
  * than each carrying their own copy (a second copy is how the "always adds
  * 2.5 hours" bug went unnoticed on one of the two screens).
+ *
+ * Prefer `useAddToCalendar()` from `components/ui/AddToCalendarDialog`, which
+ * asks the question in a real view. This stays for a caller that has nowhere to
+ * render one, and for a phone.
  */
 export const openAddToCalendar = (event: Event) => {
-  const links = createCalendarLinks(event);
+  const choices = calendarChoices(event);
+  const by = (key: string) => choices.find((choice) => choice.key === key)!;
 
   if (typeof window !== 'undefined' && window.confirm) {
-    if (window.confirm('Open Google Calendar? Press Cancel to download a calendar file instead.')) {
-      Linking.openURL(links.google);
+    // A last resort. `window.confirm` has two buttons and three calendars do
+    // not fit in two, which is exactly why the dialog exists.
+    if (window.confirm(`Add "${event.title}" to Google Calendar?\n\nPress Cancel for a file that opens in Apple Calendar.`)) {
+      by('google').open();
     } else {
-      downloadIcsFile(event);
+      by('apple').open();
     }
     return;
   }
 
-  // The last raw `Alert.alert` here, and it is safe: the browser path returns
-  // above, so only a phone reaches here. It offers three choices, which
-  // `confirmAction` (a yes or no) cannot carry.
+  // Only a phone reaches here; the browser path returns above.
   Alert.alert('Add to Calendar', event.title, [
-    { text: 'Google Calendar', onPress: () => Linking.openURL(links.google) },
-    { text: 'Outlook Calendar', onPress: () => Linking.openURL(links.outlook) },
-    { text: 'Apple / Other Calendar', onPress: () => downloadIcsFile(event) },
-    { text: 'Cancel', style: 'cancel' },
+    ...choices.map((choice) => ({ text: choice.label, onPress: choice.open })),
+    { text: 'Cancel', style: 'cancel' as const },
   ]);
 };
