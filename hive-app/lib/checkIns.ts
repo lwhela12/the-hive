@@ -250,8 +250,31 @@ export function isInHalfwayWindow(
 
 export type SeasonKind = 'quarter' | 'year';
 
-/** Days before the quarter/year end that the check-in opens and the cron nudges. */
+/**
+ * Days before the quarter/year END that the check-in opens and the cron nudges.
+ *
+ * A DEADLINE, counted exclusively: the 1st of October is not a day anybody
+ * fills in a check-in, so the three days that matter are the three before it.
+ * Matches `getWindowOpenDate` in check-in-reminder.
+ */
 export const SEASON_CHECK_IN_LEAD_DAYS = 3;
+
+/**
+ * Days before a MEETING that its check-in appears on Home.
+ *
+ * Two, not three, because the window is three days long and the last of them is
+ * the meeting itself. Nat, 2026-09-02: *"three days before but counting the
+ * day... if Production meets on September 10th, then three days before that is
+ * 10, 9, 8."*
+ *
+ * This exists as its own number because the invariant underneath it is worth
+ * more than the saving of sharing one: **what lands in the inbox and what
+ * appears on Home happen on the same morning.** The email moved to
+ * `getMeetingWindowOpenDate` (meeting − 2) on 2026-09-02 and this did not,
+ * which put Production's card on Home a day before the letter that explains it
+ * — the exact gap the halfway had for weeks.
+ */
+export const PRE_MEETING_LEAD_DAYS = 2;
 
 /**
  * How the two season check-ins are recognised, wherever they travel.
@@ -941,10 +964,13 @@ export function isSurveyOnHomeToday(
    * showed from the moment it existed. A check-in that sits in your to-do for
    * a fortnight before it means anything teaches you to ignore your to-do.
    *
-   * Same three-day lead the email uses, so what lands in the inbox and what
-   * appears on Home happen on the same morning. The pre-meeting one goes when
-   * the meeting does; the end-of-month one lingers a week, because the month
-   * ending is not the same as everyone having answered.
+   * Same lead the email uses, so what lands in the inbox and what appears on
+   * Home happen on the same morning — and since 2026-09-02 that is a different
+   * number for the two kinds, because a meeting day counts itself and the end
+   * of a month does not (`PRE_MEETING_LEAD_DAYS` vs `SEASON_CHECK_IN_LEAD_DAYS`).
+   * The pre-meeting one goes when the meeting does; the end-of-month one
+   * lingers a week, because the month ending is not the same as everyone
+   * having answered.
    */
   const ownKind = isPreMeetingCheckInSurvey(survey)
     ? 'premeeting'
@@ -956,7 +982,12 @@ export function isSurveyOnHomeToday(
     const due = new Date(survey.due_date);
     if (Number.isNaN(due.getTime())) return true;
     const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
-    const opens = new Date(dueDay.getFullYear(), dueDay.getMonth(), dueDay.getDate() - SEASON_CHECK_IN_LEAD_DAYS);
+    const opens = new Date(
+      dueDay.getFullYear(),
+      dueDay.getMonth(),
+      // A meeting counts its own day; the end of a month does not.
+      dueDay.getDate() - (ownKind === 'premeeting' ? PRE_MEETING_LEAD_DAYS : SEASON_CHECK_IN_LEAD_DAYS),
+    );
     const lingersUntil = new Date(
       dueDay.getFullYear(),
       dueDay.getMonth(),
