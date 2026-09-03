@@ -216,7 +216,7 @@ export function QuickAdd({
                     manageableHives.length > 1
                       // She picks next, and "All HIVEs" is one of the answers —
                       // so this must not promise a single HIVE before she has chosen.
-                      ? 'Choose the HIVE next, or all of them at once.'
+                      ? 'Choose the HIVE next, or HIVE-Wide for all of them.'
                       : 'Goes on this HIVE’s own News from Nat slide in the meeting deck.'
                   }
                   onPress={() => setDestination('meeting')}
@@ -339,7 +339,11 @@ function HivePicker({ memberships, selectedId, onSelect }: { memberships: HiveMe
             rather than any HIVE's colour — it is not a fourth HIVE. */}
         {memberships.length > 1 ? (
           <HiveChip
-            label="All HIVEs"
+            // "HIVE-Wide", not "All HIVEs". Nat, 2026-09-02: *"we need to be
+            // consistent with our messaging."* Every other surface in the app
+            // says HIVE-Wide for the place above the HIVEs, and a second name
+            // for the same idea is a second thing to learn.
+            label="HIVE-Wide"
             selected={everywhere}
             accent={HIVE_WIDE_INK}
             onPress={() => onSelect(ALL_HIVES)}

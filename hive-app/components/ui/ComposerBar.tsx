@@ -276,8 +276,28 @@ export function ComposerBar({
     />
   );
 
+  /**
+   * The box, so the shelf under it can hand the cursor back.
+   *
+   * Nat, 2026-09-02, watching Lucas fill in his first check-in: *"the
+   * talk-to-text microphone, he felt like it was in a weird spot. He kept
+   * trying to tap next to it. When it tagged Infiniti he didn't know to tap
+   * after Infiniti to be able to type."*
+   *
+   * The footer is inside the field's own border so the two read as one box —
+   * and a person who reads them as one box taps the empty half of the shelf
+   * expecting to type there. It did nothing. A dead tap in the middle of
+   * something that looks like an input is the app saying "not here" without
+   * saying where.
+   */
+  const inputRef = useRef<TextInput>(null);
+  const handBackTheCursor = useCallback(() => {
+    inputRef.current?.focus();
+  }, []);
+
   const textInputNode = (
     <TextInput
+      ref={inputRef}
       value={value}
       onChangeText={mentionsOn ? mention.textInputMentionProps.onChangeText : setText}
       onSelectionChange={mentionsOn ? mention.textInputMentionProps.onSelectionChange : undefined}
@@ -516,7 +536,18 @@ export function ComposerBar({
         {showFooter && (
           <View
             className="flex-row items-center px-2 py-1.5"
-            style={{ gap: 8, borderTopWidth: 1, borderTopColor: FIELD_BORDER }}
+            style={{
+              gap: 8,
+              borderTopWidth: 1,
+              borderTopColor: FIELD_BORDER,
+              // Tinted so it reads as a shelf of tools rather than a second
+              // place to type. The border alone made two boxes of one.
+              // `look`, not `tone` — tone is optional and resolves against the
+              // page skin above, so asking `tone === 'light'` would tint an
+              // unspecified light field as if it were dark. Same test the drag
+              // banner a few lines up uses.
+              backgroundColor: look === FIELD_LOOK ? 'rgba(154,128,96,0.05)' : 'rgba(255,255,255,0.04)',
+            }}
           >
             {showAttach && (
               <AttachmentPicker
@@ -532,7 +563,13 @@ export function ComposerBar({
               />
             )}
             {micNode}
-            <View className="flex-1" />
+            {/* The empty half of the shelf is where Lucas kept tapping. It
+                gives the cursor back now instead of doing nothing. */}
+            <Pressable
+              onPress={handBackTheCursor}
+              accessibilityLabel="Keep typing"
+              className="flex-1 self-stretch"
+            />
             {showCounter && (
               <Text style={{ fontFamily: 'Lato_400Regular', color: look.placeholder }} className="text-xs">
                 {counterText}
