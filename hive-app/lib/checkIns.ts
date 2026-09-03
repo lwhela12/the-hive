@@ -11,7 +11,7 @@ import type { Community, SurveyQuestion } from '../types';
  * shipped. Every surface this message gates is a monthly/tune-up flow.
  */
 export const CHECK_INS_COMING_SOON_MESSAGE =
-  "Coming soon — the monthly tune-up will be designed around this HIVE’s own rhythm.";
+  "Coming soon — this HIVE’s check-ins will be designed around its own rhythm.";
 
 /**
  * OG HIVE keeps the original database slug from before multi-HIVE existed.
@@ -1155,7 +1155,7 @@ const END_OF_MONTH_BY_SLUG: Record<string, EndOfMonthCheckIn> = {
    * would route it into OG's PRE-MEETING wizard instead of the halfway one.
    */
   show: {
-    title: 'Halfway check-in',
+    title: 'End of the month',
     description:
       'Halfway through the month — the newsletter goes out on the 1st. Two minutes: anything for the letter, tick off what you have done, and say if you want a hand.',
     questions: [

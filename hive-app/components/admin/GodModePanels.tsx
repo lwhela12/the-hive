@@ -1797,7 +1797,7 @@ export function HiveMemberPanels({
             key: 'monthly',
             when: 'Pre-Meeting',
             what: tailored
-              ? 'open the monthly tune-up'
+              ? 'open Before we meet'
               : preMeeting ? 'how we run, and where everyone stands' : 'coming soon',
             live: preMeeting,
             ...(tailored ? {
@@ -1816,7 +1816,7 @@ export function HiveMemberPanels({
               : endOfMonth ? 'what moved, what is stuck, what is next' : 'coming soon',
             live: endOfMonth,
             ...(tailored ? {
-              actionLabel: 'Test or fill out the halfway check-in',
+              actionLabel: 'Test or fill out End of the month',
               onPress: () => void openMemberCheckIn(m.community_id, 'midpoint'),
             } : endOfMonth ? {
               actionLabel: 'Read it or fill it out on Home',

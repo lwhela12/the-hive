@@ -2733,7 +2733,7 @@ export default function HiveScreen() {
       ? [{
           id: 'halfway-checkin',
           emoji: halfwayShape.emoji,
-          title: 'Halfway check-in',
+          title: 'End of the month',
           detail: halfwayShape.detail,
           cta: 'Take 2 min →',
           onPress: () => router.push({

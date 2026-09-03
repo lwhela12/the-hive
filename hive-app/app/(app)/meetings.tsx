@@ -1432,8 +1432,8 @@ export default function MeetingsScreen() {
                   {/* OG's and Tech's monthly pair. A HIVE without a designed
                       monthly rhythm still gets its own open check-ins below. */}
                   {(tailoredCheckIns ? [
-                    { label: 'Monthly Tune-up', params: {} },
-                    { label: 'Halfway Check-in', params: { mode: 'midpoint' } },
+                    { label: 'Before we meet', params: {} },
+                    { label: 'End of the month', params: { mode: 'midpoint' } },
                   ] as const : []).map((tool) => (
                     <Pressable
                       key={tool.label}

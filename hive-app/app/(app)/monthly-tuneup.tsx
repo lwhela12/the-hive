@@ -1357,7 +1357,7 @@ export default function MonthlyTuneupScreen() {
   useDeepTrail([
     { label: exit.label, onPress: leaveTuneup },
     {
-      label: isMidpoint ? 'Halfway Check-in' : `${monthName} Tune-up`,
+      label: isMidpoint ? 'End of the month' : 'Before we meet',
       onPress: stepIndex === 0 && !finished ? undefined : () => {
         setFinished(false);
         setStepIndex(0);
@@ -4333,7 +4333,7 @@ export default function MonthlyTuneupScreen() {
               marginBottom: 10,
             }}
           >
-            {isMidpoint ? "That's the halfway check-in done!" : `You're all tuned up for the ${monthName} meeting!`}
+            {isMidpoint ? "That's the end of the month done!" : `You're all set for the ${monthName} meeting!`}
           </Text>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 22, color: '#7d715f', textAlign: 'center', marginBottom: 32 }}>
             {isMidpoint
@@ -4370,7 +4370,7 @@ export default function MonthlyTuneupScreen() {
               setStepIndex(0);
             }}
             accessibilityRole="button"
-            accessibilityLabel="Go back in and keep editing your tune-up"
+            accessibilityLabel="Go back in and keep editing your check-in"
             style={({ pressed }) => ({
               marginTop: 14,
               borderRadius: 14,
@@ -4394,7 +4394,7 @@ export default function MonthlyTuneupScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
         <BackButton
           onPress={goBack}
-          accessibilityLabel={stepIndex === 0 ? 'Close tune-up' : 'Previous step'}
+          accessibilityLabel={stepIndex === 0 ? 'Close the check-in' : 'Previous step'}
           backgroundColor="#fffdf5"
           size={20}
           style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.55)' }}
@@ -4407,7 +4407,7 @@ export default function MonthlyTuneupScreen() {
               contentFit="contain"
             />
             <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 20, color: '#2d2d2d' }}>
-              {isMidpoint ? 'Halfway Check-in' : `${monthName} Tune-up`}
+              {isMidpoint ? 'End of the month' : 'Before we meet'}
             </Text>
           </View>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 2 }}>
@@ -4426,7 +4426,7 @@ export default function MonthlyTuneupScreen() {
             }
           }}
           accessibilityRole="button"
-          accessibilityLabel="Refresh tune-up data"
+          accessibilityLabel="Refresh this check-in"
           hitSlop={10}
           style={({ pressed }) => ({ opacity: pressed ? 0.9 : 0.4, paddingHorizontal: 6 })}
         >
@@ -4494,7 +4494,7 @@ export default function MonthlyTuneupScreen() {
           <Pressable
             onPress={() => void goNext()}
             accessibilityRole="button"
-            accessibilityLabel={stepIndex >= steps.length - 1 ? 'Finish the tune-up' : 'Next step'}
+            accessibilityLabel={stepIndex >= steps.length - 1 ? 'Finish the check-in' : 'Next step'}
             style={({ pressed }) => ({
               position: 'absolute',
               right: 0,

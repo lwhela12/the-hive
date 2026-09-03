@@ -582,7 +582,7 @@ export default function AppLayout() {
         <Tabs.Screen
           name="halfway/[hive]"
           options={{
-            title: 'Halfway check-in',
+            title: 'End of the month',
             href: null,
           }}
         />
@@ -599,7 +599,7 @@ export default function AppLayout() {
         <Tabs.Screen
           name="monthly-tuneup"
           options={{
-            title: 'Monthly Tune-up',
+            title: 'Before we meet',
             href: null,
           }}
         />

@@ -71,7 +71,7 @@ export const EMAIL_SETTINGS: EmailSetting[] = [
   },
   {
     column: 'email_midpoint_checkin_enabled',
-    label: 'Halfway check-in',
+    label: 'End of the month',
     hint: 'Roughly halfway between meetings. A quick pulse on how it is going, and your chance to put a shout-out or a plug in the next newsletter.',
   },
   {
