@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 // hung around after the header came out.
 import { SpaceGlobe, SPACE_BLACK } from '../../components/ui/SpaceGlobe';
 import { CollapsiblePanel } from '../../components/ui/CollapsiblePanel';
+import { WhatsNextList } from '../../components/hive/WhatsNextList';
 import { HiveMark } from '../../components/ui/HiveMark';
 import { Avatar } from '../../components/ui/Avatar';
 import { getWishQuickTitle, getWishDetailText, hasSeparateWishTitle } from '../../lib/wishDisplay';
@@ -1023,6 +1024,25 @@ export default function HiveWideScreen() {
                   RESULT was missing. HIVE Help and HIVE Hangs came out to make
                   room: both were three lines of "tbd" repeated per HIVE, and
                   neither is a thing you can act on from up here. */}
+              {/* WHAT'S NEXT — everything dated, across every HIVE you can see.
+                  The replacement for the two boxes below, and it belongs HERE
+                  rather than only in Admin: they came out the same evening it
+                  was built, and for an hour members had no upcoming events at
+                  all. Nat, straight away: *"wait, we lost all the
+                  calendar/upcoming events from the HIVE-Wide home page?"* A
+                  replacement only the owner can see is not a replacement.
+
+                  Shut on arrival like every other panel here, deliberately.
+                  There is a case for opening this one — it is the only panel
+                  that tells you what to DO — but Nat was shown both and picked
+                  shut for all of them (2026-08-06), and the two boxes it
+                  replaces were shut too, so this restores what she lost rather
+                  than quietly changing it into something else. One word to
+                  open it the day she says so. */}
+              <TopBox label="What's next" wide={wide}>
+                <WhatsNextList />
+              </TopBox>
+
               {/* "YOUR MEETINGS" AND THE HIVE-WIDE CALENDAR ARE GONE (2026-09-02).
                   Nat: *"I think these two can be rolled into one box showing
                   your HIVEs and when the next meeting is"*, and *"this HIVE-Wide
