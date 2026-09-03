@@ -103,6 +103,31 @@ export const HIVE_RULES: RuleGroup[] = [
     ],
   },
   {
+    heading: 'When each HIVE meets',
+    rules: [
+      {
+        text: 'Every HIVE meets in the second week. Tech is the 2nd Tuesday 6-8 on Meet, OG the 2nd Wednesday 5-7, Production the 2nd Thursday 5-7. One week to remember instead of three dates.',
+        source: 'set 2026-09-03; recurring on each HIVE\u2019s own calendar',
+      },
+      {
+        text: 'That is a loose structure, not a rule. Whatever the room decides in the meeting overrides it, and the room is right. September\u2019s OG moved out a week because Brittany\u2019s wedding is the 14th and she was rightly somewhere else.',
+        source: 'Nat, 2026-09-03: \u201cthe humans override the loose structure\u201d',
+      },
+      {
+        text: 'So a repeating meeting is a placeholder. It says roughly when, so nobody is left guessing if a month goes by without anyone scheduling anything.',
+        source: 'one recurring series per HIVE',
+      },
+      {
+        text: 'Some months run out of order. October 1st is a Thursday, so the 2nd Thursday lands before the 2nd Tuesday \u2014 still the second week, just not Tue, Wed, Thu. That is fine.',
+        source: 'the \u201cish\u201d in second-week-ish',
+      },
+      {
+        text: 'The HIVE app schedules as Nat, onto that HIVE\u2019s own Google Calendar, and every member of a HIVE is on that calendar. So a new meeting turns up for people without anybody being invited by hand.',
+        source: 'communities.google_calendar_id, 2026-09-03',
+      },
+    ],
+  },
+  {
     heading: 'If this, then that',
     rules: [
       {
