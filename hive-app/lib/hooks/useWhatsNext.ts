@@ -142,14 +142,25 @@ export function useWhatsNext() {
         for (const survey of surveys) {
           if (answered.has(survey.id)) continue;
           const due = String(survey.due_date).slice(0, 10);
-          // Only once it is actually open — a check-in sitting in your list for
-          // a fortnight before it means anything teaches you to ignore the list.
-          if (shift(due, -2) > today) continue;
+          /**
+           * Only once it is actually open — a check-in sitting in your list for
+           * a fortnight before it means anything teaches you to ignore the list.
+           *
+           * **Unless it belongs to no HIVE.** Nat, 2026-09-02: *"should my
+           * What's next show what I still need to do?"* It should, and hers was
+           * missing the one she had just made. A per-HIVE check-in is created
+           * weeks ahead on a schedule, so it waits for its window; a HIVE-Wide
+           * one exists because somebody deliberately opened it for everybody
+           * and is about to send the link out. Existing IS its window.
+           */
+          if (survey.community_id && shift(due, -2) > today) continue;
           push({
             key: `survey_${survey.id}`,
             date: due,
             what: `Your own: ${survey.title}`,
-            detail: nameOf(survey.community_id),
+            detail: survey.community_id
+              ? nameOf(survey.community_id)
+              : 'Everybody, whichever HIVEs they are in',
             communityId: survey.community_id,
           });
         }
