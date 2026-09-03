@@ -147,21 +147,31 @@ function GridTab({ grid }: { grid: ReturnType<typeof useHiveGrid> }) {
     {
       label: 'End of the month',
       hint: 'who has answered',
-      cell: (h) => !h.endOfMonthCounted
-        // Never a zero here. Nothing counted it, which is a different and much
-        // kinder claim than "nobody did it".
-        ? <Quiet>not counted — ticked off in their own browser</Quiet>
-        : h.endOfMonth
-          ? (
-            <>
-              <Plain bold>{h.endOfMonth.answered} of {h.endOfMonth.of}</Plain>
-              <Quiet>due {pretty(h.endOfMonth.due)}</Quiet>
-            </>
-          )
+      // It said "not counted — ticked off in their own browser" on all three
+      // rows, which stopped being true the day the check-in became one
+      // HIVE-Wide row: nothing was ticking anything in a browser, the grid
+      // simply could not see a survey belonging to no HIVE. (Audit, 2 Sept.)
+      cell: (h) => h.endOfMonth
+        ? (
+          <>
+            <Plain bold>{h.endOfMonth.answered} of {h.endOfMonth.of}</Plain>
+            <Quiet>
+              {h.endOfMonth.wide ? 'one ask, everybody · ' : ''}due {pretty(h.endOfMonth.due)}
+            </Quiet>
+          </>
+        )
+        : !h.endOfMonthCounted
+          // Never a zero here. Nothing counted it, which is a different and
+          // much kinder claim than "nobody did it".
+          ? <Quiet>not counted</Quiet>
           : <Quiet>none open</Quiet>,
     },
     {
       label: 'A member can share',
+      // The HIVE's CEILING is not the member's offer. `public` on OG and Tech
+      // governs the newsletter and the invitation, both of which Nat writes —
+      // no member can publish anything, in any HIVE, so printing "public" here
+      // described a door that does not exist. (Audit, 2 Sept.)
       cell: (h) => h.ceiling === 'hive'
         ? (
           <>
@@ -169,7 +179,12 @@ function GridTab({ grid }: { grid: ReturnType<typeof useHiveGrid> }) {
             <Quiet>nothing leaves it</Quiet>
           </>
         )
-        : <Plain>this HIVE · HIVE-Wide · public</Plain>,
+        : (
+          <>
+            <Plain>this HIVE · HIVE-Wide</Plain>
+            <Quiet>public is yours to write, never theirs</Quiet>
+          </>
+        ),
     },
     { label: 'Honey Pot', cell: (h) => h.honeyPot ? <Plain>yes · $25 a quarter</Plain> : <Quiet>no</Quiet> },
   ];

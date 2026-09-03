@@ -17,10 +17,14 @@ import { isPreMeetingCheckInSurvey, isEndOfMonthCheckInSurvey } from '../checkIn
  * survey row reused every month — 24 answers on it stretching back to May,
  * against ten members. Answers are counted for the period the survey is FOR.
  *
- * **It will not print a zero where nothing was counted.** OG's and Tech's
- * End of the month is a wizard that records "done" in the member's own browser
- * (`the-hive:halfway-done:*`), so nothing reaches us. `null` means not counted,
- * which is a different and much kinder claim than "nobody did it".
+ * **It will not print a zero where nothing was counted.** `null` means not
+ * counted, which is a different and much kinder claim than "nobody did it".
+ *
+ * **The End of the month belongs to nobody.** Since 2026-09-02 it is a single
+ * row with `community_id` null — one ask for all sixteen people — so it cannot
+ * be split three ways. The query has to reach for null explicitly; `.in(...)`
+ * on a list of HIVE ids never matches it, which is exactly how all three rows
+ * came to read "not counted" the day after the merge.
  */
 
 export type GridHive = {
@@ -29,7 +33,13 @@ export type GridHive = {
   members: number;
   nextMeeting: { date: string; time: string | null; location: string | null; onMeet: boolean } | null;
   beforeWeMeet: { answered: number; of: number; due: string } | null;
-  endOfMonth: { answered: number; of: number; due: string } | null;
+  /**
+   * The End of the month, which since 2026-09-02 belongs to NO HIVE — one row,
+   * `community_id` null, one ask for everybody. `of` is therefore every person
+   * across all the HIVEs, and the same numbers appear on every row, because it
+   * IS the same question. `wide` says so out loud so the cell can too.
+   */
+  endOfMonth: { answered: number; of: number; due: string; wide: boolean } | null;
   /** `false` when this HIVE's End of the month leaves no server record at all. */
   endOfMonthCounted: boolean;
   ceiling: string;
@@ -67,7 +77,8 @@ export function useHiveGrid(): Grid & { refresh: () => Promise<void> } {
         supabase.from('community_memberships').select('user_id, community_id').in('community_id', ids),
         supabase.from('surveys')
           .select('id, community_id, title, due_date')
-          .in('community_id', ids).eq('is_active', true),
+          .or(`community_id.in.(${ids.join(',')}),community_id.is.null`)
+          .eq('is_active', true),
         supabase.from('events')
           .select('community_id, event_date, event_time, location, meet_link')
           .in('community_id', ids).eq('event_type', 'meeting')
@@ -91,13 +102,25 @@ export function useHiveGrid(): Grid & { refresh: () => Promise<void> } {
         counted.set(survey.id, oneOff ? rows.length : rows.filter((r) => r.response_period === period).length);
       }));
 
+      /**
+       * The End of the month, found once. It belongs to no HIVE, so every row
+       * shows the same answer — and `of` is PEOPLE, not this HIVE's members.
+       */
+      const wideMonth = surveyRows.find(
+        (s) => s.community_id == null && isEndOfMonthCheckInSurvey(s)
+      );
+      const peopleCount = new Set((everyMembership.data ?? []).map((m: any) => m.user_id)).size;
+
       const rows: GridHive[] = (communities.data ?? []).map((community: any) => {
         const mine = surveyRows.filter((s) => s.community_id === community.id);
         const memberCount = (everyMembership.data ?? [])
           .filter((m: any) => m.community_id === community.id).length;
         const before = mine.find((s) => isPreMeetingCheckInSurvey(s, community))
           ?? mine.find((s) => /monthly\s+check-?in/i.test(s.title ?? ''));
-        const month = mine.find((s) => isEndOfMonthCheckInSurvey(s, community));
+        // A HIVE's OWN month-end row, from before the merge, if one is still
+        // open. The HIVE-Wide one wins — it is the one that actually sends.
+        const ownMonth = mine.find((s) => isEndOfMonthCheckInSurvey(s, community));
+        const month = wideMonth ?? ownMonth;
         const meeting = (meetings.data ?? []).find((e: any) => e.community_id === community.id) as any;
 
         return {
@@ -116,10 +139,15 @@ export function useHiveGrid(): Grid & { refresh: () => Promise<void> } {
             ? { answered: counted.get(before.id) ?? 0, of: memberCount, due: String(before.due_date).slice(0, 10) }
             : null,
           endOfMonth: month
-            ? { answered: counted.get(month.id) ?? 0, of: memberCount, due: String(month.due_date).slice(0, 10) }
+            ? {
+                answered: counted.get(month.id) ?? 0,
+                // One ask for everybody is answered by everybody, so the
+                // denominator is people — not this HIVE's ten.
+                of: month === wideMonth ? peopleCount : memberCount,
+                due: String(month.due_date).slice(0, 10),
+                wide: month === wideMonth,
+              }
             : null,
-          // Only a HIVE that files its End of the month into a survey row can
-          // be counted. The others tick it off in their own browser.
           endOfMonthCounted: !!month,
           ceiling: community.max_share_scope ?? 'hive',
           honeyPot: community.honey_pot_enabled === true,
@@ -133,7 +161,7 @@ export function useHiveGrid(): Grid & { refresh: () => Promise<void> } {
       rows.sort((a, b) => order.indexOf(slugOf(a.communityId)) - order.indexOf(slugOf(b.communityId)));
 
       setHives(rows);
-      setPeople(new Set((everyMembership.data ?? []).map((m: any) => m.user_id)).size);
+      setPeople(peopleCount);
       setState('ready');
     } catch (error) {
       console.warn('[useHiveGrid] could not read the grid:', error);

@@ -52,12 +52,16 @@ export const HIVE_RULES: RuleGroup[] = [
     heading: 'The two check-ins',
     rules: [
       {
-        text: 'There are two, and only two. Before we meet, three days before your meeting. End of the month, three days before the month ends.',
+        text: 'Two have names, and they are the two you touch every month. Before we meet, three days before your meeting. End of the month, three days before the month ends.',
         source: 'named 2026-09-02',
       },
       {
-        text: 'End of the month is one ask carrying four things: halfway between meetings, how the month went, the end of the quarter, and what you want in the Buzz.',
-        source: 'the quarterly lands the same day',
+        text: 'Two more run on their own clock and still send: the Quarterly, and the End-of-Year. Each HIVE has its own of both.',
+        source: 'surveys — Quarterly Q3, End-of-Year 2026',
+      },
+      {
+        text: 'End of the month carries three things: halfway between meetings, how the month went, and what you want in the Buzz. The quarter is its own survey and its own email — it just happens to land the same day.',
+        source: 'getWindowOpenDate counts to a deadline',
       },
       {
         text: 'Missing a window closes nothing. The link opens the check-in whenever you send it — the window only decides when the app nudges somebody on its own.',
@@ -106,12 +110,16 @@ export const HIVE_RULES: RuleGroup[] = [
         source: "its first step is Newsletter",
       },
       {
-        text: 'If a meeting moves, every reminder moves with it. No day of the week is hardcoded anywhere.',
+        text: 'If a meeting moves, everything about that meeting moves with it — the email, the last nudge, the Home card, the due date. No day of the week is hardcoded anywhere.',
         source: 'everything reads the meeting row',
       },
       {
-        text: 'If a HIVE has no meeting on the books, it gets no nudge at all. Silence beats nudging about a halfway point to nothing.',
-        source: 'no meeting → no window',
+        text: 'End of the month is the one that does not. It counts to the end of the calendar month, so it lands on the same days whatever the meetings do.',
+        source: 'getWindowOpenDate, not the meeting row',
+      },
+      {
+        text: 'If a HIVE has no meeting on the books, it gets no meeting nudge. It still gets End of the month — that one is on the calendar, not on the meeting.',
+        source: 'no meeting → no meeting window',
       },
       {
         text: 'If a question gets reworded under a new id, the slide that reads it goes blank — silently. The deck and the survey share ids.',
