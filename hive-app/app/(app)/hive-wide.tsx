@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 // across the top would put you back inside a HIVE (Nat 2026-08-03). The import
 // hung around after the header came out.
 import { SpaceGlobe, SPACE_BLACK } from '../../components/ui/SpaceGlobe';
+import { getStoredItemAsync, setStoredItemAsync } from '../../lib/webStorage';
 import { CollapsiblePanel } from '../../components/ui/CollapsiblePanel';
 import { WhatsNextList } from '../../components/hive/WhatsNextList';
 import { HiveMark } from '../../components/ui/HiveMark';
@@ -188,14 +189,42 @@ function TopBox({ label, wide, children }: { label: string; wide: boolean; child
    *
    * An earlier pass had them open, arguing that a wall of shut drawers would say
    * nothing was happening. Nat looked at both and picked shut. Leave it shut.
+   *
+   * **Shut is the FIRST answer, not the only one (2026-09-02).** Nat: *"I think
+   * it should be however you left it last. I always have to shut the 'what is
+   * HIVE-Wide' and I'd like it to remember that choice."* So each panel now
+   * remembers its own state, per person, and the default above only ever
+   * decides what a panel does the first time somebody meets it.
+   *
+   * Keyed by label rather than by index, so adding a panel in the middle does
+   * not hand one drawer another one's memory.
    */
+  const rememberKey = `the-hive:wide-panel:${label}`;
   const [open, setOpen] = useState(false);
+  const [remembered, setRemembered] = useState(false);
+
+  // Read once, then stop — the stored answer must not fight a later tap.
+  useEffect(() => {
+    if (remembered) return;
+    let cancelled = false;
+    void getStoredItemAsync(rememberKey).then((was) => {
+      if (cancelled) return;
+      if (was === 'open') setOpen(true);
+      setRemembered(true);
+    });
+    return () => { cancelled = true; };
+  }, [rememberKey, remembered]);
+
+  const rememberAndSet = (next: boolean) => {
+    setOpen(next);
+    void setStoredItemAsync(rememberKey, next ? 'open' : 'shut');
+  };
 
   return (
     <CollapsiblePanel
       title={label}
       open={open}
-      onToggle={setOpen}
+      onToggle={rememberAndSet}
       colours={PANEL_COLOURS}
       // One line, always, at whatever size that takes — the panel measures its
       // own column and shrinks to suit. "What We've Been Building" is the

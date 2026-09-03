@@ -981,7 +981,7 @@ export default function MonthlyTuneupScreen() {
   }, [loadNewsletterEvents]);
 
   // Hangs since the last meeting, for the check-in's went/didn't-go recap chips.
-  const [hangRecapEvents, setHangRecapEvents] = useState<{ id: string; title: string }[]>([]);
+  const [hangRecapEvents, setHangRecapEvents] = useState<{ id: string; title: string; eventDate: string | null }[]>([]);
   useEffect(() => {
     if (!communityId) return;
     (async () => {
@@ -1017,10 +1017,10 @@ export default function MonthlyTuneupScreen() {
         .neq('event_type', 'meeting')
         .neq('event_type', 'birthday')
         .order('event_date', { ascending: true });
-      const hangs = ((data ?? []) as { id: string; title: string; end_date: string | null }[])
+      const hangs = ((data ?? []) as { id: string; title: string; end_date: string | null; event_date: string | null }[])
         // Out-of-town stretches aren't hangs — same heuristic as the deck calendar.
         .filter((event) => !(event.end_date || /\b(out of town|away|trip|travel|galavant)/i.test(event.title)));
-      setHangRecapEvents(hangs.map((event) => ({ id: event.id, title: event.title })));
+      setHangRecapEvents(hangs.map((event) => ({ id: event.id, title: event.title, eventDate: event.event_date ?? null })));
     })().catch((error) => console.warn('Could not load hang recap events', error));
   }, [communityId]);
 

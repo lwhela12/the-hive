@@ -126,6 +126,23 @@ export function VoiceTextInput({
 export interface HangRecapEvent {
   id: string;
   title: string;
+  /**
+   * `YYYY-MM-DD`. Nat, 2026-09-02, looking at four unlabelled chips: *"I also
+   * think these need to have dates on them."* She is right — "Taste!" and "Put
+   * stuff in resin" are asking *did you make it to this*, and a month's worth
+   * of hangs with no dates is a memory test rather than a question.
+   */
+  eventDate?: string | null;
+}
+
+const HANG_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const HANG_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "Tue Sep 23" — enough to remember the evening by, and no more. */
+function hangDate(dateOnly: string): string {
+  const [y, m, d] = dateOnly.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  return `${HANG_DAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${HANG_MONTHS[m - 1]} ${d}`;
 }
 
 // The hangs-recap answer is one plain string so every existing display keeps
@@ -337,12 +354,19 @@ export function HangsRecapInput({
               style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
             >
               <Text style={{ fontSize: 15 }}>{entry ? '🙌' : '○'}</Text>
-              <Text
-                style={{ fontFamily: entry ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 14, color: entry ? '#8a6b30' : '#6b7280', flexShrink: 1 }}
-                numberOfLines={2}
-              >
-                {hang.title}
-              </Text>
+              <View style={{ flexShrink: 1 }}>
+                <Text
+                  style={{ fontFamily: entry ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 14, color: entry ? '#8a6b30' : '#6b7280' }}
+                  numberOfLines={2}
+                >
+                  {hang.title}
+                </Text>
+                {hang.eventDate ? (
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: '#9a8060', marginTop: 1 }}>
+                    {hangDate(hang.eventDate)}
+                  </Text>
+                ) : null}
+              </View>
             </Pressable>
             {entry ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 26 }}>

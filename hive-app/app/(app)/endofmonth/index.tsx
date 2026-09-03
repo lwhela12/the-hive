@@ -1,67 +1,96 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../lib/hooks/useAuth';
 import { usePageSkin } from '../../../lib/pageSkin';
+import { useSurveys, type SurveyAnswers } from '../../../lib/hooks/useSurveys';
+import { SurveyModal } from '../../../components/surveys/SurveyModal';
+import type { Survey } from '../../../types';
 
 /**
- * The short way into End of the month: app.the-hive.app/endofmonth
+ * End of the month: app.the-hive.app/endofmonth
  *
- * One link, everybody, whichever HIVEs you are in. Nat, 2026-09-02, writing the
- * text she is about to send: *"we need one singular End of the month check-in
- * survey. We need to make that, cos that's what I'll send out to everyone."*
+ * One link, everybody, whichever HIVEs you are in. Nat, 2026-09-02: *"we need
+ * one singular End of the month check-in survey, cos that's what I'll send out
+ * to everyone."*
  *
- * It looks the survey UP rather than carrying its id, so next month's row is
- * reached by the same link she has already texted people. A link with an id in
- * it is a link that expires quietly.
+ * **It draws the survey itself rather than sending you to a HIVE's Home.**
  *
- * Signed out, `authReturnTo` carries `/endofmonth` through login and lands back
- * here — the link goes to twenty-odd people and some of them will not be signed
- * in on the phone they read it on.
+ * The first version handed off to `/hive?openSurveyId=…`, the way the check-in
+ * emails do, and Nat found it dead within the hour: *"I copy and pasted this
+ * link into a new browser a few times, and every time it just keeps bringing me
+ * back here."* Home is a HIVE's page. It waits for a HIVE before it opens
+ * anything, and a new browser arrives signed out, lands at HIVE-Wide after
+ * login, and waits there forever — Home's own guard even bounces you up to
+ * `/hive-wide` first.
+ *
+ * That was the wrong destination on principle as well as in practice: this
+ * check-in belongs to no HIVE (`community_id is null`, migration 225), so
+ * routing it through one HIVE's Home was asking a question that has no answer.
+ * Nothing here needs a HIVE, so nothing here asks for one.
  */
-export default function EndOfMonthShortLink() {
+export default function EndOfMonthScreen() {
   const router = useRouter();
-  const { loading, communityId } = useAuth();
+  const { loading: authLoading, profile } = useAuth();
   const skin = usePageSkin();
-  const [missing, setMissing] = useState(false);
+  const { availableSurveys, myResponses, submitResponse, loading: surveysLoading } = useSurveys();
+
+  const [survey, setSurvey] = useState<Survey | null>(null);
+  const [state, setState] = useState<'looking' | 'ready' | 'none'>('looking');
 
   useEffect(() => {
-    if (loading) return;
+    if (authLoading || !profile) return;
     let cancelled = false;
 
     void (async () => {
-      // The open HIVE-Wide check-in — `community_id is null` is what makes it
-      // everybody's (migration 225). Soonest due date wins, so a stale row left
-      // active cannot shadow this month's.
-      const { data, error } = await supabase
+      // The open HIVE-Wide check-in. Looked UP rather than carried in the
+      // address, so next month's row answers the link she has already texted
+      // people — an id in a URL is a link that expires quietly.
+      const { data } = await supabase
         .from('surveys')
-        .select('id')
+        .select('*')
         .is('community_id', null)
         .eq('is_active', true)
         .order('due_date', { ascending: true })
         .limit(1);
 
       if (cancelled) return;
-      const survey = (data ?? [])[0] as { id: string } | undefined;
-      if (error || !survey) {
-        // Says so rather than dumping somebody on Home wondering what the link
-        // was for.
-        setMissing(true);
-        return;
-      }
-      router.replace({
-        pathname: '/hive',
-        params: { openSurveyId: survey.id, ...(communityId ? { hive: communityId } : {}) },
-      } as never);
+      const found = (data ?? [])[0] as Survey | undefined;
+      if (!found) { setState('none'); return; }
+      setSurvey(found);
+      setState('ready');
     })();
 
     return () => { cancelled = true; };
-  }, [loading, communityId, router]);
+  }, [authLoading, profile]);
+
+  const done = useCallback(() => {
+    // Home rather than back: a link out of a text message has nothing behind it.
+    router.replace('/hive-wide' as never);
+  }, [router]);
+
+  const onSubmit = useCallback(async (answers: SurveyAnswers) => {
+    if (!survey) return { error: 'No check-in open' };
+    return submitResponse(survey.id, answers);
+  }, [survey, submitResponse]);
+
+  if (state === 'ready' && survey) {
+    const mine = myResponses.get(survey.id);
+    return (
+      <SurveyModal
+        survey={survey}
+        initialAnswers={mine?.answers}
+        isEditingResponse={!!mine}
+        onSubmit={onSubmit}
+        onClose={done}
+      />
+    );
+  }
 
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: skin.page, padding: 24 }}>
-      {missing ? (
+      {state === 'none' ? (
         <Text
           style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: skin.inkSoft, textAlign: 'center' }}
         >
