@@ -1421,7 +1421,7 @@ export default function MeetingsScreen() {
                 gap: 8,
               }}
             >
-              {tailoredCheckIns || halfwayIsAWizard || openCheckIns.length > 0 ? (
+              {true ? (
                 <>
                   <Text
                     style={{
@@ -1432,7 +1432,25 @@ export default function MeetingsScreen() {
                   >
                     Fill these in before the meeting
                   </Text>
-                  {/* THE TWO CHECK-INS, EACH BEHIND ITS OWN GATE.
+                  {/* THE TWO CHECK-INS, ALWAYS, IN EVERY HIVE.
+
+                      Nat, 2026-09-04: *"we gotta make sure that the check in
+                      survey pills are always avail in the meetings tab, so if
+                      you checked in for all 3 on monday and feel different on
+                      thurs, you can always go back in and do them whenever you
+                      want. and they are always open."*
+
+                      So there is no gate on them any more. Both check-ins
+                      belong to no HIVE since the 4 September cutover, both are
+                      open all cycle, and both are the same two doors whichever
+                      HIVE you are standing in — which is the entire promise of
+                      merging them. They used to be gated on which HIVE ran OG's
+                      wizard, which is why Production had no End of the month
+                      button at all and nobody had a Before we meet one outside
+                      the three days before a meeting.
+
+                      They point at the merged check-ins now, not at the wizard.
+                      OLD NOTE, kept because it says why the gates existed:
                       Both pills used to read `tailoredCheckIns`, which is OG
                       and Tech — and that is right for "Before we meet", whose
                       wizard is OG's own pre-meeting ritual and which
@@ -1452,15 +1470,12 @@ export default function MeetingsScreen() {
                       whose halfway is the wizard has the button that opens
                       it. */}
                   {([
-                    ...(tailoredCheckIns ? [{ label: 'Before we meet', params: {} }] : []),
-                    ...(halfwayIsAWizard ? [{ label: 'End of the month', params: { mode: 'midpoint' } }] : []),
+                    { label: 'Before we meet', href: '/beforewemeet' },
+                    { label: 'End of the month', href: '/endofmonth' },
                   ] as const).map((tool) => (
                     <Pressable
                       key={tool.label}
-                      onPress={() => router.push({
-                        pathname: '/monthly-tuneup' as any,
-                        params: { from: 'meetings', ...tool.params },
-                      })}
+                      onPress={() => router.push(tool.href as any)}
                       style={({ pressed }) => ({
                         backgroundColor: 'rgba(255,255,255,0.08)',
                         borderRadius: 999,

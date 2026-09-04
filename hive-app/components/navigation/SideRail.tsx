@@ -7,7 +7,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { supabase } from '../../lib/supabase';
-import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { hiveAccent, hiveDisplayName, hiveOnDark, luminance } from '../../lib/hiveBrand';
 import { HiveMark } from '../ui/HiveMark';
 import { WorldMark } from '../ui/WorldMark';
 import { ADMIN_DESTINATION, destinationsForPlace, activeKeyForPath } from '../../lib/navigation';
@@ -229,9 +229,22 @@ const WIDE_BLACK = '#0B0B12';
  * ("they bleed together like that", Nat 2026-08-03). Derived rather than
  * hard-coded, so a HIVE picking any accent still gets a rail that belongs to it.
  */
+/**
+ * A HIVE's rail is its own colour, darkened — but never darkened into the
+ * near-black that HIVE-Wide owns.
+ *
+ * The September 2026 brand guidelines make a branch's DOMINANT colour the dark
+ * environment itself (Circuit Navy #011F46, Stage Purple #1F0338), so darkening
+ * it by another third put Tech's rail and Production's rail both within a few
+ * points of `WIDE_BLACK` — three places that are meant to be told apart at a
+ * glance, all reading as black. A colour that is already the environment is
+ * left alone.
+ */
 function deepen(hex: string, amount = 0.32): string {
   const clean = hex.replace('#', '');
   if (clean.length !== 6) return hex;
+  // Already an environment colour? Then it IS the rail.
+  if (luminance(hex) < 0.12) return hex;
   const to = (i: number) => {
     const v = parseInt(clean.slice(i, i + 2), 16);
     return Math.max(0, Math.round(v * (1 - amount)));
@@ -452,6 +465,7 @@ export const SideRail = memo(function SideRail({
     onPress,
     badge = 0,
     tint,
+    markTint,
     indented,
     world,
     bounceKey,
@@ -466,6 +480,8 @@ export const SideRail = memo(function SideRail({
     badge?: number;
     /** A colour of its own — HIVE-Wide's green, or a HIVE's accent. */
     tint?: string;
+    /** What the HIVE's hexagon wears so it reads on the rail — the branch pair's light half. */
+    markTint?: string;
     indented?: boolean;
     /** This row is HIVE-Wide, so it wears the Earth rather than a comb. */
     world?: boolean;
@@ -522,7 +538,7 @@ export const SideRail = memo(function SideRail({
         {indented && world ? (
           <WorldMark size={17} />
         ) : indented && tint ? (
-          <HiveMark size={16} colour={tint} />
+          <HiveMark size={16} colour={markTint ?? tint} />
         ) : (
           // Monochrome symbols inherit text colour. Without an explicit rail ink,
           // Quick Add's ＋ rendered black: barely visible on Tech blue and fully
@@ -902,6 +918,7 @@ export const SideRail = memo(function SideRail({
               indented
               active={m.community_id === communityId && !onHiveWide}
               tint={hiveAccent(m.community)}
+              markTint={hiveOnDark(m.community?.slug)}
               bounceKey={m.community_id}
               onPress={() => {
                 if (m.community_id === communityId && !onHiveWide) playBounce(m.community_id);

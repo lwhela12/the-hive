@@ -82,19 +82,20 @@ const HIVE_MARKS: Record<string, HiveMark> = {
   // OG HIVE still carries `default` from before there was more than one HIVE.
   // Its seal is the cream-and-gold one.
   default: DEFAULT_MARK,
-  // Tech HIVE — the little robot, Tech's dark blue, and the circuit-board seal.
+  // Tech HIVE — the little robot, Circuit Navy (#011F46, brand guidelines
+  // September 2026), and the circuit-board seal.
   tech: {
     emoji: '🤖',
-    accent: '#2f4a63',
+    accent: '#011f46',
     logo: `${LOGO_BASE}/tech-hive.png`,
     logoFormal: `${LOGO_BASE}/tech-hive-formal.png`,
   },
-  // Production HIVE — the clapperboard, Production's purple, and the seal with
+  // Production HIVE — the clapperboard, Stage Purple (#1F0338), and the seal with
   // the theatre curtains. This is the show HIVE; the clapperboard belongs here
   // and nowhere else.
   show: {
     emoji: '🎬',
-    accent: '#6b4a8f',
+    accent: '#1f0338',
     logo: `${LOGO_BASE}/production-hive.png`,
     logoFormal: `${LOGO_BASE}/production-hive-formal.png`,
   },
@@ -123,9 +124,20 @@ export const HIVE_WIDE_MARK: HiveMark = {
  * because Outlook ignores the style and would otherwise draw it full size.
  */
 export function hiveSealImg(mark: HiveMark, size = 72): string {
-  // The motto ring only reads as words at 120px and up, so the size decides
-  // which file goes in — a caller can never pick the wrong one by hand.
-  const src = size >= 120 ? mark.logoFormal : mark.logo;
+  /**
+   * THE SIZE PICKS THE FILE, AND 512 IS THE GUIDELINE'S NUMBER, NOT A GUESS.
+   *
+   * HIVE Brand Guidelines, September 2026: *"Use at 512 px and larger"* for the
+   * formal seal — brand pages, print, large placements — and *"Use below 512
+   * px"* for the simplified one, which it lists as the right choice for
+   * avatars, navigation, profile images and app icons.
+   *
+   * This said 120 for half a day, on my own reading of where the motto ring
+   * stops being words. The guideline is four times stricter, which means every
+   * letter HIVE sends carries the simplified seal, the Buzz's masthead
+   * included.
+   */
+  const src = size >= 512 ? mark.logoFormal : mark.logo;
   return `<img src="${src}" alt="${mark.emoji}" width="${size}" height="${size}"`
     + ` style="width:${size}px;height:${size}px;display:inline-block;border:0;outline:none;text-decoration:none;" />`;
 }

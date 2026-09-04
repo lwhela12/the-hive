@@ -44,20 +44,50 @@ export type HiveMark = {
   emoji: string;
   /** The written-down accent, used only when the database row has none. */
   accent: string;
+  /**
+   * THE OTHER HALF OF THE BRANCH PAIR — the one that reads ON the first.
+   *
+   * HIVE Brand Guidelines, September 2026, gives every branch a DOMINANT PAIR:
+   * a dark environment and a light partner. Space + Starlight, Honey + Ink,
+   * Circuit Navy + Signal Blue, Stage Purple + Curtain Violet. Its usage rule
+   * is the whole point — *"Use charcoal on cream or white. Use cream or white
+   * on Space, Circuit Navy, or Stage Purple."*
+   *
+   * `accent` is the environment: the rail, the header, the button. This is what
+   * a small mark wears when it has to sit ON that environment — a 16px hexagon
+   * in Circuit Navy on a Circuit Navy rail is a hexagon nobody can see.
+   */
+  onDark: string;
 };
 
-/** The HIVE default: the honeybee, in honey gold. */
-const DEFAULT_MARK: HiveMark = { emoji: '🐝', accent: HIVE_GOLD };
+/**
+ * The branch pairs, straight off the September 2026 brand guidelines. A hex
+ * here is the guideline's hex; if the two ever disagree, the guideline wins and
+ * this file is what changes.
+ */
+/** The HIVE default: the honeybee, Honey over Ink. */
+const DEFAULT_MARK: HiveMark = { emoji: '🐝', accent: HIVE_GOLD, onDark: '#313130' };
 
 const HIVE_MARKS: Record<string, HiveMark> = {
   // OG HIVE still carries `default` from before there was more than one HIVE.
+  // Honey #BD9348 over Ink #313130 — "golden honey sunburst".
   default: DEFAULT_MARK,
-  // Tech HIVE — the little robot, and Tech's dark blue.
-  tech: { emoji: '🤖', accent: '#2f4a63' },
-  // Production HIVE — the clapperboard, and Production's purple. This is the
-  // show HIVE; the clapperboard belongs here and nowhere else.
-  show: { emoji: '🎬', accent: '#6b4a8f' },
+  // Tech HIVE — the little robot. Circuit Navy over Signal Blue.
+  tech: { emoji: '🤖', accent: '#011f46', onDark: '#2f82c2' },
+  // Production HIVE — the clapperboard. Stage Purple over Curtain Violet. This
+  // is the show HIVE; the clapperboard belongs here and nowhere else.
+  show: { emoji: '🎬', accent: '#1f0338', onDark: '#a0708b' },
 };
+
+/**
+ * The colour this HIVE's small marks wear when they sit on its own dark
+ * environment — the side rail, a deepened header. Falls back to the accent for
+ * a HIVE nobody has dressed, which is what it did before the pairs existed.
+ */
+export function hiveOnDark(slug?: string | null): string {
+  const mark = HIVE_MARKS[(slug ?? '').trim().toLowerCase()];
+  return mark ? mark.onDark : HIVE_GOLD;
+}
 
 /** A HIVE's emoji and written-down accent, by slug. Anything else is the bee. */
 export function hiveMark(slug?: string | null): HiveMark {
