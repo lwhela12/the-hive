@@ -111,91 +111,141 @@ serve(async (req) => {
    *                      in. It counts to the end of the calendar month, so it
    *                      is the same question for all of them on the same day.
    *
-   *   Before we meet     everybody who has a MEETING in the next week, once
-   *                      however many of their HIVEs are meeting. Nat,
-   *                      2026-09-04: *"i want one reminder to 'check in before
-   *                      you arrive' & you can do that for as many hives as
-   *                      you're in on one day ... what i dont want is an email
-   *                      3 days before tues & then an email 3 days before
-   *                      thurs, thats anoying."*
+   *   Before we meet     the members of whichever HIVE meets TOMORROW, minus
+   *                      anyone who has already answered that HIVE's part.
    *
-   * That second rule is the whole point of the merge and it has two halves.
-   * ONE LETTER is the survey being shared. THE RIGHT PEOPLE is here: without
-   * this, opening it in a week when Tech and Production meet would also nudge
-   * every OG member about a meeting a fortnight away, which is a new annoyance
-   * traded for the old one.
+   * ## Why tomorrow, and why per-HIVE
    *
-   * A member of a HIVE that is not meeting can still answer — the check-in is
-   * open all cycle and every one of their HIVEs has a section in it. They are
-   * simply not the ones being reminded today.
+   * Nat, 2026-09-04: *"a 'you have a meeting tomorrow, dont forget to fill out
+   * your check in before the meeting starts' kind of email goes out the day
+   * before a meeting ... If someone, like [a member], who is in all 3, got an
+   * email on monday to check in, he could just do his check in for all 3. But
+   * if he only did Tech hive, then he'd get another reminder on wed for [the
+   * next one]. If he did [both] on monday, then he wouldnt get another reminder
+   * until the following tues."*
+   *
+   * So the letter is tied to ONE meeting, and the check-in behind it covers
+   * every HIVE the reader is in. Answering a HIVE's section is what stops that
+   * HIVE's reminder — which is why "answered" is counted per HIVE here and not
+   * per survey. One merged check-in holds one row per HIVE (migration 229), so
+   * the question "has this person done Tech yet" has an honest answer even
+   * though Tech shares a survey with everybody else.
+   *
+   * ## The letter never names another HIVE
+   *
+   * The first version of this gathered every meeting in the next seven days and
+   * wrote them into the letter — *"Tech HIVE, Tuesday · Production HIVE,
+   * Thursday"* — and sent it to all eleven people. Nat: *"Production HIVE is
+   * lord voldemort, we cant have that just out and about for people to see."*
+   * Naming it outside itself is one leak; naming the DAY it meets is a second,
+   * and the fact that a meeting happened at all is a fact about that HIVE (see
+   * migration 224). Tying the letter to one meeting removes the temptation:
+   * everyone who receives it is already inside the HIVE it is about.
    */
-  const MEETING_WEEK_DAYS = 7;
+  const PACIFIC_TZ = 'America/Los_Angeles';
+  const pacificDate = (at: Date) =>
+    at.toLocaleDateString('en-CA', { timeZone: PACIFIC_TZ }); // YYYY-MM-DD
 
-  let meetingHives: { id: string; name: string; date: string }[] = [];
+  /**
+   * Which occurrence of a repeating check-in an answer belongs to.
+   *
+   * The same key `getSurveyResponsePeriod` writes in the app — the month of the
+   * survey's due date — because this has to compare against rows the app saved.
+   * A one-off survey is `'default'` there and here.
+   */
+  const responsePeriod = (() => {
+    const repeats = /before (we meet|our first meeting)|monthly\s+check-?in|halfway\s+check-?in|end of the month/i
+      .test(survey.title ?? '');
+    if (!repeats || !survey.due_date) return 'default';
+    const due = new Date(survey.due_date);
+    if (Number.isNaN(due.getTime())) return 'default';
+    return `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}`;
+  })();
+
+  /** The HIVEs meeting tomorrow. Empty for anything that is not a pre-meeting. */
+  let meetingTomorrow: { id: string; name: string }[] = [];
   if (!survey.community_id && shape.kind === 'checkIn') {
-    const today = new Date().toISOString().slice(0, 10);
-    const until = new Date(Date.now() + MEETING_WEEK_DAYS * 86400000)
-      .toISOString().slice(0, 10);
+    const tomorrow = pacificDate(new Date(Date.now() + 86400000));
     const { data: soon } = await admin
       .from('events')
-      .select('community_id, event_date, community:communities!community_id(name)')
+      .select('community_id, community:communities!community_id(name)')
       .eq('event_type', 'meeting')
       .eq('status', 'scheduled')
-      .gte('event_date', today)
-      .lte('event_date', until)
-      .order('event_date', { ascending: true });
+      .eq('event_date', tomorrow);
     const seen = new Set<string>();
     for (const row of (soon ?? []) as {
-      community_id: string; event_date: string; community?: { name?: string } | null;
+      community_id: string; community?: { name?: string } | null;
     }[]) {
       if (seen.has(row.community_id)) continue;
       seen.add(row.community_id);
-      meetingHives.push({
-        id: row.community_id,
-        name: row.community?.name ?? 'your HIVE',
-        date: row.event_date,
-      });
+      meetingTomorrow.push({ id: row.community_id, name: row.community?.name ?? 'your HIVE' });
     }
-    if (!meetingHives.length) {
+    if (!meetingTomorrow.length) {
+      // Said plainly rather than reporting that it reached nobody, which is the
+      // same answer wearing a disguise.
+      const { data: next } = await admin
+        .from('events')
+        .select('event_date')
+        .eq('event_type', 'meeting').eq('status', 'scheduled')
+        .gte('event_date', pacificDate(new Date()))
+        .order('event_date', { ascending: true }).limit(1);
+      const when = (next ?? [])[0]?.event_date;
       return errorResponse(
-        `No HIVE has a meeting in the next ${MEETING_WEEK_DAYS} days, so there is nobody to remind yet.`,
+        when
+          ? `No HIVE meets tomorrow. This goes out the day before a meeting, and the next one is ${when}.`
+          : 'No HIVE meets tomorrow, and none has a meeting on the books.',
         409,
       );
     }
   }
 
   /**
-   * The line under the heading: which HIVEs, and which day.
+   * The people, and who among them has already done their part.
    *
-   * "Every HIVE" is right for End of the month, which is about the calendar.
-   * It is wrong for this one — the reader is being asked to get ready for
-   * specific evenings, and a letter covering two of them has to say which two
-   * or it cannot be acted on.
+   * For a merged pre-meeting this is asked per HIVE — a member of two HIVEs who
+   * answered one of them is done for that one and still waiting on the other.
    */
-  const weekday = (isoDate: string) => {
-    const [y, m, d] = isoDate.split('-').map(Number);
-    return new Date(Date.UTC(y, m - 1, d))
-      .toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
-  };
-  const meetingLine = meetingHives.length
-    ? meetingHives.map((h) => `${h.name}, ${weekday(h.date)}`).join(' · ')
-    : null;
+  const scopeIds = survey.community_id
+    ? [survey.community_id]
+    : meetingTomorrow.map((h) => h.id);
 
-  const membershipQuery = admin.from('community_memberships').select('user_id');
-  const { data: memberRows } = survey.community_id
-    ? await membershipQuery.eq('community_id', survey.community_id)
-    : meetingHives.length
-      ? await membershipQuery.in('community_id', meetingHives.map((h) => h.id))
-      : await membershipQuery;
-  const everyone = [...new Set((memberRows ?? []).map((r: { user_id: string }) => r.user_id))];
+  const membershipQuery = admin
+    .from('community_memberships')
+    .select('user_id, community_id');
+  const { data: memberRows } = scopeIds.length
+    ? await membershipQuery.in('community_id', scopeIds)
+    : await membershipQuery;
+  const memberships = (memberRows ?? []) as { user_id: string; community_id: string }[];
+  const everyone = [...new Set(memberships.map((r) => r.user_id))];
 
   const { data: answeredRows } = await admin
     .from('survey_responses')
-    .select('user_id')
-    .eq('survey_id', survey.id);
-  const answered = new Set((answeredRows ?? []).map((r: { user_id: string }) => r.user_id));
+    .select('user_id, community_id')
+    .eq('survey_id', survey.id)
+    .eq('response_period', responsePeriod);
+  const answeredRowsTyped = (answeredRows ?? []) as
+    { user_id: string; community_id: string | null }[];
 
-  const waiting = everyone.filter((userId) => !answered.has(userId));
+  /**
+   * Done for THIS HIVE, not done full stop.
+   *
+   * A merged check-in files one row per HIVE, so "answered" is a pair. Reading
+   * it as "any row for this survey" would have let one section of the check-in
+   * silence the reminder for all the others — the exact thing Nat described not
+   * wanting: fill in one HIVE on Monday and never hear about the next one.
+   */
+  const answeredPairs = new Set(
+    answeredRowsTyped.map((r) => `${r.user_id}:${r.community_id ?? ''}`),
+  );
+  const answeredAnywhere = new Set(answeredRowsTyped.map((r) => r.user_id));
+
+  const waiting = survey.community_id || !meetingTomorrow.length
+    ? everyone.filter((userId) => !answeredAnywhere.has(userId))
+    : [...new Set(
+        memberships
+          .filter((m) => !answeredPairs.has(`${m.user_id}:${m.community_id}`))
+          .map((m) => m.user_id),
+      )];
 
   let hiveName = 'HIVE';
   let hiveSlug: string | null = null;
@@ -220,15 +270,15 @@ serve(async (req) => {
       survey_id: survey.id,
       check_in: shape.name,
       // A NAME, not a sentence — the app puts this inside "16 people in ___
-      // get an email", and "everybody, whichever HIVEs they are in" turned
-      // that into nonsense the first time it was read on screen.
+      // get an email". This one is read by an owner, inside Admin, so it may
+      // name the HIVE meeting tomorrow; the LETTER below may not.
       hive: survey.community_id
         ? hiveName
-        : meetingHives.length
-          ? meetingHives.map((h) => h.name).join(' and ')
+        : meetingTomorrow.length
+          ? meetingTomorrow.map((h) => h.name).join(' and ')
           : 'every HIVE',
       members: everyone.length,
-      answered: answered.size,
+      answered: answeredAnywhere.size,
       would_reach: waiting.length,
       meeting_now: meetingNow,
     });
@@ -246,31 +296,53 @@ serve(async (req) => {
    * so that's just a lame step."* A letter with nothing in it to tweak is a
    * letter with nothing to review.
    */
+  /**
+   * WHAT THE LETTER MAY SAY, AND WHAT IT MAY NOT.
+   *
+   * It goes to the members of the HIVE that meets tomorrow, so "your meeting
+   * tomorrow" is unambiguous to every single reader without naming anything.
+   * It must stay that way: this is the one letter whose recipients may not all
+   * be in the same HIVE (two HIVEs could meet on the same evening), and naming
+   * a HIVE — or its meeting day — to somebody outside it is a leak, whichever
+   * HIVE it is.
+   *
+   * The second line is the whole reason the check-in was merged: a member of
+   * more than one can do all of them now, in this sitting, and then hear
+   * nothing before their next meeting. It says "every HIVE you are in" rather
+   * than listing them, which is true for the reader and tells nobody anything
+   * about anybody else.
+   */
+  const isMergedPreMeeting = !survey.community_id && shape.kind === 'checkIn';
+
   const mark = hiveMark(hiveSlug, hiveAccent);
-  const path = survey.community_id ? '/monthly-tuneup' : '/endofmonth';
+  const path = survey.community_id
+    ? '/monthly-tuneup'
+    : isMergedPreMeeting ? '/beforewemeet' : '/endofmonth';
   const href = deepLink(path, survey.community_id);
   const takes = shape.kind === 'monthCheckIn' ? 'about two minutes' : 'a few minutes';
-  /**
-   * One letter for the week, so it says so.
-   *
-   * A person in two of the meeting HIVEs gets this once and fills both sections
-   * in one sitting; a person in one barely notices the sentence. It is only
-   * added when there is genuinely more than one, because "one check-in covers
-   * both" is confusing to somebody who has only one.
-   */
-  const coversMany = meetingHives.length > 1;
 
   const sent = await Promise.all(
     waiting.map((userId) => sendReachEmail(admin, userId, shape.kind, {
-      subject: `${hiveName} · Your ${shape.name} check-in is open`,
+      // The subject names the HIVE only when the letter belongs to one. A
+      // merged pre-meeting goes to whoever meets tomorrow, and they may not all
+      // be in the same HIVE.
+      subject: survey.community_id
+        ? `${hiveName} · Your ${shape.name} check-in is open`
+        : isMergedPreMeeting
+          ? 'HIVE · You have a meeting tomorrow'
+          : `${hiveName} · Your ${shape.name} check-in is open`,
       hiveName,
       hiveSlug,
       hiveAccent,
       hiveId: survey.community_id,
-      heading: `Your ${shape.name} check-in is open`,
-      where: survey.community_id ? hiveName : (meetingLine ?? 'Every HIVE'),
-      said: coversMany
-        ? `It takes ${takes}, and one check-in covers every HIVE of yours that is meeting — what you write goes straight into each room.`
+      heading: isMergedPreMeeting
+        ? 'You have a meeting tomorrow'
+        : `Your ${shape.name} check-in is open`,
+      where: survey.community_id
+        ? hiveName
+        : isMergedPreMeeting ? 'Your meeting is tomorrow' : 'Every HIVE',
+      said: isMergedPreMeeting
+        ? `It takes ${takes}, and it covers every HIVE you are in — fill in the others now and you will not be asked again before their meetings.`
         : `It takes ${takes}, and what you write goes straight into the room.`,
       buttonLabel: 'Open the check-in',
       href,
