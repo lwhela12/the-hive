@@ -23,7 +23,7 @@ import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
 import { EditButton } from '../../components/ui/EditButton';
 import { confirmAction, showAlert } from '../../lib/showAlert';
-import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns, hasMeetingDeck, hasEndOfMonthCheckIn, getHalfwayShape, getSeasonCheckInKind, isEndOfMonthCheckInSurvey, isSurveyOnHomeToday, SEASON_CHECK_IN_EMOJI } from '../../lib/checkIns';
+import { CHECK_INS_COMING_SOON_MESSAGE, checkInDisplayName, hasTailoredCheckIns, hasMeetingDeck, hasEndOfMonthCheckIn, getHalfwayShape, getSeasonCheckInKind, isEndOfMonthCheckInSurvey, isSurveyOnHomeToday, SEASON_CHECK_IN_EMOJI } from '../../lib/checkIns';
 import { useSurveys, isMonthlyCheckInSurvey } from '../../lib/hooks/useSurveys';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
@@ -1491,7 +1491,17 @@ export default function MeetingsScreen() {
                         })}
                       >
                         <Text style={{ fontFamily: 'Lato_700Bold', color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>
-                          {kind ? `${SEASON_CHECK_IN_EMOJI[kind]} ` : ''}{survey.title}
+                          {/* A season check-in keeps the name it was launched
+                              under — "· Q3 2026" is the half that says WHICH
+                              one. Everything else is the monthly pair, and
+                              those have exactly two names (settled 2026-09-02);
+                              this pill was still printing the row's internal
+                              title, which is how "Halfway check-in" appeared on
+                              a screen after the sweep that was meant to retire
+                              that word. */}
+                          {kind
+                            ? `${SEASON_CHECK_IN_EMOJI[kind]} ${survey.title}`
+                            : checkInDisplayName(survey.title)}
                         </Text>
                       </Pressable>
                     );
