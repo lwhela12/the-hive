@@ -40,6 +40,33 @@ export const REACH_COLUMNS = {
   message: 'email_message_enabled',
   /** Somebody replied to something you posted. */
   boardReply: 'email_board_reply_enabled',
+  /**
+   * THE NEWSLETTER IS DELIBERATELY NOT ON THIS RAIL. Considered 2026-09-04 and
+   * turned down for a reason worth keeping.
+   *
+   * Everything here is keyed on a `profiles` row, because `mayReach` reads a
+   * member's switch off one. The Buzz also goes to `newsletter_subscribers` —
+   * people who signed up on the public site and have no profile at all — so
+   * putting it on this rail would have silently dropped the half of the list
+   * that is not in a HIVE.
+   *
+   * It already keeps every promise this rail exists to keep, by its own means:
+   * `email_newsletter_enabled` is read at send time, every recipient gets their
+   * own `to:` and their own unsubscribe token, and it will not send without
+   * `force`. `send-newsletter` asks `hiveIsMeetingNow` itself.
+   */
+  /**
+   * A check-in is open and waiting for you — the pre-meeting one.
+   *
+   * Nat, 2026-09-04: *"instead of going to my email and then previewing the
+   * email and then going back into the app and previewing the survey, I want
+   * everything to just happen in the app."* So the mail stopped being a letter
+   * a cron wrote at 6am for her to proofread, and became this: short, standard,
+   * and set off by her pressing send on a survey she just read.
+   */
+  checkIn: 'email_meeting_checkin_enabled',
+  /** The same, for the one that belongs to the month rather than a meeting. */
+  monthCheckIn: 'email_midpoint_checkin_enabled',
 } as const;
 
 export type Reach = keyof typeof REACH_COLUMNS;
@@ -92,7 +119,7 @@ export async function mayReach(
     .from('profiles')
     // Spelled out literally: a computed select string makes the whole row
     // `any`, and then nothing tells you when a column is wrong.
-    .select('email, name, email_mention_enabled, email_message_enabled, email_board_reply_enabled')
+    .select('email, name, email_mention_enabled, email_message_enabled, email_board_reply_enabled, email_meeting_checkin_enabled, email_midpoint_checkin_enabled')
     .eq('id', userId)
     .maybeSingle();
   if (error || !data) return { allowed: false, email: null, name: '' };
@@ -106,6 +133,83 @@ export async function mayReach(
 }
 
 /**
+ * NOTHING GOES OUT WHILE THAT HIVE IS IN ITS MEETING.
+ *
+ * Nat, 2026-09-04, listing what should and should not reach a person: *"you
+ * wouldn't get an email notification, I think, during the meeting. So that
+ * would, we can rule that out."*
+ *
+ * She is right, and the reason is worth writing down: a meeting is the one
+ * hour everybody is already inside the app, together, watching the same deck.
+ * That hour is also when the app is written in most — desires captured, wishes
+ * granted, to-dos handed out, the Wrap-Up posting a recap — so it is exactly
+ * when the mail would be thickest and least useful. Eighteen people would each
+ * get a handful of letters about a room they were sitting in.
+ *
+ * **It is the CONTENT's HIVE that has to be quiet, not the reader's.** A person
+ * in three HIVEs is in one meeting; mail about the other two still means
+ * something and still arrives. Every caller already knows which HIVE the thing
+ * lives in, so this asks for exactly what they already hold.
+ *
+ * **Held mail is dropped, not delayed.** It happened in the room the reader was
+ * in. An email an hour later saying somebody spoke during the meeting is worse
+ * noise than no email at all — and the thing itself is still sitting in the
+ * app, where they were.
+ *
+ * "In its meeting" means a scheduled meeting on that HIVE's calendar whose
+ * start and end straddle right now, read in America/Los_Angeles, the same
+ * timezone `check-in-reminder` resolves its days in. A meeting with no
+ * `end_time` is given two hours, which is what every HIVE's meeting has been
+ * since the default landed on 2026-08-25.
+ */
+const PACIFIC_TZ = 'America/Los_Angeles';
+
+export async function hiveIsMeetingNow(
+  admin: { from: (t: string) => any },
+  communityId: string | null | undefined,
+): Promise<boolean> {
+  if (!communityId) return false;
+
+  // Right now, as that HIVE reads a clock: its own calendar date, and minutes
+  // since midnight. Comparing in one timezone's own terms keeps this free of
+  // the offset arithmetic that daylight saving quietly breaks twice a year.
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: PACIFIC_TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(now).reduce<Record<string, string>>((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+  const today = `${parts.year}-${parts.month}-${parts.day}`;
+  const minutesNow = Number(parts.hour) * 60 + Number(parts.minute);
+
+  const { data, error } = await admin
+    .from('events')
+    .select('event_time, end_time')
+    .eq('community_id', communityId)
+    .eq('event_date', today)
+    .eq('event_type', 'meeting')
+    .eq('status', 'scheduled');
+  // A question we cannot answer must not silence the mail — failing quiet here
+  // would drop letters every time the query hiccuped, and nobody would know.
+  if (error || !data?.length) return false;
+
+  const minutes = (value: unknown): number | null => {
+    const match = /^(\d{1,2}):(\d{2})/.exec(String(value ?? ''));
+    return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+  };
+
+  return data.some((row: Record<string, unknown>) => {
+    const start = minutes(row.event_time);
+    if (start === null) return false;
+    const end = minutes(row.end_time) ?? start + 120;
+    return minutesNow >= start && minutesNow < end;
+  });
+}
+
+/**
  * The letter itself: the HIVE's own mark and colour, what was said, and one
  * button that lands on the thing rather than near it.
  *
@@ -116,6 +220,20 @@ export function reachEmailHtml(opts: {
   hiveName: string;
   hiveSlug?: string | null;
   hiveAccent?: string | null;
+  /**
+   * WHICH HIVE this letter is about — required, and not for decoration.
+   *
+   * `sendReachEmail` asks it whether that HIVE is mid-meeting and holds the
+   * letter if it is (see `hiveIsMeetingNow`). Null says "no single HIVE", which
+   * is honest for HIVE-Wide mail and has no meeting to be quiet for.
+   *
+   * It sits in the letter rather than being worked out here because only the
+   * caller knows whose HIVE the thing belongs to — the reader may be in three.
+   * `scripts/lint-reach-mail.mjs` fails the build if any call site leaves it
+   * off, since nothing else would notice: these functions run on Deno and
+   * `tsconfig.json` excludes them from `tsc`.
+   */
+  hiveId: string | null;
   /** "Brietta mentioned you on Things We Learned" */
   heading: string;
   /** The line under it: which board, which room, whose wish. */
@@ -157,10 +275,51 @@ export async function sendReachEmail(
   kind: Reach,
   letter: Omit<Parameters<typeof reachEmailHtml>[0], 'toName'> & { subject: string },
 ): Promise<{ sent: boolean; reason?: string }> {
+  return sendReachHtml(admin, userId, kind, {
+    hiveId: letter.hiveId,
+    subject: letter.subject,
+    // The reader's own name is only known after their switch has been read, so
+    // the letter is built inside the door rather than handed to it.
+    html: (toName) => reachEmailHtml({ ...letter, toName }),
+  });
+}
+
+/**
+ * THE DOOR ITSELF, for a letter that is not the short standard one.
+ *
+ * Everything above builds the same small card — somebody spoke to you, here is
+ * what they said, here is the button. The Buzz cannot: it is the whole letter,
+ * written by hand, and the words ARE the point. Nat, 2026-09-04, choosing full
+ * text over a teaser: her list is small and warm, and it is the one thing she
+ * writes by hand all month.
+ *
+ * So the shape is separated from the rules. A caller with its own HTML still
+ * passes through the same four: the member's switch, the meeting quiet hour,
+ * one `to:` each so nobody's inbox meets anybody else's, and a plain-text half
+ * because Gmail distrusts an HTML-only message.
+ *
+ * `html` is a function rather than a string so a letter can greet somebody by
+ * name — the name is only known once the switch has been read, and reading it
+ * twice would double the queries for an @everyone.
+ */
+export async function sendReachHtml(
+  admin: { from: (t: string) => any },
+  userId: string,
+  kind: Reach,
+  letter: {
+    hiveId: string | null;
+    subject: string;
+    html: string | ((toName: string) => string);
+  },
+): Promise<{ sent: boolean; reason?: string }> {
   if (!RESEND_API_KEY) return { sent: false, reason: 'no RESEND_API_KEY' };
+  // The HIVE this is about is in its meeting: everybody is already in the room.
+  if (await hiveIsMeetingNow(admin, letter.hiveId)) {
+    return { sent: false, reason: 'that HIVE is meeting' };
+  }
   const who = await mayReach(admin, userId, kind);
   if (!who.allowed || !who.email) return { sent: false, reason: 'switched off, or no address' };
-  const html = reachEmailHtml({ ...letter, toName: who.name });
+  const html = typeof letter.html === 'function' ? letter.html(who.name) : letter.html;
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',

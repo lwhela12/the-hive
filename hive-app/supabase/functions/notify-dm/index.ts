@@ -206,6 +206,7 @@ serve(async (req) => {
         hiveName: hiveRow?.name ?? 'Your HIVE',
         hiveSlug: hiveRow?.slug ?? null,
         hiveAccent: hiveRow?.accent_color ?? null,
+        hiveId: community_id,
         heading: `${sender.name} sent you a message`,
         where: 'In your messages',
         said: message_preview,

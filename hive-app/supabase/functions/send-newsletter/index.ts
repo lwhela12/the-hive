@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 import { readLetter, type LetterBlock } from '../_shared/letter.ts';
+import { hiveIsMeetingNow } from '../_shared/reachMail.ts';
 
 /**
  * Puts an issue of The Buzz in people's inboxes.
@@ -330,6 +331,31 @@ serve(async (req) => {
         'This public issue names a HIVE member. Remove member names and identity-to-HIVE links, then test again.',
         400
       );
+    }
+  }
+
+  /**
+   * NOT WHILE A HIVE IS MEETING.
+   *
+   * Nat, 2026-09-04, on what should reach a person: *"you wouldn't get an email
+   * notification, I think, during the meeting."* Every other kind of HIVE mail
+   * is held at the shared door in `_shared/reachMail.ts`; The Buzz cannot use
+   * that door, because half its list are subscribers with no profile to read a
+   * switch off — so it asks the same question here.
+   *
+   * The Buzz belongs to no single HIVE, so it waits for ALL of them: an issue
+   * landing mid-meeting would pull the room out of the room, whichever room it
+   * happens to be. It is a monthly letter; twenty minutes is nothing to it.
+   */
+  if (mode === 'live') {
+    const { data: allHives } = await supabase.from('communities').select('id, name');
+    for (const hive of (allHives ?? []) as { id: string; name: string }[]) {
+      if (await hiveIsMeetingNow(supabase, hive.id)) {
+        return errorResponse(
+          `${hive.name} is in its meeting right now. The Buzz waits until it is over.`,
+          409,
+        );
+      }
     }
   }
 

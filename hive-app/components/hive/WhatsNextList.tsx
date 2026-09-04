@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useWhatsNext, type WhatsNextItem } from '../../lib/hooks/useWhatsNext';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { hiveAccent, accentOnDark } from '../../lib/hiveBrand';
+import { supabase } from '../../lib/supabase';
+import { showAlert } from '../../lib/showAlert';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 /**
  * What's next — one list, everyone, on whatever dark page asks for it.
@@ -35,6 +39,66 @@ export function WhatsNextList({
   const router = useRouter();
   const { memberships } = useAuth();
   const { items, state, today, refresh } = useWhatsNext();
+  /** The check-in being sent, once its live count has come back. */
+  const [sending, setSending] = useState<
+    { surveyId: string; name: string; waiting: number; hiveName: string } | null
+  >(null);
+
+  /**
+   * Press "Send it" and this asks the sender how many, before asking her.
+   *
+   * The dry run is the same function that does the sending, reading the same
+   * two lists, so the number in the question is the number that goes. It also
+   * comes back saying whether that HIVE is mid-meeting, which is the one time
+   * nothing may go out at all.
+   */
+  const offerToSend = async (openable: NonNullable<WhatsNextItem['openable']>) => {
+    const { data, error } = await supabase.functions.invoke('open-check-in', {
+      body: { survey_id: openable.surveyId, dry_run: true },
+    });
+    if (error || !data) {
+      showAlert('That did not go through', 'The check-in could not be counted just now. Try again in a moment.');
+      return;
+    }
+    if (data.meeting_now) {
+      showAlert('Not during the meeting', `${data.hive} is meeting right now. Nothing goes out during one.`);
+      return;
+    }
+    if (!data.would_reach) {
+      showAlert('Everybody has answered', `Nobody is left to nudge about ${data.check_in}.`);
+      return;
+    }
+    setSending({
+      surveyId: openable.surveyId,
+      name: data.check_in,
+      waiting: data.would_reach,
+      hiveName: data.hive,
+    });
+  };
+
+  const reallySend = async () => {
+    const asked = sending;
+    setSending(null);
+    if (!asked) return;
+    const { data, error } = await supabase.functions.invoke('open-check-in', {
+      body: { survey_id: asked.surveyId },
+    });
+    if (error || !data) {
+      showAlert('That did not go through', 'Nothing was sent. Try again in a moment.');
+      return;
+    }
+    // What actually happened, in the words she would use: some people turn
+    // this email off, and a send that reaches fewer than it said is not a
+    // failure — it is their switch working.
+    const quiet = data.quiet
+      ? ` ${data.quiet} ${data.quiet === 1 ? 'has' : 'have'} this email turned off, so ${data.quiet === 1 ? 'it' : 'they'} got it in the app only.`
+      : '';
+    showAlert(
+      `${asked.name} is open`,
+      `${data.emailed} ${data.emailed === 1 ? 'email' : 'emails'} went out.${quiet}`,
+    );
+    void refresh();
+  };
 
   if (state === 'loading') {
     return (
@@ -74,6 +138,33 @@ export function WhatsNextList({
 
   return (
     <View>
+      {/**
+        * SAYING HOW MANY, BEFORE IT SENDS.
+        *
+        * Nat, 2026-09-04, on the whole streamlining idea: the point is fewer
+        * steps, not fewer brakes. This is the one brake left, and it is one
+        * line rather than a screen — the risk was never that she sends
+        * something wrong, it is that a tag turns out to have been a broadcast.
+        *
+        * The number in the question is NOT the number the row was drawn with.
+        * A panel opened twenty minutes ago has a stale count, and a confirm
+        * that names a stale number is worse than no number at all. Pressing
+        * asks `open-check-in` for a dry run first — the same two lists the
+        * send itself uses — and puts THAT answer in the question.
+        */}
+      <ConfirmDialog
+        visible={!!sending}
+        title={sending ? `Send ${sending.name}?` : ''}
+        body={sending
+          ? `${sending.waiting} ${sending.waiting === 1 ? 'person' : 'people'} in ${sending.hiveName} `
+            + `${sending.waiting === 1 ? 'gets' : 'get'} an email, and everyone still waiting gets it in the app. `
+            + 'Anybody who has turned this email off does not.'
+          : undefined}
+        confirmLabel={sending ? `Send to ${sending.waiting}` : 'Send'}
+        cancelLabel="Not yet"
+        onConfirm={() => { void reallySend(); }}
+        onCancel={() => setSending(null)}
+      />
       {items.map((item, index) => (
         <WhatsNextRow
           key={item.key}
@@ -94,7 +185,9 @@ export function WhatsNextList({
            * who have not answered before their first meeting.
            */
           onPress={
-            item.holdId
+            item.openable
+              ? () => { void offerToSend(item.openable!); }
+              : item.holdId
               ? () => router.push(`/approve/${item.holdId}` as never)
               : item.key.startsWith('survey_')
                 ? () => router.push(

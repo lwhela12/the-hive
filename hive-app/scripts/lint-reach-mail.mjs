@@ -58,12 +58,80 @@ for (const [kind, column] of kinds) {
 }
 
 // --- Half two: something sends it.
+//
+//     The check-in kinds are sent by the app's own send door rather than by a
+//     notify-* function — Nat presses send on a survey she has just read
+//     (2026-09-04) — and the newsletter by `send-newsletter`. They are listed
+//     here so "something sends it" still means a real file, not an exemption.
+const EXTRA_SENDERS = {
+  checkIn: 'supabase/functions/open-check-in/index.ts',
+  monthCheckIn: 'supabase/functions/open-check-in/index.ts',
+};
+
 for (const kind of kinds.keys()) {
   const callPattern = new RegExp(`sendReachEmails?\\([\\s\\S]{0,400}?'${kind}',`);
+  const extra = EXTRA_SENDERS[kind];
+
+  if (extra) {
+    /**
+     * A named sender may choose its kind at run time.
+     *
+     * `open-check-in` reads the survey's title to decide whether this is the
+     * one that rides a meeting or the one that belongs to the month, so the
+     * kind reaches `sendReachEmail` in a variable and no literal sits next to
+     * the call. Requiring BOTH — that this file really does send reach mail,
+     * and that it really does name this kind — keeps the check honest without
+     * demanding the code be written the long way round.
+     */
+    //     The literal has to be in a VALUE position — `kind: 'checkIn',` — not
+    //     in the type that lists both of them, which is where a first attempt
+    //     at this check matched and passed a file that had stopped sending one
+    //     of its kinds entirely (caught while proving this guard red).
+    const source = read(extra)
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    const sends = /sendReachEmails?\(/.test(source);
+    const names = new RegExp(`kind: '${kind}',`).test(source)
+      || new RegExp(`sendReachEmails?\\([\\s\\S]{0,400}?'${kind}',`).test(source);
+    if (!sends || !names) {
+      failures.push(`"${kind}" is declared for ${extra}, and that file does not send it.`);
+    }
+    continue;
+  }
+
   const sender = senders.find(({ source }) => callPattern.test(source));
   if (!sender) {
-    failures.push(`"${kind}" has a switch and nothing that sends it — no notify-* function calls sendReachEmail with it.`);
+    failures.push(`"${kind}" has a switch and nothing that sends it — nothing calls sendReachEmail with it.`);
   }
+}
+
+// --- Half four, added 2026-09-04: every letter says which HIVE it is about.
+//
+//     `sendReachEmail` holds a letter while that HIVE is in its meeting
+//     (`hiveIsMeetingNow`) — Nat: *"you wouldn't get an email notification, I
+//     think, during the meeting."* It can only do that if the caller says whose
+//     HIVE the thing belongs to, and nothing else would catch a caller that
+//     forgot: these run on Deno, and `tsconfig.json` excludes them from `tsc`.
+//     So a letter without `hiveId` fails the build instead of quietly emailing
+//     eighteen people who are sitting in the room it is about.
+const ALL_SENDERS = [
+  ...senders,
+  ...[...new Set(Object.values(EXTRA_SENDERS))].map((file) => ({ file, source: read(file) })),
+];
+
+for (const { file, source } of ALL_SENDERS) {
+  const lines = source.split('\n');
+  lines.forEach((line, index) => {
+    if (!/sendReachEmails?\(/.test(line)) return;
+    // The letter is the object literal that follows; `hiveId:` has to be in it,
+    // and it is always written beside the other hive facts.
+    const letter = lines.slice(index, index + 22).join('\n');
+    if (!/\bhiveId:/.test(letter)) {
+      failures.push(
+        `${file}:${index + 1} sends a letter with no hiveId, so it cannot be held while that HIVE is meeting.`,
+      );
+    }
+  });
 }
 
 // --- Half three: a member can turn it off.
@@ -74,9 +142,9 @@ for (const [kind, column] of kinds) {
 }
 
 if (failures.length) {
-  console.error('Reach mail: every kind has a column, a sender, and a switch.\n');
+  console.error('Reach mail: every kind has a column, a sender, a switch, and a HIVE.\n');
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exit(1);
 }
 
-console.log('Reach mail: every kind has a column, a sender, and a switch.');
+console.log('Reach mail: every kind has a column, a sender, a switch, and a HIVE.');

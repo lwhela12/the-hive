@@ -32,6 +32,17 @@ export type WhatsNextItem = {
   overdue: boolean;
   /** A held send only Nat can release. Carries the hold id. */
   holdId?: string;
+  /**
+   * An open check-in an owner can send out from here, and how many are waiting.
+   *
+   * Nat, 2026-09-04: *"instead of going to my email and then previewing the
+   * email and then going back into the app and previewing the survey, I want
+   * everything to just happen in the app."* This is the row that does that —
+   * she reads the check-in, presses send, and `open-check-in` mails whoever
+   * has not answered. It is the replacement for `holdId`, which is a 6am email
+   * asking her to come back to a screen.
+   */
+  openable?: { surveyId: string; waiting: number; hiveName: string };
 };
 
 const pacificToday = () =>
@@ -159,6 +170,59 @@ export function useWhatsNext() {
           .eq('user_id', profile.id)
           .in('survey_id', surveys.map((s) => s.id));
         const answered = new Set((mine ?? []).map((r: any) => r.survey_id));
+
+        /**
+         * AND, for an owner: send it.
+         *
+         * One row per open check-in that still has somebody waiting, with the
+         * number on it. Nat reads the check-in in the app and presses send
+         * here; `open-check-in` mails whoever has not answered, each person's
+         * own switch deciding, and writes everybody the in-app row.
+         *
+         * The number is worked out from the same two lists the sender uses —
+         * who is in it, and who has answered — so the button cannot promise a
+         * different count from the one that goes. It is confirmed against the
+         * function's own dry run before anything sends, because a count read
+         * when the panel opened is a count that can be minutes old.
+         */
+        if (isOwner) {
+          const [{ data: everyone }, { data: allAnswers }] = await Promise.all([
+            supabase.from('community_memberships').select('user_id, community_id'),
+            supabase.from('survey_responses')
+              .select('survey_id, user_id')
+              .in('survey_id', surveys.map((s) => s.id)),
+          ]);
+          for (const survey of surveys) {
+            if (!survey.due_date) continue;
+            const due = String(survey.due_date).slice(0, 10);
+            // Same window as the member's own row below: not before it opens.
+            if (survey.community_id && shift(due, -2) > today) continue;
+            const inIt = new Set(
+              (everyone ?? [])
+                .filter((m: any) => !survey.community_id || m.community_id === survey.community_id)
+                .map((m: any) => m.user_id),
+            );
+            const done = new Set(
+              (allAnswers ?? []).filter((r: any) => r.survey_id === survey.id).map((r: any) => r.user_id),
+            );
+            const waiting = [...inIt].filter((id) => !done.has(id)).length;
+            if (waiting === 0) continue;
+            push({
+              key: `send_${survey.id}`,
+              date: shift(due, -2),
+              what: `Send it: ${survey.title}`,
+              detail: `${waiting} of ${inIt.size} still to answer in ${
+                survey.community_id ? nameOf(survey.community_id) : 'every HIVE'
+              }.`,
+              communityId: survey.community_id,
+              openable: {
+                surveyId: survey.id,
+                waiting,
+                hiveName: survey.community_id ? nameOf(survey.community_id) : 'every HIVE',
+              },
+            });
+          }
+        }
         for (const survey of surveys) {
           if (answered.has(survey.id)) continue;
           if (!survey.due_date) continue;

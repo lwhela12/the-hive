@@ -203,6 +203,7 @@ serve(async (req) => {
       hiveName: hiveRow?.name ?? 'Your HIVE',
       hiveSlug: hiveRow?.slug ?? null,
       hiveAccent: hiveRow?.accent_color ?? null,
+      hiveId: community_id,
       heading: `${replyAuthor.name} replied to your post`,
       where: post.title ? String(post.title) : 'On the boards',
       said: reply_preview,
