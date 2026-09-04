@@ -78,6 +78,21 @@ const MONTHLY_CHECK_IN_PATTERN = /monthly\s+check-?in/i;
  * and a period key is not the place to start honouring names nothing sends.
  */
 const HALFWAY_CHECK_IN_PATTERN = /halfway\s+check-?in|end of the month/i;
+/**
+ * And the merged pre-meeting one, for the third time this has bitten.
+ *
+ * "Before we meet" matched neither pattern above, so every answer to it would
+ * have keyed to `'default'` — one row per person per HIVE for ever, with
+ * October's answers landing silently on top of September's. It is a STANDING
+ * monthly check-in, answered again every cycle, which is precisely the shape
+ * migration 096 introduced periods for.
+ *
+ * Found on 2026-09-04 by walking the cutover before doing it, not by it going
+ * wrong. The same omission has now cost Production once and "End of the month"
+ * once; the note above records the second. A title that repeats needs a period
+ * — that is the rule, and this is the third title to need telling.
+ */
+const PRE_MEETING_CHECK_IN_PATTERN = /before we meet|before our first meeting/i;
 const DEFAULT_RESPONSE_PERIOD = 'default';
 
 function isRetiredSurvey(survey: Survey) {
@@ -117,9 +132,11 @@ function getLocalDateFromSurveyDueDate(dueDate?: string | null) {
  * overwritten the August one it was filed beside.
  */
 export function getSurveyResponsePeriod(survey: Survey) {
-  if (!isMonthlyCheckInSurvey(survey) && !HALFWAY_CHECK_IN_PATTERN.test(survey.title ?? '')) {
-    return DEFAULT_RESPONSE_PERIOD;
-  }
+  const title = survey.title ?? '';
+  const repeats = isMonthlyCheckInSurvey(survey)
+    || HALFWAY_CHECK_IN_PATTERN.test(title)
+    || PRE_MEETING_CHECK_IN_PATTERN.test(title);
+  if (!repeats) return DEFAULT_RESPONSE_PERIOD;
 
   const periodDate = getLocalDateFromSurveyDueDate(survey.due_date) ?? new Date();
   const year = periodDate.getFullYear();

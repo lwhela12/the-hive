@@ -560,6 +560,60 @@ Deno.serve(async (req) => {
       console.error('Could not roll check-in due_date (non-blocking):', surveyError);
     }
 
+    /**
+     * AND THE SHARED "BEFORE WE MEET", WHICH BELONGS TO NO HIVE.
+     *
+     * The merged check-in (2026-09-04) covers every HIVE at once, so its due
+     * date cannot be "this meeting" — three HIVEs meet on three days. It is the
+     * EARLIEST meeting still to come across all of them, because that is when
+     * the reminder has to have gone: a nudge that arrives after Tech has met is
+     * no use to Tech.
+     *
+     * The roll matters as much as the reminder does. `due_date` decides the
+     * response period, and a period that never moves means October's answers
+     * land on top of September's — the bug migration 096 exists to prevent, and
+     * one this project has now hit three times under three different titles.
+     *
+     * Non-blocking and separate from the per-HIVE roll above, so a HIVE can
+     * still schedule its meeting if this half trips.
+     */
+    try {
+      const { data: sharedRows } = await supabaseAdmin
+        .from('surveys')
+        .select('id, title, due_date')
+        .is('community_id', null)
+        .eq('is_active', true);
+      const shared = (sharedRows ?? []).find((s: { title?: string }) =>
+        /before we meet/i.test(s.title || '')
+      );
+      if (shared) {
+        // Every meeting still ahead, in any HIVE. The soonest one is the one
+        // the reminder has to beat.
+        const today = new Date().toISOString().slice(0, 10);
+        const { data: upcoming } = await supabaseAdmin
+          .from('events')
+          .select('event_date')
+          .eq('event_type', 'meeting')
+          .eq('status', 'scheduled')
+          .gte('event_date', today)
+          .order('event_date', { ascending: true })
+          .limit(1);
+        const soonest = (upcoming ?? [])[0]?.event_date ?? date;
+        const [sy, sm, sd] = String(soonest).split('-').map(Number);
+        const sharedDue = new Date(Date.UTC(sy, sm - 1, sd + 1)).toISOString();
+        if (shared.due_date !== sharedDue) {
+          await supabaseAdmin
+            .from('surveys')
+            .update({ due_date: sharedDue })
+            .eq('id', shared.id)
+            .is('community_id', null);
+          console.log(`Shared check-in due_date set to ${sharedDue} (soonest meeting ${soonest})`);
+        }
+      }
+    } catch (sharedError) {
+      console.error('Could not roll the shared check-in due_date (non-blocking):', sharedError);
+    }
+
     return jsonResponse({
       success: true,
       event,
