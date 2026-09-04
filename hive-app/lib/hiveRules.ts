@@ -27,12 +27,16 @@ export const HIVE_RULES: RuleGroup[] = [
         source: 'cron — check-in-reminder-daily',
       },
       {
-        text: 'Before we meet goes out three days before, counting the meeting day. Meeting on the 10th means the email goes on the 8th, so people have the 8th, 9th and 10th.',
-        source: 'getMeetingWindowOpenDate',
+        text: 'Before we meet goes out the DAY BEFORE that meeting, and only to the people in it who have not answered yet. Meeting on Tuesday means the email goes Monday.',
+        source: 'open-check-in — meets tomorrow',
       },
       {
-        text: 'On the meeting day itself, whoever has not answered gets one last nudge. Nobody who already answered is bothered again.',
-        source: "reminder touch 'day_of'",
+        text: 'It never names another HIVE or another HIVE\u2019s meeting day. One letter per meeting, so everyone reading it is already inside the HIVE it is about.',
+        source: 'settled 2026-09-04',
+      },
+      {
+        text: 'Answer for one HIVE and that HIVE goes quiet. Fill in every section on Monday and you hear nothing until the day before your next meeting; fill in one and you get asked again before the next.',
+        source: 'answered is counted per HIVE',
       },
       {
         text: 'That email takes its weekday, time, place and note straight off the meeting. If the time looks wrong, fix the meeting and the email fixes itself.',
@@ -52,16 +56,32 @@ export const HIVE_RULES: RuleGroup[] = [
     heading: 'The two check-ins',
     rules: [
       {
-        text: 'Two have names, and they are the two you touch every month. Before we meet, three days before your meeting. End of the month, three days before the month ends.',
+        text: 'Two have names, and they are the two you touch every month. Before we meet, the day before your meeting. End of the month, three days before the month ends.',
         source: 'named 2026-09-02',
       },
       {
-        text: 'Two more run on their own clock and still send: the Quarterly, and the End-of-Year. Each HIVE has its own of both.',
-        source: 'surveys — Quarterly Q3, End-of-Year 2026',
+        text: 'There are TWO survey rows in the whole app, and neither belongs to a HIVE. It does not matter if you are in one HIVE or all three \u2014 you get one of each.',
+        source: 'surveys where is_active, 2026-09-04',
       },
       {
-        text: 'End of the month carries three things: how you are doing, how the month went, and what you want in the Buzz. The quarter is its own survey and its own email — it just happens to land the same day.',
-        source: 'getWindowOpenDate counts to a deadline',
+        text: 'Everything else is a SECTION inside one of those two. The questions about you at the top, then one short section per HIVE you are in.',
+        source: 'a check-in is sections',
+      },
+      {
+        text: 'The Quarterly and the End-of-Year are sections too. They appear inside End of the month for the three days they are open and fall away after \u2014 nothing to launch, nothing to retire.',
+        source: 'openSeasonSections',
+      },
+      {
+        text: 'A HIVE\u2019s first-night questions fall away by themselves. The check-in asks whether that HIVE has met yet, and swaps to its recurring deck the morning after.',
+        source: 'no deploy, no edit',
+      },
+      {
+        text: 'Read any date early: /endofmonth?on=2026-09-29 shows the check-in as it will be that day.',
+        source: 'the ?on= parameter',
+      },
+      {
+        text: 'Both check-ins sit on the Meetings page in every HIVE, every day. Answered on Monday and feel different by Thursday? Go back in and change it.',
+        source: 'always open, always there',
       },
       {
         text: 'Missing a window closes nothing. The link opens the check-in whenever you send it — the window only decides when the app nudges somebody on its own.',
@@ -147,7 +167,7 @@ export const HIVE_RULES: RuleGroup[] = [
         source: 'everything reads the meeting row',
       },
       {
-        text: 'End of the month is the one that does not. It counts to the end of the calendar month, so it lands on the same days whatever the meetings do.',
+        text: 'End of the month is the one that does not move. It counts to the end of the calendar month, so it lands on the same days whatever the meetings do.',
         source: 'getWindowOpenDate, not the meeting row',
       },
       {
