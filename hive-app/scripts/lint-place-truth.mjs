@@ -74,7 +74,7 @@ for (const route of [
   HIVE_WIDE_ROUTE, '/hive-wide-boards', '/board', '/buzz', '/hive', '/members',
   '/messages', '/meetings', '/admin', '/profile', '/app-feedback', '/settings',
   '/honey-pot', '/meeting-helper', '/', '/checkin/og', '/halfway/og',
-  '/approve/abc', '/endofmonth', '/some-page-nobody-has-written-yet',
+  '/approve/abc', '/endofmonth', '/beforewemeet', '/some-page-nobody-has-written-yet',
 ]) {
   const place = placeForRoute(route);
   check(

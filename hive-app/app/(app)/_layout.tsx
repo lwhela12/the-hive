@@ -617,6 +617,16 @@ export default function AppLayout() {
             href: null,
           }}
         />
+        {/* Its sibling — the other of the two check-ins (Nat, 2026-09-04). One
+            link, everybody, and the form is assembled per reader: the personal
+            questions once, then a section for each HIVE they are in. */}
+        <Tabs.Screen
+          name="beforewemeet/index"
+          options={{
+            title: 'Before we meet',
+            href: null,
+          }}
+        />
         <Tabs.Screen
           name="approve/[hold]"
           options={{

@@ -131,6 +131,55 @@ function getSurveyResponseKey(surveyId: string, responsePeriod: string) {
   return `${surveyId}:${responsePeriod}`;
 }
 
+/**
+ * SAVING AN ANSWER MUST NOT DEPEND ON WHICH UNIQUE INDEX HAPPENS TO EXIST.
+ *
+ * An upsert names its conflict target by column, and Postgres refuses with
+ * 42P10 unless a unique index matches those columns EXACTLY. That makes the
+ * index part of the app's contract, silently — and on 2026-09-04 a migration
+ * widened that index to allow one answer per HIVE and, in the same statement,
+ * dropped the three-column one this call had always named. Every check-in
+ * submit in the app started failing instantly, with no error anywhere except
+ * in the face of whoever pressed Save. Nobody happened to be answering, which
+ * is luck rather than design.
+ *
+ * So the target is a LIST, tried widest first, falling back on 42P10:
+ *
+ *   1. `…, community_key` — one answer per person, per cycle, per HIVE. What a
+ *      merged check-in covering several HIVEs needs (migration 229).
+ *   2. `…, response_period` — one per person per cycle. The shape before that.
+ *   3. `survey_id, user_id` — one per person, ever. The shape before periods.
+ *
+ * Each is a real historical shape of this table, so the fallback is not a
+ * guess: whichever index the database actually has, one of these matches it.
+ * It also means the app can be deployed BEFORE the migration and after it,
+ * with no window in between where saving is broken — which is the order this
+ * was shipped in, deliberately, the second time.
+ */
+const RESPONSE_CONFLICT_TARGETS = [
+  'survey_id,user_id,response_period,community_key',
+  'survey_id,user_id,response_period',
+  'survey_id,user_id',
+];
+
+async function upsertSurveyResponse(payload: Record<string, unknown>) {
+  let last: { data: any; error: any } = { data: null, error: null };
+  for (const onConflict of RESPONSE_CONFLICT_TARGETS) {
+    // The oldest shape has no `response_period` column to send.
+    const body = onConflict === 'survey_id,user_id'
+      ? (({ response_period: _drop, ...rest }) => rest)(payload as any)
+      : payload;
+    last = await supabase
+      .from('survey_responses')
+      .upsert(body, { onConflict })
+      .select()
+      .single();
+    if (!last.error) return last;
+    if (!shouldRetryLegacyResponseUpsert(last.error)) return last;
+  }
+  return last;
+}
+
 function shouldRetryLegacyResponseUpsert(error: any) {
   const message = typeof error?.message === 'string' ? error.message : '';
   return (
@@ -332,22 +381,7 @@ export function useSurveys(communityId?: string, userId?: string) {
       submitted_at: new Date().toISOString(),
     };
 
-    let result = await supabase
-      .from('survey_responses')
-      .upsert(payload, { onConflict: 'survey_id,user_id,response_period' })
-      .select()
-      .single();
-
-    if (result.error && shouldRetryLegacyResponseUpsert(result.error)) {
-      const { response_period: _responsePeriod, ...legacyPayload } = payload;
-      result = await supabase
-        .from('survey_responses')
-        .upsert(legacyPayload, { onConflict: 'survey_id,user_id' })
-        .select()
-        .single();
-    }
-
-    const { data, error } = result;
+    const { data, error } = await upsertSurveyResponse(payload);
 
     if (!error && data) {
       // Straight into the cache, the same shape the fetch builds. Every
@@ -365,5 +399,71 @@ export function useSurveys(communityId?: string, userId?: string) {
     return { error };
   };
 
-  return { allSurveys, activeSurveys, availableSurveys, pendingSurveys, myResponses, loading, refetch, submitResponse };
+  /**
+   * ONE CHECK-IN, ONE ROW PER HIVE.
+   *
+   * What the merged "Before we meet" saves: the answers about each HIVE under
+   * their own bare ids, in that HIVE's own row, each row also carrying a copy
+   * of the personal answers. See `splitMergedAnswers` in `lib/checkIns.ts` for
+   * the split and why the copy is deliberate.
+   *
+   * Rows are written one at a time rather than in a single call so that a HIVE
+   * that fails does not take the others down with it — a member who answered
+   * for three HIVEs and lost all three because one write tripped would have
+   * nothing to show for it and no idea which. Whatever landed, landed; the
+   * reply says how many.
+   */
+  const submitPerHiveResponses = async (
+    surveyId: string,
+    perHive: { communityId: string; answers: SurveyAnswers }[],
+  ) => {
+    if (!userId) return { error: 'Not authenticated' };
+    if (!perHive.length) return { error: 'Nothing to save' };
+
+    let survey = allSurveys.find((s) => s.id === surveyId) ?? null;
+    if (!survey) {
+      const { data: fetched } = await supabase
+        .from('surveys').select('*').eq('id', surveyId).maybeSingle();
+      survey = (fetched as Survey | null) ?? null;
+    }
+    if (!survey) return { error: 'That check-in could not be found.' };
+
+    const responsePeriod = getSurveyResponsePeriod(survey);
+    const submittedAt = new Date().toISOString();
+    const failed: string[] = [];
+    let mine: SurveyResponse | null = null;
+
+    for (const row of perHive) {
+      const { data, error } = await upsertSurveyResponse({
+        survey_id: surveyId,
+        user_id: userId,
+        community_id: row.communityId,
+        answers: row.answers,
+        response_period: responsePeriod,
+        submitted_at: submittedAt,
+      });
+      if (error) { failed.push(row.communityId); continue; }
+      // The cache holds one response per survey, so it keeps the HIVE the
+      // reader is standing in — the others are read by their own HIVE's deck.
+      if (!mine || row.communityId === communityId) mine = data as SurveyResponse;
+    }
+
+    if (mine) {
+      queryClient.setQueryData<SurveysSnapshot>(queryKey, (previous) => {
+        const base = previous ?? EMPTY_SNAPSHOT;
+        return {
+          surveys: base.surveys,
+          responses: new Map(base.responses).set(surveyId, mine as SurveyResponse),
+        };
+      });
+    }
+
+    if (failed.length === perHive.length) return { error: 'Could not save your answers.' };
+    if (failed.length) {
+      return { error: `Saved, except for ${failed.length} of your HIVEs. Try again and only those will re-send.` };
+    }
+    return { error: null };
+  };
+
+  return { allSurveys, activeSurveys, availableSurveys, pendingSurveys, myResponses, loading, refetch, submitResponse, submitPerHiveResponses };
 }

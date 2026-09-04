@@ -94,7 +94,16 @@ function mergeItems(items: CarryForwardItem[]) {
 // array identity on every render.
 const EMPTY_ITEMS: CarryForwardItem[] = [];
 
-async function fetchCarryForwardItems(
+/**
+ * One HIVE's open to-dos, wishes and last POP for this person.
+ *
+ * Exported since 2026-09-04 so the merged "Before we meet" can call it once per
+ * HIVE and hand the reader ONE roster covering all of them — Nat's *"you can
+ * look through all of the to do lists & stuff, and update everything."* The
+ * hook below is still the way a single-HIVE screen asks for it; this is the
+ * same fetch without a React lifecycle around it.
+ */
+export async function fetchCarryForwardItems(
   communityId: string,
   userId: string,
   survey: Survey

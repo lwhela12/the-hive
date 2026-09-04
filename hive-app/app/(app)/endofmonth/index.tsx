@@ -61,11 +61,21 @@ export default function EndOfMonthScreen() {
       // The open HIVE-Wide check-in. Looked UP rather than carried in the
       // address, so next month's row answers the link she has already texted
       // people — an id in a URL is a link that expires quietly.
+      /**
+       * There is more than one HIVE-Wide check-in now.
+       *
+       * This used to take the soonest active row with no HIVE, which was safe
+       * while End of the month was the only one. The merged "Before we meet"
+       * (2026-09-04) also belongs to no HIVE, so the bare query would hand
+       * whichever happened to be due first — and this screen would quietly
+       * open the wrong check-in. It asks for the one it is named after.
+       */
       const { data, error } = await supabase
         .from('surveys')
         .select('*')
         .is('community_id', null)
         .eq('is_active', true)
+        .ilike('title', '%end of the month%')
         .order('due_date', { ascending: true })
         .limit(1);
 

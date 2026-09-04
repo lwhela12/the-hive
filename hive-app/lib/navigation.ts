@@ -332,9 +332,11 @@ export function placeForRoute(pathname: string | null | undefined): RoutePlace {
     return 'either';
   }
 
-  // End of the month belongs to no HIVE, so standing above them — or inside
-  // one — is equally honest for it (migration 225).
-  if (path.startsWith('/endofmonth')) return 'either';
+  // The two check-ins belong to no HIVE — End of the month since migration
+  // 225, and Before we meet since 2026-09-04, which covers every HIVE the
+  // reader is in at once. Standing above the HIVEs, or inside one, is equally
+  // honest for both.
+  if (path.startsWith('/endofmonth') || path.startsWith('/beforewemeet')) return 'either';
 
   return 'hive';
 }
