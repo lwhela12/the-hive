@@ -210,8 +210,19 @@ export default function MeetingsScreen() {
   // would be the second of two doors to one set of answers — and the one that
   // skips the to-dos and HIVE Help on the way.
   const halfwayIsAWizard = getHalfwayShape(community)?.flow === 'tuneup';
+  /**
+   * The check-ins that need a chip of their own.
+   *
+   * The two merged ones have fixed pills above this list and must not appear
+   * twice — which is exactly what happened the moment they went live: "Before
+   * we meet" was drawn once as a pill and again as its own chip, on the same
+   * row, three inches apart. They belong to no HIVE, which is the whole test.
+   *
+   * A HIVE's own check-in still gets a chip, and so does every season one.
+   */
   const openCheckIns = availableSurveys.filter((s) =>
     isSurveyOnHomeToday(s, new Date())
+    && s.community_id != null
     && !(hasTailoredCheckIns(community) && isMonthlyCheckInSurvey(s))
     && !(halfwayIsAWizard && isEndOfMonthCheckInSurvey(s, community)));
   // The 2026-08-07 decision gated the check-ins in Admin and on the direct

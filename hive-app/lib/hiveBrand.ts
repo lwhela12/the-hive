@@ -66,11 +66,13 @@ export type HiveMark = {
  * this file is what changes.
  */
 /** The HIVE default: the honeybee, Honey over Ink. */
-const DEFAULT_MARK: HiveMark = { emoji: '🐝', accent: HIVE_GOLD, onDark: '#313130' };
+const DEFAULT_MARK: HiveMark = { emoji: '🐝', accent: HIVE_GOLD, onDark: HIVE_GOLD };
 
 const HIVE_MARKS: Record<string, HiveMark> = {
   // OG HIVE still carries `default` from before there was more than one HIVE.
-  // Honey #BD9348 over Ink #313130 — "golden honey sunburst".
+  // Honey #BD9348 over Ink #313130 — "golden honey sunburst". OG is the one
+  // branch whose DOMINANT half is the light one, so its mark on a rail is
+  // Honey: the rail is deepened honey, and Ink on it is a hole.
   default: DEFAULT_MARK,
   // Tech HIVE — the little robot. Circuit Navy over Signal Blue.
   tech: { emoji: '🤖', accent: '#011f46', onDark: '#2f82c2' },
