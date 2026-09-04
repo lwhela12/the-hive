@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 import { useAuth } from './useAuth';
 import { hiveDisplayName } from '../hiveBrand';
+import { checkInDisplayName } from '../checkIns';
 
 /**
  * What is coming, across every HIVE, in date order.
@@ -225,7 +226,7 @@ export function useWhatsNext() {
             push({
               key: `send_${survey.id}`,
               date: shift(due, -2),
-              what: `Send it: ${survey.title}`,
+              what: `Send it: ${checkInDisplayName(survey.title)}`,
               detail: `${waiting} of ${inIt.size} still to answer in ${
                 survey.community_id ? nameOf(survey.community_id) : 'every HIVE'
               }.`,
@@ -257,7 +258,7 @@ export function useWhatsNext() {
           push({
             key: `survey_${survey.id}`,
             date: due,
-            what: `Your own: ${survey.title}`,
+            what: `Your own: ${checkInDisplayName(survey.title)}`,
             detail: survey.community_id
               ? nameOf(survey.community_id)
               : 'Everybody, whichever HIVEs they are in',

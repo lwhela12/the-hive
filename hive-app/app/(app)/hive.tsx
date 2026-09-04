@@ -19,6 +19,7 @@ import {
   isEndOfMonthCheckInSurvey,
   isInHalfwayWindow,
   isSurveyOnHomeToday,
+  checkInDisplayName,
 } from '../../lib/checkIns';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
@@ -2765,7 +2766,7 @@ export default function HiveScreen() {
         // One mark per rhythm: the clipboard for the monthly, the season
         // marks for the quarter and the year.
         emoji: seasonKind ? SEASON_CHECK_IN_EMOJI[seasonKind] : '📋',
-        title: isMonthlyTuneUp ? `Before we meet · ${tuneUpMonthName}` : s.title,
+        title: isMonthlyTuneUp ? `Before we meet · ${tuneUpMonthName}` : checkInDisplayName(s.title),
         detail: isDone
           ? `Submitted ${formatDateShort(submittedAt)} · Tap to edit`
           : s.due_date
@@ -3627,7 +3628,7 @@ export default function HiveScreen() {
                           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', textAlign: 'center', lineHeight: 18 }}>
                             {todoStatusTab === 'done'
                               ? 'No completed to-dos yet.'
-                              : 'No pending to-dos.'}{'\n'}Meeting action items and{'\n'}monthly check-ins will show up here.
+                              : 'No pending to-dos.'}{'\n'}Meeting action items and{'\n'}check-ins will show up here.
                           </Text>
                         </View>
                       ) : (

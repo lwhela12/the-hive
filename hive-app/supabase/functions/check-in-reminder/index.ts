@@ -620,7 +620,10 @@ function seasonEmailHtml(
   if (kind === 'premeeting') {
     const heading = touch === 'day_of'
       ? "It's today"
-      : firstMeeting ? 'Before our first meeting' : 'Before we meet';
+      // One name for both. A first night is still "Before we meet" — the
+      // letter says it is the first one in its own sentence below, and the
+      // subject line says so too, so the HEADING does not need a second name.
+      : 'Before we meet';
     const body = firstMeeting
       ? (touch === 'day_of'
           ? `We meet tonight and your answers aren't in yet — about <strong>3 minutes</strong>. It is what fills your spot in the room: your intro, what you are building, and your say in how we run this.`
@@ -1111,7 +1114,7 @@ serve(async (req) => {
         && MONTHLY_CHECK_IN_PATTERN.test(s.title || '')
     ) as { id?: string; title?: string; due_date?: string; community_id?: string } | undefined;
     if (testSurveyId && !previewCheckIn && !['premeeting', 'endofmonth', 'quarter', 'year'].includes(String(body.test_kind ?? ''))) {
-      return errorResponse('That active monthly check-in could not be previewed.', 404);
+      return errorResponse('That check-in could not be previewed.', 404);
     }
 
     // The preview carries the real HIVE, so the pill and the button in it are
@@ -1238,7 +1241,7 @@ serve(async (req) => {
       ? requestedTestKind
       : 'window';
     if (!previewCheckIn?.community_id) {
-      return errorResponse('No active monthly check-in could be previewed.', 404);
+      return errorResponse('No open check-in could be previewed.', 404);
     }
     const previewFrom = `${shortHiveName(previewHiveName)} · `;
     const previewToday = toPacificDateOnly(new Date()) ?? new Date().toISOString().slice(0, 10);
@@ -1637,7 +1640,10 @@ serve(async (req) => {
             ? `🐝 ${meetingName} tonight — last call to check in`
             : kind === 'midpoint'
               ? '🍯 End of the month — anything for the newsletter?'
-              : '🐝 Monthly check-in is open';
+              // The two settled names, never a third (2026-09-02). This said
+              // "Monthly check-in is open" until 2026-09-04 — a retired name,
+              // on the notification most members actually see.
+              : '🐝 Your Before we meet check-in is open';
         const notificationBody =
           kind === 'day_of'
             ? `Just a reminder — ${meetingName} is tonight, ${month} ${day}. Your pre-meeting check-in isn't in yet: about 2 minutes, and it lights you up on the Arrival Board.`

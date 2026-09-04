@@ -260,7 +260,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
     id: 'app_update_2026_05_11',
     type: 'app_update',
     emoji: '✨',
-    text: 'HIVE update: Big week! Board posts now show full photo previews, the home screen has a To Do list for monthly check-ins and action items, member birthdays auto-appear in Upcoming Events, and the Meetings tab has a hub with a slide deck.',
+    text: 'HIVE update: Big week! Board posts now show full photo previews, the home screen has a To Do list for check-ins and action items, member birthdays auto-appear in Upcoming Events, and the Meetings tab has a hub with a slide deck.',
     timestamp: '2026-05-11T18:00:00.000Z',
     sourceId: 'app_update_2026_05_11',
   });

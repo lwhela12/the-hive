@@ -60,7 +60,7 @@ export const HIVE_RULES: RuleGroup[] = [
         source: 'surveys — Quarterly Q3, End-of-Year 2026',
       },
       {
-        text: 'End of the month carries three things: halfway between meetings, how the month went, and what you want in the Buzz. The quarter is its own survey and its own email — it just happens to land the same day.',
+        text: 'End of the month carries three things: how you are doing, how the month went, and what you want in the Buzz. The quarter is its own survey and its own email — it just happens to land the same day.',
         source: 'getWindowOpenDate counts to a deadline',
       },
       {

@@ -150,7 +150,7 @@ async function condenseHummdingers(
   ].filter(Boolean).join('\n')).join('\n\n');
 
   const system = [
-    'You condense HIVE members\' monthly check-ins into one line each for a',
+    'You condense HIVE members\' check-in answers into one line each for a',
     'meeting recap that someone who missed the meeting will skim.',
     '',
     'Return ONLY a JSON array, one object per person, in the order given:',

@@ -18,6 +18,7 @@ import {
 import type { Survey, SurveyAnswers, SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { SurveyQuestionField } from './SurveyQuestionField';
 import {
+  checkInDisplayName,
   getSeasonCheckInKind,
   isEndOfMonthCheckInSurvey,
   isPreMeetingCheckInSurvey,
@@ -707,7 +708,7 @@ export function SurveyModal({
             >
               {/* Header */}
               <View style={{ marginBottom: 28 }}>
-                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginBottom: 8 }}>{survey.title}</Text>
+                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginBottom: 8 }}>{checkInDisplayName(survey.title)}</Text>
                 {survey.description && (
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#6b7280', lineHeight: 21 }}>{survey.description}</Text>
                 )}

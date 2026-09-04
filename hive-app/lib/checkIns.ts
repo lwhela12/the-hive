@@ -1162,7 +1162,7 @@ const END_OF_MONTH_BY_SLUG: Record<string, EndOfMonthCheckIn> = {
   show: {
     title: 'End of the month',
     description:
-      'Halfway through the month — the newsletter goes out on the 1st. Two minutes: anything for the letter, tick off what you have done, and say if you want a hand.',
+      'The newsletter goes out on the 1st. Two minutes: anything for the letter, tick off what you have done, and say if you want a hand.',
     questions: [
       { ...NEWSLETTER_QUESTION },
     ],
@@ -1192,4 +1192,57 @@ export function isEndOfMonthCheckInSurvey(
     ? [END_OF_MONTH_BY_SLUG[community.slug ?? '']].filter(Boolean) as EndOfMonthCheckIn[]
     : Object.values(END_OF_MONTH_BY_SLUG);
   return decks.some((deck) => deck.title.toLowerCase() === title);
+}
+
+/* ------------------------------------------------------- what to CALL one */
+
+/**
+ * THE NAME A MEMBER READS. Never `survey.title` straight off the row.
+ *
+ * Nat, 2026-09-04: *"make sure that we don't have any lingering, stale names,
+ * old names, whatever."* Three live survey rows still carry retired names —
+ * OG's says "Monthly Check-in: POP + Energy", Tech's says "Before our first
+ * meeting", Production's says "Halfway check-in" — and every screen that
+ * printed `survey.title` printed those.
+ *
+ * **Renaming the rows is not the fix, and it is worth writing down why.** In
+ * this app a survey's TITLE IS ITS TYPE: seven separate matchers decide what a
+ * check-in *is* by pattern-matching that string — `MONTHLY_CHECK_IN_PATTERN`,
+ * `PRE_MEETING_CHECK_IN_PATTERN`, `END_OF_MONTH_CHECK_IN_PATTERN` and the rest,
+ * plus an unshared copy of one of them inside `schedule-meeting`. Renaming OG's
+ * row to "Before we meet" would not rename a label; it would move OG out of the
+ * monthly loop and into the season loop — a different email builder, a
+ * different timing rule, and a different dedup namespace, so old receipts stop
+ * suppressing a re-send. Two sends, or none, and no error either way.
+ *
+ * So the row keeps its name as an internal identifier, and this decides what
+ * the member is told. One place, so a retired name can only reach a screen
+ * through a caller that has not been pointed here.
+ *
+ * There are exactly TWO names (settled 2026-09-02, never invent a third):
+ * **Before we meet** and **End of the month**. The quarterly and the
+ * end-of-year keep their own, because they are their own thing.
+ */
+export function checkInDisplayName(title: string | null | undefined): string {
+  const raw = (title ?? '').trim();
+  if (!raw) return 'Check-in';
+  const t = raw.toLowerCase();
+
+  // The one that belongs to the month, whatever the row happens to be called.
+  if (/end of the month|halfway|midpoint|where the show got to/.test(t)) {
+    return 'End of the month';
+  }
+  // The one that rides a meeting. "Before our first meeting" is the same
+  // check-in on a HIVE's opening night; the letter still says so in its own
+  // sentence, but the NAME is the name.
+  if (/before (we meet|our first meeting)|monthly check-?in|tune-?up|pop \+ /.test(t)) {
+    return 'Before we meet';
+  }
+  // Its own thing, and its own name — these are not the monthly pair.
+  if (/quarterly/.test(t)) return 'Quarterly check-in';
+  if (/end[-\s]of[-\s]year/.test(t)) return 'End of the year check-in';
+
+  // Anything unrecognised is shown as written. A survey Nat makes by hand
+  // should say what she typed, not be quietly relabelled.
+  return raw;
 }
