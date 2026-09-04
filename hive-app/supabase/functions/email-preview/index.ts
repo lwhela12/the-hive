@@ -179,9 +179,27 @@ serve(async (req) => {
       when: 'Three days before the month ends. One for everybody, whichever HIVEs they are in.',
       offSwitch: 'End of the month',
       kind: 'monthCheckIn',
-      subject: `${hive.name} · Your End of the month check-in is open`,
+      /**
+       * THE ONE TEMPLATE THAT IS NOT ABOUT THE HIVE IN THE PICKER.
+       *
+       * End of the month belongs to no HIVE (`community_id` null, migration
+       * 225), so `open-check-in` sends it with no slug — which means the
+       * HIVE-Wide seal, honey gold, and "HIVE ·" on the subject line, whichever
+       * HIVEs the reader is in.
+       *
+       * This spread `common` until 2026-09-04, so the preview dressed it in
+       * whichever HIVE was selected above: Tech's navy and Tech's circuit-board
+       * seal on a letter that will arrive black and gold. On the page whose
+       * whole promise is "what you approve is what lands in an inbox", that is
+       * the one template it was not true of.
+       */
+      subject: 'HIVE · Your End of the month check-in is open',
       letter: {
-        ...common,
+        toName: common.toName,
+        hiveName: 'HIVE',
+        hiveSlug: null,
+        hiveAccent: null,
+        hiveId: null,
         heading: 'Your End of the month check-in is open',
         where: 'Every HIVE',
         said: 'It takes about two minutes, and what you write goes straight into the room.',
