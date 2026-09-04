@@ -90,7 +90,7 @@ export default function BeforeWeMeetScreen() {
           // Every HIVE's own pre-meeting questions, live.
           supabase
             .from('surveys')
-            .select('id, community_id, title, questions')
+            .select('id, community_id, title, questions, created_at')
             .in('community_id', hiveIds.length ? hiveIds : ['00000000-0000-0000-0000-000000000000']),
         ]);
 
@@ -102,11 +102,29 @@ export default function BeforeWeMeetScreen() {
       const found = (rows ?? [])[0] as Survey | undefined;
       if (!found) { setState('none'); return; }
 
+      /**
+       * WHICH OF A HIVE'S ROWS HOLDS ITS PRE-MEETING QUESTIONS.
+       *
+       * This asked for the first row that was NOT an end-of-month or a season
+       * one, which is a coin flip the moment a HIVE has two — and Tech has two:
+       * "Before our first meeting" and a retired "Monthly Check-in: POP +
+       * Learned". Whichever the database returned first would have decided what
+       * Tech's section of the merged check-in asks, and nothing on screen would
+       * have said which had won.
+       *
+       * So it asks POSITIVELY for a pre-meeting title, and takes the newest of
+       * them — a HIVE that has designed a second one has designed a
+       * replacement. The old negative test stays as the last resort, for a HIVE
+       * whose questions live under a title nobody has registered yet.
+       */
+      const notPreMeeting = /end of the month|halfway|midpoint|quarterly|end-of-year/i;
+      const isPreMeetingTitle = /before (our first meeting|we meet)|monthly\s+check-?in/i;
       const questionsFor = (id: string): SurveyQuestion[] => {
-        const mine = (hiveSurveys ?? []).filter((s: any) => s.community_id === id);
-        // The pre-meeting one, not the end-of-month one that lives beside it.
-        const pre = mine.find((s: any) => !/end of the month|halfway|midpoint|quarterly|end-of-year/i
-          .test(String(s.title ?? '')));
+        const mine = (hiveSurveys ?? [])
+          .filter((s: any) => s.community_id === id)
+          .sort((a: any, b: any) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')));
+        const pre = mine.find((s: any) => isPreMeetingTitle.test(String(s.title ?? '')))
+          ?? mine.find((s: any) => !notPreMeeting.test(String(s.title ?? '')));
         return ((pre?.questions ?? []) as SurveyQuestion[]);
       };
 

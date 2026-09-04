@@ -224,13 +224,34 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
         .filter((member): member is ArrivalBoardMember => !!member?.id && !!member.name)
         .sort((a, b) => a.name.localeCompare(b.name));
 
-      // Once the meeting day has passed, the room resets: cards gray out and
-      // don't repopulate until people check in for the NEXT meeting (whose
-      // due_date rolls forward when it gets scheduled).
+      /**
+       * THE ROOM RESETS AFTER *THIS* HIVE'S MEETING, NOT AFTER THE CHECK-IN'S.
+       *
+       * Once the meeting day has passed the cards gray out and stay gray until
+       * people check in for the next one. That used to be read off the
+       * check-in's `due_date`, which was the same date while every HIVE had a
+       * check-in of its own.
+       *
+       * The merged "Before we meet" breaks that: one row covers three HIVEs
+       * meeting on three different days, and its due date is the SOONEST of
+       * them. In a week where Tech meets Tuesday and another HIVE meets
+       * Thursday, Thursday's deck would have opened to a gray room with every
+       * answer already in it — the check-in's date had passed, so the board
+       * called the cycle over on a night that had not happened yet. Found
+       * before the cutover rather than on the night.
+       *
+       * The meeting query above already asks for THIS HIVE's next meeting from
+       * today onward, so an upcoming meeting IS a live cycle. The old rule is
+       * kept for a HIVE with nothing on the books, where there is no meeting to
+       * read and the check-in's own date is the only date there is.
+       */
+      const hasUpcomingMeeting = !!meetingRes.data?.[0];
       const meetingDayIso = activeCheckIn?.due_date
         ? getLocalIsoDate(new Date(new Date(activeCheckIn.due_date).getTime() - 12 * 60 * 60 * 1000))
         : null;
-      const cycleOver = !!meetingDayIso && today > meetingDayIso;
+      const cycleOver = hasUpcomingMeeting
+        ? false
+        : (!!meetingDayIso && today > meetingDayIso);
 
       const byUser = new Map<string, SurveyResponse>();
       if (activeCheckIn && period && !cycleOver) {
