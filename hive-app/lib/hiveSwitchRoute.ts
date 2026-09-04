@@ -1,4 +1,4 @@
-import { NAV_DESTINATIONS, HIVE_WIDE_ROUTE } from './navigation';
+import { NAV_DESTINATIONS, HIVE_WIDE_ROUTE, placeForRoute } from './navigation';
 
 /**
  * Where you land when you change HIVEs.
@@ -55,10 +55,20 @@ export function routeAfterHiveSwitch(
   const path = (pathname ?? '').split('?')[0].replace(/\/+$/, '') || '/';
 
   if (destination === 'wide') {
-    // Going up. A page with a real all-HIVEs version follows you there.
+    // Already reading something that means the same thing up here, or that
+    // only exists up here? Then there is nowhere to go — stay on it.
+    //
+    // This is the half that was missing. Pressing HIVE-Wide while standing on
+    // HIVE-Wide Boards used to look the route up by `route`, miss (its entry
+    // is a `wideRoute`), and fall through to the landing page — so the button
+    // for the place you were already in threw you off the page you were
+    // reading. Nat, 2026-09-04: *"the paths just arent good or consistent."*
+    if (placeForRoute(path) !== 'hive') return null;
+
+    // A page with a real all-HIVEs version follows you there.
     const dest = NAV_DESTINATIONS.find((d) => d.route.split('?')[0] === path);
     if (dest?.atWholeHive === 'wide') return dest.wideRoute ?? dest.route;
-    if (dest?.atWholeHive === 'same') return null;
+
     // 'hidden' pages (Clive, Meetings, Honey Pot, Profile, Settings) and
     // anything unrecognised have no meaning above the HIVEs.
     return HIVE_WIDE_ROUTE;
@@ -66,17 +76,12 @@ export function routeAfterHiveSwitch(
 
   // Coming down into a HIVE.
   //
-  // The HIVE-Wide-only doors first, by hand: these are the routes you can only
-  // be standing on when you're up there, so they need an answer rather than a
-  // lookup. Boards keeps you on boards — that is the case Nat hit.
-  const wideOnly: Record<string, string> = {
-    '/hive-wide': '/hive',
-    '/hive-wide-boards': '/board',
-    // The Buzz used to be listed here, sent home because it "doesn't exist
-    // inside a HIVE". It does now, and it is the same page — so changing HIVE
-    // while reading it keeps you reading it (Nat, 2026-08-17).
-  };
-  if (wideOnly[path]) return wideOnly[path];
+  // A wide twin hands you back its own HIVE-side half — `/hive-wide-boards`
+  // becomes `/board`, `/hive-wide` becomes `/hive`. Read off the destination
+  // list rather than a hand-written map, so a page that gains a wide twin is
+  // covered going both ways the day it gains one.
+  const twin = NAV_DESTINATIONS.find((d) => d.wideRoute === path);
+  if (twin) return twin.route;
 
   // A per-HIVE screen with no door in the rail still stays put — see the list.
   if (HIVE_SCREENS_OFF_THE_RAIL.has(path)) return null;
@@ -84,6 +89,6 @@ export function routeAfterHiveSwitch(
   const dest = NAV_DESTINATIONS.find((d) => d.route.split('?')[0] === path);
   // Every page in the rail means something inside a HIVE — that is what being
   // in the rail is — so staying is right for all of them. Only a route that is
-  // neither in the rail nor named above falls back to home.
+  // neither in the rail nor a wide twin falls back to home.
   return dest ? null : '/hive';
 }

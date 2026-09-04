@@ -590,27 +590,20 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   );
 
   /**
-   * /board is one HIVE's boards, so it has nothing to say while you are
-   * standing above them all.
+   * /board is one HIVE's boards, and it can no longer be opened from above them.
    *
-   * `atWholeHive: 'hidden'` in lib/navigation.ts already says this, and the
-   * rail obeys it — which is why nobody noticed that the SCREEN did not.
-   * `wholeHive` lasts as long as the browser tab, so a link, a reload or a back
-   * press could put you here with the app still up at HIVE-Wide: Nat pressed
-   * back out of a thread on 2026-08-06 and landed on OG HIVE's "Favorite
-   * Books!" wearing HIVE-Wide's black-and-globe, with the trail underneath
-   * calling it a shared board. It was never shared; the page was the wrong page
-   * to be on. `lib/hooks/useHiveOnlyScreen.ts` was written for this exact job
-   * and never wired up anywhere — deleted 2026-08-09 rather than left as a
-   * shelf nobody reaches for. The effect below is the actual fix.
+   * There used to be an effect here that bounced you up to `/hive-wide` if the
+   * app still thought you were at HIVE-Wide — Nat pressed back out of a thread
+   * on 2026-08-06 and landed on OG HIVE's "Favorite Books!" wearing HIVE-Wide's
+   * black-and-globe, with the trail underneath calling it a shared board.
    *
-   * A link still on its way down into a HIVE is left alone — it is about to
-   * bring you into one, and bouncing it would beat it to the punch.
+   * It was a local rescue for a shared fact being wrong, and it is gone because
+   * the fact is right now: `placeForRoute('/board')` is 'hive', so `wholeHive`
+   * off the context is false here whatever the tab last remembered, and the
+   * header, rail, footer and skin all dress for one HIVE. Bouncing the reader
+   * off a page that is now drawn correctly would be the bug. See
+   * `lib/navigation.ts`.
    */
-  useEffect(() => {
-    if (isWide || !wholeHive || resolvesRoutePost) return;
-    router.replace('/hive-wide' as never);
-  }, [isWide, resolvesRoutePost, router, wholeHive]);
 
   // Which post id we've already asked the database about (or are mid-asking).
   //
@@ -2035,7 +2028,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         {/* A link opened from HIVE-Wide is still at HIVE-Wide until it has
             found its HIVE, so the header says so rather than putting one
             HIVE's gold over a page that has not chosen one yet. */}
-        <AppHeader title="Boards" tone={isWide || wholeHive ? 'wide' : 'hive'} />
+        <AppHeader title="Boards" tone={isWide ? 'wide' : 'hive'} />
         {landedHere?.state !== 'unreachable' ? (
           <View style={{ flex: 1, justifyContent: 'center' }}>
             <ThinkingBee />

@@ -353,7 +353,13 @@ export const SideRail = memo(function SideRail({
   const canSeeAdmin = isAdmin || isOwner;
   const accent = hiveAccent(community);
   const activeKey = activeKeyForPath(pathname);
-  const onHiveWide = wholeHive || activeKey === 'hive-wide';
+  // The rail used to add `|| activeKey === 'hive-wide'` here, patching around a
+  // context that could disagree with the address bar. It covered exactly one
+  // route and left every other HIVE-Wide page — Boards up here, Admin — drawing
+  // the last HIVE's colour and page list. `wholeHive` is derived from the route
+  // now (see `app/_layout.tsx`), so the patch is gone and the rail believes the
+  // one answer everything else believes.
+  const onHiveWide = wholeHive;
   // Standing above the HIVEs, the rail goes to space rather than wearing one
   // HIVE's colour — "it should be dark, like outer space" (Nat 2026-08-03).
   // It is the same black the globe hangs in, so the rail and the page agree.

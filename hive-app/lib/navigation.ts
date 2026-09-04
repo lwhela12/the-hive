@@ -266,6 +266,80 @@ export function visibleDestinations(opts: {
  * through to Clive at '/', which matches everything.
  */
 /**
+ * WHICH PLACE a route belongs to. One table, and the only one.
+ *
+ * There are two questions the app kept asking separately, in different files,
+ * with different answers — "is it alright to be up here?" and "must I be up
+ * here?" — plus a third the rail asked on its own by peeking at the active
+ * key. Three questions about one fact is how the rail said OG HIVE while the
+ * page above it said HIVE-Wide.
+ *
+ * Nat, 2026-09-04, standing on HIVE-Wide Boards: *"its showing me the correct
+ * hive wide boards & header, but the left hand side still looks like OG HIVE &
+ * the footer says OG HIVE boards... its NEVER consistent."*
+ *
+ * She is describing state and URL disagreeing. `wholeHive` is remembered for
+ * the tab's lifetime; the URL changes on every link, bookmark, back button and
+ * reload. When they differ the URL is right — it is what actually drew the
+ * page. So the route answers, once, here, and everything else reads the
+ * answer.
+ *
+ *   'wide'   — this page only exists above the HIVEs. The HIVE-Wide landing,
+ *              every `wide` destination's wide twin (`/hive-wide-boards`), and
+ *              anything marked `only` (Admin). You cannot honestly be standing
+ *              in OG HIVE and be on one of these.
+ *   'hive'   — this page is about exactly one HIVE. Everything `hidden`, plus
+ *              the HIVE-side half of any destination that has a wide twin:
+ *              `/board` is OG's boards precisely because `/hive-wide-boards`
+ *              is the shared ones.
+ *   'either' — genuinely the same page in both places, so whatever the person
+ *              last chose still stands. The Buzz (one list, row-level security
+ *              decides what comes back), App Feedback, Members and Messages
+ *              (one screen serving both), and the check-in doors, which are
+ *              about to put you inside a HIVE themselves.
+ *
+ * Unknown routes answer 'hive'. It is an allow-list on purpose: a page added
+ * next month is HIVE-only until somebody says otherwise, because the cost of
+ * being wrong that way is a reader quietly stepping into their own HIVE,
+ * rather than a page about one HIVE wearing another one's name.
+ */
+export type RoutePlace = 'wide' | 'hive' | 'either';
+
+export function placeForRoute(pathname: string | null | undefined): RoutePlace {
+  const path = (pathname ?? '').split('?')[0].replace(/\/+$/, '') || '/';
+
+  // The wide twins first, before the HIVE-Wide landing is looked at — they are
+  // separate routes, and `/hive-wide-boards` must not be read as `/hive-wide`.
+  if (NAV_DESTINATIONS.some((d) => d.wideRoute === path)) return 'wide';
+  if (path === HIVE_WIDE_ROUTE) return 'wide';
+
+  const dest = [...NAV_DESTINATIONS, ADMIN_DESTINATION].find((d) => d.route === path);
+  if (dest) {
+    if (dest.atWholeHive === 'only') return 'wide';
+    if (dest.atWholeHive === 'same') return 'either';
+    // A `wide` destination WITH a twin has split itself in two, so its own
+    // route is the one-HIVE half. One WITHOUT a twin is a single screen that
+    // serves both places and reads `wholeHive` to decide what to show.
+    if (dest.atWholeHive === 'wide') return dest.wideRoute ? 'hive' : 'either';
+    return 'hive';
+  }
+
+  // The short check-in links pick their own HIVE and hand over — they are a
+  // door rather than a page, so they are left to do their job. `/halfway/og`
+  // is the same door onto the halfway flow (2026-09-02), and `/approve/<id>`
+  // belongs to whichever HIVE the held preview was built for.
+  if (path.startsWith('/checkin') || path.startsWith('/halfway') || path.startsWith('/approve')) {
+    return 'either';
+  }
+
+  // End of the month belongs to no HIVE, so standing above them — or inside
+  // one — is equally honest for it (migration 225).
+  if (path.startsWith('/endofmonth')) return 'either';
+
+  return 'hive';
+}
+
+/**
  * Is this page allowed to be open while somebody is standing at HIVE-Wide?
  *
  * `atWholeHive` used to be read by exactly one thing: the rail, when deciding
@@ -276,77 +350,32 @@ export function visibleDestinations(opts: {
  * Honey Pot, Profile, Settings, Admin, Clive — because none of them was ever
  * asked. A link, a bookmark, the back button and a deep link with a `?code=`
  * on it all walk straight past a menu.
- *
- * So the question is asked here, once, by route rather than by row, and the
- * layout asks it on every navigation.
- *
- * It is an ALLOW-list on purpose. A page added next month is HIVE-only until
- * somebody says otherwise, which is the safe way round: the cost of being
- * wrong is a reader quietly stepping into their own HIVE, rather than a page
- * about one HIVE wearing another one's name.
  */
 export function routeLivesAtWholeHive(pathname: string | null | undefined): boolean {
-  const path = (pathname ?? '').split('?')[0].replace(/\/+$/, '') || '/';
-
-  // The HIVE-Wide pages themselves, and any 'wide' destination's wide twin.
-  if (path === HIVE_WIDE_ROUTE) return true;
-  if (NAV_DESTINATIONS.some((d) => d.wideRoute && d.wideRoute === path)) return true;
-
-  // 'same' means the same thing wherever you stand; 'only' lives up here.
-  // Admin is maintained outside the ordinary rail list, but follows the same
-  // route-truth contract.
-  const dest = [...NAV_DESTINATIONS, ADMIN_DESTINATION].find((d) => d.route === path);
-  if (dest && (dest.atWholeHive === 'same' || dest.atWholeHive === 'only')) return true;
-
-  // A 'wide' page with no `wideRoute` is one page serving both places — the
-  // Members list is the same screen whether you are looking at one HIVE or
-  // all of them. One WITH a wideRoute has a twin up here, so its own route
-  // belongs to a single HIVE and steps you back down into one.
-  if (dest && dest.atWholeHive === 'wide' && !dest.wideRoute) return true;
-
-  // The short check-in links pick their own HIVE and hand over — they are a
-  // door rather than a page, so they are left to do their job. `/halfway/og`
-  // is the same door onto the halfway flow (2026-09-02).
-  if (path.startsWith('/checkin') || path.startsWith('/halfway')) return true;
-
-  // Approving a held check-in belongs to whichever HIVE the preview was built
-  // for, and the screen reads that off the hold itself — so it is a door too.
-  if (path.startsWith('/approve')) return true;
-
-  // End of the month belongs to no HIVE, so standing above them is exactly
-  // right for it (migration 225).
-  if (path.startsWith('/endofmonth')) return true;
-
-  return false;
+  return placeForRoute(pathname) !== 'hive';
 }
 
 /**
  * Routes you have to be standing ABOVE the HIVEs to read honestly.
  *
- * The mirror of `routeLivesAtWholeHive`, and much narrower on purpose. That one
- * answers "is it alright to be up here?" — which is true of the check-in doors,
- * because they are about to put you down inside a HIVE themselves. This one
- * answers "must I be up here?", and only `atWholeHive: 'only'` says yes.
+ * The mirror of `routeLivesAtWholeHive`. That one answers "is it alright to be
+ * up here?"; this one answers "must I be up here?".
  *
- * Admin is the whole reason it exists. Its header reads HIVE-WIDE Admin and it
- * manages every HIVE, but arriving from inside Tech left `wholeHive` false, so
- * the rail highlighted Tech HIVE and the footer said "Tech HIVE › Admin" under
- * a page titled HIVE-Wide. Nat, 2026-09-02: *"I should be in HIVE-Wide admin
- * and it still looks like I'm in Tech HIVE on the left, and according to the
+ * Admin is why it exists. Its header reads HIVE-WIDE Admin and it manages
+ * every HIVE, but arriving from inside Tech left `wholeHive` false, so the rail
+ * highlighted Tech HIVE and the footer said "Tech HIVE > Admin" under a page
+ * titled HIVE-Wide. Nat, 2026-09-02: *"I should be in HIVE-Wide admin and it
+ * still looks like I'm in Tech HIVE on the left, and according to the
  * breadcrumbs at the bottom."*
  *
- * The rail had always stepped up before opening Admin. A link, a bookmark, the
- * back button and `router.push` do not pass the rail — the same hole the
- * step-DOWN guard was written to close, in the other direction.
- *
- * `'same'` deliberately does not qualify: a page that means the same thing
- * wherever you stand should leave you standing where you were.
+ * It was written to cover `only` routes and stopped there, which left the wide
+ * TWINS uncovered — `/hive-wide-boards` is every bit as much a page that can
+ * only be read from above, and the identical complaint came back on 2026-09-04
+ * about that exact screen. Reading `placeForRoute` means a route can never be
+ * covered by one of these two questions and missed by the other.
  */
 export function routeDemandsWholeHive(pathname: string | null | undefined): boolean {
-  const path = (pathname ?? '').split('?')[0].replace(/\/+$/, '') || '/';
-  if (path === HIVE_WIDE_ROUTE) return true;
-  const dest = [...NAV_DESTINATIONS, ADMIN_DESTINATION].find((d) => d.route === path);
-  return dest?.atWholeHive === 'only';
+  return placeForRoute(pathname) === 'wide';
 }
 
 export function activeKeyForPath(pathname: string | null | undefined): string | null {

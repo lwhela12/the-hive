@@ -19,7 +19,7 @@ import {
   setWholeHiveSelected,
 } from '../lib/hiveSelection';
 import { clearBoardNavigationState } from '../lib/boardNavigation';
-import { HIVE_WIDE_ROUTE } from '../lib/navigation';
+import { HIVE_WIDE_ROUTE, placeForRoute } from '../lib/navigation';
 import { resetHomeNavigationState } from '../lib/homeNavigation';
 import type { Profile, Community, UserRole } from '../types';
 import { ArrivalScreen, markAppArrived } from '../components/ui/ThinkingBee';
@@ -305,11 +305,37 @@ function RootLayoutInner() {
   // The reading public/index.html made before React existed, kept so the app's
   // own arrival screen can wear the same colour the splash is already wearing.
   const [bootGuess] = useState<Arriving>(() => headingTo());
-  const [wholeHive, setWholeHiveState] = useState<boolean>(() => bootGuess === 'space');
+  /**
+   * WHERE THIS PERSON IS STANDING — the choice, and then the truth.
+   *
+   * `wholeHiveChoice` is what they last picked, remembered for the tab's
+   * lifetime. It is a preference, and a preference cannot be trusted to
+   * describe the page that is actually on screen: a link, a bookmark, the back
+   * button and a reload all change the URL without going anywhere near the
+   * rail. When the two disagree the URL wins, because the URL is what drew the
+   * page.
+   *
+   * Nat, 2026-09-04, on HIVE-Wide Boards with an OG HIVE rail beside it:
+   * *"everytime i click on one thing, its showing me the wrong thing... its
+   * NEVER consistent."* Ten components ask this context where she is standing —
+   * the rail, the footer, the header, the backdrop, the badges, Quick Add,
+   * Boards, Members, Messages, Home. They were all doing as they were told and
+   * all saying OG, over a page the route knew was HIVE-Wide.
+   *
+   * So the value handed out is DERIVED, and only falls back to the remembered
+   * choice where the route genuinely does not care (`placeForRoute` calls that
+   * 'either' — The Buzz, Members, App Feedback). Nothing downstream had to
+   * change, and nothing downstream can drift again: there is one answer now,
+   * and it cannot contradict the address bar even for a single frame.
+   */
+  const [wholeHiveChoice, setWholeHiveState] = useState<boolean>(() => bootGuess === 'space');
   const setWholeHive = useCallback((next: boolean) => {
     setWholeHiveSelected(next);
     setWholeHiveState(next);
   }, []);
+  const routePlace = placeForRoute(pathname);
+  const wholeHive =
+    routePlace === 'wide' ? true : routePlace === 'hive' ? false : wholeHiveChoice;
 
   const [communityRole, setCommunityRole] = useState<UserRole | null>(null);
   const [memberships, setMemberships] = useState<MembershipWithCommunity[]>([]);
@@ -771,13 +797,14 @@ function RootLayoutInner() {
     openHivePicker,
     switchCommunity,
     wholeHive,
+    wholeHiveChoice,
     enterWholeHive,
     loading,
     refreshProfile,
   }), [
     session, profile, community, communityId, communityRole, memberships,
-    hivePickerOpen, openHivePicker, switchCommunity, wholeHive, enterWholeHive,
-    loading, refreshProfile,
+    hivePickerOpen, openHivePicker, switchCommunity, wholeHive, wholeHiveChoice,
+    enterWholeHive, loading, refreshProfile,
   ]);
   const isJoinRoute = pathname === '/join' || pathname?.startsWith('/join/');
 

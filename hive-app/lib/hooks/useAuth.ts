@@ -39,6 +39,14 @@ interface AuthContextType {
    * an imaginary place.
    */
   wholeHive: boolean;
+  /**
+   * What this person last PICKED, as opposed to where the route says they are.
+   *
+   * Only the shell needs it, and only to keep the two in step — see the note
+   * on `wholeHiveChoice` in `app/_layout.tsx`. Everything that draws something
+   * wants `wholeHive`, which is the derived truth.
+   */
+  wholeHiveChoice: boolean;
   /** Stand at Whole HIVE. Leaves your actual HIVE selection untouched underneath. */
   enterWholeHive: () => void;
   loading: boolean;
@@ -56,6 +64,7 @@ export const AuthContext = createContext<AuthContextType>({
   openHivePicker: () => {},
   switchCommunity: async () => {},
   wholeHive: false,
+  wholeHiveChoice: false,
   enterWholeHive: () => {},
   loading: true,
   refreshProfile: async () => {},

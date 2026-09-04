@@ -14,7 +14,7 @@ import { CelebrationOverlay } from '../../components/ui/CelebrationOverlay';
 import { HivePicker } from '../../components/hive/HivePicker';
 import { SideRail } from '../../components/navigation';
 import { getLastAppPathAsync, getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
-import { routeDemandsWholeHive, routeLivesAtWholeHive } from '../../lib/navigation';
+import { placeForRoute } from '../../lib/navigation';
 import { currentReturnTo } from '../../lib/authReturnTo';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
@@ -98,7 +98,7 @@ function TabIcon({
 }
 
 export default function AppLayout() {
-  const { session, communityId, communityRole, profile, loading, hivePickerOpen, wholeHive, switchCommunity, openHivePicker, enterWholeHive } = useAuth();
+  const { session, communityId, communityRole, profile, loading, hivePickerOpen, wholeHive, wholeHiveChoice, switchCommunity, openHivePicker, enterWholeHive } = useAuth();
   // The colour of wherever this reader is standing. The layout needs it as much
   // as the pages do — see the note on `sceneStyle` further down.
   const skin = usePageSkin();
@@ -110,57 +110,54 @@ export default function AppLayout() {
   const router = useRouter();
   const pathname = usePathname();
   /**
-   * You cannot be at HIVE-Wide and inside one HIVE's meeting at the same time.
+   * KEEP THE REMEMBERED CHOICE IN STEP WITH THE ROUTE.
    *
-   * Nat, 2026-08-21, having opened a link: *"it look slike i'm in HIVE wide &
-   * in a meeting, thats not good"* — and then the same again one screen
-   * deeper, an OG meeting summary with HIVE-Wide written across the top of it
-   * and in the breadcrumb underneath.
+   * What the app DRAWS no longer depends on this — `wholeHive` is derived from
+   * the route now (see `app/_layout.tsx`), so the rail, the footer and the
+   * header cannot say OG HIVE over a page that says HIVE-Wide, whatever this
+   * effect does or does not manage to do in time.
    *
-   * `atWholeHive: 'hidden'` was only ever read by the rail, when choosing
-   * which rows to draw. Hiding a row is not closing a door: a link, a
-   * bookmark, the back button and this exact deep link with a `?code=` on it
-   * all arrive without passing a menu. Every HIVE-only page had the hole, not
-   * just this one.
+   * What is left for it is the remembered choice underneath, which still
+   * matters for the pages the route genuinely cannot answer for — The Buzz,
+   * Members, App Feedback, the check-in doors. Without this, opening a link
+   * into an OG meeting while HIVE-Wide was remembered would show OG correctly,
+   * and then tapping The Buzz would spring back up to HIVE-Wide, because the
+   * choice was never told what happened.
    *
-   * Standing DOWN is the right answer rather than bouncing her out. The page
-   * was already showing the right HIVE's data — `communityId` never stopped
-   * pointing at OG — so the only thing that was wrong was the frame around it.
-   * Stepping into that HIVE keeps her where she meant to be and makes the
-   * heading tell the truth. With no HIVE underneath, the picker asks.
+   * It replaces two effects that each covered one direction and disagreed
+   * about which routes counted:
+   *
+   * - Standing DOWN (Nat, 2026-08-21, having opened a link): *"it looks like
+   *   i'm in HIVE wide & in a meeting, thats not good."*
+   * - Standing UP (Nat, 2026-09-02): *"I should be in HIVE-Wide admin and it
+   *   still looks like I'm in Tech HIVE on the left."* — which was fixed for
+   *   Admin and missed for HIVE-Wide Boards, and came back on 2026-09-04
+   *   wearing the other page's name.
+   *
+   * One question, asked once, in both directions. `placeForRoute` says which
+   * pages have an opinion at all.
    */
   useEffect(() => {
     if (loading || !session) return;
-    if (!wholeHive) return;
-    if (routeLivesAtWholeHive(pathname)) return;
+    const place = placeForRoute(pathname);
+    // The page is honest either way — leave the choice exactly as it is.
+    if (place === 'either') return;
 
-    if (communityId) {
-      void switchCommunity(communityId);
-    } else {
-      openHivePicker();
+    if (place === 'wide') {
+      if (!wholeHiveChoice) enterWholeHive();
+      return;
     }
-  }, [loading, session, wholeHive, pathname, communityId, switchCommunity, openHivePicker]);
 
-  /**
-   * And the same rescue standing UP.
-   *
-   * The guard above only ever handled one direction. Admin lives above the
-   * HIVEs — its header says HIVE-Wide and it manages all of them — but arriving
-   * from inside Tech HIVE left `wholeHive` false, so the rail highlighted Tech
-   * and the footer read "Tech HIVE › Admin" beneath a page titled HIVE-Wide.
-   * Nat, 2026-09-02: *"I should be in HIVE-Wide admin and it still looks like
-   * I'm in Tech HIVE on the left."*
-   *
-   * The rail had always stepped up before opening Admin. A link, a bookmark,
-   * the back button and `router.push` do not pass the rail — exactly the hole
-   * the guard above was written to close, in the other direction.
-   */
-  useEffect(() => {
-    if (loading || !session) return;
-    if (wholeHive) return;
-    if (!routeDemandsWholeHive(pathname)) return;
-    enterWholeHive();
-  }, [loading, session, wholeHive, pathname, enterWholeHive]);
+    // A page about one HIVE. Step into the HIVE that was already selected
+    // underneath, so the choice matches what is on screen. With no HIVE
+    // underneath there is nothing to step into, and the picker asks.
+    if (!wholeHiveChoice) return;
+    if (communityId) void switchCommunity(communityId);
+    else openHivePicker();
+  }, [
+    loading, session, pathname, wholeHiveChoice, communityId,
+    switchCommunity, openHivePicker, enterWholeHive,
+  ]);
 
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const { width, height } = useWindowDimensions();

@@ -703,37 +703,26 @@ export default function HiveScreen() {
   }>();
 
   // A HIVE's home cannot be drawn while the app thinks you are standing above
-  // the HIVEs, and until now nothing stopped it.
+  // the HIVEs — and now it cannot be asked to.
   //
   // Nat, 2026-08-04, signing in on a brand-new account: "oh no, we broke it,
   // this is all sorts of messed up." The header read "HIVE-WIDE / Tech HIVE",
-  // the page was cream, and every panel tab was invisible.
+  // the page was cream, and every panel tab was invisible. `AppHeader`,
+  // `HeaderTabs` and `pageSkin` each read `wholeHive` and dressed for space;
+  // this screen referenced it nowhere and painted a HIVE. Both were doing as
+  // told, and nobody was refereeing.
   //
-  // The cause is a disagreement nobody was refereeing. `AppHeader`, `HeaderTabs`
-  // and `pageSkin` all read `wholeHive` themselves — deliberately, so a screen
-  // never has to remember — so they dressed for space. This screen referenced
-  // `wholeHive` NOWHERE, so it painted a HIVE. Both were doing as told.
-  //
-  // A new account is the one case that reliably lands here: everybody arrives in
-  // HIVE-Wide mode, and `initialRouteName` falls back to the `hive` tab when
-  // there is no remembered one — which there never is on a first sign-in. So the
-  // very first screen a new member ever saw was the broken combination.
-  //
-  // **Unless a link asked for a specific HIVE's check-in.** Nat, 2026-08-15,
-  // after the second preview: *"both times I clicked on the check-in button,
-  // they just brought me to HIVE-Wide instead of bringing me into the survey."*
-  // Everybody's app remembers HIVE-Wide, so this redirect fired the instant the
-  // email's link landed and the check-in never got a chance. A link that names
-  // a HIVE and a check-in is a request to be IN that HIVE; the handler below
-  // takes you down out of Whole HIVE and opens it.
-  //
-  // **And a link that names a HIVE counts too, even with no survey on it**
-  // (2026-09-01). Naming a HIVE is a request to be IN it — the app's oldest
-  // rule about deep links — but only `openSurveyId` was holding this redirect
-  // back, so any other `?hive=` link bounced straight back up to HIVE-Wide.
-  useEffect(() => {
-    if (wholeHive && !openSurveyId && !linkedHiveId) router.replace('/hive-wide' as never);
-  }, [wholeHive, router, openSurveyId, linkedHiveId]);
+  // The referee is the route. `/hive` is Home's one-HIVE half — its HIVE-Wide
+  // twin is `/hive-wide` — so `placeForRoute` answers 'hive' and the context
+  // hands every one of those components `wholeHive: false` while this screen is
+  // open. The redirect that used to sit here (bounce to `/hive-wide` whenever
+  // the app remembered HIVE-Wide) is gone with it, along with the two
+  // exceptions it grew: a check-in link (Nat, 2026-08-15: *"both times I
+  // clicked on the check-in button, they just brought me to HIVE-Wide instead
+  // of bringing me into the survey"*) and any other `?hive=` link (2026-09-01).
+  // Both were the redirect fighting a link that named a HIVE; there is nothing
+  // left for either of them to hold back. See `lib/navigation.ts`.
+
   const { width } = useWindowDimensions();
   const useMobileLayout = width < 768;
   const homeScrollRef = useRef<ScrollView>(null);
