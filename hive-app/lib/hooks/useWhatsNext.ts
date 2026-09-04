@@ -197,6 +197,21 @@ export function useWhatsNext() {
             const due = String(survey.due_date).slice(0, 10);
             // Same window as the member's own row below: not before it opens.
             if (survey.community_id && shift(due, -2) > today) continue;
+            /**
+             * AND NOT AFTER ITS DUE DATE HAS GONE.
+             *
+             * Found by walking this the day it was built: OG still has an
+             * ACTIVE "Halfway check-in" due 31 August, and without this line
+             * the new button cheerfully offered to email ten people in
+             * September about August's check-in. A stale row is Nat's to
+             * archive — never a session's, and never by a button that looks
+             * like an ordinary send.
+             *
+             * The window is the one the rule already names: opens three days
+             * before the due date counting the due date, chases on the day.
+             * After the day there is nothing left to chase.
+             */
+            if (due < today) continue;
             const inIt = new Set(
               (everyone ?? [])
                 .filter((m: any) => !survey.community_id || m.community_id === survey.community_id)
