@@ -912,35 +912,51 @@ export function getPreMeetingCheckIn(
 }
 
 /**
- * Every title that counts as this HIVE's pre-meeting check-in.
+ * HOW A CHECK-IN IS RECOGNISED, AND WHY IT IS A PATTERN AND NOT A LIST.
  *
- * Tech joined the list on 2026-08-27. Its *"Before our first meeting"* survey
- * has been live and working since the 25th — but only because every caller
- * asks this question WITHOUT a community, which falls back to "any HIVE's
- * pre-meeting title counts". The moment one asked about Tech by name the
- * answer would have been no, and Tech's own check-in would have stopped being
- * a check-in. A HIVE that runs the ritual belongs on the list that names it.
+ * These two are transcriptions of `PRE_MEETING_CHECK_IN_PATTERN` and
+ * `END_OF_MONTH_CHECK_IN_PATTERN` in
+ * `supabase/functions/_shared/checkInPatterns.ts`, which is where the edge
+ * functions read the same truth. The app cannot import that file — tsconfig
+ * excludes `supabase/functions`, because it is Deno — so `npm run
+ * lint:check-in-kinds` compares the two copies on every build and fails if
+ * they ever stop being the same sentence. (`230_one_check_in_of_a_kind.sql`
+ * holds a third transcription, in Postgres, and the same lint watches it.)
+ *
+ * **They used to be a list of exact titles, and that is how Production ended
+ * up with two "End of the month" items on Home.** Its live row was still
+ * called "Halfway check-in" — a retired name the row keeps as an internal
+ * identifier, which `checkInDisplayName` below deliberately prints as "End of
+ * the month". So the LABEL said end-of-the-month and the MATCHER said no, and
+ * every rule written as "if this is the end-of-month row, the wizard owns the
+ * door" silently did not apply to the one row it was about. Nat,
+ * 2026-09-04: *"i dunno how thats still happening... so i dunno how there is
+ * stil a duplicate?"*
+ *
+ * A pattern cannot drift from the name on screen the way a list can, because
+ * `checkInDisplayName` is a pattern too and now they are the same one.
  */
-export const PRE_MEETING_TITLES_BY_SLUG: Record<string, string[]> = {
-  show: ['Before our first meeting', 'Before we meet'],
-  tech: ['Before our first meeting', 'Before we meet'],
-};
+const PRE_MEETING_TITLE_PATTERN = /before (our first meeting|we meet)/i;
+const END_OF_MONTH_TITLE_PATTERN =
+  /(end of the month|where the show got to this month|pro hive pop|halfway check-?in)/i;
 
 /**
- * Whether a survey row is that HIVE's pre-meeting check-in, going by its
- * title — the same way every other check-in is recognised. Pass the community
- * when you have it; without one, any HIVE's pre-meeting title counts.
+ * Whether a survey row is a pre-meeting check-in, going by its title — the
+ * same way every other check-in is recognised.
+ *
+ * `community` is accepted for the callers that have one and reads naturally at
+ * the call site, but it no longer narrows anything: a HIVE's pre-meeting
+ * check-in and the shared one are the same ritual under the same two names, so
+ * asking "is this Tech's?" and "is this one?" have the same answer. It was a
+ * narrowing list until 2026-09-04, and the note that used to live here — Tech
+ * having worked only because every caller happened to omit the community — is
+ * the argument for it not being one.
  */
 export function isPreMeetingCheckInSurvey(
   survey: { title?: string | null } | null | undefined,
-  community?: Pick<Community, 'slug'> | null,
+  _community?: Pick<Community, 'slug'> | null,
 ): boolean {
-  const title = (survey?.title ?? '').trim().toLowerCase();
-  if (!title) return false;
-  const slugs = community ? [community.slug ?? ''] : Object.keys(PRE_MEETING_TITLES_BY_SLUG);
-  return slugs.some((slug) =>
-    (PRE_MEETING_TITLES_BY_SLUG[slug] ?? []).some((known) => known.toLowerCase() === title)
-  );
+  return PRE_MEETING_TITLE_PATTERN.test((survey?.title ?? '').trim());
 }
 
 /**
@@ -1054,7 +1070,7 @@ export function isSurveyOnHomeToday(
  *
  * So the first meeting keeps its own warm title and every meeting after it
  * settles into a stable one. Both titles count as Production's pre-meeting
- * check-in; `PRE_MEETING_TITLES_BY_SLUG` is the list, and
+ * check-in; `PRE_MEETING_TITLE_PATTERN` is what recognises them, and
  * `isPreMeetingCheckInSurvey()` reads it.
  *
  * **Production's end-of-month asks about the show, never about the person.**
@@ -1207,17 +1223,22 @@ export function getEndOfMonthCheckIn(
   return END_OF_MONTH_BY_SLUG[community?.slug ?? ''] ?? null;
 }
 
-/** Whether a survey row is that HIVE's end-of-month check-in, going by title. */
+/**
+ * Whether a survey row is an end-of-month check-in, going by title.
+ *
+ * Reads `END_OF_MONTH_TITLE_PATTERN`, not the deck titles above — see the note
+ * on that pattern for the duplicate this caused while it was a list. Retired
+ * names still answer, which is the point: "Halfway check-in" IS this check-in,
+ * and a rule about the end-of-month row has to apply to a row called that.
+ *
+ * `community` is accepted and ignored, exactly as it is for the pre-meeting
+ * one, and for the same reason.
+ */
 export function isEndOfMonthCheckInSurvey(
   survey: { title?: string | null } | null | undefined,
-  community?: Pick<Community, 'slug'> | null,
+  _community?: Pick<Community, 'slug'> | null,
 ): boolean {
-  const title = (survey?.title ?? '').trim().toLowerCase();
-  if (!title) return false;
-  const decks = community
-    ? [END_OF_MONTH_BY_SLUG[community.slug ?? '']].filter(Boolean) as EndOfMonthCheckIn[]
-    : Object.values(END_OF_MONTH_BY_SLUG);
-  return decks.some((deck) => deck.title.toLowerCase() === title);
+  return END_OF_MONTH_TITLE_PATTERN.test((survey?.title ?? '').trim());
 }
 
 /* ------------------------------------------------------- what to CALL one */

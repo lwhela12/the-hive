@@ -1421,7 +1421,7 @@ export default function MeetingsScreen() {
                 gap: 8,
               }}
             >
-              {tailoredCheckIns || openCheckIns.length > 0 ? (
+              {tailoredCheckIns || halfwayIsAWizard || openCheckIns.length > 0 ? (
                 <>
                   <Text
                     style={{
@@ -1432,12 +1432,29 @@ export default function MeetingsScreen() {
                   >
                     Fill these in before the meeting
                   </Text>
-                  {/* OG's and Tech's monthly pair. A HIVE without a designed
-                      monthly rhythm still gets its own open check-ins below. */}
-                  {(tailoredCheckIns ? [
-                    { label: 'Before we meet', params: {} },
-                    { label: 'End of the month', params: { mode: 'midpoint' } },
-                  ] as const : []).map((tool) => (
+                  {/* THE TWO CHECK-INS, EACH BEHIND ITS OWN GATE.
+                      Both pills used to read `tailoredCheckIns`, which is OG
+                      and Tech — and that is right for "Before we meet", whose
+                      wizard is OG's own pre-meeting ritual and which
+                      Production deliberately does not run (Nat, 2026-08-28:
+                      "Pro HIVE's pre-meeting survey will be unique").
+                      It was never right for the other one. Production's
+                      halfway IS OG's, copied on 2026-08-27 — `HALFWAY_BY_SLUG`
+                      has said so ever since — so the one pill that opens it
+                      was missing for the one HIVE, and its members reached
+                      End of the month only in the last three days of a month,
+                      through the card on Home. What stood here instead was
+                      Production's own stale survey row, printed by its retired
+                      title, "Halfway check-in".
+                      This is the third time a feature on this screen has had
+                      two gates and only the inner one opened — see the note on
+                      `meetingDeck` above. The gate is the SHAPE now, so a HIVE
+                      whose halfway is the wizard has the button that opens
+                      it. */}
+                  {([
+                    ...(tailoredCheckIns ? [{ label: 'Before we meet', params: {} }] : []),
+                    ...(halfwayIsAWizard ? [{ label: 'End of the month', params: { mode: 'midpoint' } }] : []),
+                  ] as const).map((tool) => (
                     <Pressable
                       key={tool.label}
                       onPress={() => router.push({
