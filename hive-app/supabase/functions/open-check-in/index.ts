@@ -174,12 +174,12 @@ serve(async (req) => {
 
   const sent = await Promise.all(
     waiting.map((userId) => sendReachEmail(admin, userId, shape.kind, {
-      subject: `${hiveName} · ${shape.name} is open`,
+      subject: `${hiveName} · Your ${shape.name} check-in is open`,
       hiveName,
       hiveSlug,
       hiveAccent,
       hiveId: survey.community_id,
-      heading: `${shape.name} is open`,
+      heading: `Your ${shape.name} check-in is open`,
       where: survey.community_id ? hiveName : 'Every HIVE',
       said: `It takes ${takes}, and what you write goes straight into the room.`,
       buttonLabel: 'Open the check-in',
@@ -199,7 +199,7 @@ serve(async (req) => {
         user_id: userId,
         community_id: survey.community_id,
         notification_type: 'general',
-        title: `${mark.emoji} ${shape.name} is open`,
+        title: `${mark.emoji} Your ${shape.name} check-in is open`,
         content: `${hiveName} — it takes ${takes}. Tap to fill it in.`,
         email_sent: false,
         metadata: {

@@ -102,11 +102,18 @@ serve(async (req) => {
         href: 'https://app.the-hive.app/messages',
       },
     },
+    /**
+     * Being tagged has two shapes, and both are shown rather than one being
+     * approved and the other inferred. Nat named both in the same breath:
+     * *"somebody tagged you, or a hive you're in."* They share one switch
+     * because they are one kind of interruption, and a member who wants to
+     * hear their own name almost always wants to hear their HIVE's.
+     */
     {
       key: 'mention',
-      name: 'Somebody wrote your name',
-      when: 'An @mention on a board, in a room, or on a wish.',
-      offSwitch: 'When somebody writes my name',
+      name: 'Somebody tagged you',
+      when: 'Somebody writes @your-name on a board, in a room, or on a wish.',
+      offSwitch: 'When somebody tags me, or a HIVE I\u2019m in',
       kind: 'mention',
       subject: `${hive.name} · Nat mentioned you on Favourite Books!`,
       letter: {
@@ -114,6 +121,22 @@ serve(async (req) => {
         heading: 'Nat mentioned you on Favourite Books!',
         where: 'Favourite Books!',
         said: '@Brietta you were the one who recommended this, weren’t you?',
+        buttonLabel: 'Go and see',
+        href: 'https://app.the-hive.app/board',
+      },
+    },
+    {
+      key: 'groupMention',
+      name: 'Somebody tagged a HIVE you\u2019re in',
+      when: `Somebody tags a whole HIVE — @${hive.slug === 'default' ? 'og' : hive.slug} — or everyone across all of them with @everyone.`,
+      offSwitch: 'When somebody tags me, or a HIVE I\u2019m in',
+      kind: 'mention',
+      subject: `${hive.name} · Nat mentioned everyone in ${hive.name} on Things We Learned`,
+      letter: {
+        ...common,
+        heading: `Nat mentioned everyone in ${hive.name} on Things We Learned`,
+        where: 'Things We Learned',
+        said: 'Don’t forget we meet tomorrow — same link as last time.',
         buttonLabel: 'Go and see',
         href: 'https://app.the-hive.app/board',
       },
@@ -136,14 +159,14 @@ serve(async (req) => {
     },
     {
       key: 'checkIn',
-      name: 'Before we meet is open',
+      name: 'Your Before we meet check-in is open',
       when: 'Three days before that HIVE meets, counting the meeting day, when Nat presses send.',
       offSwitch: 'Before we meet',
       kind: 'checkIn',
-      subject: `${hive.name} · Before we meet is open`,
+      subject: `${hive.name} · Your Before we meet check-in is open`,
       letter: {
         ...common,
-        heading: 'Before we meet is open',
+        heading: 'Your Before we meet check-in is open',
         where: hive.name,
         said: 'It takes a few minutes, and what you write goes straight into the room.',
         buttonLabel: 'Open the check-in',
@@ -152,14 +175,14 @@ serve(async (req) => {
     },
     {
       key: 'monthCheckIn',
-      name: 'End of the month is open',
+      name: 'Your End of the month check-in is open',
       when: 'Three days before the month ends. One for everybody, whichever HIVEs they are in.',
       offSwitch: 'End of the month',
       kind: 'monthCheckIn',
-      subject: `${hive.name} · End of the month is open`,
+      subject: `${hive.name} · Your End of the month check-in is open`,
       letter: {
         ...common,
-        heading: 'End of the month is open',
+        heading: 'Your End of the month check-in is open',
         where: 'Every HIVE',
         said: 'It takes about two minutes, and what you write goes straight into the room.',
         buttonLabel: 'Open the check-in',

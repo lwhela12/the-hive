@@ -86,8 +86,15 @@ export const EMAIL_SETTINGS: EmailSetting[] = [
   },
   {
     column: 'email_mention_enabled',
-    label: 'When somebody writes my name',
-    hint: 'An @mention on a board, in a room, or on a wish — with what they said and a way straight to it.',
+    // Renamed 2026-09-04. "Writes my name" described half of what this switch
+    // governs: tagging a whole HIVE — @og, @tech — has reached people since
+    // 12 August, and Nat named both halves in one breath when she read the
+    // templates back: *"somebody tagged you, or a hive you're in."* One switch
+    // for both, because a member who wants their own name almost always wants
+    // their HIVE's, and a label that names only one is a promise about the
+    // other that nothing keeps.
+    label: 'When somebody tags me, or a HIVE I’m in',
+    hint: 'Your name on a board, in a room, or on a wish — or your whole HIVE tagged at once. With what they said and a way straight to it.',
   },
   {
     column: 'email_message_enabled',
