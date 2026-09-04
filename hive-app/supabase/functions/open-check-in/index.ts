@@ -144,7 +144,10 @@ serve(async (req) => {
     return jsonResponse({
       survey_id: survey.id,
       check_in: shape.name,
-      hive: survey.community_id ? hiveName : 'everybody, whichever HIVEs they are in',
+      // A NAME, not a sentence — the app puts this inside "16 people in ___
+      // get an email", and "everybody, whichever HIVEs they are in" turned
+      // that into nonsense the first time it was read on screen.
+      hive: survey.community_id ? hiveName : 'every HIVE',
       members: everyone.length,
       answered: answered.size,
       would_reach: waiting.length,
