@@ -77,7 +77,11 @@ export default function BeforeWeMeetScreen() {
       // so next month's row answers the link she has already texted people.
       // Named explicitly: `community_id is null` alone now matches End of the
       // month too, and the soonest-due one is not necessarily this one.
-      const [{ data: rows, error: rowError }, { data: hiveSurveys, error: hiveError }] =
+      const [
+        { data: rows, error: rowError },
+        { data: hiveSurveys, error: hiveError },
+        { data: pastMeetings },
+      ] =
         await Promise.all([
           supabase
             .from('surveys')
@@ -91,6 +95,22 @@ export default function BeforeWeMeetScreen() {
           supabase
             .from('surveys')
             .select('id, community_id, title, questions, created_at')
+            .in('community_id', hiveIds.length ? hiveIds : ['00000000-0000-0000-0000-000000000000']),
+          /**
+           * Which HIVEs have already met.
+           *
+           * A first-night deck is onboarding — it fills your intro, seeds your
+           * HummDinger and votes on how the HIVE will run — and it is the wrong
+           * list for every meeting after the first. Tech carries both decks:
+           * "Before our first meeting" and a recurring one. Nothing was
+           * choosing between them by anything but age, so Tech would have been
+           * asked to introduce itself again in October.
+           */
+          supabase
+            .from('events')
+            .select('community_id')
+            .eq('event_type', 'meeting')
+            .lt('event_date', new Date().toISOString().slice(0, 10))
             .in('community_id', hiveIds.length ? hiveIds : ['00000000-0000-0000-0000-000000000000']),
         ]);
 
@@ -119,13 +139,24 @@ export default function BeforeWeMeetScreen() {
        */
       const notPreMeeting = /end of the month|halfway|midpoint|quarterly|end-of-year/i;
       const isPreMeetingTitle = /before (our first meeting|we meet)|monthly\s+check-?in/i;
+      const isFirstNight = /before our first meeting/i;
+      const hasMet = new Set(
+        ((pastMeetings ?? []) as { community_id: string }[]).map((row) => row.community_id),
+      );
       const questionsFor = (id: string): SurveyQuestion[] => {
         const mine = (hiveSurveys ?? [])
           .filter((s: any) => s.community_id === id)
           .sort((a: any, b: any) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')));
-        const pre = mine.find((s: any) => isPreMeetingTitle.test(String(s.title ?? '')))
+        const pre = mine.filter((s: any) => isPreMeetingTitle.test(String(s.title ?? '')));
+        // A HIVE that has met wants the deck for a room that has met. One that
+        // has not gets its first night, which is the only time that deck is
+        // right — and after that night this flips on its own, with no deploy.
+        const wanted = hasMet.has(id)
+          ? (pre.find((s: any) => !isFirstNight.test(String(s.title ?? ''))) ?? pre[0])
+          : (pre.find((s: any) => isFirstNight.test(String(s.title ?? ''))) ?? pre[0]);
+        const chosen = wanted
           ?? mine.find((s: any) => !notPreMeeting.test(String(s.title ?? '')));
-        return ((pre?.questions ?? []) as SurveyQuestion[]);
+        return ((chosen?.questions ?? []) as SurveyQuestion[]);
       };
 
       const built = buildMergedPreMeeting(

@@ -16,7 +16,6 @@ import { currentNewsletterDraft, newsletterIssueHistory } from '../../lib/newsle
 import { listDeletedWishes, restoreWishById, type DeletedWish } from '../../lib/wishMutations';
 import {
   CHECK_INS_COMING_SOON_MESSAGE,
-  buildSeasonCheckIn,
   getSeasonCheckInKind,
   getUpcomingSeasonOccurrence,
   hasSeasonCheckIns,
@@ -1327,17 +1326,12 @@ export function HiveMemberPanels({
    *
    * `seasonSurveysByHive` holds each HIVE's launched-and-active season
    * check-ins so the schedule can tell a launch button from an open door.
-   * `confirmSeasonLaunch` is the one dialog all the launch rows share, the
-   * same shape as `confirmRevoke` above and for the same reason. `seasonFill`
-   * opens the launched survey right here in the member-facing answer sheet —
-   * the same "test or fill out is the real flow" idea as `openMemberCheckIn`,
-   * without leaving Admin, because a season check-in has no wizard to walk.
+   * The launch dialog is GONE (2026-09-04): a season is a section inside End
+   * of the month now, not a survey somebody inserts per HIVE per occurrence.
+   * `seasonFill` stays, so a season row already launched under the old way can
+   * still be read and answered here, in the member-facing answer sheet.
    */
   const [seasonSurveysByHive, setSeasonSurveysByHive] = useState<Record<string, SeasonSurveyRow[]>>({});
-  const [confirmSeasonLaunch, setConfirmSeasonLaunch] = useState<
-    { hiveId: string; hiveName: string; kind: SeasonKind; occurrence: SeasonOccurrence } | null
-  >(null);
-  const [launchingSeason, setLaunchingSeason] = useState(false);
   const [seasonFill, setSeasonFill] = useState<{ communityId: string; surveyId: string } | null>(null);
   // The same hook the member surfaces use, pointed at whichever HIVE's survey
   // is being filled out. It computes the response period and writes the cache
@@ -1661,51 +1655,6 @@ export function HiveMemberPanels({
    * can manage surveys" rule from migration 057), so like every write in
    * this file the button and the rule agree.
    */
-  const launchSeasonCheckIn = async () => {
-    if (!confirmSeasonLaunch || launchingSeason) return;
-    const { hiveId, hiveName, kind } = confirmSeasonLaunch;
-    const community = memberships.find((m) => m.community_id === hiveId)?.community;
-    const template = buildSeasonCheckIn(community, kind, new Date());
-    if (!template) {
-      setConfirmSeasonLaunch(null);
-      showAlert('No deck designed yet', `${hiveName} does not have questions for this check-in yet.`);
-      return;
-    }
-
-    setLaunchingSeason(true);
-    const { data, error } = await supabase
-      .from('surveys')
-      .insert({
-        community_id: hiveId,
-        title: template.title,
-        description: template.description,
-        questions: template.questions,
-        due_date: template.dueDateIso,
-        created_by: profile?.id ?? null,
-        is_active: true,
-      })
-      .select();
-    setLaunchingSeason(false);
-    setConfirmSeasonLaunch(null);
-
-    if (error || !data?.length) {
-      // An empty answer with no error means the rules stopped the write —
-      // saying nothing here is how "the button does nothing" happens.
-      showAlert(
-        'Could not launch it',
-        userFacingError(error, `The check-in is unchanged. Make sure you are an admin of ${hiveName}, then try again.`)
-      );
-      return;
-    }
-
-    await load();
-    showAlert(
-      "It's launched",
-      `${template.title} is ready for ${hiveName}. Members will find it on Home from ${
-        template.occurrence.opensDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
-      }, and the reminder email goes out that morning. Tap the row any time to read or answer it yourself.`
-    );
-  };
 
   return (
     <>
@@ -1763,40 +1712,33 @@ export function HiveMemberPanels({
         const endOfMonth = tailored || hasEndOfMonthCheckIn(m.community);
         const seasonReady = hasSeasonCheckIns(m.community);
         const launchedSeason = seasonSurveysByHive[m.community_id] ?? [];
+        /**
+         * THE SEASON IS A SECTION NOW, NOT A SURVEY TO LAUNCH.
+         *
+         * Nat, 2026-09-04: *"next month, the only 'end of the month' survey
+         * avail will also have 'end of the quarter' questions...so it'll be
+         * slightly different & then go back to normal. How do we manage that?"*
+         *
+         * This row used to carry a Launch button that inserted a fresh
+         * `surveys` row per HIVE per occurrence — six rows a year, six things
+         * to remember, six more chips and six more emails. The quarter and the
+         * year now appear inside End of the month for the three days they are
+         * open and fall away after (`openSeasonSections` in lib/checkIns.ts),
+         * so there is nothing to launch and nothing to retire.
+         *
+         * The row stays because the schedule is still worth reading. It just
+         * has no button any more.
+         */
         const seasonRow = (kind: SeasonKind): CheckInScheduleRow => {
-          // Nat, 2026-08-13: "its so much to read. The bold could just be
-          // Pre-Meeting, End of Month, End of Quarter & End of Year"
           const when = kind === 'quarter' ? 'End of Quarter' : 'End of Year';
-          const what = kind === 'quarter' ? 'look back at the quarter' : 'look back at the whole year';
           if (!seasonReady) return { key: kind, when, what: 'coming soon', live: false };
           const occurrence = getUpcomingSeasonOccurrence(kind, new Date());
-          const launched = launchedSeason.find((row) => (
-            getSeasonCheckInKind(row) === kind && row.title.includes(occurrence.label)
-          ));
-          if (launched) {
-            return {
-              key: kind,
-              when,
-              what,
-              live: true,
-              actionLabel: `${occurrence.label} is launched — read it or fill it out`,
-              onPress: () => setSeasonFill({ communityId: m.community_id, surveyId: launched.id }),
-            };
-          }
-          // Not launched yet. Launching is an admin's act, like inviting —
-          // anyone else sees the schedule without a button on it.
-          if (m.role !== 'admin') return { key: kind, when, what, live: true };
+          const opens = occurrence.opensDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
           return {
             key: kind,
             when,
-            what,
+            what: `inside End of the month, from ${opens} — ${occurrence.label}`,
             live: true,
-            actionLabel: `Launch ${occurrence.label} — members see it from ${
-              occurrence.opensDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-            }`,
-            onPress: () => setConfirmSeasonLaunch({
-              hiveId: m.community_id, hiveName: name, kind, occurrence,
-            }),
           };
         };
         const checkInSchedule: CheckInScheduleRow[] = [
@@ -2646,28 +2588,6 @@ export function HiveMemberPanels({
         destructive
         onConfirm={() => { void removeMember(); }}
         onCancel={() => { if (!removing) setConfirmRemove(null); }}
-      />
-
-      {/* Launching a quarter or a year. One dialog for all the HIVEs, like the
-          two above. What it has to say plainly: launching switches the
-          reminder on, and the questions can still be reworded afterwards. */}
-      <ConfirmDialog
-        visible={!!confirmSeasonLaunch}
-        title={confirmSeasonLaunch
-          ? confirmSeasonLaunch.kind === 'quarter'
-            ? `Launch the ${confirmSeasonLaunch.occurrence.label} check-in?`
-            : `Launch the ${confirmSeasonLaunch.occurrence.label} end-of-year check-in?`
-          : ''}
-        body={confirmSeasonLaunch
-          ? `${confirmSeasonLaunch.hiveName} members will find it on Home from ${
-              confirmSeasonLaunch.occurrence.opensDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
-            }, with the reminder email that morning and a last call on ${
-              confirmSeasonLaunch.occurrence.endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
-            }. You can read it any time after launching — tap the row it becomes. To reword a question, ask in chat.`
-          : undefined}
-        confirmLabel={launchingSeason ? 'Launching…' : 'Launch it'}
-        onConfirm={() => { void launchSeasonCheckIn(); }}
-        onCancel={() => { if (!launchingSeason) setConfirmSeasonLaunch(null); }}
       />
 
       {/* The launched season check-in, in the same answer sheet members get.

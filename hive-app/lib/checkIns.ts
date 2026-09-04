@@ -1362,22 +1362,38 @@ export const PERSONAL_CHECK_IN_QUESTION_IDS: string[] = [
 /** The name, settled 2026-09-02 and 2026-09-04. Never invent a third. */
 export const MERGED_PRE_MEETING_TITLE = 'Before we meet';
 
-export type MergedPreMeetingSection = {
+export type MergedCheckInSection = {
   communityId: string;
   slug: string;
-  /** What to call this HIVE on its own section header. */
+  /** What to call this section on its own header. */
   name: string;
   questions: SurveyQuestion[];
+  /**
+   * Set when this section is here because of the DATE rather than because of
+   * the HIVE — the quarter, the year. It is what tells a screen that the
+   * section will not be there next month, and it is `undefined` for the
+   * per-HIVE sections that are always there.
+   */
+  seasonKind?: SeasonKind;
 };
 
-export type MergedPreMeeting = {
+/** The old name, kept so nothing that imports it has to change at once. */
+export type MergedPreMeetingSection = MergedCheckInSection;
+
+export type MergedCheckIn = {
   title: string;
   description: string;
   /** Asked once, at the top. */
   personal: SurveyQuestion[];
-  /** One per HIVE the answerer is in, in the order they were given. */
-  sections: MergedPreMeetingSection[];
+  /** One per HIVE, or per HIVE per open season, in the order they were given. */
+  sections: MergedCheckInSection[];
 };
+
+/** The old name, kept so nothing that imports it has to change at once. */
+export type MergedPreMeeting = MergedCheckIn;
+
+/** The name, settled 2026-09-02. Never invent a third. */
+export const MERGED_END_OF_MONTH_TITLE = 'End of the month';
 
 /**
  * WHERE EACH HIVE'S QUESTIONS COME FROM — the caller, not a table in here.
@@ -1488,8 +1504,100 @@ export function readMergedAnswerKey(key: string): { communityId: string | null; 
  * The section headers are `note` questions, which the wizard already knows how
  * to draw and never stores an answer for.
  */
+/* ----------------------------------------------------------------------------
+ * A SECTION THAT COMES AND GOES — the season, folded into End of the month
+ * -------------------------------------------------------------------------- */
+
+/**
+ * Nat, 2026-09-04: *"next month, the only 'end of the month' survey avail will
+ * also have 'end of the quarter' questions...so it'll be slightly different &
+ * then go back to normal. How do we manage that?"*
+ *
+ * This is the answer, and it is the same answer as the merge itself. A check-in
+ * is not a fixed list of questions; it is a list of SECTIONS, assembled for the
+ * person opening it. Some sections are always there (the questions about you),
+ * some are there because of who you are (one per HIVE you are in), and some are
+ * there because of WHEN it is — the quarter, the year, a HIVE's first night.
+ * A seasonal section appears inside its window and falls away after, and
+ * nothing has to be launched, retired, or remembered.
+ *
+ * ## Why the season is per HIVE and not one block
+ *
+ * Because the three HIVEs ask different questions and reuse the same ids. OG
+ * opens its quarter with `q_quarter_story`, Tech with `q_quarter_shipped`,
+ * Production with `q_quarter_stage` — and all three then share
+ * `q_quarter_proud`, `q_quarter_next`, `q_quarter_hive` and six more. Folded
+ * into one flat answer, a member of three HIVEs would have their OG answer
+ * overwritten by their Tech one, silently, and only the last would survive.
+ *
+ * So a season rides the machinery the pre-meeting merge already has: one
+ * section per HIVE, one `survey_responses` row per HIVE, each answer under its
+ * bare id inside its own row. Every reader that filters by `community_id` — the
+ * deck, the Arrival Board, `seal-meeting` — keeps working with no change.
+ *
+ * ## What this replaces
+ *
+ * Six survey rows, six launch buttons in Admin, and a whole second email path.
+ * A season used to be a survey somebody had to launch per HIVE per occurrence.
+ */
+export function openSeasonSections(
+  hives: { id: string; slug?: string | null; name?: string | null }[],
+  today: Date,
+): MergedCheckInSection[] {
+  const sections: MergedCheckInSection[] = [];
+  for (const kind of ['quarter', 'year'] as SeasonKind[]) {
+    const occurrence = getUpcomingSeasonOccurrence(kind, today);
+    // The same window the season check-in has always had: it opens three days
+    // before the season ends and closes with it. Not a day of it is invented
+    // here — `getUpcomingSeasonOccurrence` is the one calendar.
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    if (startOfToday < occurrence.opensDate || startOfToday > occurrence.endDate) continue;
+
+    for (const hive of hives) {
+      const deck = buildSeasonCheckIn({ slug: hive.slug ?? '' }, kind, today);
+      if (!deck || !deck.questions.length) continue;
+      sections.push({
+        communityId: hive.id,
+        slug: (hive.slug ?? '').trim().toLowerCase(),
+        // The section header says which HIVE AND which season, because in the
+        // three days a quarter is open a member of two HIVEs is looking at four
+        // sections and needs to know which is which.
+        name: `${hiveDisplayName(hive.name)} · ${deck.occurrence.label}`,
+        questions: deck.questions,
+        seasonKind: kind,
+      });
+    }
+  }
+  return sections;
+}
+
+/**
+ * The End of the month, assembled for whoever opened it.
+ *
+ * The row's own questions are the ones about the person and the month, asked
+ * once at the top — they are the same question for everybody, which is why the
+ * check-in was merged in the first place. Anything below them is a season, and
+ * on 361 days of the year there is nothing below them at all and this returns
+ * exactly the check-in that is there today.
+ */
+export function buildMergedEndOfMonth(
+  baseQuestions: SurveyQuestion[],
+  hives: { id: string; slug?: string | null; name?: string | null }[],
+  today: Date,
+): MergedCheckIn {
+  const sections = openSeasonSections(hives, today);
+  return {
+    title: MERGED_END_OF_MONTH_TITLE,
+    description: sections.length
+      ? 'A few minutes, whichever HIVEs you are in. The first few are about your month; then the season, one section each.'
+      : 'A few minutes, whichever HIVEs you are in. What you want in the Buzz, and how the month went.',
+    personal: baseQuestions.filter((question) => question.type !== 'note'),
+    sections,
+  };
+}
+
 export function mergedPreMeetingQuestions(
-  merged: MergedPreMeeting,
+  merged: MergedCheckIn,
 ): { question: SurveyQuestion; key: string; communityId: string | null }[] {
   const out = merged.personal.map((question) => ({
     question,
@@ -1526,11 +1634,24 @@ export function mergedPreMeetingQuestions(
  * person. See the note on storage above for why the copy is deliberate.
  */
 export function splitMergedAnswers(
-  merged: MergedPreMeeting,
+  merged: MergedCheckIn,
   answers: Record<string, unknown>,
+  /**
+   * Which answers are copied into every HIVE's row.
+   *
+   * The pre-meeting one copies arrival, energy and energy-mode, because a
+   * HIVE's deck asks "what did the people in MY room say" and must never have
+   * to go and find a fourth row to answer it.
+   *
+   * End of the month passes an EMPTY list. Its questions about the month go in
+   * the one HIVE-Wide row where the Buzz reads them, and copying a newsletter
+   * shout-out into three HIVEs' rows would have Admin's Newsletter box show it
+   * three times.
+   */
+  personalIds: string[] = PERSONAL_CHECK_IN_QUESTION_IDS,
 ): { communityId: string; answers: Record<string, unknown> }[] {
   const personal: Record<string, unknown> = {};
-  for (const id of PERSONAL_CHECK_IN_QUESTION_IDS) {
+  for (const id of personalIds) {
     if (answers[id] !== undefined) personal[id] = answers[id];
   }
 

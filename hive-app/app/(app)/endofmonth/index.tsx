@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../lib/hooks/useAuth';
 import { usePageSkin } from '../../../lib/pageSkin';
 import { useSurveys, type SurveyAnswers } from '../../../lib/hooks/useSurveys';
 import { SurveyModal } from '../../../components/surveys/SurveyModal';
-import type { Survey } from '../../../types';
+import {
+  buildMergedEndOfMonth,
+  mergedPreMeetingQuestions,
+  splitMergedAnswers,
+  type MergedCheckIn,
+} from '../../../lib/checkIns';
+import type { Survey, SurveyQuestion } from '../../../types';
 
 /**
  * End of the month: app.the-hive.app/endofmonth
@@ -33,6 +39,20 @@ import type { Survey } from '../../../types';
 export default function EndOfMonthScreen() {
   const router = useRouter();
   /**
+   * `?on=2026-09-29` — read this check-in as it will look on a given day.
+   *
+   * A section that only exists for three days a quarter is a section nobody
+   * sees until the three days, which is a bad moment to find out it is wrong.
+   * This is the door to looking early, and it changes nothing else: the
+   * questions come from the same builder, the answers save to the same rows.
+   *
+   * Owner-only would be a lie — there is nothing here worth gating. A member
+   * who types a date into the address bar sees next quarter's questions
+   * slightly early, which is the same thing as reading the survey.
+   */
+  const { on } = useLocalSearchParams<{ on?: string | string[] }>();
+  const askedDate = Array.isArray(on) ? on[0] : on;
+  /**
    * `useSurveys` NEEDS its arguments, and the failure without them is silent.
    *
    * This called `useSurveys()` bare for its first hour. The query is
@@ -46,11 +66,23 @@ export default function EndOfMonthScreen() {
    * this survey belongs to no HIVE and `submitResponse` now files it as such
    * whatever HIVE the reader happens to be standing in.
    */
-  const { loading: authLoading, profile, communityId } = useAuth();
+  const { loading: authLoading, profile, communityId, memberships } = useAuth();
   const skin = usePageSkin();
-  const { myResponses, submitResponse } = useSurveys(communityId ?? undefined, profile?.id);
+  const { myResponses, submitResponse, submitPerHiveResponses } =
+    useSurveys(communityId ?? undefined, profile?.id);
 
   const [survey, setSurvey] = useState<Survey | null>(null);
+  /**
+   * The check-in as this person sees it today.
+   *
+   * On most days it is the row exactly as it is stored. In the three days
+   * before a quarter or the year ends it also carries a section per HIVE
+   * holding that HIVE's season questions — see `buildMergedEndOfMonth`. Nat,
+   * 2026-09-04: *"next month, the only 'end of the month' survey avail will
+   * also have 'end of the quarter' questions...so it'll be slightly different &
+   * then go back to normal."*
+   */
+  const [merged, setMerged] = useState<MergedCheckIn | null>(null);
   const [state, setState] = useState<'looking' | 'ready' | 'none' | 'broken'>('looking');
 
   useEffect(() => {
@@ -87,12 +119,40 @@ export default function EndOfMonthScreen() {
       if (error) { setState('broken'); return; }
       const found = (data ?? [])[0] as Survey | undefined;
       if (!found) { setState('none'); return; }
-      setSurvey(found);
+
+      const built = buildMergedEndOfMonth(
+        (found.questions ?? []) as SurveyQuestion[],
+        memberships.map((m) => ({
+          id: m.community_id,
+          slug: m.community?.slug ?? null,
+          name: m.community?.name ?? null,
+        })),
+        // The date drives which season is open, and nothing else.
+        (() => {
+          const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(askedDate ?? '');
+          return match
+            ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+            : new Date();
+        })(),
+      );
+      setMerged(built);
+      // The row that goes on screen. With no season open this is the stored
+      // row untouched, which is the point: 361 days a year nothing changes.
+      setSurvey(built.sections.length
+        ? {
+            ...found,
+            description: built.description,
+            questions: mergedPreMeetingQuestions(built).map((entry) => ({
+              ...entry.question,
+              id: entry.key,
+            })) as SurveyQuestion[],
+          }
+        : found);
       setState('ready');
     })();
 
     return () => { cancelled = true; };
-  }, [authLoading, profile]);
+  }, [authLoading, profile, memberships, askedDate]);
 
   const done = useCallback(() => {
     // Home rather than back: a link out of a text message has nothing behind it.
@@ -101,8 +161,31 @@ export default function EndOfMonthScreen() {
 
   const onSubmit = useCallback(async (answers: SurveyAnswers) => {
     if (!survey) return { error: 'No check-in open' };
+
+    /**
+     * The month goes in the one HIVE-Wide row; a season goes in its HIVE's.
+     *
+     * Every reader of a season answer — the deck, a HIVE's own recap — filters
+     * by `community_id`, so a section's answers have to land on that HIVE's
+     * row. The questions about the month do not: they are one answer for one
+     * person, and the Buzz reads them off the row belonging to no HIVE.
+     */
     const result = await submitResponse(survey.id, answers);
     if (result.error) return result;
+
+    if (merged && merged.sections.length) {
+      // Empty personal list: nothing from the top is copied down, or a
+      // newsletter shout-out would appear three times in Admin.
+      const perHive = (splitMergedAnswers(merged, answers, []) as
+        { communityId: string; answers: SurveyAnswers }[])
+        .filter((row) => Object.keys(row.answers).length > 0);
+      if (perHive.length) {
+        const seasonResult = await submitPerHiveResponses(survey.id, perHive);
+        // The month is already saved. A season section that fails to file is
+        // worth saying out loud rather than losing behind a success screen.
+        if (seasonResult.error) return seasonResult;
+      }
+    }
 
     /**
      * The email-or-text answer has a real destination, and it is not this
@@ -126,7 +209,7 @@ export default function EndOfMonthScreen() {
         .eq('id', profile.id);
     }
     return result;
-  }, [survey, submitResponse, profile?.id]);
+  }, [survey, merged, submitResponse, submitPerHiveResponses, profile?.id]);
 
   if (state === 'ready' && survey) {
     const mine = myResponses.get(survey.id);
