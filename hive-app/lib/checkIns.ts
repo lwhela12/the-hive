@@ -1,4 +1,5 @@
 import type { Community, SurveyQuestion } from '../types';
+import { hiveDisplayName } from './hiveBrand';
 
 /**
  * OG HIVE's tune-ups were designed around OG's monthly rhythm. Other HIVEs get
@@ -1245,4 +1246,254 @@ export function checkInDisplayName(title: string | null | undefined): string {
   // Anything unrecognised is shown as written. A survey Nat makes by hand
   // should say what she typed, not be quietly relabelled.
   return raw;
+}
+
+/* ----------------------------------------------------------------------------
+ * ONE "BEFORE THE MEETING" CHECK-IN, COVERING EVERY HIVE YOU ARE IN
+ * -------------------------------------------------------------------------- */
+
+/**
+ * Nat, 2026-09-04: *"We're going to make 2 check ins: end of the month &
+ * 'before the meeting'. I want those to show all the hives people are in, so
+ * it doesn't matter if you're in 1 hive or 3, you only get 1 survey at the end
+ * of the month & 1 survey the week of meetings & you can look through all of
+ * the to do lists & stuff, and update everything."*
+ *
+ * Two check-ins for everybody, full stop. "End of the month" already belongs
+ * to no HIVE (migration 225). This is the other half: one pre-meeting check-in
+ * that covers all three, so the five members who are in more than one HIVE
+ * stop getting three of everything.
+ *
+ * ## What the merge actually is
+ *
+ * It is a REGROUPING, not a rewrite. Every HIVE's pre-meeting questions stay
+ * exactly as they are — Production still asks about venues seen and what is
+ * stuck, OG still asks its POP — because those questions are about that HIVE
+ * and only that HIVE. What changes is that the handful of questions about the
+ * PERSON get asked once, at the top, instead of three times.
+ *
+ * So the shape is two tiers:
+ *
+ *   ABOUT YOU, ASKED ONCE   how you are arriving, your energy, what you want
+ *                           from HIVE this month. The same answer would have
+ *                           been typed into all three.
+ *   ABOUT EACH HIVE         one short section per HIVE you belong to, holding
+ *                           that HIVE's own existing questions — plus its
+ *                           to-dos, which ride on the survey rather than in it
+ *                           (see `useCarryForwardContext`).
+ *
+ * Somebody in one HIVE barely notices; somebody in three walks three short
+ * sections instead of three whole surveys.
+ *
+ * ## How the answers are stored, and why nothing downstream had to change
+ *
+ * ONE `survey_responses` ROW PER HIVE, each carrying that HIVE's answers AND a
+ * copy of the personal ones. `survey_responses.community_id` has existed since
+ * the beginning and the Arrival Board, the Meeting Helper deck and
+ * `seal-meeting` all already read answers filtered by it — so each HIVE's night
+ * reads its own row and sees a complete picture, exactly as it does today.
+ * Migration 228 widened the uniqueness rule to allow it.
+ *
+ * Copying the personal answers into each row rather than storing them once is
+ * deliberate. A HIVE's deck asks one question — "what did the people in MY room
+ * say?" — and it must never have to go and find a fourth row belonging to no
+ * HIVE to answer it.
+ */
+
+/**
+ * The questions that are about the PERSON, not about a HIVE.
+ *
+ * Asked once at the top and copied into every HIVE's row. Kept as ids rather
+ * than a second list of question objects, so a HIVE that words its own arrival
+ * question differently still lifts the right one out.
+ */
+export const PERSONAL_CHECK_IN_QUESTION_IDS: string[] = [
+  'q_feeling_today',
+  PRE_MEETING_QUESTION_IDS.energyLevel,
+  'q_energy_mode',
+];
+
+/** The name, settled 2026-09-02 and 2026-09-04. Never invent a third. */
+export const MERGED_PRE_MEETING_TITLE = 'Before we meet';
+
+export type MergedPreMeetingSection = {
+  communityId: string;
+  slug: string;
+  /** What to call this HIVE on its own section header. */
+  name: string;
+  questions: SurveyQuestion[];
+};
+
+export type MergedPreMeeting = {
+  title: string;
+  description: string;
+  /** Asked once, at the top. */
+  personal: SurveyQuestion[];
+  /** One per HIVE the answerer is in, in the order they were given. */
+  sections: MergedPreMeetingSection[];
+};
+
+/**
+ * WHERE EACH HIVE'S QUESTIONS COME FROM — the caller, not a table in here.
+ *
+ * Found by testing the first version of this against all three HIVEs: OG came
+ * back with zero questions and Tech came back with its FIRST-NIGHT onboarding
+ * deck ("What a HIVE is for", "Which evening suits you best", the Honey Pot
+ * vote). Neither is a bug in the merge; both are facts about where a HIVE's
+ * pre-meeting questions actually live.
+ *
+ *   - **Production's** live in this file (`PRE_MEETING_RECURRING_BY_SLUG`).
+ *   - **OG's** live in its survey ROW in the database and nowhere else — its
+ *     door is the wizard in `monthly-tuneup.tsx`, and the row behind it holds
+ *     the real question list.
+ *   - **Tech's** code deck is the first-meeting one, which is the wrong list
+ *     for every meeting after the first.
+ *
+ * So this takes the questions as input. The caller reads each HIVE's live
+ * active pre-meeting survey and hands the list over, which makes the database
+ * the source of truth it already is, and means a question Nat edits in the
+ * survey editor shows up here without a deploy.
+ */
+export function buildMergedPreMeeting(
+  hives: {
+    id: string;
+    slug?: string | null;
+    name?: string | null;
+    questions: SurveyQuestion[];
+  }[],
+): MergedPreMeeting {
+  const personalById = new Map<string, SurveyQuestion>();
+  const sections: MergedPreMeetingSection[] = [];
+
+  for (const hive of hives) {
+    const mine: SurveyQuestion[] = [];
+    for (const question of hive.questions ?? []) {
+      if (question.type === 'note') continue; // a HIVE's own section headers
+      if (PERSONAL_CHECK_IN_QUESTION_IDS.includes(question.id)) {
+        // First HIVE to ask it wins the wording. They are the same question.
+        if (!personalById.has(question.id)) personalById.set(question.id, question);
+        continue;
+      }
+      mine.push(question);
+    }
+
+    // A HIVE whose whole check-in was personal questions has nothing left to
+    // ask about itself, and an empty section header is furniture.
+    if (mine.length === 0) continue;
+
+    sections.push({
+      communityId: hive.id,
+      slug: (hive.slug ?? '').trim().toLowerCase(),
+      name: hiveDisplayName(hive.name),
+      questions: mine,
+    });
+  }
+
+  // In the order PERSONAL_CHECK_IN_QUESTION_IDS names them, not the order the
+  // first HIVE happened to list them, so the top of the check-in reads the same
+  // for everybody however many HIVEs they are in.
+  const personal = PERSONAL_CHECK_IN_QUESTION_IDS
+    .map((id) => personalById.get(id))
+    .filter((question): question is SurveyQuestion => !!question);
+
+  return {
+    title: MERGED_PRE_MEETING_TITLE,
+    description: sections.length > 1
+      ? 'One check-in for every HIVE you are in. The first few are about you; then a short section each.'
+      : 'A few minutes before we meet, so the room starts loaded.',
+    personal,
+    sections,
+  };
+}
+
+/**
+ * THE KEY AN IN-PROGRESS ANSWER IS HELD UNDER, WHILE THE FORM IS OPEN.
+ *
+ * Two HIVEs ask `q_attendance`. Both mean it, both need their own answer, and
+ * in three separate surveys that was never a problem. In ONE form it is: a
+ * draft keyed by bare question id would let Production's "will we see you"
+ * overwrite Tech's, and the second HIVE's section would silently mirror the
+ * first. Caught by running the builder across all three HIVEs before any of
+ * this was wired to a screen.
+ *
+ * So a question about a HIVE is held under `<community id>:<question id>` while
+ * the form is open, and written back under its BARE id into that HIVE's own
+ * response row — where `community_id` is what tells the two apart, and where
+ * every existing reader already expects the plain name.
+ *
+ * Personal answers keep their bare id: there is one of each, and they are
+ * copied into every row.
+ */
+export function mergedAnswerKey(communityId: string | null, questionId: string): string {
+  return communityId ? `${communityId}:${questionId}` : questionId;
+}
+
+/** Split a key back into the HIVE it belongs to and the id to store it under. */
+export function readMergedAnswerKey(key: string): { communityId: string | null; questionId: string } {
+  const at = key.indexOf(':');
+  if (at === -1) return { communityId: null, questionId: key };
+  return { communityId: key.slice(0, at), questionId: key.slice(at + 1) };
+}
+
+/**
+ * Every question the merged check-in asks this person, in the order it asks
+ * them, each carrying the key its answer is held under.
+ *
+ * The section headers are `note` questions, which the wizard already knows how
+ * to draw and never stores an answer for.
+ */
+export function mergedPreMeetingQuestions(
+  merged: MergedPreMeeting,
+): { question: SurveyQuestion; key: string; communityId: string | null }[] {
+  const out = merged.personal.map((question) => ({
+    question,
+    key: question.id,
+    communityId: null as string | null,
+  }));
+
+  for (const section of merged.sections) {
+    out.push({
+      question: note(
+        `note_hive_${section.slug}`,
+        section.name,
+        ['Just this HIVE, for the next few.'],
+      ),
+      key: `note_hive_${section.slug}`,
+      communityId: section.communityId,
+    });
+    for (const question of section.questions) {
+      out.push({
+        question,
+        key: mergedAnswerKey(section.communityId, question.id),
+        communityId: section.communityId,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Split a finished form into the rows that get written — one per HIVE.
+ *
+ * Each row carries that HIVE's own answers under their bare ids PLUS a copy of
+ * every personal answer, so a HIVE's deck reads one row and sees the whole
+ * person. See the note on storage above for why the copy is deliberate.
+ */
+export function splitMergedAnswers(
+  merged: MergedPreMeeting,
+  answers: Record<string, unknown>,
+): { communityId: string; answers: Record<string, unknown> }[] {
+  const personal: Record<string, unknown> = {};
+  for (const id of PERSONAL_CHECK_IN_QUESTION_IDS) {
+    if (answers[id] !== undefined) personal[id] = answers[id];
+  }
+
+  return merged.sections.map((section) => {
+    const mine: Record<string, unknown> = { ...personal };
+    for (const question of section.questions) {
+      const value = answers[mergedAnswerKey(section.communityId, question.id)];
+      if (value !== undefined) mine[question.id] = value;
+    }
+    return { communityId: section.communityId, answers: mine };
+  });
 }
