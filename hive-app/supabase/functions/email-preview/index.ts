@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { reachEmailHtml, REACH_COLUMNS, type Reach } from '../_shared/reachMail.ts';
+import { reachEmailHtml, plainTextFrom, REACH_COLUMNS, type Reach } from '../_shared/reachMail.ts';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
 
 /**
@@ -26,9 +26,37 @@ import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
  * *"a preview whose link works differently from the real send is how 'it's not
  * working' gets missed for months."*
  *
- * Owner-only, and it takes no recipient at all. There is no address to hand it,
- * so it cannot be turned into a way to post a HIVE-signed letter to a stranger.
+ * Owner-only, and **it still takes no recipient**. Nat, 2026-09-04: *"put one
+ * of each type in my inbox."* So `POST { send: true }` mails the set — to the
+ * caller's OWN address, read off their profile, and nowhere else. There is no
+ * `to` parameter to hand it, which is the property that stops this becoming a
+ * way to post a HIVE-signed letter to a stranger. Reading it is a GET and
+ * sends nothing; the two are separate on purpose.
+ *
+ * **A specimen has to look like a specimen.** Nat's rule, from a fake notice
+ * that once sent her hunting through the app for something that had not
+ * happened: every one of these carries `[Test]` on the subject and a band
+ * across the top saying nobody did the thing it describes. The letter under
+ * the band is untouched, because the letter is the thing being approved.
  */
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/** The band that stops a specimen being mistaken for news. */
+function specimenBanner(name: string): string {
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto 18px; background: #fff4d6; border: 1px solid #e0c579; border-radius: 12px; padding: 12px 16px; color: #6b5417;">
+      <p style="margin: 0; font-size: 13px; line-height: 1.45;">
+        <strong>This is a test copy of a template, not a real notification.</strong>
+        Nobody messaged you, tagged you or opened a check-in — this is the
+        <em>${escapeHtml(name)}</em> letter, sent to you so you can read it.
+      </p>
+    </div>`;
+}
 
 /** Everything a person can be sent that is the same words every time. */
 type Sample = {
@@ -209,6 +237,72 @@ serve(async (req) => {
     },
   ];
 
+  const built = samples.map((sample) => ({
+    key: sample.key,
+    name: sample.name,
+    when: sample.when,
+    off_switch: sample.offSwitch,
+    column: REACH_COLUMNS[sample.kind],
+    subject: sample.subject,
+    html: reachEmailHtml(sample.letter),
+  }));
+
+  /**
+   * POST { send: true } — the set, into the caller's own inbox.
+   *
+   * One `to:` each, the caller's own address and no other, so there is nothing
+   * here that can be pointed at somebody else. Sent one at a time rather than
+   * as a batch so a single failure names itself instead of losing the lot.
+   */
+  if (req.method === 'POST') {
+    let wantsSend = false;
+    try {
+      const body = await req.json();
+      wantsSend = body?.send === true;
+    } catch { /* an empty POST is not a request to send */ }
+    if (!wantsSend) return errorResponse('Send { "send": true } to mail yourself the set.', 400);
+
+    const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
+    const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'HIVE <clive@the-hive.app>';
+    if (!RESEND_API_KEY) return errorResponse('Email is not configured.', 500);
+
+    const { data: me } = await admin
+      .from('profiles').select('email').eq('id', auth.userId).maybeSingle();
+    const to = (me as { email?: string | null } | null)?.email;
+    if (!to) return errorResponse('Your profile has no email address on it.', 400);
+
+    const results: { key: string; sent: boolean; reason?: string }[] = [];
+    for (const template of built) {
+      const html = specimenBanner(template.name) + template.html;
+      try {
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: FROM_EMAIL,
+            to,
+            // The word that stops a specimen reading as news, before it is opened.
+            subject: `[Test] ${template.subject}`,
+            html,
+            text: plainTextFrom(html),
+          }),
+        });
+        results.push(res.ok
+          ? { key: template.key, sent: true }
+          : { key: template.key, sent: false, reason: `${res.status}` });
+      } catch (err) {
+        results.push({ key: template.key, sent: false, reason: String(err) });
+      }
+    }
+    return jsonResponse({
+      hive: { name: hive.name, slug: hive.slug },
+      to,
+      sent: results.filter((r) => r.sent).length,
+      of: results.length,
+      results,
+    });
+  }
+
   return jsonResponse({
     hive: { name: hive.name, slug: hive.slug },
     /**
@@ -218,14 +312,6 @@ serve(async (req) => {
      * approve in advance — it does not exist yet.
      */
     note: 'These are the templates. The Buzz is written fresh each month and still previews before it sends.',
-    templates: samples.map((sample) => ({
-      key: sample.key,
-      name: sample.name,
-      when: sample.when,
-      off_switch: sample.offSwitch,
-      column: REACH_COLUMNS[sample.kind],
-      subject: sample.subject,
-      html: reachEmailHtml(sample.letter),
-    })),
+    templates: built,
   });
 });
