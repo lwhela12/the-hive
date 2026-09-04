@@ -1,6 +1,9 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+// The Buzz belongs to no single HIVE, so it wears the HIVE-Wide seal — the
+// black-and-gold one with the cosmos behind the bee, never a HIVE's costume.
+import { hiveSealImg, HIVE_WIDE_MARK } from '../_shared/hiveMark.ts';
 
 /**
  * The hello half of the newsletter subscription — the unsubscribe half
@@ -51,7 +54,7 @@ function welcomeEmailHtml(rawName: string | null, unsubscribeUrl: string): strin
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
       <div style="text-align: center; padding: 8px 0 4px;">
-        <span style="font-size: 40px;">🐝</span>
+        ${hiveSealImg(HIVE_WIDE_MARK)}
       </div>
       <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">You're on the list</h1>
       <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The HIVE newsletter</p>

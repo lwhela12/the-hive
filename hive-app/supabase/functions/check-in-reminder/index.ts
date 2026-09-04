@@ -2,7 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { hiveMark } from '../_shared/hiveMark.ts';
+import { hiveMark, hiveSealImg, type HiveMark } from '../_shared/hiveMark.ts';
 import {
   MONTHLY_CHECK_IN_PATTERN,
   QUARTERLY_CHECK_IN_PATTERN,
@@ -68,12 +68,9 @@ type AdminClient = ReturnType<typeof createClient<any>>;
  * ignores CSS sizing on images; alt text because a good many people read mail
  * with images off.
  */
-const LOGO_BLOCK = `
+const logoBlock = (mark: HiveMark) => `
       <div style="text-align: center; padding: 8px 0 4px;">
-        <img src="${PUBLIC_SITE_URL}/assets/hive-logo-email.png"
-             alt="H.I.V.E. — Human, Insight, Vision, Execution"
-             width="72" height="72"
-             style="width:72px;height:72px;display:inline-block;border:0;outline:none;text-decoration:none;background:#ffffff;border-radius:36px;" />
+        ${hiveSealImg(mark)}
       </div>`;
 
 // How a check-in is recognised now lives in ONE file, read by this function and
@@ -397,7 +394,7 @@ function checkInEmailHtml(
       : '';
     return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
-      ${LOGO_BLOCK}
+      ${logoBlock(mark)}
       ${kicker}
       <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Meeting tonight!</h1>
       <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">${escapeHtml(whenLine)}</p>
@@ -436,7 +433,7 @@ function checkInEmailHtml(
      */
     return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
-      ${LOGO_BLOCK}
+      ${logoBlock(mark)}
       ${halfwayKicker}
       <h1 style="color: ${mark.accent}; font-size: 22px; text-align: center; margin: 8px 0 4px;">End of the month</h1>
       <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The newsletter goes out on the 1st</p>
@@ -461,7 +458,7 @@ function checkInEmailHtml(
     : '';
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
-      ${LOGO_BLOCK}
+      ${logoBlock(mark)}
       ${kicker}
       <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Your check-in is open</h1>
       <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">${escapeHtml(whenLine)}</p>
@@ -603,7 +600,7 @@ function seasonEmailHtml(
       : `We're halfway through the month. How is it going? Is there anything you want a hand with? And have you got anything for the newsletter — a shout-out, a plug, an event to come to, a reminder, or a compliment for someone? Blanks are completely fine, and whatever is still on your list is on your to-do list in the app.`;
     return `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
-        <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">${mark.emoji}</span></div>
+        <div style="text-align: center; padding: 8px 0 4px;">${hiveSealImg(mark)}</div>
         ${kicker}
         <h1 style="color: ${mark.accent}; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
         <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The newsletter goes out on the 1st</p>
@@ -645,7 +642,7 @@ function seasonEmailHtml(
     const note = meeting?.note ? noteHtml(meeting.note) : '';
     return `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
-        <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">${mark.emoji}</span></div>
+        <div style="text-align: center; padding: 8px 0 4px;">${hiveSealImg(mark)}</div>
         ${kicker}
         <h1 style="color: ${mark.accent}; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
         <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">${whenLine}</p>
@@ -668,7 +665,9 @@ function seasonEmailHtml(
   const sub = kind === 'quarter'
     ? `The quarter ends ${month} ${day}`
     : `The year ends ${month} ${day}`;
-  const emoji = kind === 'quarter' ? '🧭' : '🎉';
+  // The season emoji (🧭 / 🎉) lives in the subject line and the push now — the
+  // picture at the top of this letter is the HIVE's seal, the same as the
+  // before-we-meet and end-of-the-month letters above it.
   const body = kind === 'quarter'
     ? (touch === 'day_of'
         ? `Today's the last day of the quarter and your check-in isn't in yet — it takes about <strong>5 minutes</strong>, and it's a lovely way to close the chapter before the next one starts.`
@@ -680,15 +679,15 @@ function seasonEmailHtml(
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
       <div style="text-align: center; padding: 8px 0 4px;">
-        <span style="font-size: 40px;">${emoji}</span>
+        ${hiveSealImg(mark)}
       </div>
-      <p style="text-align: center; color: #bd9348; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 0 0 2px;">${hive}</p>
-      <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
+      <p style="text-align: center; color: ${mark.accent}; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 0 0 2px;">${hive}</p>
+      <h1 style="color: ${mark.accent}; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
       <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">${sub}</p>
       <p style="font-size: 15px;">Hi ${name},</p>
       <p style="font-size: 15px;">${body}</p>
       <div style="text-align: center; margin: 28px 0;">
-        <a href="${openHref}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">${button}</a>
+        <a href="${openHref}" style="background: ${mark.accent}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">${button}</a>
       </div>
       <p style="font-size: 13px; color: #9a9a9a; text-align: center;">Every answer stays inside your HIVE. 🍯</p>
         ${footerNote ? `<p style="font-size: 12px; color: #b6b6b6; text-align: center; margin-top: 2px;">${footerNote}</p>` : ''}

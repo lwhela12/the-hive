@@ -64,6 +64,67 @@ export function hiveMark(slug?: string | null): HiveMark {
   return HIVE_MARKS[(slug ?? '').trim().toLowerCase()] ?? DEFAULT_MARK;
 }
 
+/* ------------------------------------------------------------------------- *
+ * THE SEALS
+ *
+ * Nat's round badges, one per HIVE, drawn 2026-09-04 — a bee at the centre of
+ * a ring in that HIVE's own colours: OG cream and gold, Tech navy over a
+ * circuit board, Production purple behind theatre curtains, and HIVE-Wide
+ * black and gold with the cosmos behind it.
+ *
+ * ## Two versions, and only one of them is in here
+ *
+ * She drew both and kept both. The FORMAL one carries the motto around its
+ * outer ring — HUMAN · INSIGHT · VISION · EXECUTION — and the SIMPLIFIED one
+ * does not. That is not a matter of taste, it is a matter of size: the motto is
+ * set small enough that below roughly 120px it stops being words and becomes a
+ * grey texture.
+ *
+ * Every seal the APP draws is small — a check-in header, a list row, a chip —
+ * so the app only ever uses the simplified one, and this table only loads that.
+ * The formal files sit beside them in `public/logos/*-formal.png`, unbundled,
+ * for the places that can give them 120px and mean it: the Buzz's masthead
+ * (`_shared/hiveMark.ts` addresses those by URL) and anything printed.
+ *
+ * Loading all eight was the first version of this, and it put four 1MB PNGs
+ * into the web bundle that nothing on any screen ever drew.
+ *
+ * ## Why they are loaded out of `public/`
+ *
+ * `public/` is copied verbatim into the web export, which is what lets an
+ * EMAIL reach them: a letter is read on somebody else's computer, so its
+ * images need a full URL, and `_shared/hiveMark.ts` builds those against the
+ * app's own domain. Requiring the same files here rather than keeping a second
+ * copy under `assets/` means the seal in the app and the seal in the inbox are
+ * the same bytes, and cannot drift into being two different logos.
+ *
+ * A fourth HIVE is a fourth ENTRY, the same as the marks above.
+ * -------------------------------------------------------------------------- */
+
+/** The seal for anything belonging to NO single HIVE — the one that is nobody's costume. */
+export const HIVE_WIDE_SLUG = 'hive-wide';
+
+const HIVE_SEALS: Record<string, number> = {
+  [HIVE_WIDE_SLUG]: require('../public/logos/hive-wide.png'),
+  // OG HIVE still carries `default` from before there was more than one HIVE.
+  default: require('../public/logos/og-hive.png'),
+  tech: require('../public/logos/tech-hive.png'),
+  show: require('../public/logos/production-hive.png'),
+};
+
+/**
+ * A HIVE's seal, ready for `<Image source={…} />`.
+ *
+ * No slug means no single HIVE, which is the HIVE-Wide seal rather than OG's —
+ * the same rule `hiveMark` in `_shared/hiveMark.ts` follows for a letter. A
+ * slug nobody has dressed yet lands there too, because a seal that says "HIVE"
+ * is honest and one that says "OG HIVE" is a lie.
+ */
+export function hiveSeal(slug?: string | null): number {
+  const key = (slug ?? '').trim().toLowerCase();
+  return HIVE_SEALS[key] ?? HIVE_SEALS[HIVE_WIDE_SLUG];
+}
+
 /** A HIVE's emoji. Takes the community row, or nothing, and always answers. */
 export function hiveEmoji(community?: Pick<Community, 'slug'> | null): string {
   return hiveMark(community?.slug).emoji;

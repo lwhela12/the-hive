@@ -34,7 +34,7 @@ import { CloseButton } from '../ui/CloseButton';
 
 import { ComposerBar } from '../ui/ComposerBar';
 import { ThinkingBee } from '../ui/ThinkingBee';
-import { accentPalette, HIVE_GOLD } from '../../lib/hiveBrand';
+import { accentPalette, hiveSeal, HIVE_GOLD } from '../../lib/hiveBrand';
 interface SurveyModalProps {
   survey: Survey;
   initialAnswers?: SurveyAnswers;
@@ -70,6 +70,16 @@ interface SurveyModalProps {
    * means no caller can get it wrong by passing the HIVE it happens to be on.
    */
   hiveAccent?: string;
+  /**
+   * The SLUG of the HIVE this modal was opened from, for its seal.
+   *
+   * Same rule as `hiveAccent` above, and decided here for the same reason: a
+   * survey belonging to no HIVE wears the HIVE-Wide seal, whichever HIVE the
+   * page behind it happens to be. Optional, because a caller that does not know
+   * gets the HIVE-Wide one, which says "HIVE" honestly rather than putting
+   * somebody else's costume on the check-in.
+   */
+  hiveSlug?: string | null;
 }
 
 const DRAFT_KEY = (surveyId: string) => `survey-draft:${surveyId}`;
@@ -166,6 +176,7 @@ export function SurveyModal({
   onSubmit,
   onClose,
   hiveAccent = HIVE_GOLD,
+  hiveSlug,
 }: SurveyModalProps) {
   /**
    * Nat, 2026-09-01: every survey still wore honey gold inside Tech HIVE and
@@ -177,6 +188,14 @@ export function SurveyModal({
    */
   const accent = survey.community_id == null ? HIVE_GOLD : hiveAccent;
   const tint = accentPalette(accent);
+  /**
+   * The seal at the top of the check-in (Nat, 2026-09-04).
+   *
+   * The same choice the accent makes one line up: a check-in belonging to no
+   * HIVE is HIVE-Wide, so it wears the black-and-gold seal rather than the HIVE
+   * whose page it was opened from.
+   */
+  const seal = hiveSeal(survey.community_id == null ? null : hiveSlug);
   const { width: recapWidth } = useWindowDimensions();
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -729,6 +748,13 @@ export function SurveyModal({
             >
               {/* Header */}
               <View style={{ marginBottom: 28 }}>
+                <Image
+                  source={seal}
+                  style={{ width: 56, height: 56, marginBottom: 12 }}
+                  contentFit="contain"
+                  cachePolicy="memory-disk"
+                  accessibilityLabel=""
+                />
                 <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginBottom: 8 }}>{checkInDisplayName(survey.title)}</Text>
                 {survey.description && (
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#6b7280', lineHeight: 21 }}>{survey.description}</Text>

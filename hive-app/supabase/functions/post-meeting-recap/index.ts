@@ -58,7 +58,7 @@ async function sendEmail(to: string, subject: string, html: string) {
 async function loadMeeting(admin: ReturnType<typeof createClient>, meetingId: string): Promise<RecapMeeting | null> {
   const { data } = await admin
     .from('meetings')
-    .select('id, community_id, date, summary, community:communities!community_id(name)')
+    .select('id, community_id, date, summary, community:communities!community_id(name, slug, accent_color)')
     .eq('id', meetingId)
     .maybeSingle();
   if (!data) return null;
@@ -67,7 +67,7 @@ async function loadMeeting(admin: ReturnType<typeof createClient>, meetingId: st
     community_id: string;
     date: string;
     summary?: string | null;
-    community?: { name?: string | null } | null;
+    community?: { name?: string | null; slug?: string | null; accent_color?: string | null } | null;
   };
   let title = `${row.community?.name || 'HIVE'} Meeting`;
   try {
@@ -78,6 +78,9 @@ async function loadMeeting(admin: ReturnType<typeof createClient>, meetingId: st
     id: row.id,
     communityId: row.community_id,
     hiveName: row.community?.name || 'Your HIVE',
+    // So the letter can wear this HIVE's seal and colour rather than everybody's.
+    hiveSlug: row.community?.slug ?? null,
+    hiveAccent: row.community?.accent_color ?? null,
     title,
     date: row.date,
   };

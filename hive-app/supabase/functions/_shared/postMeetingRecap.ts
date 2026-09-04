@@ -1,9 +1,21 @@
+import { hiveMark, hiveSealImg } from './hiveMark.ts';
 export interface RecapMeeting {
   id: string;
   communityId: string;
   hiveName: string;
   title: string;
   date: string;
+  /**
+   * Whose HIVE this meeting was, in the two fields a letter needs to dress
+   * itself — its seal and its colour (Nat, 2026-09-04).
+   *
+   * Optional because the recap ran for a fortnight without them and a meeting
+   * row that predates the column should still send. Missing means the letter
+   * falls back to the HIVE-Wide mark, which says "HIVE" honestly rather than
+   * putting one HIVE's costume on another's night.
+   */
+  hiveSlug?: string | null;
+  hiveAccent?: string | null;
 }
 
 export interface RecapRecipient {
@@ -79,20 +91,19 @@ export function postMeetingRecapHtml(
   const { summaryUrl, cliveUrl } = buildPostMeetingRecapLinks(appUrl, meeting);
 
   // Nat, 2026-08-24, reading this email live: "the only thing missing is one
-  // of our bee's or logos or something." Same file the invite and The Buzz
-  // already send — RGB with no transparency despite its name, hence the
-  // white tile underneath; width in the tag as well as the style because
-  // Outlook ignores CSS sizing on images.
+  // of our bee's or logos or something." It carried the one-logo-for-everybody
+  // until 2026-09-04; it wears THIS HIVE's seal now, so a recap of a Tech night
+  // does not arrive dressed as OG. No white tile any more — the seals are
+  // transparent PNGs and a round badge on a white square looked like a sticker
+  // somebody had not peeled.
+  const mark = hiveMark(meeting.hiveSlug, meeting.hiveAccent);
   return `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;color:#2b2b2b;line-height:1.5;">
       <div style="text-align:center;padding:8px 0 4px;">
-        <img src="https://the-hive.app/assets/hive-logo-email.png"
-             alt="H.I.V.E. — Human, Insight, Vision, Execution"
-             width="72" height="72"
-             style="width:72px;height:72px;display:inline-block;border:0;outline:none;text-decoration:none;background:#ffffff;border-radius:36px;" />
+        ${hiveSealImg(mark)}
       </div>
-      <p style="text-align:center;color:#bd9348;font-size:11px;letter-spacing:1.6px;text-transform:uppercase;font-weight:700;margin:0 0 2px;">${hive}</p>
-      <h1 style="color:#bd9348;font-size:22px;text-align:center;margin:8px 0 4px;">What you missed</h1>
+      <p style="text-align:center;color:${mark.accent};font-size:11px;letter-spacing:1.6px;text-transform:uppercase;font-weight:700;margin:0 0 2px;">${hive}</p>
+      <h1 style="color:${mark.accent};font-size:22px;text-align:center;margin:8px 0 4px;">What you missed</h1>
       <p style="text-align:center;color:#6b6b6b;font-size:14px;margin:0 0 20px;">${title}</p>
       <p style="font-size:15px;">Hi ${name},</p>
       <p style="font-size:15px;">We missed you. Tonight&rsquo;s notes are sealed, so you can catch up without hunting through the app.</p>

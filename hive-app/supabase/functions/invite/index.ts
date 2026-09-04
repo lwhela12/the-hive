@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
+import { hiveMark, hiveSealImg } from '../_shared/hiveMark.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
@@ -420,19 +421,16 @@ serve(async (req) => {
           // HIVE meets in person.
           html: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
-              <!-- The real logo, not the bee emoji standing in for it (Nat,
-                   2026-08-14: "I would swap out this first emoji bee to our
-                   actual logo, so it's branded"). Same file The Buzz already
-                   sends, so the two letters look like the same HIVE. It is RGB
-                   with no transparency despite its name, hence the white tile
-                   underneath; width in the tag as well as the style because
-                   Outlook ignores CSS sizing on images; alt text because a
-                   good many people read mail with images off. -->
+              <!-- The seal of the HIVE they were actually invited to (Nat,
+                   2026-09-04). This was the one-logo-for-everybody until then,
+                   which meant the first picture a new member ever saw of us
+                   said nothing about the room they were joining — and the
+                   headline right under it exists precisely to say which room
+                   that is. Big, at 96px, because this is somebody's first
+                   look; alt text because a good many people read mail with
+                   images off. -->
               <div style="text-align: center; padding: 8px 0 4px;">
-                <img src="${PUBLIC_SITE_URL}/assets/hive-logo-email.png"
-                     alt="H.I.V.E. — Human, Insight, Vision, Execution"
-                     width="96" height="96"
-                     style="width:96px;height:96px;display:inline-block;border:0;outline:none;text-decoration:none;background:#ffffff;border-radius:48px;" />
+                ${hiveSealImg(hiveMark(community?.slug as string | null, accent), 96)}
               </div>
               <!-- The HIVE they were actually invited to is the headline.
                    Nat, 2026-08-21: "i'm leaning towards making Tech HIVE more

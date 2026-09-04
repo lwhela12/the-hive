@@ -1355,9 +1355,9 @@ export function HiveMemberPanels({
    * The HIVE whose check-in this is — not whichever HIVE the admin is standing
    * in. Filling Tech's check-in from OG's Admin folder should look like Tech.
    */
-  const seasonFillAccent = hiveAccent(
-    memberships.find((m) => m.community_id === seasonFill?.communityId)?.community
-  );
+  const seasonFillHive = memberships
+    .find((m) => m.community_id === seasonFill?.communityId)?.community;
+  const seasonFillAccent = hiveAccent(seasonFillHive);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -2679,6 +2679,7 @@ export function HiveMemberPanels({
           initialAnswers={seasonFillExisting?.answers}
           isEditingResponse={!!seasonFillExisting}
           hiveAccent={seasonFillAccent}
+          hiveSlug={seasonFillHive?.slug}
           onSubmit={(answers) => submitSeasonFill(seasonFillSurvey.id, answers)}
           onClose={() => setSeasonFill(null)}
         />

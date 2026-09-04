@@ -3719,6 +3719,7 @@ export default function ProfileScreen() {
           carryForwardLoading={carryForwardLoading}
           carryForwardError={carryForwardError}
           hiveAccent={hiveAccent(community)}
+          hiveSlug={community?.slug}
           onSubmit={async (answers: SurveyAnswers) => {
             const result = await submitResponse(activeSurvey.id, answers);
             if (!result.error && activeSurveyStorageKey) {

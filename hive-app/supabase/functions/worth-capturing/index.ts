@@ -38,6 +38,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
+import { hiveMark, hiveSealImg } from '../_shared/hiveMark.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
@@ -71,11 +72,13 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// This letter only ever goes to Tech HIVE — the library lives there — so it
+// wears Tech's seal rather than the one-logo-for-everybody the whole app used
+// to send. `TECH_SLUG` is the same constant the query below uses, so the
+// picture and the recipients can never disagree about whose letter this is.
 const LOGO = `
   <div style="text-align: center; padding: 8px 0 4px;">
-    <img src="${PUBLIC_SITE_URL}/assets/hive-logo-email.png"
-         alt="H.I.V.E." width="72" height="72"
-         style="width:72px;height:72px;display:inline-block;border:0;outline:none;text-decoration:none;background:#ffffff;border-radius:36px;" />
+    ${hiveSealImg(hiveMark(TECH_SLUG))}
   </div>`;
 
 function button(href: string, label: string, filled = true): string {

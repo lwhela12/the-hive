@@ -1997,6 +1997,7 @@ export default function MeetingsScreen() {
           initialAnswers={myResponses.get(activeSeasonSurvey.id)?.answers}
           isEditingResponse={!!myResponses.get(activeSeasonSurvey.id)}
           hiveAccent={hiveAccent(community)}
+          hiveSlug={community?.slug}
           onSubmit={(answers) => submitSeasonSurvey(activeSeasonSurvey.id, answers)}
           onClose={() => setActiveSeasonSurvey(null)}
         />

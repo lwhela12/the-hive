@@ -24,7 +24,7 @@
  * browser tab. Nat: *"When it is an app, then they can toggle those on."*
  */
 
-import { hiveMark } from './hiveMark.ts';
+import { hiveMark, hiveSealImg } from './hiveMark.ts';
 
 /** The kinds of mail a member can turn off, and the column that carries each. */
 export const REACH_COLUMNS = {
@@ -247,7 +247,7 @@ export function reachEmailHtml(opts: {
   const name = escapeHtml((opts.toName || '').split(/\s+/)[0] || 'there');
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
-      <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">${mark.emoji}</span></div>
+      <div style="text-align: center; padding: 8px 0 4px;">${hiveSealImg(mark)}</div>
       <p style="text-align: center; color: ${mark.accent}; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 0 0 2px;">${escapeHtml(opts.hiveName)}</p>
       <h1 style="color: ${mark.accent}; font-size: 21px; text-align: center; margin: 8px 0 4px;">${escapeHtml(opts.heading)}</h1>
       <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">${escapeHtml(opts.where)}</p>
