@@ -47,6 +47,7 @@ import {
   hivePanelSkin,
 } from '../../components/admin/GodModePanels';
 import { WhatsNextPanel } from '../../components/admin/WhatsNextPanel';
+import { EmailTemplatesPanel } from '../../components/admin/EmailTemplatesPanel';
 import { HIVE_GOLD, accentOnDark, accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 // Admin is always seen from the cosmos, whichever HIVE you happen to belong to,
 // so its boxes take the space skin's ink and card values rather than asking
@@ -1614,6 +1615,20 @@ export default function AdminScreen() {
               scrollStyle={panelScrollStyle}
               Panel={AdminPanel}
               order={0}
+            />
+          )}
+
+          {/* Every templated email, rendered by the real sender, read once.
+              Sits beside the newsletter on purpose: the two halves of the same
+              question — the letters that are always the same, and the one
+              written fresh every month. */}
+          {isOwner && (
+            <EmailTemplatesPanel
+              cellStyle={dashboardCellStyle}
+              panelStyle={dashboardPanelStyle}
+              bodyStyle={dashboardPanelBodyStyle}
+              scrollStyle={panelScrollStyle}
+              Panel={AdminPanel}
             />
           )}
 

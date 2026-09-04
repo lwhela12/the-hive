@@ -185,6 +185,9 @@ verify_jwt = false
 # only, checked in function code. The caller may name a post id and nothing
 # else — the issue is read from board_posts, so this can never be handed
 # arbitrary HTML to mail out.
+[functions.email-preview]
+verify_jwt = false
+
 [functions.open-check-in]
 verify_jwt = false
 

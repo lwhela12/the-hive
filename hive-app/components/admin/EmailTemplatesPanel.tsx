@@ -1,0 +1,213 @@
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../lib/hooks/useAuth';
+import { hiveDisplayName } from '../../lib/hiveBrand';
+
+/**
+ * EVERY TEMPLATED EMAIL, RENDERED, IN ONE PLACE. NOTHING SENDS FROM HERE.
+ *
+ * Nat, 2026-09-04: *"you'll make all the templates today, with the new logos &
+ * i'll approve them all just once. Then we dont need to play this game each
+ * time."*
+ *
+ * This is the page that makes "approve once" honest. The Build Standard was
+ * amended the same day to match: a template — the same words every time with a
+ * name and a date slotted in — is read and approved ONCE, here; only words
+ * written fresh still preview before every send.
+ *
+ * **The letters below are built by the real sender.** `email-preview` imports
+ * `reachEmailHtml` from the same module the five notify functions use, so what
+ * is approved on this page is character-for-character what lands in an inbox.
+ * A second copy of a template kept for previewing would let her approve
+ * something nobody receives — the `_shared/hiveMark.ts` trap with the stakes
+ * reversed.
+ *
+ * **They are shown in a real browser frame, on web.** An email is HTML, and
+ * retyping it as React Native views to display it would be a third copy that
+ * looks right and proves nothing. On a phone build there is no frame to use, so
+ * the panel says so and shows the words instead of pretending.
+ */
+
+type Template = {
+  key: string;
+  name: string;
+  when: string;
+  off_switch: string;
+  column: string;
+  subject: string;
+  html: string;
+};
+
+export function EmailTemplatesPanel({
+  cellStyle,
+  panelStyle,
+  bodyStyle,
+  scrollStyle,
+  Panel,
+}: {
+  cellStyle: any;
+  panelStyle: any;
+  bodyStyle: any;
+  scrollStyle: any;
+  Panel: React.ComponentType<any>;
+}) {
+  const { memberships } = useAuth();
+  // Which HIVE's colours to draw them in. A template wears a real HIVE's
+  // accent and emoji, so reading them in only one HIVE's costume is how
+  // Production's purple survived on Tech's check-in for weeks.
+  const [slug, setSlug] = useState('default');
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [open, setOpen] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setState('loading');
+    const { data, error } = await supabase.functions.invoke(`email-preview?hive=${slug}`, {
+      method: 'GET',
+    });
+    if (error || !data?.templates) { setState('error'); return; }
+    setTemplates(data.templates as Template[]);
+    setState('ready');
+  }, [slug]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const hives = [
+    { slug: 'default', label: 'OG HIVE' },
+    ...memberships
+      .map((m) => ({ slug: m.community?.slug ?? '', label: hiveDisplayName(m.community?.name) }))
+      .filter((h) => h.slug && h.slug !== 'default'),
+  ];
+
+  return (
+    <View style={cellStyle}>
+      <Panel
+        title="The emails we send"
+        titleTabKey="mail"
+        activeTab="mail"
+        style={panelStyle}
+        bodyStyle={bodyStyle}
+      >
+        <ScrollView style={scrollStyle} contentContainerStyle={{ paddingBottom: 6 }}>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: 'rgba(255,248,233,0.78)', paddingHorizontal: 12, paddingTop: 10 }}>
+            These are the same every time, with a name and a date filled in.
+            {'\n'}Read them once and they are approved.
+            {'\n'}The Buzz is written fresh each month, so it still previews before it sends.
+          </Text>
+
+          {/* Whose colours. A template is drawn in a real HIVE's accent and emoji. */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 12, paddingTop: 12 }}>
+            {hives.map((hive) => (
+              <Pressable
+                key={hive.slug}
+                onPress={() => setSlug(hive.slug)}
+                style={{
+                  paddingHorizontal: 11,
+                  paddingVertical: 5,
+                  borderRadius: 999,
+                  backgroundColor: slug === hive.slug ? 'rgba(255,248,233,0.92)' : 'rgba(255,248,233,0.09)',
+                }}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: slug === hive.slug ? '#141414' : 'rgba(255,248,233,0.8)' }}>
+                  {hive.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {state === 'loading' ? (
+            <View style={{ paddingVertical: 26, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color="#e8c583" />
+            </View>
+          ) : state === 'error' ? (
+            <View style={{ padding: 14 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, lineHeight: 19, color: '#ffb4a8' }}>
+                These did not load, so none of them is being shown as approved.
+              </Text>
+              <Pressable onPress={() => { void load(); }} style={{ marginTop: 10, alignSelf: 'flex-start', paddingHorizontal: 13, paddingVertical: 6, borderRadius: 999, backgroundColor: 'rgba(255,248,233,0.14)' }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#fffdf5' }}>Try again</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ paddingTop: 8 }}>
+              {templates.map((template) => {
+                const showing = open === template.key;
+                return (
+                  <View key={template.key} style={{ borderTopWidth: 1, borderTopColor: 'rgba(246,244,229,0.12)' }}>
+                    <Pressable
+                      onPress={() => setOpen(showing ? null : template.key)}
+                      style={{ paddingHorizontal: 12, paddingVertical: 11 }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#fffdf5' }}>
+                        {template.name}
+                      </Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: 'rgba(255,248,233,0.66)', paddingTop: 3 }}>
+                        {template.when}
+                      </Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, lineHeight: 17, color: 'rgba(255,248,233,0.48)', paddingTop: 3 }}>
+                        Turn it off in Settings: “{template.off_switch}”
+                      </Text>
+                    </Pressable>
+
+                    {showing ? (
+                      <View style={{ paddingHorizontal: 12, paddingBottom: 14 }}>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', color: 'rgba(255,248,233,0.5)', paddingBottom: 4 }}>
+                          Subject
+                        </Text>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#fffdf5', paddingBottom: 10 }}>
+                          {template.subject}
+                        </Text>
+                        <LetterFrame html={template.html} />
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </ScrollView>
+      </Panel>
+    </View>
+  );
+}
+
+/**
+ * The letter itself, drawn by a browser, because that is what will draw it.
+ *
+ * `srcDoc` rather than a URL: the HTML is already in hand, and handing it to
+ * the frame directly means no second request and nothing to authenticate. The
+ * frame is sandboxed with nothing granted — a preview has no reason to run a
+ * script or follow a link, and the letters carry neither.
+ */
+function LetterFrame({ html }: { html: string }) {
+  if (Platform.OS !== 'web') {
+    return (
+      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: 'rgba(255,248,233,0.8)' }}>
+        {stripTags(html)}
+      </Text>
+    );
+  }
+  return (
+    <View style={{ borderRadius: 10, overflow: 'hidden', backgroundColor: '#ffffff' }}>
+      {/* An iframe is a real element on web; react-native-web passes it through. */}
+      <iframe
+        srcDoc={html}
+        sandbox=""
+        title="What this email looks like"
+        style={{ width: '100%', height: 460, border: 'none', display: 'block' }}
+      />
+    </View>
+  );
+}
+
+/** The words on their own, for a phone with no frame to draw them in. */
+function stripTags(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
