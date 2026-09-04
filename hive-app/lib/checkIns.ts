@@ -1606,13 +1606,22 @@ export function mergedPreMeetingQuestions(
   }));
 
   for (const section of merged.sections) {
+    // A section that is here because of the DATE says so — otherwise a member
+    // opening End of the month in the last three days of a quarter meets nine
+    // extra questions with nothing telling them why, or that they will be gone
+    // next month.
+    const key = section.seasonKind
+      ? `note_${section.seasonKind}_${section.slug}`
+      : `note_hive_${section.slug}`;
     out.push({
-      question: note(
-        `note_hive_${section.slug}`,
-        section.name,
-        ['Just this HIVE, for the next few.'],
-      ),
-      key: `note_hive_${section.slug}`,
+      question: note(key, section.name, [
+        section.seasonKind === 'quarter'
+          ? 'Just this HIVE. These come round once a quarter, then they are gone again.'
+          : section.seasonKind === 'year'
+            ? 'Just this HIVE. Once a year, then they are gone again.'
+            : 'Just this HIVE, for the next few.',
+      ]),
+      key,
       communityId: section.communityId,
     });
     for (const question of section.questions) {
