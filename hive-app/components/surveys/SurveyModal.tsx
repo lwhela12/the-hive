@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Fragment, useState, useEffect, useCallback, useMemo } from 'react';
 import { ActivityIndicator, View, Text, ScrollView, Pressable, Modal, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -40,6 +40,23 @@ interface SurveyModalProps {
   initialAnswers?: SurveyAnswers;
   isEditingResponse?: boolean;
   carryForwardItems?: CarryForwardItem[];
+  /**
+   * The roster, BROKEN UP and drawn beside the questions it belongs to.
+   *
+   * Keyed by the id of the `note` question that heads a section: whatever is
+   * listed under that key is drawn immediately after that note instead of in
+   * one block at the top.
+   *
+   * Nat, 2026-09-04, on the merged check-in walked with three HIVEs' worth of
+   * to-dos in it: *"deff break it up per hive."* Fourteen cards stood between
+   * the top of the page and the first question. One HIVE's roster is a helpful
+   * preamble; three HIVEs' rosters stacked together is a wall.
+   *
+   * DISPLAY ONLY. `carryForwardItems` stays the full flat list, because that is
+   * what the saved answer is built from — grouping how it is drawn must never
+   * change what is stored.
+   */
+  carryForwardSections?: Record<string, CarryForwardItem[]>;
   carryForwardLoading?: boolean;
   carryForwardError?: string | null;
   onSubmit: (answers: SurveyAnswers) => Promise<{ error: any }>;
@@ -143,6 +160,7 @@ export function SurveyModal({
   initialAnswers,
   isEditingResponse = false,
   carryForwardItems = [],
+  carryForwardSections,
   carryForwardLoading = false,
   carryForwardError = null,
   onSubmit,
@@ -532,7 +550,10 @@ export function SurveyModal({
     setAnswer(CARRY_FORWARD_ANSWER_KEY, next);
   };
 
-  const renderCarryForwardContext = () => {
+  const renderCarryForwardContext = (
+    items: CarryForwardItem[] = carryForwardItems,
+    heading = 'Still on your roster',
+  ) => {
     if (carryForwardLoading) {
       return (
         <View style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: tint.line(0.45), borderRadius: 16, padding: 16, marginBottom: 24, alignItems: 'center' }}>
@@ -554,19 +575,19 @@ export function SurveyModal({
       );
     }
 
-    if (carryForwardItems.length === 0) return null;
+    if (items.length === 0) return null;
 
     return (
       <View style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: tint.line(0.55), borderRadius: 18, padding: 16, marginBottom: 24 }}>
         <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 6 }}>
-          Still on your roster
+          {heading}
         </Text>
         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#7f715f', lineHeight: 19, marginBottom: 14 }}>
           HIVE found these open tasks, wishes, HD boards, threads, and recent POP notes. Mark what should happen next.
         </Text>
 
         <View style={{ gap: 12 }}>
-          {carryForwardItems.map((item) => {
+          {items.map((item) => {
             const response = carryForwardResponsesByKey.get(carryForwardItemKey(item));
             const activeStatus = response?.status ?? 'keep_active';
 
@@ -801,16 +822,27 @@ export function SurveyModal({
                 );
               })()}
 
-              {draftLoaded && renderCarryForwardContext()}
+              {/* Grouped? Then each section draws its own, below its heading. */}
+              {draftLoaded && !carryForwardSections && renderCarryForwardContext()}
 
               {/* A note block explains; it does not ask. So the numbers count
                   only the questions, and a person who reads "3 of 12" and then
                   counts the boxes finds twelve boxes. */}
               {draftLoaded && (() => {
                 let asked = 0;
-                return survey.questions.map((q) =>
-                  renderQuestion(q, q.type === 'note' ? -1 : asked++)
-                );
+                return survey.questions.map((q) => {
+                  const drawn = renderQuestion(q, q.type === 'note' ? -1 : asked++);
+                  const mine = carryForwardSections?.[q.id];
+                  if (!mine?.length) return drawn;
+                  // This HIVE's own open things, under this HIVE's heading and
+                  // above its own questions.
+                  return (
+                    <Fragment key={`${q.id}_section`}>
+                      {drawn}
+                      {renderCarryForwardContext(mine, 'Still on your roster here')}
+                    </Fragment>
+                  );
+                });
               })()}
 
               {error && (

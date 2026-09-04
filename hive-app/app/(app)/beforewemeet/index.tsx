@@ -60,6 +60,7 @@ export default function BeforeWeMeetScreen() {
   const [row, setRow] = useState<Survey | null>(null);
   const [merged, setMerged] = useState<MergedPreMeeting | null>(null);
   const [todos, setTodos] = useState<CarryForwardItem[]>([]);
+  const [todosByHive, setTodosByHive] = useState<Record<string, CarryForwardItem[]>>({});
   const [state, setState] = useState<'looking' | 'ready' | 'none' | 'broken'>('looking');
 
   const hiveIds = useMemo(
@@ -138,17 +139,35 @@ export default function BeforeWeMeetScreen() {
           try {
             const items = await fetchCarryForwardItems(m.community_id, profile.id, found);
             const where = hiveDisplayName(m.community?.name);
-            return items.map((item: CarryForwardItem) => ({
-              ...item,
-              id: `${m.community_id}:${item.id}`,
-              sourceLabel: `${where} · ${item.sourceLabel}`,
-            }));
+            return {
+              communityId: m.community_id,
+              slug: (m.community?.slug ?? '').trim().toLowerCase(),
+              items: items.map((item: CarryForwardItem) => ({
+                ...item,
+                id: `${m.community_id}:${item.id}`,
+                sourceLabel: `${where} · ${item.sourceLabel}`,
+              })),
+            };
           } catch {
-            return [] as CarryForwardItem[];
+            return { communityId: m.community_id, slug: '', items: [] as CarryForwardItem[] };
           }
         }),
       );
-      if (!cancelled) setTodos(rosters.flat());
+      if (cancelled) return;
+      /**
+       * Grouped under each HIVE's own section heading, not stacked at the top.
+       *
+       * Walked with three HIVEs on 2026-09-04 and it was fourteen to-do cards
+       * before the first question. Nat: *"deff break it up per hive."* The key
+       * is the id of the `note` that heads each section, which is what
+       * `mergedPreMeetingQuestions` names it.
+       */
+      const bySection: Record<string, CarryForwardItem[]> = {};
+      for (const roster of rosters) {
+        if (roster.items.length) bySection[`note_hive_${roster.slug}`] = roster.items;
+      }
+      setTodos(rosters.flatMap((roster) => roster.items));
+      setTodosByHive(bySection);
     })();
 
     return () => { cancelled = true; };
@@ -194,6 +213,7 @@ export default function BeforeWeMeetScreen() {
         initialAnswers={mine?.answers}
         isEditingResponse={!!mine}
         carryForwardItems={todos}
+        carryForwardSections={todosByHive}
         onSubmit={onSubmit}
         onClose={done}
       />

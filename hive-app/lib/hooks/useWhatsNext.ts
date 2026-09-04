@@ -196,8 +196,21 @@ export function useWhatsNext() {
           for (const survey of surveys) {
             if (!survey.due_date) continue;
             const due = String(survey.due_date).slice(0, 10);
-            // Same window as the member's own row below: not before it opens.
-            if (survey.community_id && shift(due, -2) > today) continue;
+            /**
+             * THIS ROW IS THE REMINDER, AND A REMINDER HAS A DATE.
+             *
+             * The check-ins are open all month now (Nat, 2026-09-04: *"so that
+             * if someone has a thought, they can always just pop in and update
+             * stuff… but I'll REMIND them of it 3 days before"*), which splits
+             * this row from the member's own row below. Theirs is a door and
+             * stands open; hers is a prompt to nudge people, and a prompt that
+             * shows every day of the month is furniture.
+             *
+             * So the window applies here even to the shared check-ins, where it
+             * used to be skipped — "Send it: End of the month" was sitting in
+             * her list on the 4th for a row not due until the 30th.
+             */
+            if (shift(due, -2) > today) continue;
             /**
              * AND NOT AFTER ITS DUE DATE HAS GONE.
              *
@@ -254,6 +267,9 @@ export function useWhatsNext() {
            * one exists because somebody deliberately opened it for everybody
            * and is about to send the link out. Existing IS its window.
            */
+          // A shared check-in is open all month, so it is on your list all
+          // month (2026-09-04). A HIVE's own still waits for its window until
+          // the October cutover retires it.
           if (survey.community_id && shift(due, -2) > today) continue;
           push({
             key: `survey_${survey.id}`,

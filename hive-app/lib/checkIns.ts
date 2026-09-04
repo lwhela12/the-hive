@@ -954,7 +954,7 @@ export function isPreMeetingCheckInSurvey(
  * member-facing moment on the calendar regardless.)
  */
 export function isSurveyOnHomeToday(
-  survey: { title?: string | null; due_date?: string | null },
+  survey: { title?: string | null; due_date?: string | null; community_id?: string | null },
   today: Date,
 ): boolean {
   /**
@@ -978,11 +978,36 @@ export function isSurveyOnHomeToday(
    * lingers a week, because the month ending is not the same as everyone
    * having answered.
    */
+  /**
+   * A CHECK-IN THAT BELONGS TO NO HIVE IS ALWAYS OPEN.
+   *
+   * Nat, 2026-09-04: *"the check ins should always be open, I think. So that if
+   * someone has a thought, they can always just pop in and update stuff, you
+   * know? But I'll REMIND them of it 3 days before the end of the month & the
+   * week of the meetings."*
+   *
+   * That splits two things this file had treated as one. A due date used to say
+   * both "this is worth your attention now" and "this is the only time you may
+   * answer" — and the second was never something anybody asked for. Somebody
+   * who thinks of a shout-out on the 8th should be able to put it somewhere.
+   *
+   * So the date is now only about the REMINDER, and the two merged check-ins —
+   * the ones with no `community_id`, which every member shares — sit on Home
+   * all month. Their answers are editable after the fact and always were; only
+   * the door was shut.
+   *
+   * A HIVE's OWN check-in keeps its window until the October cutover retires
+   * it, because a per-HIVE row on Home is exactly the clutter the merge is
+   * removing — Nat, 2026-08-15: *"a check-in that sits in your to-do for a
+   * fortnight before it means anything teaches you to ignore your to-do."*
+   */
+  const belongsToNoHive = (survey as { community_id?: string | null }).community_id == null;
   const ownKind = isPreMeetingCheckInSurvey(survey)
     ? 'premeeting'
     : isEndOfMonthCheckInSurvey(survey)
       ? 'endofmonth'
       : null;
+  if (ownKind && belongsToNoHive) return true;
   if (ownKind) {
     if (!survey.due_date) return true;
     const due = new Date(survey.due_date);
