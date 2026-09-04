@@ -104,14 +104,89 @@ serve(async (req) => {
   /**
    * WHO IT REACHES.
    *
-   * A survey belonging to a HIVE reaches that HIVE. One belonging to no HIVE is
-   * the single HIVE-Wide "End of the month" (migration 225) and reaches every
-   * member of every HIVE, each person once however many HIVEs they are in.
+   * A survey belonging to a HIVE reaches that HIVE. A survey belonging to none
+   * is one of the two merged check-ins, and the two do NOT reach the same room:
+   *
+   *   End of the month   everybody, in every HIVE, once however many they are
+   *                      in. It counts to the end of the calendar month, so it
+   *                      is the same question for all of them on the same day.
+   *
+   *   Before we meet     everybody who has a MEETING in the next week, once
+   *                      however many of their HIVEs are meeting. Nat,
+   *                      2026-09-04: *"i want one reminder to 'check in before
+   *                      you arrive' & you can do that for as many hives as
+   *                      you're in on one day ... what i dont want is an email
+   *                      3 days before tues & then an email 3 days before
+   *                      thurs, thats anoying."*
+   *
+   * That second rule is the whole point of the merge and it has two halves.
+   * ONE LETTER is the survey being shared. THE RIGHT PEOPLE is here: without
+   * this, opening it in a week when Tech and Production meet would also nudge
+   * every OG member about a meeting a fortnight away, which is a new annoyance
+   * traded for the old one.
+   *
+   * A member of a HIVE that is not meeting can still answer — the check-in is
+   * open all cycle and every one of their HIVEs has a section in it. They are
+   * simply not the ones being reminded today.
    */
+  const MEETING_WEEK_DAYS = 7;
+
+  let meetingHives: { id: string; name: string; date: string }[] = [];
+  if (!survey.community_id && shape.kind === 'checkIn') {
+    const today = new Date().toISOString().slice(0, 10);
+    const until = new Date(Date.now() + MEETING_WEEK_DAYS * 86400000)
+      .toISOString().slice(0, 10);
+    const { data: soon } = await admin
+      .from('events')
+      .select('community_id, event_date, community:communities!community_id(name)')
+      .eq('event_type', 'meeting')
+      .eq('status', 'scheduled')
+      .gte('event_date', today)
+      .lte('event_date', until)
+      .order('event_date', { ascending: true });
+    const seen = new Set<string>();
+    for (const row of (soon ?? []) as {
+      community_id: string; event_date: string; community?: { name?: string } | null;
+    }[]) {
+      if (seen.has(row.community_id)) continue;
+      seen.add(row.community_id);
+      meetingHives.push({
+        id: row.community_id,
+        name: row.community?.name ?? 'your HIVE',
+        date: row.event_date,
+      });
+    }
+    if (!meetingHives.length) {
+      return errorResponse(
+        `No HIVE has a meeting in the next ${MEETING_WEEK_DAYS} days, so there is nobody to remind yet.`,
+        409,
+      );
+    }
+  }
+
+  /**
+   * The line under the heading: which HIVEs, and which day.
+   *
+   * "Every HIVE" is right for End of the month, which is about the calendar.
+   * It is wrong for this one — the reader is being asked to get ready for
+   * specific evenings, and a letter covering two of them has to say which two
+   * or it cannot be acted on.
+   */
+  const weekday = (isoDate: string) => {
+    const [y, m, d] = isoDate.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d))
+      .toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
+  };
+  const meetingLine = meetingHives.length
+    ? meetingHives.map((h) => `${h.name}, ${weekday(h.date)}`).join(' · ')
+    : null;
+
   const membershipQuery = admin.from('community_memberships').select('user_id');
   const { data: memberRows } = survey.community_id
     ? await membershipQuery.eq('community_id', survey.community_id)
-    : await membershipQuery;
+    : meetingHives.length
+      ? await membershipQuery.in('community_id', meetingHives.map((h) => h.id))
+      : await membershipQuery;
   const everyone = [...new Set((memberRows ?? []).map((r: { user_id: string }) => r.user_id))];
 
   const { data: answeredRows } = await admin
@@ -147,7 +222,11 @@ serve(async (req) => {
       // A NAME, not a sentence — the app puts this inside "16 people in ___
       // get an email", and "everybody, whichever HIVEs they are in" turned
       // that into nonsense the first time it was read on screen.
-      hive: survey.community_id ? hiveName : 'every HIVE',
+      hive: survey.community_id
+        ? hiveName
+        : meetingHives.length
+          ? meetingHives.map((h) => h.name).join(' and ')
+          : 'every HIVE',
       members: everyone.length,
       answered: answered.size,
       would_reach: waiting.length,
@@ -171,6 +250,15 @@ serve(async (req) => {
   const path = survey.community_id ? '/monthly-tuneup' : '/endofmonth';
   const href = deepLink(path, survey.community_id);
   const takes = shape.kind === 'monthCheckIn' ? 'about two minutes' : 'a few minutes';
+  /**
+   * One letter for the week, so it says so.
+   *
+   * A person in two of the meeting HIVEs gets this once and fills both sections
+   * in one sitting; a person in one barely notices the sentence. It is only
+   * added when there is genuinely more than one, because "one check-in covers
+   * both" is confusing to somebody who has only one.
+   */
+  const coversMany = meetingHives.length > 1;
 
   const sent = await Promise.all(
     waiting.map((userId) => sendReachEmail(admin, userId, shape.kind, {
@@ -180,8 +268,10 @@ serve(async (req) => {
       hiveAccent,
       hiveId: survey.community_id,
       heading: `Your ${shape.name} check-in is open`,
-      where: survey.community_id ? hiveName : 'Every HIVE',
-      said: `It takes ${takes}, and what you write goes straight into the room.`,
+      where: survey.community_id ? hiveName : (meetingLine ?? 'Every HIVE'),
+      said: coversMany
+        ? `It takes ${takes}, and one check-in covers every HIVE of yours that is meeting — what you write goes straight into each room.`
+        : `It takes ${takes}, and what you write goes straight into the room.`,
       buttonLabel: 'Open the check-in',
       href,
     })),
