@@ -155,7 +155,25 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
         supabase
           .from('surveys')
           .select('*')
-          .eq('community_id', communityId)
+          /**
+           * THIS HIVE'S OWN CHECK-INS, AND THE SHARED ONES.
+           *
+           * Until 2026-09-04 this asked only for `community_id = <this HIVE>`,
+           * which is exactly right while every pre-meeting check-in belonged to
+           * a HIVE. The merged "Before we meet" belongs to none of them — one
+           * check-in covering every HIVE a member is in — so the moment the
+           * per-HIVE rows are switched off at the October cutover, this query
+           * would have found nothing and the deck would have opened on meeting
+           * night to an empty room with everybody's answers sitting right
+           * there. That is the failure this file already carries a scar from
+           * once, in the comment above.
+           *
+           * The RESPONSE query below needs no change at all, which is the whole
+           * point of the merged check-in writing one row per HIVE: it still
+           * asks for this HIVE's answers by `community_id` and still gets a
+           * whole person back.
+           */
+          .or(`community_id.eq.${communityId},community_id.is.null`)
           .eq('is_active', true)
           .order('created_at', { ascending: false }),
         supabase
@@ -179,10 +197,26 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
       // have opened on Tuesday showing an empty room while every member had
       // in fact checked in.
       const activeSurveys = (surveysRes.data ?? []) as Survey[];
-      const activeCheckIn =
-        activeSurveys.find(isMonthlyCheckInSurvey)
-        ?? activeSurveys.find((survey) => isPreMeetingCheckInSurvey(survey))
-        ?? null;
+      /**
+       * A HIVE'S OWN CHECK-IN WINS WHILE IT EXISTS; THE SHARED ONE IS THE
+       * FALLBACK.
+       *
+       * Both are in this list during the changeover, and both can match the
+       * same title patterns — Production's own row and the merged one are
+       * literally both called "Before we meet". Leaving `find` to pick would
+       * have meant whichever the database happened to return first, which is a
+       * coin flip that decides whose answers light up the room.
+       *
+       * Own-first is the right order in both states: while the per-HIVE rows
+       * are live the deck reads the survey people are actually answering, and
+       * the moment they are switched off at the October cutover it reads the
+       * merged one without another line changing.
+       */
+      const own = activeSurveys.filter((survey) => survey.community_id === communityId);
+      const shared = activeSurveys.filter((survey) => survey.community_id == null);
+      const pick = (list: Survey[]) =>
+        list.find(isMonthlyCheckInSurvey) ?? list.find((survey) => isPreMeetingCheckInSurvey(survey));
+      const activeCheckIn = pick(own) ?? pick(shared) ?? null;
       const period = activeCheckIn ? getSurveyResponsePeriod(activeCheckIn) : null;
 
       const memberRows = ((membersRes.data ?? []) as unknown as { profiles: ArrivalBoardMember | ArrivalBoardMember[] | null }[])
