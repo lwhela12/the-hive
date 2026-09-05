@@ -123,9 +123,6 @@ export function EmailTemplatesPanel({
         bodyStyle={bodyStyle}
       >
         <ScrollView style={scrollStyle} contentContainerStyle={{ paddingBottom: 6 }}>
-          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: 'rgba(255,248,233,0.78)', paddingHorizontal: 12, paddingTop: 10 }}>
-            Approve template wording once; open an email to review it.
-          </Text>
 
           {approvalError ? <Text accessibilityRole="alert" style={{ color: '#ffb4a8', padding: 12 }}>{approvalError}</Text> : null}
           {/* The same five, in the place they will actually be read. */}
@@ -143,11 +140,11 @@ export function EmailTemplatesPanel({
               }}
             >
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#fffdf5' }}>
-                {posting === 'sending' ? 'Sending test copies…' : state === 'ready' ? `Email me unapproved previews (${templates.filter(template => !template.approved).length})` : 'Email me unapproved previews'}
+                {posting === 'sending' ? 'Sending…' : state === 'ready' ? `Email ${templates.filter(template => !template.approved).length} previews` : 'Email previews'}
               </Text>
             </Pressable>
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: 'rgba(255,248,233,0.78)', paddingTop: 6 }}>
-              Test copies only, to you. Already approved templates are skipped; approval also controls member emails.
+              Unapproved only · Just to you
             </Text>
             {posting === 'empty' ? <Text style={{ color: '#fffdf5', fontSize: 12, paddingTop: 6 }}>All templates are already approved. No test copies sent.</Text> : posting === 'sent' ? (
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: 'rgba(255,248,233,0.66)', paddingTop: 6 }}>

@@ -8,6 +8,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { hiveDisplayName } from '../../lib/hiveBrand';
 import { useHiveGrid, type GridHive } from '../../lib/hooks/useHiveGrid';
 import { HIVE_RULES } from '../../lib/hiveRules';
+import { humanTimeInput } from '../../lib/timeInput';
 
 /**
  * What's next — every HIVE, in date order, at the top of HIVE-Wide Admin.
@@ -125,7 +126,7 @@ function GridTab({ grid }: { grid: ReturnType<typeof useHiveGrid> }) {
           <>
             <Plain bold>{pretty(h.nextMeeting.date)}</Plain>
             <Quiet>
-              {[h.nextMeeting.time, h.nextMeeting.location].filter(Boolean).join(' · ')}
+              {[humanTimeInput(h.nextMeeting.time), h.nextMeeting.location].filter(Boolean).join(' · ')}
               {h.nextMeeting.onMeet ? ' + Meet' : ''}
             </Quiet>
           </>

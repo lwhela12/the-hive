@@ -19,8 +19,9 @@ const imported = id => {
 };
 new Function('require', 'exports', ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText)(imported, exportsObject);
 const html = renderToStaticMarkup(React.createElement(exportsObject.EmailTemplatesPanel, { Panel: ({ children }) => React.createElement(RN.View, null, children) }));
-assert.match(html, /Email me unapproved previews \(2\)/);
-assert.match(html, /Already approved templates are skipped/);
+assert.match(html, /Email 2 previews/);
+assert.match(html, /Unapproved only · Just to you/);
+assert.doesNotMatch(html, /Approve template wording once|Test copies only, to you|Already approved templates are skipped/);
 assert.equal((html.match(/role="switch"/g) || []).length, 5);
 assert.equal((html.match(/checked=""/g) || []).length, 3);
 assert.equal((html.match(/background-color:rgba\(246,244,229,1.00\)/g) || []).length, 5, 'every actual RN Web thumb must be cream, including ON');
