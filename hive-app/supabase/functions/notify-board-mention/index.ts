@@ -338,6 +338,9 @@ serve(async (req) => {
     }
 
     // ----- One person, by id (the path that has always existed) --------------
+    if (!recipient_id) {
+      return errorResponse('A recipient is required.', 400);
+    }
     if (sender_id === recipient_id) {
       return jsonResponse({ skipped: true, reason: 'self_mention' });
     }

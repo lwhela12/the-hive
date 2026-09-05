@@ -357,7 +357,8 @@ export function useSurveys(communityId?: string, userId?: string) {
 
   const submitResponse = async (
     surveyId: string,
-    answers: SurveyAnswers
+    answers: SurveyAnswers,
+    periodOverride?: string,
   ) => {
     if (!userId) return { error: 'Not authenticated' };
 
@@ -386,7 +387,7 @@ export function useSurveys(communityId?: string, userId?: string) {
     const isWide = survey.community_id == null;
     if (!isWide && !communityId) return { error: 'Not authenticated' };
 
-    const responsePeriod = getSurveyResponsePeriod(survey);
+    const responsePeriod = periodOverride ?? getSurveyResponsePeriod(survey);
 
     const payload = {
       survey_id: surveyId,
@@ -432,7 +433,7 @@ export function useSurveys(communityId?: string, userId?: string) {
    */
   const submitPerHiveResponses = async (
     surveyId: string,
-    perHive: { communityId: string; answers: SurveyAnswers }[],
+    perHive: { communityId: string; answers: SurveyAnswers; responsePeriod?: string }[],
   ) => {
     if (!userId) return { error: 'Not authenticated' };
     if (!perHive.length) return { error: 'Nothing to save' };
@@ -456,7 +457,7 @@ export function useSurveys(communityId?: string, userId?: string) {
         user_id: userId,
         community_id: row.communityId,
         answers: row.answers,
-        response_period: responsePeriod,
+        response_period: row.responsePeriod ?? responsePeriod,
         submitted_at: submittedAt,
       });
       if (error) { failed.push(row.communityId); continue; }
@@ -477,10 +478,36 @@ export function useSurveys(communityId?: string, userId?: string) {
 
     if (failed.length === perHive.length) return { error: 'Could not save your answers.' };
     if (failed.length) {
-      return { error: `Saved, except for ${failed.length} of your HIVEs. Try again and only those will re-send.` };
+      return { error: `Saved, except for ${failed.length} of your HIVEs. Your other answers are saved. Please try again.` };
     }
     return { error: null };
   };
 
-  return { allSurveys, activeSurveys, availableSurveys, pendingSurveys, myResponses, loading, refetch, submitResponse, submitPerHiveResponses };
+  // No legacy-write fallback: a missing RPC must fail closed, not mark a
+  // response complete independently of saving its occurrence answers.
+  const submitCheckInOccurrence = async (
+    surveyId: string,
+    answers: SurveyAnswers,
+    occurrenceCommunityId: string | null,
+    occurrence: string,
+  ) => {
+    if (!userId) return { error: 'Not authenticated' };
+    const { data, error } = await supabase.rpc('save_check_in_occurrence', {
+      p_survey_id: surveyId,
+      p_community_id: occurrenceCommunityId,
+      p_occurrence: occurrence,
+      p_answers: answers,
+    });
+    if (error) return { error };
+    if (!data) return { error: 'Could not confirm your saved check-in.' };
+    // Only publish success after both database writes committed.
+    queryClient.setQueryData<SurveysSnapshot>(surveysQueryKey(occurrenceCommunityId ?? communityId, userId), (previous) => {
+      const base = previous ?? EMPTY_SNAPSHOT;
+      return { surveys: base.surveys, responses: new Map(base.responses).set(surveyId, data as SurveyResponse) };
+    });
+    void queryClient.invalidateQueries({ queryKey: ['surveys'] });
+    return { error: null };
+  };
+
+  return { allSurveys, activeSurveys, availableSurveys, pendingSurveys, myResponses, loading, refetch, submitResponse, submitPerHiveResponses, submitCheckInOccurrence };
 }

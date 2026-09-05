@@ -27,6 +27,7 @@ import { supabase } from '../../lib/supabase';
 import { clearSpotlight } from '../../lib/spotlight';
 import { showAlert } from '../../lib/showAlert';
 import { getCycleStart } from '../../lib/meetingCycle';
+import { fetchCheckInActivityContext, type ActivityContext } from '../../lib/checkInActivityContext';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { Avatar } from '../ui/Avatar';
@@ -38,6 +39,9 @@ import { accentPalette, hiveSeal, HIVE_GOLD } from '../../lib/hiveBrand';
 interface SurveyModalProps {
   survey: Survey;
   initialAnswers?: SurveyAnswers;
+  /** Isolate drafts by member, HIVE and meeting/month occurrence. */
+  draftScope?: string;
+  closeLabel?: string;
   isEditingResponse?: boolean;
   carryForwardItems?: CarryForwardItem[];
   /**
@@ -168,6 +172,8 @@ function formatSurveyDueDate(dueDate: string) {
 export function SurveyModal({
   survey,
   initialAnswers,
+  draftScope,
+  closeLabel = "Back to HIVE",
   isEditingResponse = false,
   carryForwardItems = [],
   carryForwardSections,
@@ -197,9 +203,13 @@ export function SurveyModal({
    */
   const seal = hiveSeal(survey.community_id == null ? null : hiveSlug);
   const { width: recapWidth } = useWindowDimensions();
+  const draftId = draftScope ?? survey.id;
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  // Expo tabs retain their screens after navigation; dismiss the portal itself.
+  const [closed, setClosed] = useState(false);
+  const handleClose = useCallback(() => { setClosed(true); onClose(); }, [onClose]);
   const [error, setError] = useState<string | null>(null);
   const [draftLoaded, setDraftLoaded] = useState(false);
   // Memory jogger (Nat, 2026-08-13, twice: "werent we goint to preseeed it
@@ -328,10 +338,11 @@ export function SurveyModal({
     let active = true;
     setAnswers({});
     setSubmitted(false);
+    setClosed(false);
     setError(null);
     setDraftLoaded(false);
 
-    AsyncStorage.getItem(DRAFT_KEY(survey.id)).then(raw => {
+    AsyncStorage.getItem(DRAFT_KEY(draftId)).then(raw => {
       if (!active) return;
       if (raw) {
         try { setAnswers(JSON.parse(raw)); } catch {}
@@ -344,85 +355,53 @@ export function SurveyModal({
     return () => {
       active = false;
     };
-  }, [survey.id]);
+  }, [draftId]);
 
-  /**
-   * "What did you get done?" answers itself.
-   *
-   * Nat, 2026-08-15: *"instead of having things on your to-do list, and then
-   * you check them off, and then you have to remember what you did and say
-   * that — there should be automation there. Things should be seeded and
-   * pre-seeding. And then you can add in anything else you did, like maybe on
-   * your list was 'call Circus Center', but then maybe you also called four
-   * other gyms."*
-   *
-   * So the field arrives already holding the to-dos this person ticked off
-   * since the last meeting, as plain editable text. They add whatever else they
-   * did and send it. Nobody is asked to remember what the app already knows.
-   *
-   * It only ever fills a field the person has not touched — a saved answer or a
-   * draft in progress always wins, so re-opening the check-in never overwrites
-   * anything they wrote.
-   */
+  const isStaple = isPreMeetingCheckInSurvey(survey) || isEndOfMonthCheckInSurvey(survey);
+  const [completedContext, setCompletedContext] = useState<string[]>([]);
+  const [contextState, setContextState] = useState<'loading' | 'ready' | 'error'>('loading');
   useEffect(() => {
-    if (!draftLoaded) return;
-    // The end-of-month check-in asks the same question of the same cycle
-    // (lib/checkIns.ts, rebuilt 2026-08-27), so it gets the same pre-fill —
-    // the field is `q_show_progress` on both, which is also the key the
-    // meeting deck reads.
-    if (!isPreMeetingCheckInSurvey(survey) && !isEndOfMonthCheckInSurvey(survey)) return;
-    if (!viewerProfile?.id) return;
-    const target = survey.questions.find((q) => q.id === 'q_show_progress');
-    if (!target) return;
-    if (String(answers.q_show_progress ?? '').trim()) return;
-
     let active = true;
+    setCompletedContext([]); setContextState('loading');
+    if (!isStaple || !survey.community_id || !viewerProfile?.id) { setContextState('ready'); return; }
     (async () => {
-      // Since the meeting before this one. `getCycleStart` is the one anchor
-      // the whole app measures a cycle from — it reads the calendar AND the
-      // record of nights that actually happened, which is what stopped these
-      // lists reaching back into the previous cycle (lib/meetingCycle.ts).
-      const due = new Date(survey.due_date ?? Date.now());
-      const since = await getCycleStart(
-        survey.community_id,
-        due.toISOString().slice(0, 10),
-      );
-
-      const { data: done } = await supabase
-        .from('action_items')
-        .select('description, completed_at')
-        .eq('community_id', survey.community_id)
-        .eq('assigned_to', viewerProfile.id)
-        .eq('completed', true)
-        .is('archived_at', null)
-        .gte('completed_at', since.toISOString())
-        .order('completed_at', { ascending: true })
-        .limit(20);
-
-      if (!active || !done?.length) return;
-      const lines = done
-        .map((item) => parseActionItemDescription(String(item.description ?? '')).text.trim())
-        .filter(Boolean)
-        .map((text) => `\u2022 ${text}`);
-      if (!lines.length) return;
-      setAnswers((prev) => (
-        String(prev.q_show_progress ?? '').trim()
-          ? prev
-          : { ...prev, q_show_progress: lines.join('\n') }
-      ));
-    })();
-
+      const since = await getCycleStart(survey.community_id, new Date(survey.due_date ?? Date.now()).toISOString().slice(0, 10));
+      const [own, helpers] = await Promise.all([
+        supabase.from('action_items').select('id, description').eq('community_id', survey.community_id).eq('assigned_to', viewerProfile.id).eq('completed', true).is('archived_at', null).gte('completed_at', since.toISOString()).order('completed_at', { ascending: false }).limit(20),
+        supabase.from('action_items').select('id, description, assignee:profiles!assigned_to(name)').eq('community_id', survey.community_id).eq('related_user_id', viewerProfile.id).neq('assigned_to', viewerProfile.id).eq('completed', true).is('archived_at', null).gte('completed_at', since.toISOString()).order('completed_at', { ascending: false }).limit(20),
+      ]);
+      if (!active) return;
+      if (own.error || helpers.error) { setContextState('error'); return; }
+      setCompletedContext([
+        ...(own.data ?? []).map(item => parseActionItemDescription(item.description).text),
+        ...(helpers.data ?? []).map((item: any) => `${parseActionItemDescription(item.description).text} — ${item.assignee?.name ?? 'A HIVE member'} helped`),
+      ]);
+      setContextState('ready');
+    })().catch(() => { if (active) setContextState('error'); });
     return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftLoaded, survey.id, viewerProfile?.id]);
+  }, [survey.community_id, survey.due_date, viewerProfile?.id, isStaple]);
+
+  const activityKey = `${survey.id}:${survey.community_id}:${viewerProfile?.id ?? ''}`;
+  const [activity, setActivity] = useState<{ key: string; state: 'ready' | 'error'; data?: ActivityContext } | null>(null);
+  useEffect(() => {
+    let active = true;
+    setActivity(null);
+    if (!isStaple || !survey.community_id || !viewerProfile?.id) return;
+    fetchCheckInActivityContext(survey.community_id).then(data => {
+      if (active) setActivity({ key: activityKey, state: 'ready', data });
+    }).catch(() => { if (active) setActivity({ key: activityKey, state: 'error' }); });
+    return () => { active = false; };
+  }, [activityKey, isStaple, survey.community_id, viewerProfile?.id]);
+  // Gate synchronously as well as cancelling requests: never flash another HIVE's context.
+  const currentActivity = activity?.key === activityKey ? activity : null;
 
   const setAnswer = useCallback((questionId: string, value: any) => {
     setAnswers(prev => {
       const next = { ...prev, [questionId]: value };
-      AsyncStorage.setItem(DRAFT_KEY(survey.id), JSON.stringify(next)).catch(() => {});
+      AsyncStorage.setItem(DRAFT_KEY(draftId), JSON.stringify(next)).catch(() => {});
       return next;
     });
-  }, [survey.id]);
+  }, [draftId]);
 
   const handleSubmit = async () => {
     const missing = survey.questions.filter(q => q.required && !answers[q.id] && answers[q.id] !== 0);
@@ -519,7 +498,7 @@ export function SurveyModal({
       }
     }
     setSubmitting(false);
-    AsyncStorage.removeItem(DRAFT_KEY(survey.id)).catch(() => {});
+    AsyncStorage.removeItem(DRAFT_KEY(draftId)).catch(() => {});
     setSubmitted(true);
     /**
      * If the wish did not file, SAY so.
@@ -664,6 +643,8 @@ export function SurveyModal({
                   })}
                 </View>
 
+                {activeStatus === 'needs_attention' && <Text style={{ color: '#92400e', fontSize: 12, marginBottom: 8 }}>Keep this open and flag it in your saved check-in for Admin review. Add what needs attention below. This does not notify anyone.</Text>}
+
                 {/* The shared message bar, so a note on your roster looks and
                     behaves like every other box you write in — mic inside the
                     box's own border rather than on a strip welded underneath. */}
@@ -686,9 +667,16 @@ export function SurveyModal({
   };
 
   const renderQuestion = (q: SurveyQuestion, index: number) => (
+    <View key={q.id}>
+      {isStaple && ['q_hive_help_recap', 'q_hangs_recap'].includes(q.id) && (
+        <View style={{ padding: 12, gap: 6, backgroundColor: '#f1ecdf', borderRadius: 12 }}>
+          <Text style={{ color: '#5c5648' }}>{!currentActivity ? 'Loading this HIVE’s activity…' : currentActivity.state === 'error' ? 'Activity could not load. You can still write your own reflection.' : q.id === 'q_hive_help_recap' ? (currentActivity.data?.help?.title ?? 'No active HIVE Help focus recorded.') : currentActivity.data?.hangs.length ? 'This cycle’s scheduled Hangs. Attendance and ratings are yours to choose — nothing is assumed.' : 'No Hangs recorded for this cycle.'}</Text>
+          {q.id === 'q_hive_help_recap' && currentActivity?.data?.help?.content ? <Text style={{ color: '#5c5648' }}>{currentActivity.data.help.content}</Text> : null}
+        </View>
+      )}
     <SurveyQuestionField
-      key={q.id}
-      question={q}
+      hangEvents={currentActivity?.data?.hangs}
+      question={isStaple && q.id === 'q_hangs_recap' ? { ...q, type: 'hangs' } : isStaple && q.id === 'q_hive_help_recap' ? { ...q, type: 'long', text: 'Any reflection on this HIVE’s Help activity? Completion is handled in your roster — no need to report it twice.' } : q}
       index={index}
       value={answers[q.id]}
       onChange={(value) => setAnswer(q.id, value)}
@@ -700,12 +688,13 @@ export function SurveyModal({
       communityId={survey.community_id}
       accent={accent}
     />
+    </View>
   );
 
   return (
-    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={!closed} animationType="slide" transparent onRequestClose={handleClose}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-        <Pressable onPress={onClose} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
+        <Pressable onPress={handleClose} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
         <View style={{ backgroundColor: '#faf8f3', borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '94%' }}>
           {/* Handle + close button */}
           <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
@@ -719,7 +708,7 @@ export function SurveyModal({
               </View>
             ) : <View style={{ width: 80 }} />}
             <CloseButton
-              onPress={onClose}
+              onPress={handleClose}
               accessibilityLabel="Close survey"
               color="#9a8060"
               size={22}
@@ -733,10 +722,10 @@ export function SurveyModal({
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, color: '#6b7280', textAlign: 'center', lineHeight: 22, marginBottom: 32 }}>
                 {isEditingResponse
                   ? 'Your updated answers are saved. HIVE will be working from the latest version.'
-                  : 'Your answers are saved for the meeting.'}
+                  : 'Your check-in answers are saved.'}
               </Text>
-              <Pressable onPress={onClose} style={{ backgroundColor: tint.accent, borderRadius: 14, paddingHorizontal: 32, paddingVertical: 14 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>Back to HIVE</Text>
+              <Pressable onPress={handleClose} style={{ backgroundColor: tint.accent, borderRadius: 14, paddingHorizontal: 32, paddingVertical: 14 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>{closeLabel}</Text>
               </Pressable>
             </View>
           ) : (
@@ -848,6 +837,12 @@ export function SurveyModal({
                 );
               })()}
 
+              {isStaple && survey.community_id && <View style={{ backgroundColor: tint.wash, borderRadius: 14, padding: 14, marginBottom: 18, gap: 6 }}>
+                <Text style={{ color: tint.ink, fontFamily: 'Lato_700Bold' }}>Completed work & helper credit</Text>
+                <Text style={{ color: '#5c5648' }}>{contextState === 'loading' ? 'Loading this HIVE’s completed work…' : contextState === 'error' ? 'Completed work could not load. Your answers are still yours to write.' : completedContext.length ? 'A reminder, not a pre-written answer:' : 'No completed work recorded for this cycle yet.'}</Text>
+                {completedContext.map((line, index) => <Text key={index} style={{ color: '#5c5648' }}>• {line}</Text>)}
+                <Text style={{ color: '#5c5648' }}>Your active goals, HD and commitments are in the roster below. Update each status there once; use POP for changes, blockers and what help would move you forward.</Text>
+              </View>}
               {/* Grouped? Then each section draws its own, below its heading. */}
               {draftLoaded && !carryForwardSections && renderCarryForwardContext()}
 

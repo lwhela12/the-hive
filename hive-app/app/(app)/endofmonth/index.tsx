@@ -1,17 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../lib/hooks/useAuth';
 import { usePageSkin } from '../../../lib/pageSkin';
 import { useSurveys, type SurveyAnswers } from '../../../lib/hooks/useSurveys';
+import { AppHeader } from '../../../components/navigation/AppHeader';
+import { LegacyCheckInAnswers } from '../../../components/surveys/LegacyCheckInAnswers';
 import { SurveyModal } from '../../../components/surveys/SurveyModal';
+import { CheckInHiveCard } from '../../../components/surveys/CheckInHiveCard';
+import { checkInQuestions, PLATE_QUESTION, type MeetingPreview } from '../../../lib/checkInPresentation';
 import {
   buildMergedEndOfMonth,
   mergedPreMeetingQuestions,
   splitMergedAnswers,
   type MergedCheckIn,
 } from '../../../lib/checkIns';
+import { fetchCarryForwardItems } from '../../../lib/hooks/useCarryForwardContext';
+import { CARRY_FORWARD_ANSWER_KEY, type CarryForwardItem } from '../../../lib/carryForward';
+import { hiveDisplayName, hiveAccent } from '../../../lib/hiveBrand';
 import type { Survey, SurveyQuestion } from '../../../types';
 
 /**
@@ -38,6 +46,7 @@ import type { Survey, SurveyQuestion } from '../../../types';
  */
 export default function EndOfMonthScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   /**
    * `?on=2026-09-29` — read this check-in as it will look on a given day.
    *
@@ -68,9 +77,15 @@ export default function EndOfMonthScreen() {
    */
   const { loading: authLoading, profile, communityId, memberships } = useAuth();
   const skin = usePageSkin();
-  const { myResponses, submitResponse, submitPerHiveResponses } =
+  const { myResponses, submitCheckInOccurrence } =
     useSurveys(communityId ?? undefined, profile?.id);
 
+  const [meetings, setMeetings] = useState<MeetingPreview[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [review, setReview] = useState<Record<string, SurveyAnswers>>({});
+  const [saved, setSaved] = useState<Record<string, SurveyAnswers>>({});
+  const [todos, setTodos] = useState<Record<string, CarryForwardItem[]>>({});
+  const month = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }).slice(0, 7);
   const [survey, setSurvey] = useState<Survey | null>(null);
   /**
    * The check-in as this person sees it today.
@@ -121,7 +136,7 @@ export default function EndOfMonthScreen() {
       if (!found) { setState('none'); return; }
 
       const built = buildMergedEndOfMonth(
-        (found.questions ?? []) as SurveyQuestion[],
+        [PLATE_QUESTION, ...checkInQuestions((found.questions ?? []) as SurveyQuestion[], true)],
         memberships.map((m) => ({
           id: m.community_id,
           slug: m.community?.slug ?? null,
@@ -135,6 +150,22 @@ export default function EndOfMonthScreen() {
             : new Date();
         })(),
       );
+      for (const m of memberships) {
+        if (!built.sections.some(s => s.communityId === m.community_id)) built.sections.push({
+          communityId: m.community_id, slug: m.community?.slug ?? '', name: hiveDisplayName(m.community?.name), questions: [],
+        });
+      }
+      const [{ data: receipts, error: receiptError }, rosters, nextMeetings] = await Promise.all([
+        supabase.from('check_in_completions').select('community_id, occurrence, answers')
+          .eq('survey_id', found.id).eq('user_id', profile.id).eq('occurrence', `month:${month}`),
+        Promise.all(memberships.map(async m => ({ id: m.community_id, items: await fetchCarryForwardItems(m.community_id, profile.id, found) }))),
+        supabase.from('events').select('id, community_id, event_date, event_time').eq('event_type', 'meeting').eq('status', 'scheduled').gte('event_date', new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })).in('community_id', memberships.map(m => m.community_id)).order('event_date'),
+      ]);
+      if (cancelled) return;
+      if (receiptError || nextMeetings.error) { setState('broken'); return; }
+      setMeetings(nextMeetings.data ?? []);
+      setSaved(Object.fromEntries((receipts ?? []).map(r => [r.community_id ?? 'month', r.answers as SurveyAnswers])));
+      setTodos(Object.fromEntries(rosters.map(r => [r.id, r.items])));
       setMerged(built);
       // The row that goes on screen. With no season open this is the stored
       // row untouched, which is the point: 361 days a year nothing changes.
@@ -152,7 +183,7 @@ export default function EndOfMonthScreen() {
     })();
 
     return () => { cancelled = true; };
-  }, [authLoading, profile, memberships, askedDate]);
+  }, [authLoading, profile, memberships, askedDate, month]);
 
   const done = useCallback(() => {
     // Home rather than back: a link out of a text message has nothing behind it.
@@ -160,7 +191,17 @@ export default function EndOfMonthScreen() {
   }, [router]);
 
   const onSubmit = useCallback(async (answers: SurveyAnswers) => {
-    if (!survey) return { error: 'No check-in open' };
+    if (!survey || !profile || !selected || !merged) return { error: 'No check-in open' };
+    // Date previews are read-only; never file future seasonal answers into this month.
+    if (askedDate) return { error: 'Preview only' };
+    if (selected !== 'month') {
+      const own = splitMergedAnswers({ ...merged, personal: [], sections: merged.sections.filter(s => s.communityId === selected) }, Object.fromEntries(Object.entries(answers).map(([key, value]) => [`${selected}:${key}`, value])), [])[0];
+      if (!own) return { error: 'No section' };
+      if (answers[CARRY_FORWARD_ANSWER_KEY]) own.answers[CARRY_FORWARD_ANSWER_KEY] = answers[CARRY_FORWARD_ANSWER_KEY];
+      const { error } = await submitCheckInOccurrence(survey.id, own.answers as SurveyAnswers, selected, `month:${month}`);
+      if (!error) { setSaved(previous => ({ ...previous, [selected]: answers })); setReview(previous => { const next = { ...previous }; delete next[selected]; return next; }); }
+      return { error };
+    }
 
     /**
      * The month goes in the one HIVE-Wide row; a season goes in its HIVE's.
@@ -170,59 +211,57 @@ export default function EndOfMonthScreen() {
      * row. The questions about the month do not: they are one answer for one
      * person, and the Buzz reads them off the row belonging to no HIVE.
      */
-    const result = await submitResponse(survey.id, answers);
+    const result = await submitCheckInOccurrence(survey.id, answers, null, `month:${month}`);
     if (result.error) return result;
 
-    if (merged && merged.sections.length) {
-      // Empty personal list: nothing from the top is copied down, or a
-      // newsletter shout-out would appear three times in Admin.
-      const perHive = (splitMergedAnswers(merged, answers, []) as
-        { communityId: string; answers: SurveyAnswers }[])
-        .filter((row) => Object.keys(row.answers).length > 0);
-      if (perHive.length) {
-        const seasonResult = await submitPerHiveResponses(survey.id, perHive);
-        // The month is already saved. A season section that fails to file is
-        // worth saying out loud rather than losing behind a success screen.
-        if (seasonResult.error) return seasonResult;
-      }
-    }
+    setSaved(previous => ({ ...previous, month: answers }));
+    setReview(previous => { const next = { ...previous }; delete next.month; return next; });
+    return { error: null };
+  }, [survey, merged, selected, month, askedDate, submitCheckInOccurrence, profile?.id]);
 
-    /**
-     * The email-or-text answer has a real destination, and it is not this
-     * survey's answer blob.
-     *
-     * `profiles.contact_pref` (migration 223) is what Admin reads to tell Nat
-     * who wants a text. Left in `answers.q_contact` it would be a display
-     * string nobody reads — the "question with nowhere to go" this project
-     * keeps having to delete. So the answer is copied to the column it belongs
-     * in, and a failure there does not fail the check-in: the rest of what
-     * they wrote matters more than this one field.
-     */
-    const said = answers.q_contact;
-    const pref = typeof said === 'string'
-      ? ({ Email: 'email', Text: 'text', 'Either is fine': 'either' } as Record<string, string>)[said]
-      : undefined;
-    if (pref && profile?.id) {
-      await (supabase as any)
-        .from('profiles')
-        .update({ contact_pref: pref })
-        .eq('id', profile.id);
-    }
-    return result;
-  }, [survey, merged, submitResponse, submitPerHiveResponses, profile?.id]);
+  if (!isFocused) return null;
 
-  if (state === 'ready' && survey) {
-    const mine = myResponses.get(survey.id);
+  if (state === 'ready' && survey && merged && selected) {
+    const part = selected === 'month'
+      ? { ...merged, sections: [] }
+      : { ...merged, personal: [], sections: merged.sections.filter(s => s.communityId === selected) };
     return (
       <SurveyModal
-        survey={survey}
-        initialAnswers={mine?.answers}
-        isEditingResponse={!!mine}
+        key={`${survey.id}:${month}:${selected}`}
+        survey={{ ...survey, community_id: selected === 'month' ? survey.community_id : selected,
+          description: selected === 'month' ? 'Your month, and anything for the Buzz.' : 'Just this HIVE. Review your commitments, then save.',
+          questions: mergedPreMeetingQuestions(part).map(e => e.question) }}
+        draftScope={`${profile?.id}:${survey.id}:${askedDate ?? month}:${selected}`}
+        initialAnswers={review[selected] ?? saved[selected]}
+        isEditingResponse={!!saved[selected]}
+        carryForwardItems={todos[selected] ?? []}
         onSubmit={onSubmit}
-        onClose={done}
+        closeLabel="Back to check-ins"
+        hiveSlug={memberships.find(m => m.community_id === selected)?.community?.slug}
+        hiveAccent={hiveAccent(memberships.find(m => m.community_id === selected)?.community)}
+        onClose={() => setSelected(null)}
       />
     );
   }
+  if (state === 'ready' && survey && merged) return (
+    <ScrollView style={{ backgroundColor: skin.page }} contentContainerStyle={{ padding: 24, gap: 16 }}>
+      <AppHeader title="End of the month" tone="wide" />
+      <Text style={{ color: skin.inkSoft }}>{askedDate ? 'Read-only date preview.' : 'One sitting. Review each HIVE, then finish with your month and the Buzz.'}</Text>
+      {memberships.map(m => <CheckInHiveCard key={m.community_id} community={m.community}
+        event={meetings.find(event => event.community_id === m.community_id)} onPress={() => setSelected(m.community_id)}
+        status={saved[m.community_id] ? 'Saved — review' : 'Review commitments'} />)}
+      {profile && [null, ...memberships.map(m => m.community_id)].map(id => <LegacyCheckInAnswers key={id ?? 'month'} scopeLabel={id ? hiveDisplayName(memberships.find(m => m.community_id === id)?.community?.name) : 'Your month'} surveyId={survey.id} userId={profile.id} communityId={id} onReview={answers => { const key = id ?? 'month'; setReview(r => ({ ...r, [key]: answers })); setSelected(key); }} />)}
+      <Pressable accessibilityRole="link" onPress={() => router.push('/settings' as never)} style={{ padding: 12 }}>
+        <Text style={{ color: skin.gold }}>Email settings →</Text>
+        <Text style={{ color: skin.inkSoft }}>Switch off individual HIVE emails, including check-in reminders and the Buzz. This does not choose email versus text or stop personal messages.</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" disabled={!askedDate && memberships.some(m => !saved[m.community_id])}
+        onPress={() => setSelected('month')} style={{ padding: 20 }}>
+        <Text style={{ color: skin.gold }}>{saved.month ? 'Your month — saved' : 'Finish: your month + the Buzz'}</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" onPress={done}><Text style={{ color: skin.gold }}>Done for now</Text></Pressable>
+    </ScrollView>
+  );
 
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: skin.page, padding: 24 }}>

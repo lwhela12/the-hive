@@ -1178,6 +1178,8 @@ type SeasonSurveyRow = {
   due_date: string | null;
 };
 
+import { CheckInAnswersPanel } from './CheckInAnswersPanel';
+
 export function HiveMemberPanels({
   cellStyle,
   panelStyle,
@@ -1658,6 +1660,8 @@ export function HiveMemberPanels({
 
   return (
     <>
+      <CheckInAnswersPanel hives={memberships.filter(m => profile?.is_owner || m.role === 'admin')}
+        cellStyle={cellStyle} panelStyle={panelStyle} bodyStyle={bodyStyle} scrollStyle={scrollStyle} Panel={Panel} />
       {/* EVERY HIVE, including the one you happen to be standing in.
           It used to skip the current one, because admin.tsx drew that one
           itself — which is exactly why they didn't match: two bits of code
@@ -1693,89 +1697,6 @@ export function HiveMemberPanels({
         const admins = rows.filter((r) => r.role === 'admin');
         const soleAdminId = admins.length === 1 ? admins[0].id : null;
 
-        /* The check-in schedule, built for THIS HIVE. The monthly pair is
-           live where the monthly rhythm has been designed (OG and Tech);
-           the quarter and the year are live wherever a season deck exists
-           in lib/checkIns.ts — all three HIVEs, Nat's Trello call — and
-           each of those rows is either the door to the launched survey or
-           the button that launches this occurrence. Italic "coming soon"
-           now only ever means "no deck designed", never "built but
-           resting". */
-        const tailored = hasTailoredCheckIns(m.community);
-        // A HIVE can run a check-in before its meetings and at the end of its
-        // months without running OG's monthly TUNE-UP WIZARD, whose steps are
-        // OG's own rituals. Production does exactly that from 2026-08-14 — its
-        // two check-ins are plain survey cards on Home. Reading `tailored` for
-        // these rows told Nat "coming soon" about a survey she had just filled
-        // in herself.
-        const preMeeting = tailored || hasPreMeetingCheckIn(m.community);
-        const endOfMonth = tailored || hasEndOfMonthCheckIn(m.community);
-        const seasonReady = hasSeasonCheckIns(m.community);
-        const launchedSeason = seasonSurveysByHive[m.community_id] ?? [];
-        /**
-         * THE SEASON IS A SECTION NOW, NOT A SURVEY TO LAUNCH.
-         *
-         * Nat, 2026-09-04: *"next month, the only 'end of the month' survey
-         * avail will also have 'end of the quarter' questions...so it'll be
-         * slightly different & then go back to normal. How do we manage that?"*
-         *
-         * This row used to carry a Launch button that inserted a fresh
-         * `surveys` row per HIVE per occurrence — six rows a year, six things
-         * to remember, six more chips and six more emails. The quarter and the
-         * year now appear inside End of the month for the three days they are
-         * open and fall away after (`openSeasonSections` in lib/checkIns.ts),
-         * so there is nothing to launch and nothing to retire.
-         *
-         * The row stays because the schedule is still worth reading. It just
-         * has no button any more.
-         */
-        const seasonRow = (kind: SeasonKind): CheckInScheduleRow => {
-          const when = kind === 'quarter' ? 'End of Quarter' : 'End of Year';
-          if (!seasonReady) return { key: kind, when, what: 'coming soon', live: false };
-          const occurrence = getUpcomingSeasonOccurrence(kind, new Date());
-          const opens = occurrence.opensDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-          return {
-            key: kind,
-            when,
-            what: `inside End of the month, from ${opens} — ${occurrence.label}`,
-            live: true,
-          };
-        };
-        const checkInSchedule: CheckInScheduleRow[] = [
-          {
-            key: 'monthly',
-            when: 'Before we meet',
-            what: tailored
-              ? 'open Before we meet'
-              : preMeeting ? 'how we run, and where everyone stands' : 'coming soon',
-            live: preMeeting,
-            ...(tailored ? {
-              actionLabel: 'Test or fill out Before we meet',
-              onPress: () => void openMemberCheckIn(m.community_id),
-            } : preMeeting ? {
-              actionLabel: 'Read it or fill it out on Home',
-              onPress: () => void openPlainCheckIn(m.community_id),
-            } : {}),
-          },
-          {
-            key: 'halfway',
-            when: 'End of the month',
-            what: tailored
-              ? 'shout-outs for the newsletter'
-              : endOfMonth ? 'what moved, what is stuck, what is next' : 'coming soon',
-            live: endOfMonth,
-            ...(tailored ? {
-              actionLabel: 'Test or fill out End of the month',
-              onPress: () => void openMemberCheckIn(m.community_id, 'midpoint'),
-            } : endOfMonth ? {
-              actionLabel: 'Read it or fill it out on Home',
-              onPress: () => void openPlainCheckIn(m.community_id),
-            } : {}),
-          },
-          seasonRow('quarter'),
-          seasonRow('year'),
-        ];
-
         return (
           // One after another, no gaps. The HIVEs used to take every other
           // position so the two cross-HIVE boxes could sit between them in the
@@ -1804,7 +1725,6 @@ export function HiveMemberPanels({
                 ...(m.role === 'admin' && waitingCount > 0
                   ? [{ key: 'waiting', label: `Waiting (${waitingCount})` }]
                   : m.role === 'admin' ? [{ key: 'waiting', label: 'Waiting' }] : []),
-                { key: 'checkins', label: 'Check-ins' },
                 // Only a HIVE's admin can put a wish back, so only an admin is
                 // shown the shelf it sits on.
                 ...(m.role === 'admin' ? [{ key: 'removed', label: 'Removed' }] : []),
@@ -1854,137 +1774,6 @@ export function HiveMemberPanels({
               } : undefined}
             >
               <ScrollView style={scrollStyle} nestedScrollEnabled showsVerticalScrollIndicator>
-                {tab === 'checkins' ? (
-                  /* THE CHECK-INS THIS HIVE RUNS.
-                     One door, then the shape of the year underneath it.
-
-                     Nat asked for an Answers tab too — *"we could have an
-                     'answer' tab that populates with all of those things?"*,
-                     phrased as a question, so: both sets of answers already have
-                     a door, and each door is where the answers get used. The
-                     pre-meeting check-in's are in the sheet this row opens,
-                     grouped by month with the POP readout on top. The month-end
-                     one's are shout-outs, and they are in the Newsletter box —
-                     the screen Nat is on when she writes the newsletter they
-                     were collected for. An Answers tab would be a third door
-                     onto those two rooms, on the morning whose whole job was
-                     taking doors away. So this row says "answers" out loud, and
-                     the line below names where the shout-outs go.
-
-                     Every HIVE shows the schedule now (2026-08-12): a HIVE
-                     whose monthly rhythm is still being designed keeps those
-                     two rows in honest italics, and its quarter and year rows
-                     work today — that was the whole promise. */
-                  <View style={{ paddingVertical: 6 }}>
-                    {tailored ? (
-                      <Pressable
-                        onPress={() => void openCheckInsForHive(m.community_id)}
-                        style={({ pressed }) => ({
-                          flexDirection: 'row', alignItems: 'center', gap: 10,
-                          paddingHorizontal: 14, paddingVertical: 11,
-                          backgroundColor: pressed ? skin.inset : 'transparent',
-                          borderBottomWidth: 1, borderBottomColor: skin.hairline,
-                        })}
-                      >
-                        <Text style={{ fontSize: 15 }}>📊</Text>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#F6F4E5' }}>
-                            Questions &amp; answers
-                          </Text>
-                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(246,244,229,0.55)' }}>
-                            The meeting check-in, and what {name} said
-                          </Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={15} color="rgba(246,244,229,0.5)" />
-                      </Pressable>
-                    ) : (
-                      <Text
-                        accessibilityRole="text"
-                        style={{
-                          fontFamily: 'Lato_400Regular', fontStyle: 'italic',
-                          fontSize: 12, lineHeight: 18,
-                          color: 'rgba(246,244,229,0.55)',
-                          paddingHorizontal: 14, paddingVertical: 10,
-                          borderBottomWidth: 1, borderBottomColor: skin.hairline,
-                        }}
-                      >
-                        {CHECK_INS_COMING_SOON_MESSAGE}
-                      </Text>
-                    )}
-
-                    <Text
-                      style={{
-                        fontFamily: 'Lato_700Bold', fontSize: 10.5, letterSpacing: 0.9,
-                        textTransform: 'uppercase', color: 'rgba(246,244,229,0.6)',
-                        paddingHorizontal: 14, paddingTop: 14, paddingBottom: 6,
-                      }}
-                    >
-                      When they go out
-                    </Text>
-                    {checkInSchedule.map((step) => {
-                          const content = (
-                            <>
-                              <View
-                                style={{
-                                  width: 6, height: 6, borderRadius: 3, marginTop: 5,
-                                  backgroundColor: step.live ? accent : 'transparent',
-                                  borderWidth: step.live ? 0 : 1,
-                                  borderColor: 'rgba(246,244,229,0.45)',
-                                }}
-                              />
-                              <View style={{ flex: 1 }}>
-                                <Text
-                                  style={{
-                                    fontFamily: step.live ? 'Lato_700Bold' : 'Lato_400Regular',
-                                    fontSize: 12, lineHeight: 17,
-                                    fontStyle: step.live ? 'normal' : 'italic',
-                                    color: step.live ? '#F6F4E5' : 'rgba(246,244,229,0.45)',
-                                  }}
-                                >
-                                  {step.when}
-                                  <Text style={{ color: 'rgba(246,244,229,0.5)' }}> · {step.what}</Text>
-                                </Text>
-                                {step.actionLabel ? (
-                                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10.5, color: 'rgba(246,244,229,0.55)', marginTop: 1 }}>
-                                    {step.actionLabel}
-                                  </Text>
-                                ) : null}
-                              </View>
-                              {step.onPress ? (
-                                <Ionicons name="chevron-forward" size={14} color="rgba(246,244,229,0.5)" />
-                              ) : null}
-                            </>
-                          );
-
-                          return step.onPress ? (
-                            <Pressable
-                              key={step.key}
-                              onPress={step.onPress}
-                              accessibilityRole="button"
-                              accessibilityLabel={step.actionLabel ?? step.when}
-                              style={({ pressed }) => ({
-                                flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-                                paddingHorizontal: 14, paddingVertical: 9,
-                                backgroundColor: pressed ? skin.inset : 'transparent',
-                              })}
-                            >
-                              {content}
-                            </Pressable>
-                          ) : (
-                            <View
-                              key={step.key}
-                              style={{
-                                flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-                                paddingHorizontal: 14, paddingVertical: 5,
-                              }}
-                            >
-                              {content}
-                            </View>
-                          );
-                        })}
-                    <View style={{ height: 10 }} />
-                  </View>
-                ) : (
                 <>
                 {inviting ? (
                   <View
@@ -2543,7 +2332,6 @@ export function HiveMemberPanels({
                   </View>
                 ) : null}
                 </>
-                )}
               </ScrollView>
             </Panel>
           </View>

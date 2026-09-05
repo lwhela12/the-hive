@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../lib/hooks/useAuth';
 import { usePageSkin } from '../../../lib/pageSkin';
 import { useSurveys, type SurveyAnswers } from '../../../lib/hooks/useSurveys';
+import { AppHeader } from '../../../components/navigation/AppHeader';
+import { LegacyCheckInAnswers } from '../../../components/surveys/LegacyCheckInAnswers';
 import { SurveyModal } from '../../../components/surveys/SurveyModal';
+import { SharedPlate } from '../../../components/surveys/SharedPlate';
+import { CheckInHiveCard } from '../../../components/surveys/CheckInHiveCard';
+import { checkInQuestions, type MeetingPreview } from '../../../lib/checkInPresentation';
 import {
   buildMergedPreMeeting,
   mergedPreMeetingQuestions,
@@ -13,9 +19,10 @@ import {
   MERGED_PRE_MEETING_TITLE,
   type MergedPreMeeting,
 } from '../../../lib/checkIns';
-import { hiveDisplayName } from '../../../lib/hiveBrand';
+import { meetingOccurrence, type CheckInMeeting } from '../../../supabase/functions/_shared/checkInSession';
+import { hiveDisplayName, hiveAccent } from '../../../lib/hiveBrand';
 import { fetchCarryForwardItems } from '../../../lib/hooks/useCarryForwardContext';
-import type { CarryForwardItem } from '../../../lib/carryForward';
+import { CARRY_FORWARD_ANSWER_KEY, type CarryForwardItem } from '../../../lib/carryForward';
 import type { Survey, SurveyQuestion } from '../../../types';
 
 /**
@@ -53,10 +60,16 @@ import type { Survey, SurveyQuestion } from '../../../types';
  */
 export default function BeforeWeMeetScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const { loading: authLoading, profile, communityId, memberships } = useAuth();
   const skin = usePageSkin();
-  const { myResponses, submitPerHiveResponses } = useSurveys(communityId ?? undefined, profile?.id);
+  const { myResponses, submitCheckInOccurrence } = useSurveys(communityId ?? undefined, profile?.id);
 
+  const [plate, setPlate] = useState<string | undefined>();
+  const [selected, setSelected] = useState<string | null>(null);
+  const [review, setReview] = useState<Record<string, SurveyAnswers>>({});
+  const [meetings, setMeetings] = useState<MeetingPreview[]>([]);
+  const [saved, setSaved] = useState<Record<string, SurveyAnswers>>({});
   const [row, setRow] = useState<Survey | null>(null);
   const [merged, setMerged] = useState<MergedPreMeeting | null>(null);
   const [todos, setTodos] = useState<CarryForwardItem[]>([]);
@@ -80,7 +93,8 @@ export default function BeforeWeMeetScreen() {
       const [
         { data: rows, error: rowError },
         { data: hiveSurveys, error: hiveError },
-        { data: pastMeetings },
+        { data: pastMeetings, error: pastError },
+        { data: upcoming, error: upcomingError },
       ] =
         await Promise.all([
           supabase
@@ -110,14 +124,19 @@ export default function BeforeWeMeetScreen() {
             .from('events')
             .select('community_id')
             .eq('event_type', 'meeting')
-            .lt('event_date', new Date().toISOString().slice(0, 10))
+            .lt('event_date', new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }))
             .in('community_id', hiveIds.length ? hiveIds : ['00000000-0000-0000-0000-000000000000']),
+          supabase.from('events').select('id, community_id, event_date, event_time')
+            .eq('event_type', 'meeting').eq('status', 'scheduled')
+            .gte('event_date', new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }))
+            .in('community_id', hiveIds.length ? hiveIds : ['00000000-0000-0000-0000-000000000000'])
+            .order('event_date'),
         ]);
 
       if (cancelled) return;
       // Not-loaded, empty and failed are three different states, and only one
       // of them gets the reassuring copy.
-      if (rowError || hiveError) { setState('broken'); return; }
+      if (rowError || hiveError || pastError || upcomingError) { setState('broken'); return; }
 
       const found = (rows ?? [])[0] as Survey | undefined;
       if (!found) { setState('none'); return; }
@@ -156,7 +175,7 @@ export default function BeforeWeMeetScreen() {
           : (pre.find((s: any) => isFirstNight.test(String(s.title ?? ''))) ?? pre[0]);
         const chosen = wanted
           ?? mine.find((s: any) => !notPreMeeting.test(String(s.title ?? '')));
-        return ((chosen?.questions ?? []) as SurveyQuestion[]);
+        return checkInQuestions((chosen?.questions ?? []) as SurveyQuestion[]);
       };
 
       const built = buildMergedPreMeeting(
@@ -169,6 +188,18 @@ export default function BeforeWeMeetScreen() {
       );
 
       if (built.sections.length === 0) { setState('none'); return; }
+      const next = (upcoming ?? []).filter((event, index, all) => all.findIndex(e => e.community_id === event.community_id) === index) as CheckInMeeting[];
+      const { data: receipts, error: receiptError } = await supabase.from('check_in_completions')
+        .select('community_id, occurrence, answers').eq('survey_id', found.id).eq('user_id', profile.id);
+      if (cancelled) return;
+      if (receiptError) { setState('broken'); return; }
+      const hydrated: Record<string, SurveyAnswers> = {};
+      for (const event of next) {
+        const receipt = receipts?.find(r => r.community_id === event.community_id && r.occurrence === meetingOccurrence(event.id));
+        if (receipt) hydrated[event.community_id] = receipt.answers as SurveyAnswers;
+      }
+      setSaved(hydrated);
+      setMeetings(next);
       setRow(found);
       setMerged(built);
       setState('ready');
@@ -193,7 +224,6 @@ export default function BeforeWeMeetScreen() {
               slug: (m.community?.slug ?? '').trim().toLowerCase(),
               items: items.map((item: CarryForwardItem) => ({
                 ...item,
-                id: `${m.community_id}:${item.id}`,
                 sourceLabel: `${where} · ${item.sourceLabel}`,
               })),
             };
@@ -235,39 +265,76 @@ export default function BeforeWeMeetScreen() {
    * `splitMergedAnswers` puts the bare ids back on the way out.
    */
   const forThisReader: Survey | null = useMemo(() => {
-    if (!row || !merged) return null;
+    if (!row || !merged || !selected) return null;
     return {
       ...row,
+      community_id: selected,
+      due_date: meetings.find(m => m.community_id === selected)?.event_date ?? row.due_date,
       description: merged.description,
-      questions: mergedPreMeetingQuestions(merged).map(({ question, key }) => ({
+      questions: mergedPreMeetingQuestions({ ...merged, sections: merged.sections.filter(s => s.communityId === selected) }).map(({ question, key }) => ({
         ...question,
-        id: key,
+        id: question.id,
       })),
     } as Survey;
-  }, [row, merged]);
+  }, [row, merged, selected, meetings]);
 
   const onSubmit = useCallback(async (answers: SurveyAnswers) => {
-    if (!row || !merged) return { error: 'No check-in open' };
-    return submitPerHiveResponses(
-      row.id,
-      splitMergedAnswers(merged, answers) as { communityId: string; answers: SurveyAnswers }[],
-    );
-  }, [row, merged, submitPerHiveResponses]);
+    const event = meetings.find(m => m.community_id === selected);
+    if (!row || !merged || !selected || !event || !profile) return { error: 'No upcoming meeting' };
+    const own = splitMergedAnswers({ ...merged, sections: merged.sections.filter(s => s.communityId === selected) }, Object.fromEntries(Object.entries(answers).map(([key, value]) => [`${selected}:${key}`, value])), [])[0];
+    if (!own) return { error: 'No section' };
+    // Preserve historic numeric energy; capacity has its own string key.
+    for (const id of ['q_energy_level', 'q_energy_mode', 'q_feeling_today', 'q_plate']) {
+      const original = review[selected] ?? saved[selected];
+      if (original?.[id] !== undefined) own.answers[id] = original[id];
+    }
+    if (plate !== undefined) own.answers.q_plate = plate;
+    if (answers[CARRY_FORWARD_ANSWER_KEY]) own.answers[CARRY_FORWARD_ANSWER_KEY] = answers[CARRY_FORWARD_ANSWER_KEY];
+    const { error } = await submitCheckInOccurrence(row.id, own.answers as SurveyAnswers, selected, meetingOccurrence(event.id));
+    if (!error) { setSaved(previous => ({ ...previous, [selected]: own.answers as SurveyAnswers })); setReview(previous => { const next = { ...previous }; delete next[selected]; return next; }); }
+    return { error };
+  }, [row, merged, selected, meetings, profile, submitCheckInOccurrence, plate, saved, review]);
 
-  if (state === 'ready' && forThisReader) {
-    const mine = myResponses.get(forThisReader.id);
+  if (!isFocused) return null;
+
+  if (state === 'ready' && forThisReader && selected) {
+    const mine = review[selected] ?? saved[selected];
+    const section = merged?.sections.find(s => s.communityId === selected);
     return (
       <SurveyModal
+        key={`${row?.id}:${selected}:${meetings.find(m => m.community_id === selected)?.id}`}
+        draftScope={`${profile?.id}:${row?.id}:${selected}:${meetings.find(m => m.community_id === selected)?.id}`}
         survey={forThisReader}
-        initialAnswers={mine?.answers}
+        initialAnswers={mine}
         isEditingResponse={!!mine}
-        carryForwardItems={todos}
-        carryForwardSections={todosByHive}
+        carryForwardItems={section ? todosByHive[`note_hive_${section.slug}`] ?? [] : []}
+        carryForwardSections={section ? { [`note_hive_${section.slug}`]: todosByHive[`note_hive_${section.slug}`] ?? [] } : {}}
         onSubmit={onSubmit}
-        onClose={done}
+        closeLabel="Back to check-ins"
+        hiveSlug={memberships.find(m => m.community_id === selected)?.community?.slug}
+        hiveAccent={hiveAccent(memberships.find(m => m.community_id === selected)?.community)}
+        onClose={() => setSelected(null)}
       />
     );
   }
+
+  if (state === 'ready' && merged) return (
+    <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }} style={{ backgroundColor: skin.page }}>
+      <AppHeader title="Before we meet" tone="wide" />
+      <Text style={{ color: skin.inkSoft }}>Choose a HIVE. Do one now, or work through them all — even next week's.</Text>
+      {memberships.map(member => {
+        const section = merged.sections.find(s => s.communityId === member.community_id);
+        const event = meetings.find(m => m.community_id === member.community_id);
+        return <View key={member.community_id}><CheckInHiveCard community={member.community} event={event}
+          disabled={!event || !section} onPress={() => setSelected(member.community_id)}
+          status={!section ? 'Check-in questions not available yet' : saved[member.community_id] ? 'Saved — review' : 'Ready to fill in'} />
+          {row && profile && <LegacyCheckInAnswers surveyId={row.id} userId={profile.id} communityId={member.community_id} onReview={answers => { setReview(r => ({ ...r, [member.community_id]: answers })); if (event && section) setSelected(member.community_id); }} />}
+        </View>;
+      })}
+      <SharedPlate scope={`check-in-plate:${profile?.id}:${row?.id}:${meetings.map(m => m.id).sort().join(':')}`} onChange={setPlate} />
+      <Pressable accessibilityRole="button" onPress={done}><Text style={{ color: skin.gold }}>Done for now</Text></Pressable>
+    </ScrollView>
+  );
 
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: skin.page, padding: 24 }}>

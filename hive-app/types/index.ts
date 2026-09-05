@@ -1021,6 +1021,18 @@ export interface Database {
         Update: Partial<Omit<Survey, 'id' | 'created_at'>>;
         Relationships: [];
       };
+      check_in_answer_history: {
+        Row: { id: string; response_id: string; survey_id: string; user_id: string; community_id: string | null; response_period: string | null; submitted_at: string | null; answers: Record<string, any>; original_row: Record<string, any>; archived_at: string };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      check_in_completions: {
+        Row: { id: string; survey_id: string; user_id: string; community_id: string | null; community_key: string; occurrence: string; answers: Record<string, any>; completed_at: string };
+        Insert: { survey_id: string; user_id: string; community_id: string | null; occurrence: string; answers: Record<string, any>; completed_at?: string };
+        Update: { answers?: Record<string, any>; completed_at?: string };
+        Relationships: [];
+      };
       survey_responses: {
         Row: SurveyResponse;
         Insert: Omit<SurveyResponse, 'id' | 'submitted_at'>;
@@ -1188,6 +1200,10 @@ export interface Database {
     };
     Views: {};
     Functions: {
+      save_check_in_occurrence: {
+        Args: { p_survey_id: string; p_community_id: string | null; p_occurrence: string; p_answers: Record<string, any> };
+        Returns: SurveyResponse;
+      };
       resolve_meeting_summary_conflict: {
         Args: {
           p_meeting_id: string;

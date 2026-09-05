@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { supabase } from '../../lib/supabase';
 
 /**
@@ -33,6 +33,8 @@ type Template = {
   when: string;
   subject: string;
   html: string;
+  approved: boolean;
+  revision: string;
 };
 
 export function EmailTemplatesPanel({
@@ -48,10 +50,12 @@ export function EmailTemplatesPanel({
   scrollStyle: any;
   Panel: React.ComponentType<any>;
 }) {
-  // No HIVE picker any more. A notification email names no HIVE as of
-  // 2026-09-04 — Nat: *"the name of the game here... is generic"* — so all
-  // five render identically whoever reads them, and a chooser that redrew
-  // them in three costumes would be a control that changes nothing.
+  // Scope changes the real seal/colour, never the approved generic words.
+  const [scopeId, setScopeId] = useState<string | null>(null);
+  const [scopes, setScopes] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => { void supabase.from('communities').select('id, name').then(({ data }) => setScopes(data ?? [])); }, []);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [open, setOpen] = useState<string | null>(null);
@@ -59,13 +63,13 @@ export function EmailTemplatesPanel({
 
   const load = useCallback(async () => {
     setState('loading');
-    const { data, error } = await supabase.functions.invoke('email-preview', {
+    const { data, error } = await supabase.functions.invoke(scopeId ? `email-preview?hive=${encodeURIComponent(scopeId)}` : 'email-preview', {
       method: 'GET',
     });
     if (error || !data?.templates) { setState('error'); return; }
     setTemplates(data.templates as Template[]);
     setState('ready');
-  }, []);
+  }, [scopeId]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -85,13 +89,23 @@ export function EmailTemplatesPanel({
    */
   const mailThemToMe = useCallback(async () => {
     setPosting('sending');
-    const { data, error } = await supabase.functions.invoke('email-preview', {
+    const { data, error } = await supabase.functions.invoke(scopeId ? `email-preview?hive=${encodeURIComponent(scopeId)}` : 'email-preview', {
       method: 'POST',
       body: { send: true },
     });
     const sent = (data as { sent?: number; of?: number } | null);
     setPosting(!error && sent?.sent === sent?.of && (sent?.of ?? 0) > 0 ? 'sent' : 'failed');
-  }, []);
+  }, [scopeId]);
+
+  const setApproval = async (template: Template, approved: boolean) => {
+    setSaving(template.key); setApprovalError(null);
+    const { data, error } = await supabase.functions.invoke('email-preview', {
+      method: 'POST', body: { action: 'approval', key: template.key, revision: template.revision, approved },
+    });
+    if (error || data?.approved !== approved) setApprovalError('That approval was not saved. Reload and try again.');
+    else setTemplates(rows => rows.map(row => row.key === template.key ? { ...row, approved: data.approved } : row));
+    setSaving(null);
+  };
 
   return (
     <View style={cellStyle}>
@@ -104,10 +118,16 @@ export function EmailTemplatesPanel({
       >
         <ScrollView style={scrollStyle} contentContainerStyle={{ paddingBottom: 6 }}>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: 'rgba(255,248,233,0.78)', paddingHorizontal: 12, paddingTop: 10 }}>
-            Five letters, the same for everybody, every time. None of them names a HIVE, a board or a person.
+            Approve each set of generic words once. Wording changes need approval again; source-HIVE seals and colours do not. No private posts or sender names appear.
             {'\n'}The Buzz is written fresh each month, so it still previews before it sends.
           </Text>
 
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, padding: 12 }}>
+            {[{ id: null, name: 'HIVE-Wide' }, ...scopes].map(scope => <Pressable key={scope.id ?? 'wide'} disabled={state === 'loading'} accessibilityRole="button" accessibilityState={{ selected: scopeId === scope.id }} onPress={() => setScopeId(scope.id)}>
+              <Text style={{ color: '#fffdf5', fontWeight: scopeId === scope.id ? '700' : '400' }}>{scope.name}</Text>
+            </Pressable>)}
+          </View>
+          {approvalError ? <Text accessibilityRole="alert" style={{ color: '#ffb4a8', padding: 12 }}>{approvalError}</Text> : null}
           {/* The same five, in the place they will actually be read. */}
           <View style={{ paddingHorizontal: 12, paddingTop: 12 }}>
             <Pressable
@@ -132,7 +152,7 @@ export function EmailTemplatesPanel({
               </Text>
             ) : posting === 'failed' ? (
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, lineHeight: 18, color: '#ffb4a8', paddingTop: 6 }}>
-                Those did not send. Nothing left the building — try again.
+                Not all test copies were confirmed sent. Some may have arrived; check your inbox before retrying.
               </Text>
             ) : null}
           </View>
@@ -168,6 +188,12 @@ export function EmailTemplatesPanel({
                       </Text>
                     </Pressable>
 
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingBottom: 10 }}>
+                      <Switch value={template.approved === true} disabled={saving !== null}
+                        accessibilityLabel={`${template.name}: ${template.approved ? 'Approved' : 'Not approved'}`}
+                        onValueChange={value => { void setApproval(template, value); }} />
+                      <Text style={{ color: '#fffdf5', fontSize: 12 }}>{saving === template.key ? 'Saving…' : template.approved ? 'Approved' : 'Not approved'}</Text>
+                    </View>
                     {showing ? (
                       <View style={{ paddingHorizontal: 12, paddingBottom: 14 }}>
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', color: 'rgba(255,248,233,0.5)', paddingBottom: 4 }}>

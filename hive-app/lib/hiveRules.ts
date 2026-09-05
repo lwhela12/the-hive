@@ -19,8 +19,8 @@ export const HIVE_RULES: RuleGroup[] = [
     heading: 'What sends, and when',
     rules: [
       {
-        text: 'Nothing reaches a member until you have read that exact email and said go. Every one of them lands in your inbox first, with a button, and waits there.',
-        source: 'check-in-reminder → /approve/<hold>',
+        text: 'Approve generic template words once in The emails we send. Wording changes need approval again; HIVE seals and colours do not. Freshly written emails, including The Buzz, still need review before each send.',
+        source: 'email_template_approvals + email-preview',
       },
       {
         text: 'One thing in the HIVE sends on a clock, and it runs at 6am your time. Nothing else mails a group by itself.',
@@ -126,7 +126,7 @@ export const HIVE_RULES: RuleGroup[] = [
     heading: 'When each HIVE meets',
     rules: [
       {
-        text: 'Every HIVE meets in the second week. Tech is the 2nd Tuesday 6-8 on Meet, OG the 2nd Wednesday 5-7, Production the 2nd Thursday 5-7. One week to remember instead of three dates.',
+        text: 'The meeting target is the second week: Tech Tuesday, OG Wednesday, Production Thursday, all 6–8pm Pacific. This is a planning target, not a calendar booking; agreed exceptions win.',
         source: 'set 2026-09-03; the shape, not a booking',
       },
       {
@@ -146,7 +146,7 @@ export const HIVE_RULES: RuleGroup[] = [
         source: 'one place, many ways in',
       },
       {
-        text: 'Some months run out of order. October 1st is a Thursday, so the 2nd Thursday lands before the 2nd Tuesday \u2014 still the second week, just not Tue, Wed, Thu. That is fine.',
+        text: 'Second week means a shared Tuesday–Thursday target, not three independently calculated second weekdays. Confirm actual dates with each HIVE; changing this guidance does not move any meeting.',
         source: 'the \u201cish\u201d in second-week-ish',
       },
       {

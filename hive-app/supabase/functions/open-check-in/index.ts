@@ -1,8 +1,11 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { sendReachEmail, genericLetter, deepLink, hiveIsMeetingNow } from '../_shared/reachMail.ts';
+import { sendReachEmail, genericLetter, deepLink, hiveIsMeetingNow, templateIsApproved } from '../_shared/reachMail.ts';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
+import { waitingForCheckIn, reminderKey, type CheckInMeeting } from '../_shared/checkInSession.ts';
+import { deliverCheckIn } from '../_shared/checkInDelivery.ts';
+import { MONTHLY_CHECK_IN_PATTERN, PRE_MEETING_CHECK_IN_PATTERN, END_OF_MONTH_CHECK_IN_PATTERN } from '../_shared/checkInPatterns.ts';
 import { hiveMark } from '../_shared/hiveMark.ts';
 
 /**
@@ -28,8 +31,8 @@ import { hiveMark } from '../_shared/hiveMark.ts';
  * nothing in it for her to tweak, so there is nothing for her to proofread, so
  * the 6am mail has no job left.
  *
- * The old path is untouched. It keeps Saturday's Tech check-in working while
- * this one is walked; it retires once she has pressed this button for real.
+ * Legacy email/approval/resend paths are retired. This remains owner-manual;
+ * no canonical scheduler is enabled by this implementation.
  *
  * ## The rules this door keeps
  *
@@ -58,7 +61,7 @@ function shapeOf(title: string): { kind: 'checkIn' | 'monthCheckIn'; name: strin
   // "End of the month" belongs to the calendar and to everybody; anything else
   // that opens is the one that rides a meeting. The two names were settled on
   // 2026-09-02 and a third must never be invented — see PROJECT.md.
-  return /end of the month|halfway|midpoint/i.test(title)
+  return END_OF_MONTH_CHECK_IN_PATTERN.test(title)
     ? { kind: 'monthCheckIn', name: 'End of the month' }
     : { kind: 'checkIn', name: 'Before we meet' };
 }
@@ -99,7 +102,16 @@ serve(async (req) => {
   if (!survey) return errorResponse('That check-in could not be found.', 404);
   if (!survey.is_active) return errorResponse('That check-in is closed.', 409);
 
+  if (survey.community_id || ![MONTHLY_CHECK_IN_PATTERN, PRE_MEETING_CHECK_IN_PATTERN, END_OF_MONTH_CHECK_IN_PATTERN].some(pattern => pattern.test(survey.title ?? ''))) {
+    return errorResponse('Only a shared Before we meet or End of the month check-in can use this sender.', 409);
+  }
   const shape = shapeOf(survey.title ?? '');
+  // Gate the whole operation BEFORE recipient claims or app notifications, not
+  // merely the downstream email channel. A dry run must not advertise a send
+  // that the owner has not approved either. The shared mail door checks again.
+  if (!(await templateIsApproved(admin, shape.kind))) {
+    return errorResponse('This email template is not approved. Review it in The emails we send first. Nothing sent or claimed.', 409);
+  }
 
   /**
    * WHO IT REACHES.
@@ -146,34 +158,21 @@ serve(async (req) => {
   const pacificDate = (at: Date) =>
     at.toLocaleDateString('en-CA', { timeZone: PACIFIC_TZ }); // YYYY-MM-DD
 
-  /**
-   * Which occurrence of a repeating check-in an answer belongs to.
-   *
-   * The same key `getSurveyResponsePeriod` writes in the app — the month of the
-   * survey's due date — because this has to compare against rows the app saved.
-   * A one-off survey is `'default'` there and here.
-   */
-  const responsePeriod = (() => {
-    const repeats = /before (we meet|our first meeting)|monthly\s+check-?in|halfway\s+check-?in|end of the month/i
-      .test(survey.title ?? '');
-    if (!repeats || !survey.due_date) return 'default';
-    const due = new Date(survey.due_date);
-    if (Number.isNaN(due.getTime())) return 'default';
-    return `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}`;
-  })();
-
   /** The HIVEs meeting tomorrow. Empty for anything that is not a pre-meeting. */
   let meetingTomorrow: { id: string; name: string }[] = [];
-  if (!survey.community_id && shape.kind === 'checkIn') {
+  let dueMeetings: CheckInMeeting[] = [];
+  if (shape.kind === 'checkIn') {
     const tomorrow = pacificDate(new Date(Date.now() + 86400000));
-    const { data: soon } = await admin
+    const { data: soon, error: meetingError } = await admin
       .from('events')
-      .select('community_id, community:communities!community_id(name)')
+      .select('id, event_date, community_id, community:communities!community_id(name)')
       .eq('event_type', 'meeting')
       .eq('status', 'scheduled')
       .eq('event_date', tomorrow);
+    if (meetingError) return errorResponse('Could not read upcoming meetings.', 503);
+    dueMeetings = (soon ?? []).filter((event: CheckInMeeting) => !survey.community_id || event.community_id === survey.community_id) as CheckInMeeting[];
     const seen = new Set<string>();
-    for (const row of (soon ?? []) as {
+    for (const row of (soon ?? []).filter((event: CheckInMeeting) => !survey.community_id || event.community_id === survey.community_id) as {
       community_id: string; community?: { name?: string } | null;
     }[]) {
       if (seen.has(row.community_id)) continue;
@@ -212,40 +211,26 @@ serve(async (req) => {
   const membershipQuery = admin
     .from('community_memberships')
     .select('user_id, community_id');
-  const { data: memberRows } = scopeIds.length
+  const { data: memberRows, error: membershipError } = scopeIds.length
     ? await membershipQuery.in('community_id', scopeIds)
     : await membershipQuery;
+  if (membershipError) return errorResponse('Could not read memberships.', 503);
   const memberships = (memberRows ?? []) as { user_id: string; community_id: string }[];
   const everyone = [...new Set(memberships.map((r) => r.user_id))];
 
-  const { data: answeredRows } = await admin
-    .from('survey_responses')
-    .select('user_id, community_id')
-    .eq('survey_id', survey.id)
-    .eq('response_period', responsePeriod);
-  const answeredRowsTyped = (answeredRows ?? []) as
-    { user_id: string; community_id: string | null }[];
-
-  /**
-   * Done for THIS HIVE, not done full stop.
-   *
-   * A merged check-in files one row per HIVE, so "answered" is a pair. Reading
-   * it as "any row for this survey" would have let one section of the check-in
-   * silence the reminder for all the others — the exact thing Nat described not
-   * wanting: fill in one HIVE on Monday and never hear about the next one.
-   */
-  const answeredPairs = new Set(
-    answeredRowsTyped.map((r) => `${r.user_id}:${r.community_id ?? ''}`),
-  );
-  const answeredAnywhere = new Set(answeredRowsTyped.map((r) => r.user_id));
-
-  const waiting = survey.community_id || !meetingTomorrow.length
-    ? everyone.filter((userId) => !answeredAnywhere.has(userId))
-    : [...new Set(
-        memberships
-          .filter((m) => !answeredPairs.has(`${m.user_id}:${m.community_id}`))
-          .map((m) => m.user_id),
-      )];
+  const { data: answeredRows, error: completionError } = await admin
+    .from('check_in_completions')
+    .select('user_id, community_id, occurrence')
+    .eq('survey_id', survey.id);
+  if (completionError) return errorResponse('Could not verify completed check-ins. Nothing sent.', 503);
+  const day = pacificDate(new Date());
+  const pending = waitingForCheckIn(memberships, dueMeetings, answeredRows ?? [], day.slice(0, 7));
+  const { data: prior, error: receiptError } = await admin.from('check_in_reminder_receipts')
+    .select('dedupe_key').in('dedupe_key', pending.map(id => reminderKey(shape.kind, id, day)));
+  if (receiptError) return errorResponse('Could not verify reminder receipts. Nothing sent.', 503);
+  const claimed = new Set((prior ?? []).map((r: { dedupe_key: string }) => r.dedupe_key));
+  const waiting = pending.filter(id => !claimed.has(reminderKey(shape.kind, id, day)));
+  const answeredAnywhere = new Set(everyone.filter(id => !pending.includes(id)));
 
   let hiveName = 'HIVE';
   let hiveSlug: string | null = null;
@@ -279,6 +264,7 @@ serve(async (req) => {
           : 'every HIVE',
       members: everyone.length,
       answered: answeredAnywhere.size,
+      already_claimed: pending.length - waiting.length,
       would_reach: waiting.length,
       meeting_now: meetingNow,
     });
@@ -321,56 +307,27 @@ serve(async (req) => {
   const href = deepLink(path, survey.community_id);
   const takes = shape.kind === 'monthCheckIn' ? 'about two minutes' : 'a few minutes';
 
-  const sent = await Promise.all(
-    waiting.map((userId) => sendReachEmail(admin, userId, shape.kind, {
-      // The letter names no HIVE, whether or not this survey belongs to one.
-      // A pre-meeting goes to whoever meets tomorrow and they may not all be in
-      // the same HIVE — but that was never the only reason. Nat settled the
-      // wider rule on 2026-09-04: a notification email says the KIND and
-      // nothing else, so an inbox is told nothing a login is meant to keep.
-      // The words live in `genericLetter`, one place for all of them.
+  const delivery = await deliverCheckIn(admin, waiting, shape.kind, day,
+    userId => sendReachEmail(admin, userId, shape.kind, {
       ...genericLetter(shape.kind, {
-        buttonLabel: 'Open the check-in',
-        href,
-        hiveId: survey.community_id,
+        buttonLabel: 'Open the check-in', href, hiveId: survey.community_id,
       }),
-    })),
+    }),
+    (userId, emailed) => ({
+      user_id: userId,
+      community_id: survey.community_id,
+      notification_type: 'general',
+      title: `${mark.emoji} Your ${shape.name} check-in is open`,
+      content: `${hiveName} — it takes ${takes}. Tap to fill it in.`,
+      email_sent: emailed,
+      metadata: { reminder_survey_id: survey.id, check_in_opened_by: auth.userId },
+    }),
   );
-  const emailed = sent.filter((r) => r.sent).length;
-
-  /**
-   * And the same thing in the app, for everyone — including the people whose
-   * email switch is off. Turning the mail off is not asking to be left out of
-   * the HIVE, so the in-app row goes to all of them.
-   */
-  if (waiting.length) {
-    const { error: notifyError } = await admin.from('notifications').insert(
-      waiting.map((userId) => ({
-        user_id: userId,
-        community_id: survey.community_id,
-        notification_type: 'general',
-        title: `${mark.emoji} Your ${shape.name} check-in is open`,
-        content: `${hiveName} — it takes ${takes}. Tap to fill it in.`,
-        email_sent: false,
-        metadata: {
-          reminder_survey_id: survey.id,
-          check_in_opened_by: auth.userId,
-        },
-      })),
-    );
-    // A row that fails to write must not make the letters look unsent.
-    if (notifyError) console.error('[open-check-in] notification insert:', notifyError.message);
-  }
-
-  console.log(
-    `[open-check-in] ${hiveName} · ${shape.name}: ${waiting.length} waiting, ${emailed} emailed`,
-  );
-
   return jsonResponse({
     survey_id: survey.id,
     check_in: shape.name,
-    reached: waiting.length,
-    emailed,
-    quiet: waiting.length - emailed,
+    reached: delivery.notified,
+    already_claimed: pending.length - waiting.length,
+    ...delivery,
   });
 });

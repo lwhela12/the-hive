@@ -71,6 +71,38 @@ export const REACH_COLUMNS = {
 
 export type Reach = keyof typeof REACH_COLUMNS;
 
+export const TEMPLATE_BUTTONS: Record<Reach, string> = {
+  message: 'Read it and reply', mention: 'Go and see', boardReply: 'Read the reply',
+  checkIn: 'Open the check-in', monthCheckIn: 'Open the check-in',
+};
+
+/** Hash the actual rendered words, not branding, recipients or destination IDs. */
+export async function templateRevision(kind: Reach): Promise<string> {
+  const letter = genericLetter(kind, { buttonLabel: TEMPLATE_BUTTONS[kind], href: '__destination__', hiveId: null });
+  const words = plainTextFrom(reachEmailHtml({ ...letter, toName: '__reader__' }));
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(letter.subject + '\n' + words));
+  return Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function templateIsApproved(admin: { from: (t: string) => any }, kind: Reach): Promise<boolean> {
+  try {
+    const { data, error } = await admin.from('email_template_approvals')
+      .select('approved, revision').eq('template_key', kind).maybeSingle();
+    return !error && data?.approved === true && data.revision === await templateRevision(kind);
+  } catch {
+    return false; // Network/schema failures must never become approval.
+  }
+}
+
+/** The source scope chooses only the seal/colour; the prose stays generic. */
+export async function scopeLetter(admin: { from: (t: string) => any }, letter: ReturnType<typeof genericLetter>) {
+  if (!letter.hiveId) return { ...letter, hiveSlug: null, hiveAccent: null };
+  const { data, error } = await admin.from('communities').select('slug, accent_color').eq('id', letter.hiveId).maybeSingle();
+  if (error || !data) throw new Error('Cannot resolve email scope');
+  return { ...letter, hiveSlug: data.slug, hiveAccent: data.accent_color };
+}
+
+
 /**
  * WHAT A NOTIFICATION EMAIL IS ALLOWED TO SAY — AND IT IS NOT MUCH.
  *
@@ -139,11 +171,10 @@ const GENERIC_LINE: Record<Reach, { line: string; said: string }> = {
 /**
  * The whole letter for one kind, with nothing in it that could name anybody.
  *
- * A caller chooses the button and where it lands, and nothing else. `hiveId` is
- * kept because `sendReachEmail` asks it whether that HIVE is mid-meeting and
- * holds the letter if it is; it is never rendered.
- * The letter wears the HIVE-Wide seal, which is the only one that is not
- * somebody's costume.
+ * Buttons and prose are canonical. The source hiveId selects the seal/colour
+ * at the shared sending door and governs meeting quiet time. No private
+ * sender, board name or post content is rendered. Branding alone needs no
+ * new copy approval.
  */
 export function genericLetter(
   kind: Reach,
@@ -158,7 +189,7 @@ export function genericLetter(
     hiveId: opts.hiveId,
     heading: line,
     said,
-    buttonLabel: opts.buttonLabel,
+    buttonLabel: TEMPLATE_BUTTONS[kind],
     href: opts.href,
   };
 }
@@ -377,12 +408,21 @@ export async function sendReachEmail(
   kind: Reach,
   letter: Omit<Parameters<typeof reachEmailHtml>[0], 'toName'> & { subject: string },
 ): Promise<{ sent: boolean; reason?: string }> {
+  if (!(await templateIsApproved(admin, kind))) return { sent: false, reason: 'template not approved' };
+  // Refuse altered prose even when a caller passes a hand-built letter.
+  const expected = genericLetter(kind, { buttonLabel: TEMPLATE_BUTTONS[kind], href: letter.href, hiveId: letter.hiveId });
+  if (letter.subject !== expected.subject || letter.heading !== expected.heading || letter.said !== expected.said || letter.buttonLabel !== expected.buttonLabel || letter.hiveName !== expected.hiveName) {
+    return { sent: false, reason: 'template words changed' };
+  }
+  let scoped;
+  try { scoped = await scopeLetter(admin, letter); }
+  catch { return { sent: false, reason: 'unknown email scope' }; }
   return sendReachHtml(admin, userId, kind, {
     hiveId: letter.hiveId,
     subject: letter.subject,
     // The reader's own name is only known after their switch has been read, so
     // the letter is built inside the door rather than handed to it.
-    html: (toName) => reachEmailHtml({ ...letter, toName }),
+    html: (toName) => reachEmailHtml({ ...scoped, toName }),
   });
 }
 
@@ -404,7 +444,7 @@ export async function sendReachEmail(
  * name — the name is only known once the switch has been read, and reading it
  * twice would double the queries for an @everyone.
  */
-export async function sendReachHtml(
+async function sendReachHtml(
   admin: { from: (t: string) => any },
   userId: string,
   kind: Reach,

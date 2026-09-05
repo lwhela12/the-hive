@@ -48,7 +48,8 @@ export function WhatsNextList({
    * Press "Send it" and this asks the sender how many, before asking her.
    *
    * The dry run is the same function that does the sending, reading the same
-   * two lists, so the number in the question is the number that goes. It also
+   * eligibility rules. The count is provisional; concurrent claims and member
+   * preferences are resolved at delivery time. It also
    * comes back saying whether that HIVE is mid-meeting, which is the one time
    * nothing may go out at all.
    */
@@ -65,7 +66,9 @@ export function WhatsNextList({
       return;
     }
     if (!data.would_reach) {
-      showAlert('Everybody has answered', `Nobody is left to nudge about ${data.check_in}.`);
+      showAlert('Nobody to remind now', data.already_claimed
+        ? `${data.already_claimed} reminder slots are already claimed today. This does not mean everybody has answered.`
+        : `Nobody is left to nudge about ${data.check_in}.`);
       return;
     }
     setSending({
@@ -84,19 +87,19 @@ export function WhatsNextList({
       body: { survey_id: asked.surveyId },
     });
     if (error || !data) {
-      showAlert('That did not go through', 'Nothing was sent. Try again in a moment.');
+      showAlert('That did not go through', 'The delivery result could not be confirmed. Some reminders may have gone out; check delivery records before retrying.');
       return;
     }
-    // What actually happened, in the words she would use: some people turn
-    // this email off, and a send that reaches fewer than it said is not a
-    // failure — it is their switch working.
-    const quiet = data.quiet
-      ? ` ${data.quiet} ${data.quiet === 1 ? 'has' : 'have'} this email turned off, so ${data.quiet === 1 ? 'it' : 'they'} got it in the app only.`
-      : '';
-    showAlert(
-      `${asked.name} is open`,
-      `${data.emailed} ${data.emailed === 1 ? 'email' : 'emails'} went out.${quiet}`,
-    );
+    const details = [
+      `${data.emailed ?? 0} emails sent; ${data.notified ?? 0} in-app reminders created.`,
+      data.suppressed ? `${data.suppressed} emails skipped by preferences, missing address, or meeting quiet time.` : '',
+      data.delivery_failed ? `${data.delivery_failed} email deliveries failed or are unconfirmed. Owner review required.` : '',
+      data.claim_lost || data.already_claimed ? `${(data.claim_lost ?? 0) + (data.already_claimed ?? 0)} reminder slots were already claimed; not sent again.` : '',
+      data.claim_failed ? `${data.claim_failed} reminder claims failed; nothing sent for those recipients.` : '',
+      data.notification_failed ? `${data.notification_failed} in-app reminders could not be saved.` : '',
+      data.receipt_failed ? `${data.receipt_failed} delivery records could not be updated. Review before retrying.` : '',
+    ].filter(Boolean).join(' ');
+    showAlert(`${asked.name}: delivery results`, details);
     void refresh();
   };
 
@@ -157,7 +160,7 @@ export function WhatsNextList({
         title={sending ? `Send ${sending.name}?` : ''}
         body={sending
           ? `${sending.waiting} ${sending.waiting === 1 ? 'person' : 'people'} in ${sending.hiveName} `
-            + `${sending.waiting === 1 ? 'gets' : 'get'} an email, and everyone still waiting gets it in the app. `
+            + 'will be checked for delivery. Each successful reminder claim can create one email and one in-app reminder. '
             + 'Anybody who has turned this email off does not.'
           : undefined}
         confirmLabel={sending ? `Send to ${sending.waiting}` : 'Send'}

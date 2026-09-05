@@ -1431,11 +1431,8 @@ export function buildMergedPreMeeting(
     const mine: SurveyQuestion[] = [];
     for (const question of hive.questions ?? []) {
       if (question.type === 'note') continue; // a HIVE's own section headers
-      if (PERSONAL_CHECK_IN_QUESTION_IDS.includes(question.id)) {
-        // First HIVE to ask it wins the wording. They are the same question.
-        if (!personalById.has(question.id)) personalById.set(question.id, question);
-        continue;
-      }
+      // Even arrival and energy can differ next week in another HIVE.
+      // Keep every answer in the HIVE section; never copy another room's answer.
       mine.push(question);
     }
 
@@ -1461,7 +1458,7 @@ export function buildMergedPreMeeting(
   return {
     title: MERGED_PRE_MEETING_TITLE,
     description: sections.length > 1
-      ? 'One check-in for every HIVE you are in. The first few are about you; then a short section each.'
+      ? 'Choose a HIVE and answer for that meeting. Each HIVE keeps its own answers.'
       : 'A few minutes before we meet, so the room starts loaded.',
     personal,
     sections,

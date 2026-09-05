@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { reachEmailHtml, genericLetter, plainTextFrom, type Reach } from '../_shared/reachMail.ts';
+import { reachEmailHtml, genericLetter, plainTextFrom, templateRevision, scopeLetter, type Reach } from '../_shared/reachMail.ts';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
 
 /**
@@ -189,13 +189,19 @@ serve(async (req) => {
     },
   ];
 
-  const built = samples.map((sample) => ({
+  const { data: approvals, error: approvalError } = await admin.from('email_template_approvals').select('template_key, approved, revision');
+  if (approvalError) return errorResponse('Approval records are unavailable. No approval can be assumed.', 503);
+  const scopeId = new URL(req.url).searchParams.get('hive');
+  const built = await Promise.all(samples.map(async (sample) => ({
     key: sample.key,
     name: sample.name,
     when: sample.when,
     subject: sample.letter.subject,
-    html: reachEmailHtml(sample.letter),
-  }));
+    html: reachEmailHtml({ ...await scopeLetter(admin, { ...sample.letter, hiveId: scopeId }), toName }),
+    revision: await templateRevision(sample.kind),
+    approved: false,
+  })));
+  for (const template of built) template.approved = approvals?.some(row => row.template_key === template.key && row.approved === true && row.revision === template.revision) ?? false;
 
   /**
    * POST { send: true } — the set, into the caller's own inbox.
@@ -208,6 +214,17 @@ serve(async (req) => {
     let wantsSend = false;
     try {
       const body = await req.json();
+      if (body?.action === 'approval') {
+        const template = built.find(t => t.key === body.key);
+        if (!template || typeof body.approved !== 'boolean') return errorResponse('Invalid template approval.', 400);
+        if (body.revision !== template.revision) return errorResponse('The words changed. Reload and review them again.', 409);
+        const { error } = await admin.from('email_template_approvals').upsert({
+          template_key: template.key, revision: template.revision, approved: body.approved,
+          reviewed_by: auth.userId, reviewed_at: new Date().toISOString(),
+        });
+        if (error) return errorResponse('Approval was not saved.', 500);
+        return jsonResponse({ key: template.key, revision: template.revision, approved: body.approved });
+      }
       wantsSend = body?.send === true;
     } catch { /* an empty POST is not a request to send */ }
     if (!wantsSend) return errorResponse('Send { "send": true } to mail yourself the set.', 400);
