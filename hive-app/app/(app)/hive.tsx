@@ -4223,19 +4223,7 @@ export default function HiveScreen() {
                         canSubmit={!savingEvent}
                         submitting={savingEvent}
                       />
-                      {/* Date, end date and time on one line.
-                          Nat, 2026-08-05: "instead of it saying date and then you
-                          have to follow the screen allllllllllllll the way to the
-                          right, and then time & you have to follow it
-                          alllllllllllllllll the way to the left to see the drop
-                          down, i think they could be shortened and maybe side by
-                          side?" A full-window bar for six characters of date made
-                          the eye travel the whole screen to reach the picker.
-
-                          `flexBasis` with wrap rather than a breakpoint, so they
-                          fall into a stack on a phone on their own. The tune-up
-                          got this treatment first; this is the same form in
-                          another room. */}
+                      {/* Keep dates together, then start and end times together. */}
                       <View className="mb-3" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                         <View style={{ flexGrow: 1, flexBasis: 180 }}>
                           <EventDatePicker
@@ -4252,13 +4240,16 @@ export default function HiveScreen() {
                             clearable
                           />
                         </View>
-                        {!eventAllDay && (
-                          <View style={{ flexGrow: 1, flexBasis: 150 }}>
-                            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Time</Text>
+                      </View>
+                      {!eventAllDay && (
+                        <View className="mb-3" style={{ flexDirection: 'row', gap: 10 }}>
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Start time</Text>
                             {/* A clock time, so no microphone — it wears the same
                                 fill, hairline and placeholder ink as everything
                                 around it. */}
                             <TimeInput
+                              accessibilityLabel="Start time (AM or PM)"
                               placeholder="7:30 PM"
                               placeholderTextColor={FIELD_LOOK.placeholder}
                               selectionColor={FIELD_LOOK.ink}
@@ -4267,6 +4258,7 @@ export default function HiveScreen() {
                               returnKeyType="next"
                               className="rounded-xl px-4 py-3 text-base text-charcoal"
                               style={{
+                                width: '100%',
                                 fontFamily: FIELD_LOOK.font,
                                 backgroundColor: FIELD_LOOK.fill,
                                 borderWidth: 1,
@@ -4274,14 +4266,11 @@ export default function HiveScreen() {
                               }}
                             />
                           </View>
-                        )}
-                        {/* Nat, 2026-08-21: "i couldnt add window, like 5-7, i
-                            could only put in 5pm." Optional — a meeting with no
-                            end reads exactly as it always did. */}
-                        {!eventAllDay && (
-                          <View style={{ flexGrow: 1, flexBasis: 150 }}>
-                            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Ends (optional)</Text>
+                          {/* End time stays optional. */}
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">End time (optional)</Text>
                             <TimeInput
+                              accessibilityLabel="End time (optional, AM or PM)"
                               placeholder="9:00 PM"
                               placeholderTextColor={FIELD_LOOK.placeholder}
                               selectionColor={FIELD_LOOK.ink}
@@ -4291,6 +4280,7 @@ export default function HiveScreen() {
                               onSubmitEditing={saveEvent}
                               className="rounded-xl px-4 py-3 text-base text-charcoal"
                               style={{
+                                width: '100%',
                                 fontFamily: FIELD_LOOK.font,
                                 backgroundColor: FIELD_LOOK.fill,
                                 borderWidth: 1,
@@ -4298,8 +4288,8 @@ export default function HiveScreen() {
                               }}
                             />
                           </View>
-                        )}
-                      </View>
+                        </View>
+                      )}
                       <Pressable
                         onPress={() => setEventAllDay((prev) => !prev)}
                         className="flex-row items-center mb-3 active:opacity-70"

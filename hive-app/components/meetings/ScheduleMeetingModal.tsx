@@ -388,26 +388,20 @@ export function ScheduleMeetingModal({
               )}
             </View>
 
-            {/* Time Picker */}
-            <View className="mb-4">
-              <Text className="text-gray-700 font-medium mb-2">Time</Text>
-              <TimeInput accessibilityLabel="Start time (AM or PM)" value={startText ?? getTimeInputValue()} onChangeText={setStartText} />
-            </View>
-
-            {/* End Time — optional, same control as Time above. Nat,
-                2026-08-21: "i couldnt add window, like 5-7, i could only put
-                in 5pm." Leave it unset and a meeting reads exactly as it
-                always did (migration 202). */}
-            <View className="mb-4">
-              <View className="flex-row justify-between items-center mb-2">
-                <Text className="text-gray-700 font-medium">End Time (optional)</Text>
+            <View className="mb-4" style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text className="text-gray-700 font-medium mb-2">Start time</Text>
+                <TimeInput accessibilityLabel="Start time (AM or PM)" value={startText ?? getTimeInputValue()} onChangeText={setStartText} style={{ width: '100%' }} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text className="text-gray-700 font-medium mb-2">End time (optional)</Text>
+                <TimeInput accessibilityLabel="End time (optional, AM or PM)" value={endText} onChangeText={setEndText} style={{ width: '100%' }} />
                 {!!endText && (
-                  <Pressable onPress={() => setEndText('')}>
+                  <Pressable onPress={() => setEndText('')} className="mt-2 self-start" accessibilityLabel="Clear end time">
                     <Text className="text-blue-500 text-sm">Clear</Text>
                   </Pressable>
                 )}
               </View>
-              <TimeInput accessibilityLabel="End time (optional, AM or PM)" value={endText} onChangeText={setEndText} />
             </View>
 
             {/* Duration */}

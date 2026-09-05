@@ -1837,38 +1837,39 @@ export default function MeetingsScreen() {
               />
             </View>
 
-            {/* A clock time is not words, so no microphone — just the same
-                white fill and gold hairline as the boxes above it. */}
-            <View className="mb-4">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className={FIELD_LABEL_CLASS}>Time (optional)</Text>
-              <TimeInput
-                accessibilityLabel="Start time (optional, AM or PM)"
-                value={editForm.event_time}
-                onChangeText={(text) => setEditForm((f) => ({ ...f, event_time: text }))}
-                className="rounded-xl px-4 py-3 text-base bg-white"
-                style={{ fontFamily: 'Lato_400Regular', borderWidth: 1, borderColor: FIELD_BORDER }}
-                placeholder="e.g. 6:00 PM"
-                placeholderTextColor={PLACEHOLDER_INK}
-                returnKeyType="next"
-              />
-            </View>
-
-            {/* This is the box Nat came to when she wanted 5-7 and found only a
-                start: "i just treid to update taht in the app & i couldnt add
-                windo, like 5-7, i could only put in 5pm" (2026-08-21). */}
-            <View className="mb-4">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className={FIELD_LABEL_CLASS}>Ends (optional)</Text>
-              <TimeInput
-                accessibilityLabel="End time (optional, AM or PM)"
-                value={editForm.end_time}
-                onChangeText={(text) => setEditForm((f) => ({ ...f, end_time: text }))}
-                className="rounded-xl px-4 py-3 text-base bg-white"
-                style={{ fontFamily: 'Lato_400Regular', borderWidth: 1, borderColor: FIELD_BORDER }}
-                placeholder="e.g. 8:00 PM"
-                placeholderTextColor={PLACEHOLDER_INK}
-                returnKeyType="send"
-                onSubmitEditing={handleSaveEdit}
-              />
+            <View className="mb-4" style={{ flexDirection: 'row', gap: 10 }}>
+              {/* A clock time is not words, so no microphone — just the same
+                  white fill and gold hairline as the boxes above it. */}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className={FIELD_LABEL_CLASS}>Start time (optional)</Text>
+                <TimeInput
+                  accessibilityLabel="Start time (optional, AM or PM)"
+                  value={editForm.event_time}
+                  onChangeText={(text) => setEditForm((f) => ({ ...f, event_time: text }))}
+                  className="rounded-xl px-4 py-3 text-base bg-white"
+                  style={{ width: '100%', fontFamily: 'Lato_400Regular', borderWidth: 1, borderColor: FIELD_BORDER }}
+                  placeholder="e.g. 6:00 PM"
+                  placeholderTextColor={PLACEHOLDER_INK}
+                  returnKeyType="next"
+                />
+              </View>
+              {/* This is the box Nat came to when she wanted 5-7 and found only a
+                  start: "i just treid to update taht in the app & i couldnt add
+                  windo, like 5-7, i could only put in 5pm" (2026-08-21). */}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className={FIELD_LABEL_CLASS}>End time (optional)</Text>
+                <TimeInput
+                  accessibilityLabel="End time (optional, AM or PM)"
+                  value={editForm.end_time}
+                  onChangeText={(text) => setEditForm((f) => ({ ...f, end_time: text }))}
+                  className="rounded-xl px-4 py-3 text-base bg-white"
+                  style={{ width: '100%', fontFamily: 'Lato_400Regular', borderWidth: 1, borderColor: FIELD_BORDER }}
+                  placeholder="e.g. 8:00 PM"
+                  placeholderTextColor={PLACEHOLDER_INK}
+                  returnKeyType="send"
+                  onSubmitEditing={handleSaveEdit}
+                />
+              </View>
             </View>
 
             <View className="bg-gray-50 rounded-lg p-4 mt-4">
