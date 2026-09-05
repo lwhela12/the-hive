@@ -232,7 +232,7 @@ export default function MeetingsScreen() {
   // Meeting Helper deck inside Tech and Production as if they were theirs
   // (Nat, 2026-08-11: "I dont want these blindly brought over from OG hive").
   // Same rule, same shared string, applied to every door on this screen.
-  const tailoredCheckIns = hasTailoredCheckIns(community);
+
   /**
    * Whether the Meeting Helper tile opens.
    *
@@ -1424,8 +1424,7 @@ export default function MeetingsScreen() {
               can run the meeting from the meeting helper. lets assume I'm
               always running it (natwalstead) for now."* What you write in them
               is yours; what Nat reads is the meeting deck they feed. */}
-          {(isAdmin || !tailoredCheckIns) && (
-            <View
+          <View
               style={{
                 marginTop: 16,
                 paddingTop: 14,
@@ -1445,7 +1444,7 @@ export default function MeetingsScreen() {
                       width: '100%', marginBottom: 8,
                     }}
                   >
-                    Fill these in before the meeting
+                    Your check-ins
                   </Text>
                   {/* THE TWO CHECK-INS, ALWAYS, IN EVERY HIVE.
 
@@ -1490,7 +1489,10 @@ export default function MeetingsScreen() {
                   ] as const).map((tool) => (
                     <Pressable
                       key={tool.label}
-                      onPress={() => router.push(tool.href as any)}
+                      onPress={() => router.push({
+                        pathname: tool.href,
+                        params: { from: 'meetings', hive: community?.slug ?? '' },
+                      } as any)}
                       style={({ pressed }) => ({
                         backgroundColor: 'rgba(255,255,255,0.08)',
                         borderRadius: 999,
@@ -1551,12 +1553,11 @@ export default function MeetingsScreen() {
                   }}
                 >
                   {hasEndOfMonthCheckIn(community)
-                    ? 'Nothing to fill in right now — the check-ins open a few days before they are due.'
+                    ? 'These two check-ins have not been set up for this HIVE yet.'
                     : CHECK_INS_COMING_SOON_MESSAGE}
                 </Text>
               )}
-            </View>
-          )}
+          </View>
         </View>
 
         {/* Upcoming Meetings */}

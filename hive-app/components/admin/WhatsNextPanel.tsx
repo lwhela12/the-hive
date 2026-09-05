@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useRouter } from 'expo-router';
+
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useWhatsNext } from '../../lib/hooks/useWhatsNext';
@@ -20,7 +20,7 @@ import { humanTimeInput } from '../../lib/timeInput';
  * It replaces two things that died of the same disease. Her Google Tasks got
  * messy; the HIVE Task Tracker sheet has not moved since 15 August. Both had to
  * be fed. **Nothing here is fed** — every line is worked out from the meeting
- * rows, the open check-ins and the held sends each time the panel opens.
+ * rows and current check-in windows each time the panel opens.
  *
  * And nothing falls off it. Her calendar loses a job the day after it was due:
  * *"if it's in my calendar that I need to send something out on the first and
@@ -45,14 +45,12 @@ export function WhatsNextPanel({
   Panel: React.ComponentType<any>;
   order?: number;
 }) {
-  const router = useRouter();
   const { memberships } = useAuth();
   const { items, state, today } = useWhatsNext();
   const grid = useHiveGrid();
   // The title is the first tab, the way every other folder in Admin works.
   const [tab, setTab] = useState('next');
 
-  const waiting = items.filter((item) => item.holdId).length;
 
   return (
     /**
@@ -70,7 +68,7 @@ export function WhatsNextPanel({
      */
     <View style={[cellStyle, { order } as any]}>
       <Panel
-        title={waiting > 0 ? `What's next · ${waiting} waiting on you` : "What's next"}
+        title="What's next"
         titleTabKey="next"
         tabs={[
           { key: 'grid', label: 'The grid' },

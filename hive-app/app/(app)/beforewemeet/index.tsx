@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../lib/hooks/useAuth';
@@ -19,7 +19,7 @@ import {
   MERGED_PRE_MEETING_TITLE,
   type MergedPreMeeting,
 } from '../../../lib/checkIns';
-import { meetingOccurrence } from '../../../supabase/functions/_shared/checkInSession';
+import { meetingOccurrence, nextMeetingOccurrence } from '../../../supabase/functions/_shared/checkInSession';
 import { hiveDisplayName, hiveAccent } from '../../../lib/hiveBrand';
 import { fetchCarryForwardItems } from '../../../lib/hooks/useCarryForwardContext';
 import { CARRY_FORWARD_ANSWER_KEY, type CarryForwardItem } from '../../../lib/carryForward';
@@ -60,8 +60,15 @@ import type { Survey, SurveyQuestion } from '../../../types';
  */
 export default function BeforeWeMeetScreen() {
   const router = useRouter();
+  const { from, hive } = useLocalSearchParams<{ from?: string; hive?: string }>();
+  const returnTo = from === 'meetings' ? '/meetings' : from === 'hive' ? '/hive' : '/hive-wide';
+  const requestedHiveSlug = typeof hive === 'string' ? hive : null;
+  const originHandled = useRef<string | null>(null);
   const isFocused = useIsFocused();
   const { loading: authLoading, profile, communityId, memberships } = useAuth();
+  const originMembership = (from === 'meetings' || from === 'hive') && requestedHiveSlug
+    ? memberships.find(item => item.community.slug === requestedHiveSlug)
+    : null;
   const skin = usePageSkin();
   const { myResponses, submitCheckInOccurrence } = useSurveys(communityId ?? undefined, profile?.id);
 
@@ -76,7 +83,6 @@ export default function BeforeWeMeetScreen() {
   const [todosByHive, setTodosByHive] = useState<Record<string, CarryForwardItem[]>>({});
   const [state, setState] = useState<'looking' | 'ready' | 'none' | 'broken'>('looking');
   const [today, setToday] = useState(pacificToday);
-  const [lookingAhead, setLookingAhead] = useState(false);
   const [loadedScope, setLoadedScope] = useState<string | null>(null);
   const scope = `${profile?.id ?? ''}:${memberships.map(m => m.community_id).sort().join(':')}:${today}`;
   const ready = !authLoading && !!profile && state === 'ready' && loadedScope === scope;
@@ -103,7 +109,7 @@ export default function BeforeWeMeetScreen() {
     setPlate(undefined);
     setTodos([]);
     setTodosByHive({});
-    setLookingAhead(false);
+
 
     void (async () => {
       // The open merged check-in. Looked UP rather than carried in the address,
@@ -144,6 +150,7 @@ export default function BeforeWeMeetScreen() {
             .from('events')
             .select('community_id')
             .eq('event_type', 'meeting')
+            .eq('status', 'scheduled')
             .lt('event_date', today)
             .in('community_id', hiveIds.length ? hiveIds : ['00000000-0000-0000-0000-000000000000']),
           supabase.from('events').select('id, community_id, event_date, event_time')
@@ -215,9 +222,13 @@ export default function BeforeWeMeetScreen() {
       if (cancelled) return;
       if (receiptError) { setState('broken'); return; }
       const hydrated: Record<string, SurveyAnswers> = {};
-      for (const event of next) {
-        const receipt = receipts?.find(r => r.community_id === event.community_id && r.occurrence === meetingOccurrence(event.id));
-        if (receipt) hydrated[event.community_id] = receipt.answers as SurveyAnswers;
+      for (const item of [...ordered.prominent, ...ordered.future, ...ordered.missing]) {
+        const exactOccurrence = item.event ? meetingOccurrence(item.event.id) : nextMeetingOccurrence(item.member.community_id);
+        const receipt = receipts?.find(r => r.community_id === item.member.community_id && r.occurrence === exactOccurrence)
+          ?? (item.event
+            ? receipts?.find(r => r.community_id === item.member.community_id && r.occurrence === nextMeetingOccurrence(item.member.community_id))
+            : undefined);
+        if (receipt) hydrated[item.member.community_id] = receipt.answers as SurveyAnswers;
       }
       setSaved(hydrated);
       setMeetings(next);
@@ -274,9 +285,34 @@ export default function BeforeWeMeetScreen() {
     return () => { cancelled = true; };
   }, [authLoading, profile, memberships, hiveIds, today, scope]);
 
+  // A pill inside one HIVE opens that HIVE's section without changing the
+  // place named by the shell around it. The email has no HIVE in its address
+  // (that would leak the meeting if it were forwarded), so when exactly one
+  // section is relevant it opens that one directly too.
+  useEffect(() => {
+    if (!isFocused) { originHandled.current = null; return; }
+    if (!ready) return;
+    const requested = requestedHiveSlug
+      ? memberships.find(item => item.community.slug === requestedHiveSlug)
+      : null;
+    const soleMeeting = !requestedHiveSlug && groups.prominent.length === 1
+      ? groups.prominent[0]
+      : !requestedHiveSlug && groups.prominent.length === 0 && groups.future.length === 1
+        ? groups.future[0]
+        : null;
+    const membership = requested ?? soleMeeting?.member;
+    const event = meetings.find(item => item.community_id === membership?.community_id);
+    if (!membership) return;
+    const originKey = `${profile?.id ?? ''}:${membership.community_id}:${event?.id ?? 'next'}`;
+    if (originHandled.current === originKey) return;
+    originHandled.current = originKey;
+    const section = merged?.sections.find(item => item.communityId === membership.community_id);
+    if (section) setSelected(membership.community_id);
+  }, [groups.future, groups.prominent, isFocused, meetings, memberships, merged, profile?.id, ready, requestedHiveSlug]);
+
   const done = useCallback(() => {
-    router.replace('/hive-wide' as never);
-  }, [router]);
+    router.replace(returnTo as never);
+  }, [returnTo, router]);
 
   /**
    * The survey handed to the modal is assembled for THIS reader.
@@ -290,7 +326,10 @@ export default function BeforeWeMeetScreen() {
     if (!row || !merged || !selected) return null;
     return {
       ...row,
-      community_id: selected,
+      // Data is filed under `selected` in onSubmit. This field is visual only:
+      // keep the HIVE where the person entered instead of changing costumes as
+      // they move through sections of the shared check-in.
+      community_id: originMembership?.community_id ?? null,
       due_date: meetings.find(m => m.community_id === selected)?.event_date ?? row.due_date,
       description: merged.description,
       questions: mergedPreMeetingQuestions({ ...merged, sections: merged.sections.filter(s => s.communityId === selected) }).map(({ question, key }) => ({
@@ -298,11 +337,11 @@ export default function BeforeWeMeetScreen() {
         id: question.id,
       })),
     } as Survey;
-  }, [row, merged, selected, meetings]);
+  }, [row, merged, selected, meetings, originMembership?.community_id]);
 
   const onSubmit = useCallback(async (answers: SurveyAnswers) => {
     const event = meetings.find(m => m.community_id === selected);
-    if (!row || !merged || !selected || !event || !profile) return { error: 'No upcoming meeting' };
+    if (!row || !merged || !selected || !profile) return { error: 'This check-in did not load' };
     const own = splitMergedAnswers({ ...merged, sections: merged.sections.filter(s => s.communityId === selected) }, Object.fromEntries(Object.entries(answers).map(([key, value]) => [`${selected}:${key}`, value])), [])[0];
     if (!own) return { error: 'No section' };
     // Preserve historic numeric energy; capacity has its own string key.
@@ -312,7 +351,8 @@ export default function BeforeWeMeetScreen() {
     }
     if (plate !== undefined) own.answers.q_plate = plate;
     if (answers[CARRY_FORWARD_ANSWER_KEY]) own.answers[CARRY_FORWARD_ANSWER_KEY] = answers[CARRY_FORWARD_ANSWER_KEY];
-    const { error } = await submitCheckInOccurrence(row.id, own.answers as SurveyAnswers, selected, meetingOccurrence(event.id));
+    const occurrence = event ? meetingOccurrence(event.id) : nextMeetingOccurrence(selected);
+    const { error } = await submitCheckInOccurrence(row.id, own.answers as SurveyAnswers, selected, occurrence);
     if (!error) { setSaved(previous => ({ ...previous, [selected]: own.answers as SurveyAnswers })); setReview(previous => { const next = { ...previous }; delete next[selected]; return next; }); }
     return { error };
   }, [row, merged, selected, meetings, profile, submitCheckInOccurrence, plate, saved, review]);
@@ -324,8 +364,8 @@ export default function BeforeWeMeetScreen() {
     const section = merged?.sections.find(s => s.communityId === selected);
     return (
       <SurveyModal
-        key={`${row?.id}:${selected}:${meetings.find(m => m.community_id === selected)?.id}`}
-        draftScope={`${profile?.id}:${row?.id}:${selected}:${meetings.find(m => m.community_id === selected)?.id}`}
+        key={`${row?.id}:${selected}:${meetings.find(m => m.community_id === selected)?.id ?? 'next'}`}
+        draftScope={`${profile?.id}:${row?.id}:${selected}:${meetings.find(m => m.community_id === selected)?.id ?? 'next'}`}
         survey={forThisReader}
         initialAnswers={mine}
         isEditingResponse={!!mine}
@@ -333,8 +373,8 @@ export default function BeforeWeMeetScreen() {
         carryForwardSections={section ? { [`note_hive_${section.slug}`]: todosByHive[`note_hive_${section.slug}`] ?? [] } : {}}
         onSubmit={onSubmit}
         closeLabel="Back to check-ins"
-        hiveSlug={memberships.find(m => m.community_id === selected)?.community?.slug}
-        hiveAccent={hiveAccent(memberships.find(m => m.community_id === selected)?.community)}
+        hiveSlug={originMembership?.community?.slug}
+        hiveAccent={hiveAccent(originMembership?.community)}
         onClose={() => setSelected(null)}
       />
     );
@@ -343,27 +383,29 @@ export default function BeforeWeMeetScreen() {
   const renderHive = ({ member, event }: (typeof groups.prominent)[number]) => {
     const section = merged?.sections.find(s => s.communityId === member.community_id);
     return <View key={member.community_id}><CheckInHiveCard community={member.community} event={event}
-      disabled={!event || !section} onPress={() => setSelected(member.community_id)}
-      status={!section ? 'Check-in questions not available yet' : saved[member.community_id] ? 'Saved — review' : event ? 'Ready to fill in' : 'Date to be confirmed'} />
-      {row && profile && <LegacyCheckInAnswers surveyId={row.id} userId={profile.id} communityId={member.community_id} onReview={answers => { setReview(r => ({ ...r, [member.community_id]: answers })); if (event && section) setSelected(member.community_id); }} />}
+      disabled={!section} onPress={() => setSelected(member.community_id)}
+      status={!section ? 'Check-in questions not available yet' : saved[member.community_id] ? 'Saved — review' : 'Ready to fill in'} />
+      {row && profile && <LegacyCheckInAnswers surveyId={row.id} userId={profile.id} communityId={member.community_id} onReview={answers => { setReview(r => ({ ...r, [member.community_id]: answers })); if (section) setSelected(member.community_id); }} />}
     </View>;
   };
 
   if (ready && merged) return (
-    <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }} style={{ backgroundColor: skin.page }}>
-      <AppHeader title="Before we meet" tone="wide" />
-      {groups.prominent.length > 0 ? <Text style={{ color: skin.ink, fontFamily: 'Lato_700Bold', fontSize: 18 }}>Today & tomorrow</Text> : <Text style={{ color: skin.inkSoft }}>No meetings today or tomorrow.</Text>}
-      {groups.prominent.map(renderHive)}
-      {groups.future.length > 0 && <>
-        <Pressable accessibilityRole="button" accessibilityState={{ expanded: lookingAhead }} onPress={() => setLookingAhead(value => !value)} style={{ paddingVertical: 12 }}>
-          <Text style={{ color: skin.gold, fontFamily: 'Lato_700Bold' }}>{lookingAhead ? '▾' : '▸'} Looking ahead · Optional ({groups.future.length})</Text>
-        </Pressable>
-        {lookingAhead && groups.future.map(renderHive)}
-      </>}
-      {groups.missing.map(renderHive)}
-      <SharedPlate scope={`check-in-plate:${profile?.id}:${row?.id}:${meetings.map(m => m.id).sort().join(':')}`} onChange={setPlate} />
-      <Pressable accessibilityRole="button" onPress={done}><Text style={{ color: skin.gold }}>Done for now</Text></Pressable>
-    </ScrollView>
+    <View style={{ flex: 1, backgroundColor: skin.page }}>
+      <AppHeader title="Before we meet" />
+      <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }} style={{ backgroundColor: skin.page }}>
+        <Text style={{ color: skin.inkSoft }}>
+          Open any HIVE whenever you have something to add. We only send the reminder when its meeting is close.
+        </Text>
+        {groups.prominent.length > 0 && <Text style={{ color: skin.ink, fontFamily: 'Lato_700Bold', fontSize: 18 }}>Meeting soon</Text>}
+        {groups.prominent.map(renderHive)}
+        {groups.future.length > 0 && <Text style={{ color: skin.ink, fontFamily: 'Lato_700Bold', fontSize: 18 }}>Anytime</Text>}
+        {groups.future.map(renderHive)}
+        {groups.missing.length > 0 && <Text style={{ color: skin.inkSoft, fontFamily: 'Lato_700Bold', marginTop: 8 }}>No meeting date yet · still open</Text>}
+        {groups.missing.map(renderHive)}
+        <SharedPlate scope={`check-in-plate:${profile?.id}:${row?.id}:${meetings.map(m => m.id).sort().join(':')}`} onChange={setPlate} />
+        <Pressable accessibilityRole="button" onPress={done}><Text style={{ color: skin.gold }}>Done for now</Text></Pressable>
+      </ScrollView>
+    </View>
   );
 
   return (
@@ -375,8 +417,7 @@ export default function BeforeWeMeetScreen() {
         </Text>
       ) : state === 'none' ? (
         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: skin.inkSoft, textAlign: 'center' }}>
-          There is no Before we meet check-in open just now. Nothing has gone wrong — it opens in
-          the days before your HIVE meets.
+          Before we meet has not been set up yet.
         </Text>
       ) : (
         <>

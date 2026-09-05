@@ -995,7 +995,7 @@ export function isSurveyOnHomeToday(
    * having answered.
    */
   /**
-   * A CHECK-IN THAT BELONGS TO NO HIVE IS ALWAYS OPEN.
+   * THE FORM IS ALWAYS OPEN. HOME IS NOT.
    *
    * Nat, 2026-09-04: *"the check ins should always be open, I think. So that if
    * someone has a thought, they can always just pop in and update stuff, you
@@ -1007,10 +1007,9 @@ export function isSurveyOnHomeToday(
    * answer" — and the second was never something anybody asked for. Somebody
    * who thinks of a shout-out on the 8th should be able to put it somewhere.
    *
-   * So the date is now only about the REMINDER, and the two merged check-ins —
-   * the ones with no `community_id`, which every member shares — sit on Home
-   * all month. Their answers are editable after the fact and always were; only
-   * the door was shut.
+   * So the date is only about the REMINDER. The two merged check-ins — the
+   * ones with no `community_id`, which every member shares — remain reachable
+   * from Meetings all month. Home shows them only in their nudge window.
    *
    * A HIVE's OWN check-in keeps its window until the October cutover retires
    * it, because a per-HIVE row on Home is exactly the clutter the merge is
@@ -1023,17 +1022,23 @@ export function isSurveyOnHomeToday(
     : isEndOfMonthCheckInSurvey(survey)
       ? 'endofmonth'
       : null;
-  if (ownKind && belongsToNoHive) return true;
+  // The shared pre-meeting survey has one due date but many HIVE meeting dates,
+  // so this helper cannot decide its Home window. A HIVE Home caller supplies
+  // its own next-meeting date. Everywhere else keeps it off the to-do list.
+  if (ownKind === 'premeeting' && belongsToNoHive) return false;
   if (ownKind) {
     if (!survey.due_date) return true;
-    const due = new Date(survey.due_date);
-    if (Number.isNaN(due.getTime())) return true;
-    const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+    const dateParts = /^(\d{4})-(\d{2})-(\d{2})/.exec(survey.due_date);
+    if (!dateParts) return true;
+    // A database date is a calendar day, not midnight UTC. Constructing it
+    // locally avoids shifting September 30 to September 29 in Pacific time.
+    const dueDay = new Date(Number(dateParts[1]), Number(dateParts[2]) - 1, Number(dateParts[3]), 12);
     const opens = new Date(
       dueDay.getFullYear(),
       dueDay.getMonth(),
-      // A meeting counts its own day; the end of a month does not.
-      dueDay.getDate() - (ownKind === 'premeeting' ? PRE_MEETING_LEAD_DAYS : SEASON_CHECK_IN_LEAD_DAYS),
+      // A meeting counts its own day. "Three days before month end" means
+      // the third-to-last calendar day: due date minus two.
+      dueDay.getDate() - (ownKind === 'premeeting' ? PRE_MEETING_LEAD_DAYS : SEASON_CHECK_IN_LEAD_DAYS - 1),
     );
     const lingersUntil = new Date(
       dueDay.getFullYear(),

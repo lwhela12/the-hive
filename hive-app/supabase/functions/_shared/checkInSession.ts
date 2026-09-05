@@ -2,6 +2,7 @@
 export type CheckInMeeting = { id: string; community_id: string; event_date: string };
 export type CheckInCompletion = { user_id: string; community_id: string | null; occurrence: string };
 export const meetingOccurrence = (eventId: string) => `meeting:${eventId}`;
+export const nextMeetingOccurrence = (communityId: string) => `next:${communityId}`;
 export const reminderKey = (_kind: string, userId: string, day: string) => `check-in:${userId}:${day}`;
 export function scopeAnswers(answers: Record<string, unknown>, communityId: string) {
   return Object.fromEntries(Object.entries(answers).filter(([key]) => key.startsWith(`${communityId}:`)).map(([key, value]) => [key.slice(communityId.length + 1), value]));

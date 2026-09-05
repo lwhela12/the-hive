@@ -19,10 +19,12 @@ import {
   getHalfwayShape,
   getSeasonCheckInKind,
   isEndOfMonthCheckInSurvey,
+  isPreMeetingCheckInSurvey,
   isInHalfwayWindow,
   isSurveyOnHomeToday,
   checkInDisplayName,
 } from '../../lib/checkIns';
+import { pacificToday } from '../../lib/checkInPresentation';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
@@ -2695,9 +2697,35 @@ export default function HiveScreen() {
   // Either way the card drops the moment you finish, because stale to-dos
   // piling up is what we're avoiding. The flow itself is always open from
   // Meetings; this is only the nudge.
-  const todayDate = new Date();
+  const todayKey = pacificToday();
+  const todayDate = new Date(`${todayKey}T12:00:00`);
   const halfwayShape = getHalfwayShape(community);
-  const nextMeetingDate = upcomingEvents.find((event) => event.event_type === 'meeting')?.event_date;
+  const nextMeeting = upcomingEvents.find((event) => event.event_type === 'meeting');
+  const nextMeetingDate = nextMeeting?.event_date;
+  const tomorrowKey = new Date(Date.parse(`${todayKey}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+  const meetingIsTomorrow = nextMeetingDate === tomorrowKey;
+  const [checkInCompletionTimes, setCheckInCompletionTimes] = useState<Map<string, string>>(new Map());
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    if (!profile?.id || !communityId) {
+      setCheckInCompletionTimes(new Map());
+      return () => { active = false; };
+    }
+    // Do not let the prior HIVE's shared-survey receipt survive even one render.
+    setCheckInCompletionTimes(new Map());
+    void supabase.from('check_in_completions')
+      .select('survey_id, occurrence, completed_at')
+      .eq('user_id', profile.id)
+      .eq('community_id', communityId)
+      .then(({ data, error }) => {
+        if (!active || error) return;
+        setCheckInCompletionTimes(new Map((data ?? []).map((row) => [
+          `${communityId}:${row.survey_id}:${row.occurrence}`,
+          row.completed_at,
+        ])));
+      });
+    return () => { active = false; };
+  }, [communityId, profile?.id]));
   // `flow: 'tuneup'` means this card is the door. Every HIVE reads that way as
   // of 2026-08-28 — Production's halfway became a copy of OG's rather than a
   // survey of its own — and the value is kept rather than assumed so a HIVE
@@ -2739,17 +2767,34 @@ export default function HiveScreen() {
           } as any),
         } as HomeTodo]
       : []),
+    // The forms themselves stay open from Meetings. Home is the nudge: Before
+    // we meet appears the day before this HIVE's meeting, and End of the month
+    // keeps its own month-end window.
     // Quarterly and end-of-year check-ins keep to their season: the card
     // appears three days before the quarter/year ends and steps back two
     // weeks after (lib/checkIns.ts), however early the survey was launched
     // from Admin. Every other survey shows the moment it exists, unchanged.
     ...availableSurveys
-      .filter((s) => isSurveyOnHomeToday(s, todayDate))
+      .filter((s) => isPreMeetingCheckInSurvey(s) && s.community_id == null
+        ? meetingIsTomorrow
+        : isSurveyOnHomeToday(s, todayDate))
       .filter((s) => !(halfwayWizardOwnsTheDoor && isEndOfMonthCheckInSurvey(s, community)))
       .map(s => {
       const response = myResponses.get(s.id);
-      const submittedAt = response?.submitted_at ?? null;
-      const isDone = !!submittedAt && !pendingSurveyIds.has(s.id);
+      const isBeforeWeMeet = isPreMeetingCheckInSurvey(s) && s.community_id == null;
+      const isEndOfMonth = isEndOfMonthCheckInSurvey(s) && s.community_id == null;
+      const occurrence = isBeforeWeMeet && nextMeeting?.id
+        ? `meeting:${nextMeeting.id}`
+        : isEndOfMonth
+          ? `month:${todayKey.slice(0, 7)}`
+          : null;
+      const receiptCompletedAt = occurrence
+        ? checkInCompletionTimes.get(`${communityId}:${s.id}:${occurrence}`) ?? null
+        : null;
+      const submittedAt = occurrence ? receiptCompletedAt : response?.submitted_at ?? null;
+      const isDone = occurrence
+        ? !!receiptCompletedAt
+        : !!submittedAt && !pendingSurveyIds.has(s.id);
       // Monthly check-ins route through the guided Monthly Tune-up (wishes →
       // hang ideas → calendar → helpers → check-in) instead of the bare survey.
       const isMonthlyTuneUp = isMonthlyCheckInSurvey(s);
@@ -2770,7 +2815,7 @@ export default function HiveScreen() {
         // marks for the quarter and the year.
         emoji: seasonKind ? SEASON_CHECK_IN_EMOJI[seasonKind] : '📋',
         title: isMonthlyTuneUp ? `Before we meet · ${tuneUpMonthName}` : checkInDisplayName(s.title),
-        detail: isDone
+        detail: isDone && submittedAt
           ? `Submitted ${formatDateShort(submittedAt)} · Tap to edit`
           : s.due_date
             ? `Due ${formatSurveyDueDate(s.due_date)}`
@@ -2778,7 +2823,13 @@ export default function HiveScreen() {
         cta: isDone ? undefined : 'Fill out →',
         isDone,
         completedAt: isDone ? submittedAt : null,
-        onPress: isMonthlyTuneUp ? () => router.push({ pathname: '/monthly-tuneup', params: { from: 'hive' } } as any) : () => openSurvey(s),
+        onPress: isBeforeWeMeet
+          ? () => router.push({ pathname: '/beforewemeet', params: { from: 'hive', hive: community?.slug ?? '' } } as any)
+          : isEndOfMonth
+            ? () => router.push({ pathname: '/endofmonth', params: { from: 'hive', hive: community?.slug ?? '' } } as any)
+            : isMonthlyTuneUp
+              ? () => router.push({ pathname: '/monthly-tuneup', params: { from: 'hive' } } as any)
+              : () => openSurvey(s),
       };
     }),
     ...homeActionItems.map(a => {

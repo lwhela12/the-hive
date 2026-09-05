@@ -56,7 +56,7 @@ export const HIVE_RULES: RuleGroup[] = [
     heading: 'The two check-ins',
     rules: [
       {
-        text: 'Two have names, and they are the two you touch every month. Before we meet, the day before your meeting. End of the month, three days before the month ends.',
+        text: 'Two have names, and both stay open in Meetings whenever you want them. Before we meet nudges you the day before your meeting. End of the month nudges you three days before the month ends.',
         source: 'named 2026-09-02',
       },
       {
@@ -84,8 +84,12 @@ export const HIVE_RULES: RuleGroup[] = [
         source: 'always open, always there',
       },
       {
-        text: 'Missing a window closes nothing. The link opens the check-in whenever you send it — the window only decides when the app nudges somebody on its own.',
-        source: 'the window gates the Home card, not the link',
+        text: 'Missing a window closes nothing. The link and the Meetings pills always open the check-in — the window only decides when Home, email or a notification nudges somebody.',
+        source: 'Meetings is the always-open door; timing gates nudges only',
+      },
+      {
+        text: 'The answers live in one shared check-in, but the screen keeps the HIVE where you opened it. Enter from Tech and its header, colours and return path stay Tech.',
+        source: 'shared data does not erase place, 2026-09-05',
       },
       {
         text: 'People here answer on meeting night, not in the days before it. In June, 5 of 7 answered within fifteen minutes of each other, during the meeting. Quiet beforehand is normal.',

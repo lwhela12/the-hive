@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
@@ -59,8 +59,11 @@ export default function EndOfMonthScreen() {
    * who types a date into the address bar sees next quarter's questions
    * slightly early, which is the same thing as reading the survey.
    */
-  const { on } = useLocalSearchParams<{ on?: string | string[] }>();
+  const { on, from, hive } = useLocalSearchParams<{ on?: string | string[]; from?: string; hive?: string }>();
   const askedDate = Array.isArray(on) ? on[0] : on;
+  const returnTo = from === 'meetings' ? '/meetings' : from === 'hive' ? '/hive' : '/hive-wide';
+  const requestedHiveSlug = typeof hive === 'string' ? hive : null;
+  const originHandled = useRef<string | null>(null);
   /**
    * `useSurveys` NEEDS its arguments, and the failure without them is silent.
    *
@@ -76,6 +79,9 @@ export default function EndOfMonthScreen() {
    * whatever HIVE the reader happens to be standing in.
    */
   const { loading: authLoading, profile, communityId, memberships } = useAuth();
+  const originMembership = (from === 'meetings' || from === 'hive') && requestedHiveSlug
+    ? memberships.find(item => item.community.slug === requestedHiveSlug)
+    : null;
   const skin = usePageSkin();
   const { myResponses, submitCheckInOccurrence } =
     useSurveys(communityId ?? undefined, profile?.id);
@@ -185,10 +191,20 @@ export default function EndOfMonthScreen() {
     return () => { cancelled = true; };
   }, [authLoading, profile, memberships, askedDate, month]);
 
+  useEffect(() => {
+    if (!isFocused) { originHandled.current = null; return; }
+    if (state !== 'ready' || !requestedHiveSlug) return;
+    const originKey = `${profile?.id ?? ''}:${requestedHiveSlug}`;
+    if (originHandled.current === originKey) return;
+    originHandled.current = originKey;
+    const membership = memberships.find(item => item.community.slug === requestedHiveSlug);
+    if (membership) setSelected(membership.community_id);
+  }, [isFocused, memberships, profile?.id, requestedHiveSlug, state]);
+
   const done = useCallback(() => {
     // Home rather than back: a link out of a text message has nothing behind it.
-    router.replace('/hive-wide' as never);
-  }, [router]);
+    router.replace(returnTo as never);
+  }, [returnTo, router]);
 
   const onSubmit = useCallback(async (answers: SurveyAnswers) => {
     if (!survey || !profile || !selected || !merged) return { error: 'No check-in open' };
@@ -228,7 +244,7 @@ export default function EndOfMonthScreen() {
     return (
       <SurveyModal
         key={`${survey.id}:${month}:${selected}`}
-        survey={{ ...survey, community_id: selected === 'month' ? survey.community_id : selected,
+        survey={{ ...survey, community_id: originMembership?.community_id ?? survey.community_id,
           description: selected === 'month' ? 'Your month, and anything for the Buzz.' : 'Just this HIVE. Review your commitments, then save.',
           questions: mergedPreMeetingQuestions(part).map(e => e.question) }}
         draftScope={`${profile?.id}:${survey.id}:${askedDate ?? month}:${selected}`}
@@ -237,30 +253,32 @@ export default function EndOfMonthScreen() {
         carryForwardItems={todos[selected] ?? []}
         onSubmit={onSubmit}
         closeLabel="Back to check-ins"
-        hiveSlug={memberships.find(m => m.community_id === selected)?.community?.slug}
-        hiveAccent={hiveAccent(memberships.find(m => m.community_id === selected)?.community)}
+        hiveSlug={originMembership?.community?.slug}
+        hiveAccent={hiveAccent(originMembership?.community)}
         onClose={() => setSelected(null)}
       />
     );
   }
   if (state === 'ready' && survey && merged) return (
-    <ScrollView style={{ backgroundColor: skin.page }} contentContainerStyle={{ padding: 24, gap: 16 }}>
-      <AppHeader title="End of the month" tone="wide" />
-      <Text style={{ color: skin.inkSoft }}>{askedDate ? 'Read-only date preview.' : 'One sitting. Review each HIVE, then finish with your month and the Buzz.'}</Text>
-      {memberships.map(m => <CheckInHiveCard key={m.community_id} community={m.community}
-        event={meetings.find(event => event.community_id === m.community_id)} onPress={() => setSelected(m.community_id)}
-        status={saved[m.community_id] ? 'Saved — review' : 'Review commitments'} />)}
-      {profile && [null, ...memberships.map(m => m.community_id)].map(id => <LegacyCheckInAnswers key={id ?? 'month'} scopeLabel={id ? hiveDisplayName(memberships.find(m => m.community_id === id)?.community?.name) : 'Your month'} surveyId={survey.id} userId={profile.id} communityId={id} onReview={answers => { const key = id ?? 'month'; setReview(r => ({ ...r, [key]: answers })); setSelected(key); }} />)}
-      <Pressable accessibilityRole="link" onPress={() => router.push('/settings' as never)} style={{ padding: 12 }}>
-        <Text style={{ color: skin.gold }}>Email settings →</Text>
-        <Text style={{ color: skin.inkSoft }}>Switch off individual HIVE emails, including check-in reminders and the Buzz. This does not choose email versus text or stop personal messages.</Text>
-      </Pressable>
-      <Pressable accessibilityRole="button" disabled={!askedDate && memberships.some(m => !saved[m.community_id])}
-        onPress={() => setSelected('month')} style={{ padding: 20 }}>
-        <Text style={{ color: skin.gold }}>{saved.month ? 'Your month — saved' : 'Finish: your month + the Buzz'}</Text>
-      </Pressable>
-      <Pressable accessibilityRole="button" onPress={done}><Text style={{ color: skin.gold }}>Done for now</Text></Pressable>
-    </ScrollView>
+    <View style={{ flex: 1, backgroundColor: skin.page }}>
+      <AppHeader title="End of the month" />
+      <ScrollView style={{ backgroundColor: skin.page }} contentContainerStyle={{ padding: 24, gap: 16 }}>
+        <Text style={{ color: skin.inkSoft }}>{askedDate ? 'Read-only date preview.' : 'One sitting. Review each HIVE, then finish with your month and the Buzz.'}</Text>
+        {memberships.map(m => <CheckInHiveCard key={m.community_id} community={m.community}
+          event={meetings.find(event => event.community_id === m.community_id)} onPress={() => setSelected(m.community_id)}
+          status={saved[m.community_id] ? 'Saved — review' : 'Review commitments'} />)}
+        {profile && [null, ...memberships.map(m => m.community_id)].map(id => <LegacyCheckInAnswers key={id ?? 'month'} scopeLabel={id ? hiveDisplayName(memberships.find(m => m.community_id === id)?.community?.name) : 'Your month'} surveyId={survey.id} userId={profile.id} communityId={id} onReview={answers => { const key = id ?? 'month'; setReview(r => ({ ...r, [key]: answers })); setSelected(key); }} />)}
+        <Pressable accessibilityRole="link" onPress={() => router.push('/settings' as never)} style={{ padding: 12 }}>
+          <Text style={{ color: skin.gold }}>Email settings →</Text>
+          <Text style={{ color: skin.inkSoft }}>Switch off individual HIVE emails, including check-in reminders and the Buzz. This does not choose email versus text or stop personal messages.</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" disabled={!askedDate && memberships.some(m => !saved[m.community_id])}
+          onPress={() => setSelected('month')} style={{ padding: 20 }}>
+          <Text style={{ color: skin.gold }}>{saved.month ? 'Your month — saved' : 'Finish: your month + the Buzz'}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={done}><Text style={{ color: skin.gold }}>Done for now</Text></Pressable>
+      </ScrollView>
+    </View>
   );
 
   return (
@@ -276,8 +294,7 @@ export default function EndOfMonthScreen() {
         <Text
           style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: skin.inkSoft, textAlign: 'center' }}
         >
-          There is no End of the month check-in open just now. Nothing has gone wrong — it opens
-          three days before the month ends.
+          End of the month has not been set up yet.
         </Text>
       ) : (
         <>

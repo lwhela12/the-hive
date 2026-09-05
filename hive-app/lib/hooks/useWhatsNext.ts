@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 import { useAuth } from './useAuth';
 import { hiveDisplayName } from '../hiveBrand';
-import { checkInDisplayName } from '../checkIns';
+import { checkInDisplayName, isEndOfMonthCheckInSurvey, isPreMeetingCheckInSurvey } from '../checkIns';
 
 /**
  * What is coming, across every HIVE, in date order.
@@ -13,8 +13,8 @@ import { checkInDisplayName } from '../checkIns';
  * page."*
  *
  * Nothing here is stored. Every line is worked out from the meeting rows, the
- * open check-ins and the held sends at the moment the panel opens — the two
- * trackers this replaces both rotted because they had to be fed, and a list
+ * open check-ins at the moment the panel opens — the two trackers this replaces
+ * both rotted because they had to be fed, and a list
  * that can go stale is a list she will stop trusting.
  *
  * **Overdue does not disappear.** Her whole complaint about her calendar: *"if
@@ -31,19 +31,7 @@ export type WhatsNextItem = {
   detail?: string;
   communityId: string | null;
   overdue: boolean;
-  /** A held send only Nat can release. Carries the hold id. */
-  holdId?: string;
-  /**
-   * An open check-in an owner can send out from here, and how many are waiting.
-   *
-   * Nat, 2026-09-04: *"instead of going to my email and then previewing the
-   * email and then going back into the app and previewing the survey, I want
-   * everything to just happen in the app."* This is the row that does that —
-   * she reads the check-in, presses send, and `open-check-in` mails whoever
-   * has not answered. It is the replacement for `holdId`, which is a 6am email
-   * asking her to come back to a screen.
-   */
-  openable?: { surveyId: string; waiting: number; hiveName: string };
+  destination?: string;
 };
 
 const pacificToday = () =>
@@ -62,13 +50,6 @@ const lastDayOfMonth = (dateOnly: string) => {
 
 export function useWhatsNext() {
   const { memberships, profile } = useAuth();
-  /**
-   * The ROW is a fact and the fact is the same for everybody — that is Nat's
-   * own design for this list. The WORDING is not. Three rows described jobs
-   * only she can do, in the second person, to all sixteen members: *"previews
-   * to you at 6am, nothing sends until you say go"* would have taught five
-   * Production members that their check-in emails wait on somebody's approval.
-   */
   const isOwner = profile?.is_owner === true;
   const [items, setItems] = useState<WhatsNextItem[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -85,12 +66,13 @@ export function useWhatsNext() {
       found.push({ ...item, overdue: item.date < today });
 
     try {
-      const [meetingsResult, surveysResult, holdsResult] = await Promise.all([
+      const [meetingsResult, surveysResult, completionsResult] = await Promise.all([
         supabase
           .from('events')
           .select('id, community_id, title, event_date, event_time, end_time, location, meet_link')
           .in('community_id', hiveIds)
           .eq('event_type', 'meeting')
+          .eq('status', 'scheduled')
           .gte('event_date', today)
           .order('event_date', { ascending: true }),
         supabase
@@ -109,38 +91,25 @@ export function useWhatsNext() {
           .or(`community_id.in.(${hiveIds.join(',')}),community_id.is.null`)
           .eq('is_active', true)
           .order('due_date', { ascending: true }),
-        // Only Nat ever has one of these; for anybody else it comes back empty
-        // rather than erroring, which is what should happen.
         supabase
-          .from('notifications')
-          .select('id, created_at, metadata')
-          .eq('user_id', profile.id)
-          .eq('metadata->>check_in_approval', 'pending')
-          .order('created_at', { ascending: false }),
+          .from('check_in_completions')
+          .select('survey_id, community_id, occurrence')
+          .eq('user_id', profile.id),
       ]);
 
-      if (meetingsResult.error || surveysResult.error) throw meetingsResult.error ?? surveysResult.error;
+      if (meetingsResult.error || surveysResult.error || completionsResult.error) {
+        throw meetingsResult.error ?? surveysResult.error ?? completionsResult.error;
+      }
 
       const nameOf = (id: string) =>
         hiveDisplayName(memberships.find((m) => m.community_id === id)?.community?.name);
 
-      // ---- Written, addressed, waiting on her. Always the top of the list.
-      for (const row of (holdsResult.data ?? []) as any[]) {
-        const meta = row.metadata ?? {};
-        const to = Number(meta.check_in_recipients ?? 0);
-        push({
-          key: `hold_${row.id}`,
-          // The day it was HELD, so one waiting three days reads as three days late.
-          date: String(row.created_at).slice(0, 10),
-          what: `Say go: ${meta.check_in_subject ?? 'a check-in'}`,
-          detail: `${to} ${to === 1 ? 'person' : 'people'} in ${meta.check_in_hive_name ?? 'a HIVE'}. Nothing has gone yet.`,
-          communityId: meta.check_in_community ?? null,
-          holdId: row.id,
-        });
-      }
+      const meetings = (meetingsResult.data ?? []) as any[];
+      const completions = (completionsResult.data ?? []) as any[];
+      const tomorrow = shift(today, 1);
 
       // ---- Meetings, and the email each one drags behind it.
-      for (const meeting of (meetingsResult.data ?? []) as any[]) {
+      for (const meeting of meetings) {
         const name = nameOf(meeting.community_id);
         push({
           key: `meeting_${meeting.id}`,
@@ -149,17 +118,6 @@ export function useWhatsNext() {
           detail: [meeting.event_time?.slice(0, 5), meeting.location].filter(Boolean).join(' · '),
           communityId: meeting.community_id,
         });
-        // Three days counting the meeting day — same sum the sender does.
-        const opens = shift(meeting.event_date, -2);
-        if (opens >= today) {
-          push({
-            key: `open_${meeting.id}`,
-            date: opens,
-            what: `Before we meet opens · ${name}`,
-            detail: 'Previews to you at 6am. Nothing sends until you say go.',
-            communityId: meeting.community_id,
-          });
-        }
       }
 
       // ---- Check-ins that are open and unanswered.
@@ -172,113 +130,56 @@ export function useWhatsNext() {
           .in('survey_id', surveys.map((s) => s.id));
         const answered = new Set((mine ?? []).map((r: any) => r.survey_id));
 
-        /**
-         * AND, for an owner: send it.
-         *
-         * One row per open check-in that still has somebody waiting, with the
-         * number on it. Nat reads the check-in in the app and presses send
-         * here; `open-check-in` mails whoever has not answered, each person's
-         * own switch deciding, and writes everybody the in-app row.
-         *
-         * The number is worked out from the same two lists the sender uses —
-         * who is in it, and who has answered — so the button cannot promise a
-         * different count from the one that goes. It is confirmed against the
-         * function's own dry run before anything sends, because a count read
-         * when the panel opened is a count that can be minutes old.
-         */
-        if (isOwner) {
-          const [{ data: everyone }, { data: allAnswers }] = await Promise.all([
-            supabase.from('community_memberships').select('user_id, community_id'),
-            supabase.from('survey_responses')
-              .select('survey_id, user_id')
-              .in('survey_id', surveys.map((s) => s.id)),
-          ]);
-          for (const survey of surveys) {
-            if (!survey.due_date) continue;
-            const due = String(survey.due_date).slice(0, 10);
-            /**
-             * THIS ROW IS THE REMINDER, AND A REMINDER HAS A DATE.
-             *
-             * The check-ins are open all month now (Nat, 2026-09-04: *"so that
-             * if someone has a thought, they can always just pop in and update
-             * stuff… but I'll REMIND them of it 3 days before"*), which splits
-             * this row from the member's own row below. Theirs is a door and
-             * stands open; hers is a prompt to nudge people, and a prompt that
-             * shows every day of the month is furniture.
-             *
-             * So the window applies here even to the shared check-ins, where it
-             * used to be skipped — "Send it: End of the month" was sitting in
-             * her list on the 4th for a row not due until the 30th.
-             */
-            if (shift(due, -2) > today) continue;
-            /**
-             * AND NOT AFTER ITS DUE DATE HAS GONE.
-             *
-             * Found by walking this the day it was built: OG still has an
-             * ACTIVE "Halfway check-in" due 31 August, and without this line
-             * the new button cheerfully offered to email ten people in
-             * September about August's check-in. A stale row is Nat's to
-             * archive — never a session's, and never by a button that looks
-             * like an ordinary send.
-             *
-             * The window is the one the rule already names: opens three days
-             * before the due date counting the due date, chases on the day.
-             * After the day there is nothing left to chase.
-             */
-            if (due < today) continue;
-            const inIt = new Set(
-              (everyone ?? [])
-                .filter((m: any) => !survey.community_id || m.community_id === survey.community_id)
-                .map((m: any) => m.user_id),
-            );
-            const done = new Set(
-              (allAnswers ?? []).filter((r: any) => r.survey_id === survey.id).map((r: any) => r.user_id),
-            );
-            const waiting = [...inIt].filter((id) => !done.has(id)).length;
-            if (waiting === 0) continue;
-            push({
-              key: `send_${survey.id}`,
-              date: shift(due, -2),
-              what: `Send it: ${checkInDisplayName(survey.title)}`,
-              detail: `${waiting} of ${inIt.size} still to answer in ${
-                survey.community_id ? nameOf(survey.community_id) : 'every HIVE'
-              }.`,
-              communityId: survey.community_id,
-              openable: {
-                surveyId: survey.id,
-                waiting,
-                hiveName: survey.community_id ? nameOf(survey.community_id) : 'every HIVE',
-              },
-            });
-          }
-        }
+
         for (const survey of surveys) {
-          if (answered.has(survey.id)) continue;
           if (!survey.due_date) continue;
           const due = String(survey.due_date).slice(0, 10);
+          const isBeforeWeMeet = isPreMeetingCheckInSurvey(survey);
+          const isEndOfMonth = isEndOfMonthCheckInSurvey(survey);
+          const dueMeetings = isBeforeWeMeet
+            ? meetings.filter((meeting) => meeting.event_date === tomorrow
+              && (!survey.community_id || meeting.community_id === survey.community_id))
+            : [];
+          const beforeComplete = isBeforeWeMeet && dueMeetings.length > 0
+            && dueMeetings.every((meeting) => completions.some((completion) => (
+              completion.survey_id === survey.id
+              && completion.community_id === meeting.community_id
+              && completion.occurrence === `meeting:${meeting.id}`
+            )));
+          const monthOccurrence = `month:${today.slice(0, 7)}`;
+          const monthComplete = isEndOfMonth
+            && [null, ...hiveIds].every((communityId) => completions.some((completion) => (
+              completion.survey_id === survey.id
+              && completion.community_id === communityId
+              && completion.occurrence === monthOccurrence
+            )));
+          if (isBeforeWeMeet) {
+            if (dueMeetings.length === 0 || beforeComplete) continue;
+          } else if (isEndOfMonth) {
+            if (shift(due, -2) > today || due < today || monthComplete) continue;
+          } else if (answered.has(survey.id)) {
+            continue;
+          }
           /**
-           * Only once it is actually open — a check-in sitting in your list for
-           * a fortnight before it means anything teaches you to ignore the list.
-           *
-           * **Unless it belongs to no HIVE.** Nat, 2026-09-02: *"should my
-           * What's next show what I still need to do?"* It should, and hers was
-           * missing the one she had just made. A per-HIVE check-in is created
-           * weeks ahead on a schedule, so it waits for its window; a HIVE-Wide
-           * one exists because somebody deliberately opened it for everybody
-           * and is about to send the link out. Existing IS its window.
+           * The survey page is always available from Meetings. What's Next is
+           * different: it is attention, so it appears only in the useful window.
            */
-          // A shared check-in is open all month, so it is on your list all
-          // month (2026-09-04). A HIVE's own still waits for its window until
-          // the October cutover retires it.
-          if (survey.community_id && shift(due, -2) > today) continue;
+          if (!isBeforeWeMeet && !isEndOfMonth && survey.community_id && shift(due, -2) > today) continue;
           push({
             key: `survey_${survey.id}`,
-            date: due,
+            date: isBeforeWeMeet ? tomorrow : due,
             what: `Your own: ${checkInDisplayName(survey.title)}`,
             detail: survey.community_id
               ? nameOf(survey.community_id)
               : 'Everybody, whichever HIVEs they are in',
             communityId: survey.community_id,
+            destination: isBeforeWeMeet
+              ? '/beforewemeet'
+              : isEndOfMonth
+                ? '/endofmonth'
+                : survey.community_id
+                  ? `/hive?hive=${survey.community_id}`
+                  : '/meetings',
           });
         }
       }
