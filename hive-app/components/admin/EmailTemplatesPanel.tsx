@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../lib/hooks/useAuth';
-import { hiveDisplayName } from '../../lib/hiveBrand';
 
 /**
  * EVERY TEMPLATED EMAIL, RENDERED, IN ONE PLACE. NOTHING SENDS FROM HERE.
@@ -52,33 +50,50 @@ export function EmailTemplatesPanel({
   scrollStyle: any;
   Panel: React.ComponentType<any>;
 }) {
-  const { memberships } = useAuth();
-  // Which HIVE's colours to draw them in. A template wears a real HIVE's
-  // accent and emoji, so reading them in only one HIVE's costume is how
-  // Production's purple survived on Tech's check-in for weeks.
-  const [slug, setSlug] = useState('default');
+  // No HIVE picker any more. A notification email names no HIVE as of
+  // 2026-09-04 — Nat: *"the name of the game here... is generic"* — so all
+  // five render identically whoever reads them, and a chooser that redrew
+  // them in three costumes would be a control that changes nothing.
   const [templates, setTemplates] = useState<Template[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [open, setOpen] = useState<string | null>(null);
+  const [posting, setPosting] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
 
   const load = useCallback(async () => {
     setState('loading');
-    const { data, error } = await supabase.functions.invoke(`email-preview?hive=${slug}`, {
+    const { data, error } = await supabase.functions.invoke('email-preview', {
       method: 'GET',
     });
     if (error || !data?.templates) { setState('error'); return; }
     setTemplates(data.templates as Template[]);
     setState('ready');
-  }, [slug]);
+  }, []);
 
   useEffect(() => { void load(); }, [load]);
 
-  const hives = [
-    { slug: 'default', label: 'OG HIVE' },
-    ...memberships
-      .map((m) => ({ slug: m.community?.slug ?? '', label: hiveDisplayName(m.community?.name) }))
-      .filter((h) => h.slug && h.slug !== 'default'),
-  ];
+  /**
+   * Read them here, or read them where they will actually arrive.
+   *
+   * Nat, 2026-09-04: *"put one of each type in my inbox."* Every previous set
+   * went out because a session ran the function by hand from a terminal, which
+   * is the exact shape PROJECT.md warns about for check-ins — *"before this,
+   * there was no button anywhere."* A page that renders the templates and then
+   * cannot mail them is a page that needs somebody at a keyboard every time the
+   * words change.
+   *
+   * It takes no recipient and never has. `email-preview` reads the caller's own
+   * address off their profile and mails it there and nowhere else, so there is
+   * nothing here that can be pointed at a member.
+   */
+  const mailThemToMe = useCallback(async () => {
+    setPosting('sending');
+    const { data, error } = await supabase.functions.invoke('email-preview', {
+      method: 'POST',
+      body: { send: true },
+    });
+    const sent = (data as { sent?: number; of?: number } | null);
+    setPosting(!error && sent?.sent === sent?.of && (sent?.of ?? 0) > 0 ? 'sent' : 'failed');
+  }, []);
 
   return (
     <View style={cellStyle}>
@@ -91,29 +106,39 @@ export function EmailTemplatesPanel({
       >
         <ScrollView style={scrollStyle} contentContainerStyle={{ paddingBottom: 6 }}>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: 'rgba(255,248,233,0.78)', paddingHorizontal: 12, paddingTop: 10 }}>
-            These are the same every time, with a name and a date filled in.
+            These are the same every time, for everybody.
+            {'\n'}None of them names a HIVE, a board or a person — the button does that, behind the login.
             {'\n'}Read them once and they are approved.
             {'\n'}The Buzz is written fresh each month, so it still previews before it sends.
           </Text>
 
-          {/* Whose colours. A template is drawn in a real HIVE's accent and emoji. */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 12, paddingTop: 12 }}>
-            {hives.map((hive) => (
-              <Pressable
-                key={hive.slug}
-                onPress={() => setSlug(hive.slug)}
-                style={{
-                  paddingHorizontal: 11,
-                  paddingVertical: 5,
-                  borderRadius: 999,
-                  backgroundColor: slug === hive.slug ? 'rgba(255,248,233,0.92)' : 'rgba(255,248,233,0.09)',
-                }}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: slug === hive.slug ? '#141414' : 'rgba(255,248,233,0.8)' }}>
-                  {hive.label}
-                </Text>
-              </Pressable>
-            ))}
+          {/* The same five, in the place they will actually be read. */}
+          <View style={{ paddingHorizontal: 12, paddingTop: 12 }}>
+            <Pressable
+              onPress={() => { void mailThemToMe(); }}
+              disabled={posting === 'sending' || state !== 'ready'}
+              style={{
+                alignSelf: 'flex-start',
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderRadius: 999,
+                backgroundColor: 'rgba(255,248,233,0.14)',
+                opacity: posting === 'sending' || state !== 'ready' ? 0.5 : 1,
+              }}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#fffdf5' }}>
+                {posting === 'sending' ? 'Sending…' : 'Send them to my inbox'}
+              </Text>
+            </Pressable>
+            {posting === 'sent' ? (
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: 'rgba(255,248,233,0.66)', paddingTop: 6 }}>
+                On their way to you, and nobody else. Every subject starts with [Test].
+              </Text>
+            ) : posting === 'failed' ? (
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, lineHeight: 18, color: '#ffb4a8', paddingTop: 6 }}>
+                Those did not send. Nothing left the building — try again.
+              </Text>
+            ) : null}
           </View>
 
           {state === 'loading' ? (

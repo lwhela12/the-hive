@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { sendReachEmail, deepLink, hiveIsMeetingNow } from '../_shared/reachMail.ts';
+import { sendReachEmail, genericLetter, deepLink, hiveIsMeetingNow } from '../_shared/reachMail.ts';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
 import { hiveMark } from '../_shared/hiveMark.ts';
 
@@ -323,29 +323,18 @@ serve(async (req) => {
 
   const sent = await Promise.all(
     waiting.map((userId) => sendReachEmail(admin, userId, shape.kind, {
-      // The subject names the HIVE only when the letter belongs to one. A
-      // merged pre-meeting goes to whoever meets tomorrow, and they may not all
-      // be in the same HIVE.
-      subject: survey.community_id
-        ? `${hiveName} · Your ${shape.name} check-in is open`
-        : isMergedPreMeeting
-          ? 'HIVE · You have a meeting tomorrow'
-          : `${hiveName} · Your ${shape.name} check-in is open`,
-      hiveName,
-      hiveSlug,
-      hiveAccent,
-      hiveId: survey.community_id,
-      heading: isMergedPreMeeting
-        ? 'You have a meeting tomorrow'
-        : `Your ${shape.name} check-in is open`,
-      where: survey.community_id
-        ? hiveName
-        : isMergedPreMeeting ? 'Your meeting is tomorrow' : 'Every HIVE',
-      said: isMergedPreMeeting
-        ? `It takes ${takes}, and it covers every HIVE you are in — fill in the others now and you will not be asked again before their meetings.`
-        : `It takes ${takes}, and what you write goes straight into the room.`,
-      buttonLabel: 'Open the check-in',
-      href,
+      // The letter names no HIVE, whether or not this survey belongs to one.
+      // A pre-meeting goes to whoever meets tomorrow and they may not all be in
+      // the same HIVE — but that was never the only reason. Nat settled the
+      // wider rule on 2026-09-04: a notification email says the KIND and
+      // nothing else, so an inbox is told nothing a login is meant to keep.
+      // The words live in `genericLetter`, one place for all of them.
+      ...genericLetter(shape.kind, {
+        where: shape.kind === 'checkIn' ? 'Your meeting is tomorrow' : 'Every HIVE',
+        buttonLabel: 'Open the check-in',
+        href,
+        hiveId: survey.community_id,
+      }),
     })),
   );
   const emailed = sent.filter((r) => r.sent).length;

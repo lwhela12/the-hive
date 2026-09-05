@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { sendReachEmail, deepLink } from '../_shared/reachMail.ts';
+import { sendReachEmail, genericLetter, deepLink } from '../_shared/reachMail.ts';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 
 interface NotifyBoardReplyPayload {
@@ -192,23 +192,13 @@ serve(async (req) => {
      * Sent AFTER the in-app row is written and never awaited into failure: a
      * letter that cannot go must not take the notification down with it.
      */
-    const { data: replyHive } = await supabaseAdmin
-      .from('communities')
-      .select('name, slug, accent_color')
-      .eq('id', community_id)
-      .maybeSingle();
-    const hiveRow = replyHive as { name?: string; slug?: string; accent_color?: string } | null;
     const emailResult = await sendReachEmail(supabaseAdmin, post.author_id, 'boardReply', {
-      subject: `${hiveRow?.name ?? 'HIVE'} · ${replyAuthor.name} replied to your post`,
-      hiveName: hiveRow?.name ?? 'Your HIVE',
-      hiveSlug: hiveRow?.slug ?? null,
-      hiveAccent: hiveRow?.accent_color ?? null,
-      hiveId: community_id,
-      heading: `${replyAuthor.name} replied to your post`,
-      where: post.title ? String(post.title) : 'On the boards',
-      said: reply_preview,
-      buttonLabel: 'Read the reply',
-      href: deepLink(`/board?postId=${encodeURIComponent(post_id)}`, community_id),
+      ...genericLetter('boardReply', {
+        where: 'On the boards',
+        buttonLabel: 'Read the reply',
+        href: deepLink(`/board?postId=${encodeURIComponent(post_id)}`, community_id),
+        hiveId: community_id,
+      }),
     });
 
     // Send push notification if post author has a push token

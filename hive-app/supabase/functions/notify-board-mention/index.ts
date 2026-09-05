@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { sendReachEmail, sendReachEmails, deepLink } from '../_shared/reachMail.ts';
+import { sendReachEmail, sendReachEmails, genericLetter, deepLink } from '../_shared/reachMail.ts';
 import { verifySupabaseJwt, isAuthError, isCommunityMember, isOwner } from '../_shared/auth.ts';
 
 // One person by id, or a whole group resolved here. The sender may stand
@@ -288,27 +288,17 @@ serve(async (req) => {
        * written to, and a second letter about one sentence is the fastest way
        * to teach a person to ignore both.
        */
-      const { data: mentionHive } = await supabaseAdmin
-        .from('communities')
-        .select('name, slug, accent_color')
-        .eq('id', targetCommunityId)
-        .maybeSingle();
-      const groupHive = mentionHive as { name?: string; slug?: string; accent_color?: string } | null;
       const emailsSent = await sendReachEmails(
         supabaseAdmin,
         recipientIds.filter((userId) => !alreadyTold.has(userId)),
         'mention',
         {
-          subject: `${groupHive?.name ?? 'HIVE'} · ${title}`,
-          hiveName: groupHive?.name ?? 'Your HIVE',
-          hiveSlug: groupHive?.slug ?? null,
-          hiveAccent: groupHive?.accent_color ?? null,
-          hiveId: targetCommunityId,
-          heading: title,
-          where: board_name ? String(board_name) : 'On the boards',
-          said: preview,
-          buttonLabel: 'Go and see',
-          href: deepLink(`/board?postId=${encodeURIComponent(post_id)}`, targetCommunityId),
+          ...genericLetter('mention', {
+            where: 'On the boards',
+            buttonLabel: 'Go and see',
+            href: deepLink(`/board?postId=${encodeURIComponent(post_id)}`, targetCommunityId),
+            hiveId: targetCommunityId,
+          }),
         },
       );
 
@@ -462,23 +452,13 @@ serve(async (req) => {
     // The email. Skipped for a duplicate, on the same reasoning as the group
     // path: the row already existed, so the letter already went.
     if (!results.duplicate_skipped) {
-      const { data: soloHive } = await supabaseAdmin
-        .from('communities')
-        .select('name, slug, accent_color')
-        .eq('id', community_id)
-        .maybeSingle();
-      const hiveRow = soloHive as { name?: string; slug?: string; accent_color?: string } | null;
       const emailResult = await sendReachEmail(supabaseAdmin, recipient_id, 'mention', {
-        subject: `${hiveRow?.name ?? 'HIVE'} · ${title}`,
-        hiveName: hiveRow?.name ?? 'Your HIVE',
-        hiveSlug: hiveRow?.slug ?? null,
-        hiveAccent: hiveRow?.accent_color ?? null,
-        hiveId: community_id,
-        heading: title,
-        where: board_name ? String(board_name) : 'On the boards',
-        said: preview,
-        buttonLabel: 'Go and see',
-        href: deepLink(`/board?postId=${encodeURIComponent(post_id)}`, community_id),
+        ...genericLetter('mention', {
+          where: 'On the boards',
+          buttonLabel: 'Go and see',
+          href: deepLink(`/board?postId=${encodeURIComponent(post_id)}`, community_id),
+          hiveId: community_id,
+        }),
       });
       (results as { email_sent?: boolean }).email_sent = emailResult.sent;
     }

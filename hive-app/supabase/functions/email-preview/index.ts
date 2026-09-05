@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { reachEmailHtml, plainTextFrom, REACH_COLUMNS, type Reach } from '../_shared/reachMail.ts';
+import { reachEmailHtml, genericLetter, plainTextFrom, REACH_COLUMNS, type Reach } from '../_shared/reachMail.ts';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
 
 /**
@@ -68,8 +68,8 @@ type Sample = {
   /** Which switch turns it off, in her words. */
   offSwitch: string;
   kind: Reach;
-  subject: string;
-  letter: Parameters<typeof reachEmailHtml>[0];
+  /** Subject and body together, from the one builder the real senders use. */
+  letter: Parameters<typeof reachEmailHtml>[0] & { subject: string };
 };
 
 serve(async (req) => {
@@ -87,32 +87,34 @@ serve(async (req) => {
   if (!(await isOwner(admin, auth.userId))) return errorResponse(refusal, 403);
 
   /**
-   * A real HIVE, so the colour and the emoji in the preview are a real HIVE's.
+   * NO HIVE IS PICKED, BECAUSE NO TEMPLATE NAMES ONE.
    *
-   * Which one is asked for, defaulting to OG — the check-in email wore
-   * Production's purple and clapperboard for weeks because the branding was
-   * typed in by hand, and a preview drawn in invented colours is how that
-   * survives a reading.
+   * This block used to read a `?hive=` slug and dress every sample in that
+   * HIVE's colour and seal, because the check-in email had Production's purple
+   * typed into it by hand once and nobody could see it. That is fixed a better
+   * way now: as of 2026-09-04 a notification email says its KIND and nothing
+   * else, wears the HIVE-Wide seal, and is identical whoever reads it — so a
+   * picker offering to redraw them in three costumes would be a control that
+   * changes nothing. See `genericLetter` in `_shared/reachMail.ts` for why.
    */
-  const url = new URL(req.url);
-  const slug = url.searchParams.get('hive') || 'default';
-  const { data: hiveRow } = await admin
-    .from('communities')
-    .select('id, name, slug, accent_color')
-    .eq('slug', slug)
-    .maybeSingle();
-  const hive = hiveRow as
-    { id: string; name: string; slug: string; accent_color: string | null } | null;
-  if (!hive) return errorResponse('No HIVE by that name.', 404);
 
-  const common = {
-    toName: 'Brietta',
-    hiveName: hive.name,
-    hiveSlug: hive.slug,
-    hiveAccent: hive.accent_color,
-    hiveId: hive.id,
-  };
-
+  /**
+   * FIVE. Nat counted them on 2026-09-04: *"There should only be 5 types of
+   * emails that i need to approve: pre meeting survey open, end of the month
+   * survey open, newsletter, someone tagged you, someone messaged you, or
+   * someone responded to something you wrote."*
+   *
+   * Being tagged is ONE of them here, not two. It used to be shown twice —
+   * tagged by name, and tagged as part of a HIVE — and the two now produce the
+   * same letter, because which of the two happened is exactly the sort of
+   * detail an inbox is not told. Five senders still exist behind this one
+   * sample: boards, rooms and wishes each have their own, personal and group.
+   *
+   * The Buzz is the sixth thing on her list and is deliberately NOT here. It is
+   * written fresh every month, so there is nothing to approve in advance; it
+   * previews before every send, which is the half of The Build Standard the
+   * 2026-09-04 amendment did not touch.
+   */
   const samples: Sample[] = [
     {
       key: 'message',
@@ -120,54 +122,25 @@ serve(async (req) => {
       when: 'When a message lands for you. One per conversation, then quiet until you have opened it.',
       offSwitch: 'When a message lands for me',
       kind: 'message',
-      subject: `${hive.name} · Nat sent you a message`,
-      letter: {
-        ...common,
-        heading: 'Nat sent you a message',
+      letter: genericLetter('message', {
         where: 'In your messages',
-        said: 'Are you still up for Thursday? No pressure either way.',
-        buttonLabel: 'Go and see',
+        buttonLabel: 'Read it and reply',
         href: 'https://app.the-hive.app/messages',
-      },
+        hiveId: null,
+      }),
     },
-    /**
-     * Being tagged has two shapes, and both are shown rather than one being
-     * approved and the other inferred. Nat named both in the same breath:
-     * *"somebody tagged you, or a hive you're in."* They share one switch
-     * because they are one kind of interruption, and a member who wants to
-     * hear their own name almost always wants to hear their HIVE's.
-     */
     {
       key: 'mention',
       name: 'Somebody tagged you',
-      when: 'Somebody writes @your-name on a board, in a room, or on a wish.',
+      when: 'Somebody writes your name — or tags a whole HIVE, or everybody — on a board, in a room, or on a wish.',
       offSwitch: 'When somebody tags me, or a HIVE I\u2019m in',
       kind: 'mention',
-      subject: `${hive.name} · Nat mentioned you on Favourite Books!`,
-      letter: {
-        ...common,
-        heading: 'Nat mentioned you on Favourite Books!',
-        where: 'Favourite Books!',
-        said: '@Brietta you were the one who recommended this, weren’t you?',
+      letter: genericLetter('mention', {
+        where: 'On the boards',
         buttonLabel: 'Go and see',
         href: 'https://app.the-hive.app/board',
-      },
-    },
-    {
-      key: 'groupMention',
-      name: 'Somebody tagged a HIVE you\u2019re in',
-      when: `Somebody tags a whole HIVE — @${hive.slug === 'default' ? 'og' : hive.slug} — or everyone across all of them with @everyone.`,
-      offSwitch: 'When somebody tags me, or a HIVE I\u2019m in',
-      kind: 'mention',
-      subject: `${hive.name} · Nat mentioned everyone in ${hive.name} on Things We Learned`,
-      letter: {
-        ...common,
-        heading: `Nat mentioned everyone in ${hive.name} on Things We Learned`,
-        where: 'Things We Learned',
-        said: 'Don’t forget we meet tomorrow — same link as last time.',
-        buttonLabel: 'Go and see',
-        href: 'https://app.the-hive.app/board',
-      },
+        hiveId: null,
+      }),
     },
     {
       key: 'boardReply',
@@ -175,65 +148,38 @@ serve(async (req) => {
       when: 'A reply on something you put on a board. A post nobody is tagged in sends nothing.',
       offSwitch: 'When somebody replies to my post',
       kind: 'boardReply',
-      subject: `${hive.name} · Nat replied to your post`,
-      letter: {
-        ...common,
-        heading: 'Nat replied to your post',
-        where: 'Our Favourite Recipes',
-        said: 'I made this last night and it worked. Adding a photo tomorrow.',
-        buttonLabel: 'Go and see',
+      letter: genericLetter('boardReply', {
+        where: 'On the boards',
+        buttonLabel: 'Read the reply',
         href: 'https://app.the-hive.app/board',
-      },
+        hiveId: null,
+      }),
     },
     {
       key: 'checkIn',
-      name: 'Your Before we meet check-in is open',
-      when: 'Three days before that HIVE meets, counting the meeting day, when Nat presses send.',
+      name: 'Before we meet is open',
+      when: 'The day before a HIVE meets, when Nat presses send. It covers every HIVE the reader is in.',
       offSwitch: 'Before we meet',
       kind: 'checkIn',
-      subject: `${hive.name} · Your Before we meet check-in is open`,
-      letter: {
-        ...common,
-        heading: 'Your Before we meet check-in is open',
-        where: hive.name,
-        said: 'It takes a few minutes, and what you write goes straight into the room.',
+      letter: genericLetter('checkIn', {
+        where: 'Your meeting is tomorrow',
         buttonLabel: 'Open the check-in',
-        href: 'https://app.the-hive.app/monthly-tuneup',
-      },
+        href: 'https://app.the-hive.app/beforewemeet',
+        hiveId: null,
+      }),
     },
     {
       key: 'monthCheckIn',
-      name: 'Your End of the month check-in is open',
+      name: 'End of the month is open',
       when: 'Three days before the month ends. One for everybody, whichever HIVEs they are in.',
       offSwitch: 'End of the month',
       kind: 'monthCheckIn',
-      /**
-       * THE ONE TEMPLATE THAT IS NOT ABOUT THE HIVE IN THE PICKER.
-       *
-       * End of the month belongs to no HIVE (`community_id` null, migration
-       * 225), so `open-check-in` sends it with no slug — which means the
-       * HIVE-Wide seal, honey gold, and "HIVE ·" on the subject line, whichever
-       * HIVEs the reader is in.
-       *
-       * This spread `common` until 2026-09-04, so the preview dressed it in
-       * whichever HIVE was selected above: Tech's navy and Tech's circuit-board
-       * seal on a letter that will arrive black and gold. On the page whose
-       * whole promise is "what you approve is what lands in an inbox", that is
-       * the one template it was not true of.
-       */
-      subject: 'HIVE · Your End of the month check-in is open',
-      letter: {
-        toName: common.toName,
-        hiveName: 'HIVE',
-        hiveSlug: null,
-        hiveAccent: null,
-        hiveId: null,
-        heading: 'Your End of the month check-in is open',
+      letter: genericLetter('monthCheckIn', {
         where: 'Every HIVE',
-        said: 'It takes about two minutes, and what you write goes straight into the room.',
         buttonLabel: 'Open the check-in',
         href: 'https://app.the-hive.app/endofmonth',
-      },
+        hiveId: null,
+      }),
     },
   ];
 
@@ -243,7 +189,7 @@ serve(async (req) => {
     when: sample.when,
     off_switch: sample.offSwitch,
     column: REACH_COLUMNS[sample.kind],
-    subject: sample.subject,
+    subject: sample.letter.subject,
     html: reachEmailHtml(sample.letter),
   }));
 
@@ -295,7 +241,6 @@ serve(async (req) => {
       }
     }
     return jsonResponse({
-      hive: { name: hive.name, slug: hive.slug },
       to,
       sent: results.filter((r) => r.sent).length,
       of: results.length,
@@ -304,7 +249,6 @@ serve(async (req) => {
   }
 
   return jsonResponse({
-    hive: { name: hive.name, slug: hive.slug },
     /**
      * Said out loud rather than left to be inferred: this page is the templated
      * mail and only the templated mail. The Buzz and anything else written

@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { sendReachEmail, deepLink } from '../_shared/reachMail.ts';
+import { sendReachEmail, genericLetter, deepLink } from '../_shared/reachMail.ts';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 
 interface NotifyDMPayload {
@@ -195,23 +195,13 @@ serve(async (req) => {
     const mayTellAgain = !told || (!!seen && seen >= told);
 
     if (mayTellAgain && !seatRow?.muted) {
-      const { data: dmHive } = await supabaseAdmin
-        .from('communities')
-        .select('name, slug, accent_color')
-        .eq('id', community_id)
-        .maybeSingle();
-      const hiveRow = dmHive as { name?: string; slug?: string; accent_color?: string } | null;
       const emailResult = await sendReachEmail(supabaseAdmin, recipient_id, 'message', {
-        subject: `${hiveRow?.name ?? 'HIVE'} · ${sender.name} sent you a message`,
-        hiveName: hiveRow?.name ?? 'Your HIVE',
-        hiveSlug: hiveRow?.slug ?? null,
-        hiveAccent: hiveRow?.accent_color ?? null,
-        hiveId: community_id,
-        heading: `${sender.name} sent you a message`,
-        where: 'In your messages',
-        said: message_preview,
-        buttonLabel: 'Read it and reply',
-        href: deepLink(`/messages?roomId=${encodeURIComponent(room_id)}`, community_id),
+        ...genericLetter('message', {
+          where: 'In your messages',
+          buttonLabel: 'Read it and reply',
+          href: deepLink(`/messages?roomId=${encodeURIComponent(room_id)}`, community_id),
+          hiveId: community_id,
+        }),
       });
       results.email_sent = emailResult.sent;
       // Stamped only when one actually went. Stamping on a refusal would make

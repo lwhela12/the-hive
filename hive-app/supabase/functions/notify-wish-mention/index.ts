@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { sendReachEmail, sendReachEmails, deepLink } from '../_shared/reachMail.ts';
+import { sendReachEmail, sendReachEmails, genericLetter, deepLink } from '../_shared/reachMail.ts';
 import { verifySupabaseJwt, isAuthError, isCommunityMember, isOwner } from '../_shared/auth.ts';
 
 // One person by id, or a whole group resolved here. The sender may stand
@@ -274,23 +274,13 @@ serve(async (req) => {
       // reason the pushes below are: somebody inside the dedupe window has
       // already heard about this one.
       const freshRecipients = recipientIds.filter((userId) => !alreadyTold.has(userId));
-      const { data: wishHive } = await supabaseAdmin
-        .from('communities')
-        .select('name, slug, accent_color')
-        .eq('id', targetCommunityId)
-        .maybeSingle();
-      const groupHive = wishHive as { name?: string; slug?: string; accent_color?: string } | null;
       const emailsSent = await sendReachEmails(supabaseAdmin, freshRecipients, 'mention', {
-        subject: `${groupHive?.name ?? 'HIVE'} · ${title}`,
-        hiveName: groupHive?.name ?? 'Your HIVE',
-        hiveSlug: groupHive?.slug ?? null,
-        hiveAccent: groupHive?.accent_color ?? null,
-        hiveId: targetCommunityId,
-        heading: title,
-        where: wish_owner_name ? `${wish_owner_name}'s HD wish` : 'On a wish',
-        said: preview,
-        buttonLabel: 'Go and see',
-        href: deepLink('/hive', targetCommunityId),
+        ...genericLetter('mention', {
+          where: 'On a wish',
+          buttonLabel: 'Go and see',
+          href: deepLink('/hive', targetCommunityId),
+          hiveId: targetCommunityId,
+        }),
       });
 
       // Pushes only for the people whose row was just written — a recipient in
@@ -423,23 +413,13 @@ serve(async (req) => {
     }
 
     {
-      const { data: soloHive } = await supabaseAdmin
-        .from('communities')
-        .select('name, slug, accent_color')
-        .eq('id', community_id)
-        .maybeSingle();
-      const hiveRow = soloHive as { name?: string; slug?: string; accent_color?: string } | null;
       const emailResult = await sendReachEmail(supabaseAdmin, recipient_id, 'mention', {
-        subject: `${hiveRow?.name ?? 'HIVE'} · ${title}`,
-        hiveName: hiveRow?.name ?? 'Your HIVE',
-        hiveSlug: hiveRow?.slug ?? null,
-        hiveAccent: hiveRow?.accent_color ?? null,
-        hiveId: community_id,
-        heading: title,
-        where: wish_owner_name ? `${wish_owner_name}'s HD wish` : 'On a wish',
-        said: preview,
-        buttonLabel: 'Go and see',
-        href: deepLink('/hive', community_id),
+        ...genericLetter('mention', {
+          where: 'On a wish',
+          buttonLabel: 'Go and see',
+          href: deepLink('/hive', community_id),
+          hiveId: community_id,
+        }),
       });
       results.email_sent = emailResult.sent;
     }

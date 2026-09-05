@@ -71,6 +71,100 @@ export const REACH_COLUMNS = {
 
 export type Reach = keyof typeof REACH_COLUMNS;
 
+/**
+ * WHAT A NOTIFICATION EMAIL IS ALLOWED TO SAY — AND IT IS NOT MUCH.
+ *
+ * Nat, 2026-09-04, reading the approval set: *"the name of the game here...
+ * is generic. Let's just leave it generic for right now, i think thats the
+ * better, safer, less likely to break way."*
+ *
+ * She had just been handed two specimens that proved it. One said
+ * "OG HIVE · Your Before we meet check-in is open" — but the check-in belongs
+ * to no HIVE any more, so naming one is wrong for a reader who is in three.
+ * The other said "Nat mentioned everyone in OG HIVE on Things We Learned", and
+ * OG HIVE has no board by that name; a template that quotes a place can be
+ * wrong about the place.
+ *
+ * So a notification email carries the KIND and nothing else. Not the HIVE, not
+ * the board or room or wish, not who wrote it, not a word of what they said.
+ * Three things follow from that, and all three are the point:
+ *
+ *   1. **It cannot be wrong.** There is nothing in it to be wrong about.
+ *   2. **It cannot leak.** A subject line sits on a lock screen and in a mail
+ *      list somebody else can see over your shoulder. Which HIVEs you are in,
+ *      who is in them with you, and what any of you said are all things HIVE
+ *      keeps behind a login — an inbox is not behind a login. Production is
+ *      never named outside Production, and the same reasoning covers the rest.
+ *   3. **It stays one letter.** A member of three HIVEs gets one "somebody
+ *      tagged you", not three that give away the count.
+ *
+ * The BUTTON is what carries the specifics, because it lands behind the login
+ * where the specifics belong — the deep link keeps its `?hive=` and still opens
+ * the exact thing (see "the three doors out of the app").
+ *
+ * THE IN-APP ROW AND THE PUSH ARE NOT THIS. They stay specific — "Nat mentioned
+ * you on Favourite Books!" — because you are already inside the app, past the
+ * login, when you read one. Only the email goes out into the open.
+ */
+const GENERIC_LINE: Record<Reach, { line: string; said: string }> = {
+  message: {
+    line: 'Somebody sent you a message',
+    said: 'Open HIVE to read it.',
+  },
+  mention: {
+    // One line for both shapes of being tagged — by name, or as part of a HIVE
+    // somebody tagged. Nat listed them as one thing, and the difference between
+    // them is exactly the kind of detail an inbox should not be told.
+    line: 'Somebody tagged you',
+    said: 'Open HIVE to see it.',
+  },
+  boardReply: {
+    line: 'Somebody replied to your post',
+    said: 'Open HIVE to read it.',
+  },
+  checkIn: {
+    line: 'You have a meeting tomorrow',
+    // Nat's own words for this one: *"we have a meeting tomorrow, dont forget
+    // to fill this out before it starts."* The second sentence is why the
+    // check-in was merged — a member of three can do all of them in this
+    // sitting — and it names no HIVE to say so.
+    said: 'Don\u2019t forget to fill this out before it starts. It covers every HIVE you are in.',
+  },
+  monthCheckIn: {
+    line: 'Your end of the month check-in is open',
+    said: 'It takes about two minutes.',
+  },
+};
+
+/**
+ * The whole letter for one kind, with nothing in it that could name anybody.
+ *
+ * `where` is the only thing a caller still chooses, and it may only be an AREA
+ * of the app — "On the boards", "In your messages" — never a board's or a
+ * room's name. `hiveId` is kept because `sendReachEmail` asks it whether that
+ * HIVE is mid-meeting and holds the letter if it is; it is never rendered.
+ * The letter wears the HIVE-Wide seal, which is the only one that is not
+ * somebody's costume.
+ */
+export function genericLetter(
+  kind: Reach,
+  opts: { where: string; buttonLabel: string; href: string; hiveId: string | null },
+): Omit<Parameters<typeof reachEmailHtml>[0], 'toName'> & { subject: string } {
+  const { line, said } = GENERIC_LINE[kind];
+  return {
+    subject: `HIVE \u00b7 ${line}`,
+    hiveName: 'HIVE',
+    hiveSlug: null,
+    hiveAccent: null,
+    hiveId: opts.hiveId,
+    heading: line,
+    where: opts.where,
+    said,
+    buttonLabel: opts.buttonLabel,
+    href: opts.href,
+  };
+}
+
 const APP_URL = Deno.env.get('EXPO_PUBLIC_APP_URL') || 'https://app.the-hive.app';
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
 const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'HIVE <clive@the-hive.app>';
