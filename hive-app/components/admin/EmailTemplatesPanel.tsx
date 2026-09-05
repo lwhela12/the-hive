@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { supabase } from '../../lib/supabase';
+import { HIVE_GOLD } from '../../lib/hiveBrand';
 
 /**
  * EVERY TEMPLATED EMAIL, RENDERED, IN ONE PLACE. NOTHING SENDS FROM HERE.
@@ -53,7 +54,7 @@ export function EmailTemplatesPanel({
   // Scope changes the real seal/colour, never the approved generic words.
   const [scopeId, setScopeId] = useState<string | null>(null);
   const [scopes, setScopes] = useState<{ id: string; name: string }[]>([]);
-  useEffect(() => { void supabase.from('communities').select('id, name').then(({ data }) => setScopes(data ?? [])); }, []);
+  useEffect(() => { void supabase.from('communities').select('id, name').then(({ data }) => setScopes([...(data ?? [])].sort((a, b) => a.name.localeCompare(b.name)))); }, []);
   const [saving, setSaving] = useState<string | null>(null);
   const [approvalError, setApprovalError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -61,11 +62,14 @@ export function EmailTemplatesPanel({
   const [open, setOpen] = useState<string | null>(null);
   const [posting, setPosting] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
 
+  const loadVersion = useRef(0);
   const load = useCallback(async () => {
+    const version = ++loadVersion.current;
     setState('loading');
     const { data, error } = await supabase.functions.invoke(scopeId ? `email-preview?hive=${encodeURIComponent(scopeId)}` : 'email-preview', {
       method: 'GET',
     });
+    if (version !== loadVersion.current) return;
     if (error || !data?.templates) { setState('error'); return; }
     setTemplates(data.templates as Template[]);
     setState('ready');
@@ -111,22 +115,17 @@ export function EmailTemplatesPanel({
     <View style={cellStyle}>
       <Panel
         title="The emails we send"
-        titleTabKey="mail"
-        activeTab="mail"
+        tabs={[{ key: 'wide', label: 'HIVE-Wide' }, ...scopes.map(scope => ({ key: scope.id, label: scope.name }))]}
+        activeTab={scopeId ?? 'wide'}
+        onTabChange={(key: string) => { setScopeId(key === 'wide' ? null : key); setOpen(null); setPosting('idle'); }}
         style={panelStyle}
         bodyStyle={bodyStyle}
       >
         <ScrollView style={scrollStyle} contentContainerStyle={{ paddingBottom: 6 }}>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: 'rgba(255,248,233,0.78)', paddingHorizontal: 12, paddingTop: 10 }}>
-            Approve each set of generic words once. Wording changes need approval again; source-HIVE seals and colours do not. No private posts or sender names appear.
-            {'\n'}The Buzz is written fresh each month, so it still previews before it sends.
+            Approve template wording once; open an email to review it.
           </Text>
 
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, padding: 12 }}>
-            {[{ id: null, name: 'HIVE-Wide' }, ...scopes].map(scope => <Pressable key={scope.id ?? 'wide'} disabled={state === 'loading'} accessibilityRole="button" accessibilityState={{ selected: scopeId === scope.id }} onPress={() => setScopeId(scope.id)}>
-              <Text style={{ color: '#fffdf5', fontWeight: scopeId === scope.id ? '700' : '400' }}>{scope.name}</Text>
-            </Pressable>)}
-          </View>
           {approvalError ? <Text accessibilityRole="alert" style={{ color: '#ffb4a8', padding: 12 }}>{approvalError}</Text> : null}
           {/* The same five, in the place they will actually be read. */}
           <View style={{ paddingHorizontal: 12, paddingTop: 12 }}>
@@ -176,26 +175,30 @@ export function EmailTemplatesPanel({
                 const showing = open === template.key;
                 return (
                   <View key={template.key} style={{ borderTopWidth: 1, borderTopColor: 'rgba(246,244,229,0.12)' }}>
-                    <Pressable
-                      onPress={() => setOpen(showing ? null : template.key)}
-                      style={{ paddingHorizontal: 12, paddingVertical: 11 }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#fffdf5' }}>
-                        {template.name}
-                      </Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: 'rgba(255,248,233,0.66)', paddingTop: 3 }}>
-                        {template.when}
-                      </Text>
-                    </Pressable>
-
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingBottom: 10 }}>
-                      <Switch value={template.approved === true} disabled={saving !== null}
-                        accessibilityLabel={`${template.name}: ${template.approved ? 'Approved' : 'Not approved'}`}
-                        onValueChange={value => { void setApproval(template, value); }} />
-                      <Text style={{ color: '#fffdf5', fontSize: 12 }}>{saving === template.key ? 'Saving…' : template.approved ? 'Approved' : 'Not approved'}</Text>
+                    <View testID="email-approval-row" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 6 }}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Review ${template.name}`}
+                        accessibilityState={{ expanded: showing }}
+                        onPress={() => setOpen(showing ? null : template.key)}
+                        style={{ flex: 1, minWidth: 0, minHeight: 44, justifyContent: 'center' }}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#fffdf5' }}>
+                          {showing ? '▾ ' : '▸ '}{template.name}
+                        </Text>
+                      </Pressable>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                        <Switch value={template.approved === true} disabled={saving !== null}
+                          trackColor={{ false: '#665c49', true: HIVE_GOLD }}
+                          thumbColor="#F6F4E5" ios_backgroundColor="#665c49"
+                          accessibilityLabel={`${template.name}: ${template.approved ? 'Approved' : 'Needs review'}`}
+                          onValueChange={value => { void setApproval(template, value); }} />
+                        <Text style={{ color: '#fffdf5', fontSize: 12 }}>{saving === template.key ? 'Saving…' : template.approved ? 'Approved' : 'Needs review'}</Text>
+                      </View>
                     </View>
                     {showing ? (
                       <View style={{ paddingHorizontal: 12, paddingBottom: 14 }}>
+                        <Text style={{ fontSize: 12, lineHeight: 18, color: 'rgba(255,248,233,0.66)', paddingBottom: 10 }}>{template.when}</Text>
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', color: 'rgba(255,248,233,0.5)', paddingBottom: 4 }}>
                           Subject
                         </Text>

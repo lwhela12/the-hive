@@ -11,7 +11,7 @@ import { LegacyCheckInAnswers } from '../../../components/surveys/LegacyCheckInA
 import { SurveyModal } from '../../../components/surveys/SurveyModal';
 import { SharedPlate } from '../../../components/surveys/SharedPlate';
 import { CheckInHiveCard } from '../../../components/surveys/CheckInHiveCard';
-import { checkInQuestions, type MeetingPreview } from '../../../lib/checkInPresentation';
+import { checkInQuestions, groupCheckInHives, pacificToday, type MeetingPreview } from '../../../lib/checkInPresentation';
 import {
   buildMergedPreMeeting,
   mergedPreMeetingQuestions,
@@ -19,7 +19,7 @@ import {
   MERGED_PRE_MEETING_TITLE,
   type MergedPreMeeting,
 } from '../../../lib/checkIns';
-import { meetingOccurrence, type CheckInMeeting } from '../../../supabase/functions/_shared/checkInSession';
+import { meetingOccurrence } from '../../../supabase/functions/_shared/checkInSession';
 import { hiveDisplayName, hiveAccent } from '../../../lib/hiveBrand';
 import { fetchCarryForwardItems } from '../../../lib/hooks/useCarryForwardContext';
 import { CARRY_FORWARD_ANSWER_KEY, type CarryForwardItem } from '../../../lib/carryForward';
@@ -75,6 +75,18 @@ export default function BeforeWeMeetScreen() {
   const [todos, setTodos] = useState<CarryForwardItem[]>([]);
   const [todosByHive, setTodosByHive] = useState<Record<string, CarryForwardItem[]>>({});
   const [state, setState] = useState<'looking' | 'ready' | 'none' | 'broken'>('looking');
+  const [today, setToday] = useState(pacificToday);
+  const [lookingAhead, setLookingAhead] = useState(false);
+  const [loadedScope, setLoadedScope] = useState<string | null>(null);
+  const scope = `${profile?.id ?? ''}:${memberships.map(m => m.community_id).sort().join(':')}:${today}`;
+  const ready = !authLoading && !!profile && state === 'ready' && loadedScope === scope;
+  const groups = groupCheckInHives(memberships, meetings, today);
+
+  useEffect(() => {
+    setToday(pacificToday());
+    const timer = setInterval(() => setToday(pacificToday()), 30_000);
+    return () => clearInterval(timer);
+  }, [isFocused]);
 
   const hiveIds = useMemo(
     () => memberships.map((m) => m.community_id).filter(Boolean),
@@ -84,6 +96,14 @@ export default function BeforeWeMeetScreen() {
   useEffect(() => {
     if (authLoading || !profile) return;
     let cancelled = false;
+    setState('looking');
+    setLoadedScope(null);
+    setSelected(null);
+    setReview({});
+    setPlate(undefined);
+    setTodos([]);
+    setTodosByHive({});
+    setLookingAhead(false);
 
     void (async () => {
       // The open merged check-in. Looked UP rather than carried in the address,
@@ -124,11 +144,11 @@ export default function BeforeWeMeetScreen() {
             .from('events')
             .select('community_id')
             .eq('event_type', 'meeting')
-            .lt('event_date', new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }))
+            .lt('event_date', today)
             .in('community_id', hiveIds.length ? hiveIds : ['00000000-0000-0000-0000-000000000000']),
           supabase.from('events').select('id, community_id, event_date, event_time')
             .eq('event_type', 'meeting').eq('status', 'scheduled')
-            .gte('event_date', new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }))
+            .gte('event_date', today)
             .in('community_id', hiveIds.length ? hiveIds : ['00000000-0000-0000-0000-000000000000'])
             .order('event_date'),
         ]);
@@ -188,7 +208,8 @@ export default function BeforeWeMeetScreen() {
       );
 
       if (built.sections.length === 0) { setState('none'); return; }
-      const next = (upcoming ?? []).filter((event, index, all) => all.findIndex(e => e.community_id === event.community_id) === index) as CheckInMeeting[];
+      const ordered = groupCheckInHives(memberships, (upcoming ?? []) as MeetingPreview[], today);
+      const next = [...ordered.prominent, ...ordered.future].map(item => item.event!) as MeetingPreview[];
       const { data: receipts, error: receiptError } = await supabase.from('check_in_completions')
         .select('community_id, occurrence, answers').eq('survey_id', found.id).eq('user_id', profile.id);
       if (cancelled) return;
@@ -202,6 +223,7 @@ export default function BeforeWeMeetScreen() {
       setMeetings(next);
       setRow(found);
       setMerged(built);
+      setLoadedScope(scope);
       setState('ready');
 
       /**
@@ -250,7 +272,7 @@ export default function BeforeWeMeetScreen() {
     })();
 
     return () => { cancelled = true; };
-  }, [authLoading, profile, memberships, hiveIds]);
+  }, [authLoading, profile, memberships, hiveIds, today, scope]);
 
   const done = useCallback(() => {
     router.replace('/hive-wide' as never);
@@ -297,7 +319,7 @@ export default function BeforeWeMeetScreen() {
 
   if (!isFocused) return null;
 
-  if (state === 'ready' && forThisReader && selected) {
+  if (ready && forThisReader && selected) {
     const mine = review[selected] ?? saved[selected];
     const section = merged?.sections.find(s => s.communityId === selected);
     return (
@@ -318,19 +340,27 @@ export default function BeforeWeMeetScreen() {
     );
   }
 
-  if (state === 'ready' && merged) return (
+  const renderHive = ({ member, event }: (typeof groups.prominent)[number]) => {
+    const section = merged?.sections.find(s => s.communityId === member.community_id);
+    return <View key={member.community_id}><CheckInHiveCard community={member.community} event={event}
+      disabled={!event || !section} onPress={() => setSelected(member.community_id)}
+      status={!section ? 'Check-in questions not available yet' : saved[member.community_id] ? 'Saved — review' : event ? 'Ready to fill in' : 'Date to be confirmed'} />
+      {row && profile && <LegacyCheckInAnswers surveyId={row.id} userId={profile.id} communityId={member.community_id} onReview={answers => { setReview(r => ({ ...r, [member.community_id]: answers })); if (event && section) setSelected(member.community_id); }} />}
+    </View>;
+  };
+
+  if (ready && merged) return (
     <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }} style={{ backgroundColor: skin.page }}>
       <AppHeader title="Before we meet" tone="wide" />
-      <Text style={{ color: skin.inkSoft }}>Choose a HIVE. Do one now, or work through them all — even next week's.</Text>
-      {memberships.map(member => {
-        const section = merged.sections.find(s => s.communityId === member.community_id);
-        const event = meetings.find(m => m.community_id === member.community_id);
-        return <View key={member.community_id}><CheckInHiveCard community={member.community} event={event}
-          disabled={!event || !section} onPress={() => setSelected(member.community_id)}
-          status={!section ? 'Check-in questions not available yet' : saved[member.community_id] ? 'Saved — review' : 'Ready to fill in'} />
-          {row && profile && <LegacyCheckInAnswers surveyId={row.id} userId={profile.id} communityId={member.community_id} onReview={answers => { setReview(r => ({ ...r, [member.community_id]: answers })); if (event && section) setSelected(member.community_id); }} />}
-        </View>;
-      })}
+      {groups.prominent.length > 0 ? <Text style={{ color: skin.ink, fontFamily: 'Lato_700Bold', fontSize: 18 }}>Today & tomorrow</Text> : <Text style={{ color: skin.inkSoft }}>No meetings today or tomorrow.</Text>}
+      {groups.prominent.map(renderHive)}
+      {groups.future.length > 0 && <>
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: lookingAhead }} onPress={() => setLookingAhead(value => !value)} style={{ paddingVertical: 12 }}>
+          <Text style={{ color: skin.gold, fontFamily: 'Lato_700Bold' }}>{lookingAhead ? '▾' : '▸'} Looking ahead · Optional ({groups.future.length})</Text>
+        </Pressable>
+        {lookingAhead && groups.future.map(renderHive)}
+      </>}
+      {groups.missing.map(renderHive)}
       <SharedPlate scope={`check-in-plate:${profile?.id}:${row?.id}:${meetings.map(m => m.id).sort().join(':')}`} onChange={setPlate} />
       <Pressable accessibilityRole="button" onPress={done}><Text style={{ color: skin.gold }}>Done for now</Text></Pressable>
     </ScrollView>

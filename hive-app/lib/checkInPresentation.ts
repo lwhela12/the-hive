@@ -17,10 +17,36 @@ export function checkInQuestions(questions: SurveyQuestion[], month = false): Su
   });
 }
 export type MeetingPreview = { id: string; community_id: string; event_date: string; event_time?: string | null };
-export function meetingLabel(event?: MeetingPreview): string {
-  if (!event) return 'No meeting scheduled yet';
-  const date = new Date(`${event.event_date.slice(0, 10)}T12:00:00`);
-  const day = Number.isNaN(date.getTime()) ? event.event_date : date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+export const pacificToday = (now = new Date()): string => now.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+
+export function meetingPriority(event: MeetingPreview | undefined, today = pacificToday()): 'today' | 'tomorrow' | 'future' | 'missing' {
+  if (!event?.event_date) return 'missing';
+  const day = event.event_date.slice(0, 10);
+  const next = new Date(`${today}T12:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  if (day === today) return 'today';
+  if (day === next.toISOString().slice(0, 10)) return 'tomorrow';
+  return day > today ? 'future' : 'missing';
+}
+
+/** Presentation only: all member HIVEs remain available; no response expiry. */
+export function groupCheckInHives<T extends { community_id: string }>(members: T[], meetings: MeetingPreview[], today = pacificToday()) {
+  const ordered = members.map(member => ({ member, event: meetings.filter(event => event.community_id === member.community_id && event.event_date >= today)
+    .sort((a, b) => a.event_date.localeCompare(b.event_date) || (a.event_time ?? '99').localeCompare(b.event_time ?? '99') || a.id.localeCompare(b.id))[0] }))
+    .sort((a, b) => (a.event?.event_date ?? '9999').localeCompare(b.event?.event_date ?? '9999') || (a.event?.event_time ?? '99').localeCompare(b.event?.event_time ?? '99') || a.member.community_id.localeCompare(b.member.community_id));
+  return {
+    prominent: ordered.filter(({ event }) => ['today', 'tomorrow'].includes(meetingPriority(event, today))),
+    future: ordered.filter(({ event }) => meetingPriority(event, today) === 'future'),
+    missing: ordered.filter(({ event }) => meetingPriority(event, today) === 'missing'),
+  };
+}
+
+export function meetingLabel(event?: MeetingPreview, today = pacificToday()): string {
+  if (!event?.event_date) return 'No meeting scheduled yet';
+  const date = new Date(`${event.event_date.slice(0, 10)}T12:00:00Z`);
+  const priority = meetingPriority(event, today);
+  const calendarDay = Number.isNaN(date.getTime()) ? event.event_date : date.toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
+  const day = priority === 'today' ? `Today · ${calendarDay}` : priority === 'tomorrow' ? `Tomorrow · ${calendarDay}` : calendarDay;
   const match = /^(\d{2}):(\d{2})/.exec(event.event_time ?? '');
   const time = match ? `${Number(match[1]) % 12 || 12}:${match[2]} ${Number(match[1]) >= 12 ? 'PM' : 'AM'} PT` : 'Time to be confirmed';
   return `${day} · ${time}`;

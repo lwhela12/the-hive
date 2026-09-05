@@ -1660,8 +1660,6 @@ export function HiveMemberPanels({
 
   return (
     <>
-      <CheckInAnswersPanel hives={memberships.filter(m => profile?.is_owner || m.role === 'admin')}
-        cellStyle={cellStyle} panelStyle={panelStyle} bodyStyle={bodyStyle} scrollStyle={scrollStyle} Panel={Panel} />
       {/* EVERY HIVE, including the one you happen to be standing in.
           It used to skip the current one, because admin.tsx drew that one
           itself — which is exactly why they didn't match: two bits of code
@@ -1722,6 +1720,7 @@ export function HiveMemberPanels({
                */
               tabs={[
                 { key: 'members', label: `Members (${rows.length})` },
+                ...(canManage ? [{ key: 'answers', label: 'Answers' }] : []),
                 ...(m.role === 'admin' && waitingCount > 0
                   ? [{ key: 'waiting', label: `Waiting (${waitingCount})` }]
                   : m.role === 'admin' ? [{ key: 'waiting', label: 'Waiting' }] : []),
@@ -1859,6 +1858,7 @@ export function HiveMemberPanels({
                   </View>
                 ) : null}
 
+                {tab === 'answers' && canManage ? <CheckInAnswersPanel key={m.community_id} hiveId={m.community_id} /> : null}
                 {tab === 'members' ? (
                 loading && rows.length === 0 ? (
                   <ActivityIndicator size="small" color="#fffdf5" />
