@@ -90,7 +90,7 @@ assert.match(noMeetingMigration, /carried-to:/, 'the undated drawer is consumed 
 
 // Execute the screen with controlled hook state: no browser or backend involved.
 function renderScreen({ user = 'user', loading = false, loaded = 'user:far:missing:todayEarly:todayLate:tomorrow:2026-09-10', selected = null } = {}) {
-  const values = [undefined, selected, {}, meetings, {todayEarly:{answer:'saved'}}, {id:'survey'}, {sections:members.map(m=>({communityId:m.community_id,slug:m.community_id})),description:''}, [], {}, 'ready', '2026-09-10', loaded];
+  const values = [null, false, undefined, selected, {}, meetings, {todayEarly:{answer:'saved'}}, {id:'survey'}, {sections:members.map(m=>({communityId:m.community_id,slug:m.community_id})),description:''}, {}, 'ready', '2026-09-10', loaded];
   let index = 0;
   const react = { useState: () => [values[index++], () => {}], useMemo: fn => fn(), useCallback: fn => fn, useEffect: () => {}, useRef: value => ({current:value}) };
   const jsx = (type, props) => ({type: typeof type === 'function' ? type.name : type, ...props});

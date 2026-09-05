@@ -42,6 +42,7 @@ interface SurveyModalProps {
   /** Isolate drafts by member, HIVE and meeting/month occurrence. */
   draftScope?: string;
   closeLabel?: string;
+  introduction?: React.ReactNode;
   isEditingResponse?: boolean;
   carryForwardItems?: CarryForwardItem[];
   /**
@@ -174,6 +175,7 @@ export function SurveyModal({
   initialAnswers,
   draftScope,
   closeLabel = "Back to HIVE",
+  introduction,
   isEditingResponse = false,
   carryForwardItems = [],
   carryForwardSections,
@@ -844,6 +846,7 @@ export function SurveyModal({
                 <Text style={{ color: '#5c5648' }}>Your active goals, HD and commitments are in the roster below. Update each status there once; use POP for changes, blockers and what help would move you forward.</Text>
               </View>}
               {/* Grouped? Then each section draws its own, below its heading. */}
+              {draftLoaded && introduction}
               {draftLoaded && !carryForwardSections && renderCarryForwardContext()}
 
               {/* A note block explains; it does not ask. So the numbers count

@@ -282,45 +282,31 @@ serve(async (req) => {
    * so that's just a lame step."* A letter with nothing in it to tweak is a
    * letter with nothing to review.
    */
-  /**
-   * WHAT THE LETTER MAY SAY, AND WHAT IT MAY NOT.
-   *
-   * It goes to the members of the HIVE that meets tomorrow, so "your meeting
-   * tomorrow" is unambiguous to every single reader without naming anything.
-   * It must stay that way: this is the one letter whose recipients may not all
-   * be in the same HIVE (two HIVEs could meet on the same evening), and naming
-   * a HIVE — or its meeting day — to somebody outside it is a leak, whichever
-   * HIVE it is.
-   *
-   * The second line is the whole reason the check-in was merged: a member of
-   * more than one can do all of them now, in this sitting, and then hear
-   * nothing before their next meeting. It says "every HIVE you are in" rather
-   * than listing them, which is true for the reader and tells nobody anything
-   * about anybody else.
-   */
-  const isMergedPreMeeting = !survey.community_id && shape.kind === 'checkIn';
-
-  const mark = hiveMark(hiveSlug, hiveAccent);
-  const path = survey.community_id
-    ? '/monthly-tuneup'
-    : isMergedPreMeeting ? '/beforewemeet' : '/endofmonth';
-  const href = deepLink(path, survey.community_id);
-  const takes = shape.kind === 'monthCheckIn' ? 'about two minutes' : 'a few minutes';
-
+  // Each recipient's letter opens an unanswered meeting in their own HIVE.
+  // Preserve the shared once-per-day claim and all completion receipts.
+  const meetingFor = (userId: string) => dueMeetings
+    .filter(event => memberships.some(m => m.user_id === userId && m.community_id === event.community_id))
+    .filter(event => !(answeredRows ?? []).some(row => row.user_id === userId
+      && row.community_id === event.community_id && row.occurrence === `meeting:${event.id}`))
+    .sort((a, b) => a.event_date.localeCompare(b.event_date) || a.id.localeCompare(b.id))[0];
+  const sourceFor = (userId: string) => shape.kind === 'checkIn' ? meetingFor(userId)?.community_id ?? null : null;
+  const hrefFor = (userId: string) => shape.kind === 'checkIn'
+    ? `https://app.the-hive.app/beforewemeet?meeting=${encodeURIComponent(meetingFor(userId)?.id ?? '')}`
+    : deepLink('/endofmonth');
   const delivery = await deliverCheckIn(admin, waiting, shape.kind, day,
-    userId => sendReachEmail(admin, userId, shape.kind, {
-      ...genericLetter(shape.kind, {
-        buttonLabel: 'Open the check-in', href, hiveId: survey.community_id,
-      }),
-    }),
+    userId => {
+      const hiveId = sourceFor(userId);
+      if (shape.kind === 'checkIn' && !hiveId) return Promise.resolve({ sent: false, reason: 'No eligible meeting' });
+      return sendReachEmail(admin, userId, shape.kind, genericLetter(shape.kind, {
+        buttonLabel: 'Open the check-in', href: hrefFor(userId), hiveId: hiveId,
+      }));
+    },
     (userId, emailed) => ({
-      user_id: userId,
-      community_id: survey.community_id,
-      notification_type: 'general',
-      title: `${mark.emoji} Your ${shape.name} check-in is open`,
-      content: `${hiveName} — it takes ${takes}. Tap to fill it in.`,
-      email_sent: emailed,
-      metadata: { reminder_survey_id: survey.id, check_in_opened_by: auth.userId },
+      user_id: userId, community_id: sourceFor(userId), notification_type: 'general',
+      title: `Your ${shape.name} check-in is open`,
+      content: 'Tap to fill it in.', email_sent: emailed,
+      metadata: { reminder_survey_id: survey.id, check_in_opened_by: auth.userId,
+        meeting_id: meetingFor(userId)?.id ?? null, url: hrefFor(userId) },
     }),
   );
   return jsonResponse({

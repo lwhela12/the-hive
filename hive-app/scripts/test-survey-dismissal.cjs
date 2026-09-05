@@ -36,7 +36,7 @@ for (const submitted of [false, true]) {
 for(const page of ['beforewemeet','endofmonth']) {
  const source=fs.readFileSync(root+`app/(app)/${page}/index.tsx`,'utf8');
  assert.ok(source.includes('if (!isFocused) return null;'));
- assert.ok(source.includes('onClose={() => setSelected(null)}'));
+ assert.ok(source.includes(page === 'beforewemeet' ? 'onClose={originMembership ? done : () => setSelected(null)}' : 'onClose={() => setSelected(null)}'));
 }
 (async()=>{
  const {applyCarryForwardStatuses,normalizeCarryForwardResponse}=load('lib/carryForward.ts',{});

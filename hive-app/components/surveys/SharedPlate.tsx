@@ -13,6 +13,6 @@ export function SharedPlate({ scope, onChange }: { scope: string; onChange: (val
     {ready && <SurveyQuestionField question={PLATE_QUESTION} index={0} value={value} onChange={next => {
       setValue(next); onChange(next); void AsyncStorage.setItem(scope, next).catch(() => {});
     }} />}
-    <Text style={{ color: '#5c5648' }}>Asked once here. Your choice is included when you save each HIVE check-in; changing it does not rewrite already-saved meetings.</Text>
+    <Text style={{ color: '#5c5648' }}>Your choice saves with this check-in.</Text>
   </View>;
 }

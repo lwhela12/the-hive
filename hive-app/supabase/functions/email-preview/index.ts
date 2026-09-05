@@ -100,17 +100,21 @@ serve(async (req) => {
   const readerRow = reader as { name?: string | null; email?: string | null } | null;
   const toName = readerRow?.name ?? '';
 
-  /**
-   * NO HIVE IS PICKED, BECAUSE NO TEMPLATE NAMES ONE.
-   *
-   * This block used to read a `?hive=` slug and dress every sample in that
-   * HIVE's colour and seal, because the check-in email had Production's purple
-   * typed into it by hand once and nobody could see it. That is fixed a better
-   * way now: as of 2026-09-04 a notification email says its KIND and nothing
-   * else, wears the HIVE-Wide seal, and is identical whoever reads it — so a
-   * picker offering to redraw them in three costumes would be a control that
-   * changes nothing. See `genericLetter` in `_shared/reachMail.ts` for why.
-   */
+  // Preview a real meeting early, with the same source binding as its reminder.
+  const scopeId = new URL(req.url).searchParams.get('hive');
+  const { data: memberships, error: membershipError } = await admin.from('community_memberships')
+    .select('community_id').eq('user_id', auth.userId);
+  if (membershipError) return errorResponse('Could not read your HIVEs.', 503);
+  const memberIds = (memberships ?? []).map(row => row.community_id);
+  const meetingScopes = scopeId ? memberIds.filter(id => id === scopeId) : memberIds;
+  const { data: meetings, error: meetingError } = await admin.from('events')
+    .select('id, community_id, event_date').eq('event_type', 'meeting').eq('status', 'scheduled')
+    .in('community_id', meetingScopes.length ? meetingScopes : ['00000000-0000-0000-0000-000000000000'])
+    .gte('event_date', new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }))
+    .order('event_date').order('id').limit(1);
+  if (meetingError) return errorResponse('Could not read the meeting for this preview.', 503);
+  const previewMeeting = meetings?.[0];
+  const previewDay = previewMeeting ? new Date(`${previewMeeting.event_date}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' }) : '';
 
   /**
    * FIVE. Nat counted them on 2026-09-04: *"There should only be 5 types of
@@ -168,12 +172,12 @@ serve(async (req) => {
     {
       key: 'checkIn',
       name: 'Before we meet',
-      when: 'The day before a HIVE meets, when Nat presses send. It covers every HIVE the reader is in.',
+      when: `The day before this HIVE meets. This preview opens its ${previewDay} meeting check-in.`,
       kind: 'checkIn',
       letter: withName(genericLetter('checkIn', {
         buttonLabel: 'Open the check-in',
-        href: 'https://app.the-hive.app/beforewemeet',
-        hiveId: null,
+        href: `https://app.the-hive.app/beforewemeet?meeting=${encodeURIComponent(previewMeeting?.id ?? '')}`,
+        hiveId: previewMeeting?.community_id ?? null,
       })),
     },
     {
@@ -191,16 +195,16 @@ serve(async (req) => {
 
   const { data: approvals, error: approvalError } = await admin.from('email_template_approvals').select('template_key, approved, revision');
   if (approvalError) return errorResponse('Approval records are unavailable. No approval can be assumed.', 503);
-  const scopeId = new URL(req.url).searchParams.get('hive');
-  const built = await Promise.all(samples.map(async (sample) => ({
-    key: sample.key,
-    name: sample.name,
-    when: sample.when,
-    subject: sample.letter.subject,
-    html: reachEmailHtml({ ...await scopeLetter(admin, { ...sample.letter, hiveId: scopeId }), toName }),
-    revision: await templateRevision(sample.kind),
-    approved: false,
-  })));
+  const built = await Promise.all(samples.filter(sample => sample.kind !== 'checkIn' || previewMeeting).map(async (sample) => {
+    const hiveId = sample.kind === 'checkIn' ? previewMeeting.community_id
+      : sample.kind === 'monthCheckIn' ? null : scopeId;
+    const letter = await scopeLetter(admin, { ...sample.letter, hiveId });
+    return {
+      key: sample.key, name: sample.name, when: sample.when,
+      subject: letter.subject, html: reachEmailHtml({ ...letter, toName }),
+      revision: await templateRevision(sample.kind), approved: false,
+    };
+  }));
   for (const template of built) template.approved = approvals?.some(row => row.template_key === template.key && row.approved === true && row.revision === template.revision) ?? false;
 
   /**

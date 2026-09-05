@@ -18,19 +18,19 @@ const db = row => ({ from: () => ({ select() { return this; }, eq() { return thi
     assert.equal(await mail.templateIsApproved(db({ approved: true, revision: revisions[kind] }), kind), true);
     const letter = mail.genericLetter(kind, { buttonLabel: 'unreviewed copy', href: '/private', hiveId: 'pro' });
     assert.equal(letter.buttonLabel, mail.TEMPLATE_BUTTONS[kind]);
-    const pro = await mail.scopeLetter(db({ slug: 'show', accent_color: '#1f0338' }), letter);
+    const pro = await mail.scopeLetter(db({ name: 'Production HIVE', slug: 'show', accent_color: '#1f0338' }), letter);
     const wide = await mail.scopeLetter(db(null), { ...letter, hiveId: null });
     assert.match(mail.reachEmailHtml({ ...pro, toName: '' }), /production-hive.png/);
     assert.doesNotMatch(mail.reachEmailHtml({ ...wide, toName: '' }), /production-hive.png/);
-    assert.equal(mail.plainTextFrom(mail.reachEmailHtml({ ...pro, toName: '' })), mail.plainTextFrom(mail.reachEmailHtml({ ...wide, toName: '' })));
+    if (kind !== 'checkIn') assert.equal(mail.plainTextFrom(mail.reachEmailHtml({ ...pro, toName: '' })), mail.plainTextFrom(mail.reachEmailHtml({ ...wide, toName: '' })));
     assert.equal((await mail.sendReachEmail(db(null), 'fixture', kind, letter)).reason, 'template not approved');
     assert.equal((await mail.sendReachEmail(db({ approved: true, revision: revisions[kind] }), 'fixture', kind, { ...letter, said: 'private post' })).reason, 'template words changed');
   }
   // Exercise the actual sending door, including scope lookup and provider payload.
-  for (const [kind, hiveId] of [['message', 'pro'], ['mention', null]]) {
+  for (const [kind, hiveId] of [['message', 'pro'], ['mention', null], ['checkIn', 'pro']]) {
     const scopedDb = { from(table) {
       const data = table === 'email_template_approvals' ? { approved: true, revision: revisions[kind] }
-        : table === 'communities' ? { slug: 'show', accent_color: '#1f0338' }
+        : table === 'communities' ? { name: 'Production HIVE', slug: 'show', accent_color: '#1f0338' }
         : table === 'profiles' ? { email: 'fixture@example.invalid', name: 'Reader' } : [];
       return { select() { return this; }, eq() { return this; }, maybeSingle: async () => ({ data, error: null }), then: resolve => Promise.resolve({ data, error: null }).then(resolve) };
     } };
@@ -41,11 +41,17 @@ const db = row => ({ from: () => ({ select() { return this; }, eq() { return thi
     else assert.doesNotMatch(payload.html, /production-hive.png/);
     const scoped = await mail.scopeLetter(scopedDb, letter);
     assert.equal(payload.html, mail.reachEmailHtml({ ...scoped, toName: 'Reader' }));
+    assert.equal(payload.subject, scoped.subject);
+    if (kind === 'checkIn') {
+      assert.match(payload.subject, /^Production HIVE/);
+      assert.doesNotMatch(payload.html, /covers every HIVE|tech-hive/);
+    }
   }
-  assert.equal(deliveries.length, 2);
+  assert.equal(deliveries.length, 3);
   const migration = fs.readFileSync('supabase/migrations/234_email_template_approvals.sql', 'utf8');
   for (const kind of ['message','mention','boardReply']) assert.ok(migration.includes(`('${kind}', '${revisions[kind]}', true`));
-  for (const kind of ['checkIn','monthCheckIn']) assert.ok(migration.includes(`('${kind}', '${revisions[kind]}', false`));
+  // Historical unapproved revisions stay immutable when new words need review.
+  for (const kind of ['checkIn','monthCheckIn']) assert.ok(migration.split('\n').some(line => line.includes(`('${kind}',`) && line.includes(', false')));
   assert.match(migration, /enable row level security/i);
   const panels = fs.readFileSync('components/admin/GodModePanels.tsx','utf8');
   assert.doesNotMatch(panels, /key: 'checkins'|checkInSchedule\.map/);

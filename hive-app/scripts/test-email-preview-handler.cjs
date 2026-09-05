@@ -9,9 +9,9 @@ let handler, owner = true, approvals = [], error = null;
 const deliveries = [];
 global.fetch = async (url, opts) => { assert.equal(url, 'https://api.resend.com/emails'); deliveries.push(JSON.parse(opts.body)); return { ok: true }; };
 const admin = { from(table) {
- assert.ok(['profiles','email_template_approvals','communities'].includes(table));
- const result = () => ({ data: table === 'profiles' ? { name: 'Owner', email: 'owner@example.invalid' } : table === 'communities' ? { slug: 'show', accent_color: '#1f0338' } : approvals, error: table === 'email_template_approvals' ? error : null });
- return { select() { return this; }, eq(k,v) { if(table === 'profiles') assert.equal(v, 'owner-id'); return this; }, maybeSingle: async () => result(), then: resolve => Promise.resolve(result()).then(resolve) };
+ assert.ok(['profiles','email_template_approvals','communities','community_memberships','events'].includes(table));
+ const result = () => ({ data: table === 'profiles' ? { name: 'Owner', email: 'owner@example.invalid' } : table === 'communities' ? { name: 'Production HIVE', slug: 'show', accent_color: '#1f0338' } : table === 'community_memberships' ? [{community_id:'fixture-scope'}] : table === 'events' ? [{id:'opaque-meeting',community_id:'fixture-scope',event_date:'2099-09-08'}] : approvals, error: table === 'email_template_approvals' ? error : null });
+ return { in() {return this;}, gte() {return this;}, order() {return this;}, limit() {return this;}, select() { return this; }, eq(k,v) { if(table === 'profiles') assert.equal(v, 'owner-id'); return this; }, maybeSingle: async () => result(), then: resolve => Promise.resolve(result()).then(resolve) };
 } };
 const base = path.resolve('supabase/functions/email-preview');
 const imported = id => id.includes('/http/server.ts') ? { serve: f => handler = f } : id.startsWith('https://esm.sh') ? { createClient: () => admin } : id.endsWith('/auth.ts') ? { verifySupabaseJwt: async () => ({ userId: 'owner-id' }), isAuthError: () => false, isOwner: async () => owner } : require(path.resolve(base,id));
@@ -22,7 +22,7 @@ const request = method => new Request('https://offline.invalid/email-preview?hiv
  approvals = templates.map((t,i)=>({template_key:t.key,revision:t.revision,approved:i<3}));
  let r = await (await handler(request('POST'))).json();
  assert.deepEqual(r.results.map(t=>t.key),['checkIn','monthCheckIn']); assert.equal(r.of,2);
- for(const d of deliveries) {assert.equal(d.to,'owner@example.invalid');assert.match(d.subject,/^\[Test\]/);assert.match(d.html,/production-hive.png/);}
+ for(const d of deliveries) {assert.equal(d.to,'owner@example.invalid');assert.match(d.subject,/^\[Test\]/);if(d.subject.includes('meeting tomorrow')) {assert.match(d.html,/production-hive.png/);assert.match(d.html,/beforewemeet\?meeting=opaque-meeting/);assert.doesNotMatch(d.html,/covers every HIVE|hive=fixture-scope/);} else assert.doesNotMatch(d.html,/production-hive.png/);}
  approvals.forEach(t=>t.approved=true); deliveries.length=0;
  r=await (await handler(request('POST'))).json(); assert.equal(r.of,0);assert.equal(deliveries.length,0);
  approvals[0].revision='stale';

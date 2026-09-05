@@ -94,50 +94,21 @@ export async function templateIsApproved(admin: { from: (t: string) => any }, ki
   }
 }
 
-/** The source scope chooses only the seal/colour; the prose stays generic. */
+/** Meeting reminders belong to their source HIVE. Other notices keep generic copy. */
 export async function scopeLetter(admin: { from: (t: string) => any }, letter: ReturnType<typeof genericLetter>) {
   if (!letter.hiveId) return { ...letter, hiveSlug: null, hiveAccent: null };
-  const { data, error } = await admin.from('communities').select('slug, accent_color').eq('id', letter.hiveId).maybeSingle();
+  const { data, error } = await admin.from('communities').select('name, slug, accent_color').eq('id', letter.hiveId).maybeSingle();
   if (error || !data) throw new Error('Cannot resolve email scope');
-  return { ...letter, hiveSlug: data.slug, hiveAccent: data.accent_color };
+  const meeting = letter.heading === GENERIC_LINE.checkIn.line;
+  if (meeting && !data.name) throw new Error('Cannot resolve meeting HIVE');
+  return { ...letter, hiveSlug: data.slug, hiveAccent: data.accent_color,
+    ...(meeting ? { hiveName: data.name, subject: `${data.name} · ${letter.heading}` } : {}),
+  };
 }
 
 
-/**
- * WHAT A NOTIFICATION EMAIL IS ALLOWED TO SAY — AND IT IS NOT MUCH.
- *
- * Nat, 2026-09-04, reading the approval set: *"the name of the game here...
- * is generic. Let's just leave it generic for right now, i think thats the
- * better, safer, less likely to break way."*
- *
- * She had just been handed two specimens that proved it. One said
- * "OG HIVE · Your Before we meet check-in is open" — but the check-in belongs
- * to no HIVE any more, so naming one is wrong for a reader who is in three.
- * The other said "Nat mentioned everyone in OG HIVE on Things We Learned", and
- * OG HIVE has no board by that name; a template that quotes a place can be
- * wrong about the place.
- *
- * So a notification email carries the KIND and nothing else. Not the HIVE, not
- * the board or room or wish, not who wrote it, not a word of what they said.
- * Three things follow from that, and all three are the point:
- *
- *   1. **It cannot be wrong.** There is nothing in it to be wrong about.
- *   2. **It cannot leak.** A subject line sits on a lock screen and in a mail
- *      list somebody else can see over your shoulder. Which HIVEs you are in,
- *      who is in them with you, and what any of you said are all things HIVE
- *      keeps behind a login — an inbox is not behind a login. Production is
- *      never named outside Production, and the same reasoning covers the rest.
- *   3. **It stays one letter.** A member of three HIVEs gets one "somebody
- *      tagged you", not three that give away the count.
- *
- * The BUTTON is what carries the specifics, because it lands behind the login
- * where the specifics belong — the deep link keeps its `?hive=` and still opens
- * the exact thing (see "the three doors out of the app").
- *
- * THE IN-APP ROW AND THE PUSH ARE NOT THIS. They stay specific — "Nat mentioned
- * you on Favourite Books!" — because you are already inside the app, past the
- * login, when you read one. Only the email goes out into the open.
- */
+/** Canonical words. Meeting reminders use their source HIVE's name and seal;
+ * message, tag and reply content stays private. */
 const GENERIC_LINE: Record<Reach, { line: string; said: string }> = {
   message: {
     line: 'Somebody sent you a message',
@@ -156,11 +127,7 @@ const GENERIC_LINE: Record<Reach, { line: string; said: string }> = {
   },
   checkIn: {
     line: 'You have a meeting tomorrow',
-    // Nat's own words for this one: *"we have a meeting tomorrow, dont forget
-    // to fill this out before it starts."* The second sentence is why the
-    // check-in was merged — a member of three can do all of them in this
-    // sitting — and it names no HIVE to say so.
-    said: 'Don\u2019t forget to fill this out before it starts. It covers every HIVE you are in.',
+    said: 'Take a moment to fill in Before we meet before we get together.',
   },
   monthCheckIn: {
     line: 'Your end of the month check-in is open',
@@ -389,7 +356,7 @@ export function reachEmailHtml(opts: {
         ${escapeHtml(opts.said)}
       </div>
       <div style="text-align: center; margin: 28px 0;">
-        <a href="${opts.href}" style="background: ${mark.accent}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">${escapeHtml(opts.buttonLabel)}</a>
+        <a href="${escapeHtml(opts.href)}" target="_top" style="background: ${mark.accent}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">${escapeHtml(opts.buttonLabel)}</a>
       </div>
       <p style="font-size: 12px; color: #b6b6b6; text-align: center;">Every one of these has its own switch in Settings. 🍯</p>
     </div>
@@ -409,6 +376,7 @@ export async function sendReachEmail(
   letter: Omit<Parameters<typeof reachEmailHtml>[0], 'toName'> & { subject: string },
 ): Promise<{ sent: boolean; reason?: string }> {
   if (!(await templateIsApproved(admin, kind))) return { sent: false, reason: 'template not approved' };
+  if (kind === 'checkIn' && !letter.hiveId) return { sent: false, reason: 'No meeting HIVE' };
   // Refuse altered prose even when a caller passes a hand-built letter.
   const expected = genericLetter(kind, { buttonLabel: TEMPLATE_BUTTONS[kind], href: letter.href, hiveId: letter.hiveId });
   if (letter.subject !== expected.subject || letter.heading !== expected.heading || letter.said !== expected.said || letter.buttonLabel !== expected.buttonLabel || letter.hiveName !== expected.hiveName) {
@@ -419,7 +387,7 @@ export async function sendReachEmail(
   catch { return { sent: false, reason: 'unknown email scope' }; }
   return sendReachHtml(admin, userId, kind, {
     hiveId: letter.hiveId,
-    subject: letter.subject,
+    subject: scoped.subject,
     // The reader's own name is only known after their switch has been read, so
     // the letter is built inside the door rather than handed to it.
     html: (toName) => reachEmailHtml({ ...scoped, toName }),

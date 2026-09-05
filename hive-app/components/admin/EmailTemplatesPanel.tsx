@@ -227,8 +227,8 @@ export function EmailTemplatesPanel({
  *
  * `srcDoc` rather than a URL: the HTML is already in hand, and handing it to
  * the frame directly means no second request and nothing to authenticate. The
- * frame is sandboxed with nothing granted — a preview has no reason to run a
- * script or follow a link, and the letters carry neither.
+ * frame blocks scripts and forms. A deliberate button click can open its
+ * destination in the app, using the same link a member receives.
  */
 function LetterFrame({ html }: { html: string }) {
   if (Platform.OS !== 'web') {
@@ -243,7 +243,7 @@ function LetterFrame({ html }: { html: string }) {
       {/* An iframe is a real element on web; react-native-web passes it through. */}
       <iframe
         srcDoc={html}
-        sandbox=""
+        sandbox="allow-top-navigation-by-user-activation"
         title="What this email looks like"
         style={{ width: '100%', height: 460, border: 'none', display: 'block' }}
       />

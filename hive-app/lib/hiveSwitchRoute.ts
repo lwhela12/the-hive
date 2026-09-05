@@ -42,6 +42,8 @@ import { NAV_DESTINATIONS, HIVE_WIDE_ROUTE, placeForRoute } from './navigation';
  * written to catch, and it is the one case where going home is wrong.
  */
 const HIVE_SCREENS_OFF_THE_RAIL = new Set([
+  '/beforewemeet',
+  '/endofmonth',
   '/monthly-tuneup',
   '/arrival-board',
   '/newsletter',

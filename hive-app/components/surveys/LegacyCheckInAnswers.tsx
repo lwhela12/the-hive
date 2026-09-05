@@ -13,7 +13,9 @@ export function LegacyCheckInAnswers({ surveyId, userId, communityId, scopeLabel
   const skin = usePageSkin();
   const [rows, setRows] = useState<CheckInHistory[]>([]);
   const [error, setError] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   useEffect(() => {
+    if (!expanded) return;
     let current = true;
     setRows([]); setError(false);
     void supabase.from('check_in_answer_history')
@@ -24,22 +26,32 @@ export function LegacyCheckInAnswers({ surveyId, userId, communityId, scopeLabel
         setError(!!error); setRows(data ?? []);
       });
     return () => { current = false; };
-  }, [surveyId, userId]);
+  }, [surveyId, userId, communityId, expanded]);
   const seen = new Set<string>();
+  const history = rows.flatMap(row => {
+    const answers = transitionAnswers(row, communityId);
+    if (!answers) return [];
+    const key = JSON.stringify([row.response_period, answers]);
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{ row, answers }];
+  });
+  const label = scopeLabel ? `Review past answers · ${scopeLabel}` : 'Review past answers';
   return <View style={{ gap: 8 }}>
-    {error && <Text accessibilityRole="alert" style={{ color: skin.inkSoft }}>Earlier answers could not load. They have not been removed.</Text>}
-    {rows.map(row => {
-      const answers = transitionAnswers(row, communityId);
-      if (!answers) return null;
-      const key = JSON.stringify([row.response_period, answers]);
-      if (seen.has(key)) return null;
-      seen.add(key);
-      return <View key={row.id} style={{ padding: 12, borderWidth: 1, borderColor: skin.inkSoft, gap: 6 }}>
-        <Text style={{ color: skin.inkSoft }}>{scopeLabel ?? (communityId ? "This HIVE" : "Your month")} · Earlier answers · {row.response_period ?? 'Undated'} · submitted {row.submitted_at ?? 'date unknown'}</Text>
-        <Text style={{ color: skin.inkSoft }}>Original preserved. Review and save to use these for this check-in; they do not mark a meeting complete.</Text>
-        {Object.entries(answers).map(([key, value]) => <Text selectable key={key} style={{ color: skin.inkSoft }}>{key}: {typeof value === 'string' ? value : JSON.stringify(value)}</Text>)}
-        <Pressable accessibilityRole="button" onPress={() => onReview(answers)}><Text style={{ color: skin.gold }}>Review these answers →</Text></Pressable>
-      </View>;
-    })}
+    <Pressable accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setExpanded(value => !value)} style={{ minHeight: 44, justifyContent: 'center' }}>
+      <Text style={{ color: skin.gold }}>{expanded ? '▾' : '▸'} {label}</Text>
+    </Pressable>
+    {expanded && <View style={{ gap: 8, padding: 12 }}>
+      {error ? <Text accessibilityRole="alert" style={{ color: skin.inkSoft }}>Past answers could not load. Please try again.</Text> : history.length === 0 ? <Text style={{ color: skin.inkSoft }}>No past answers here yet.</Text> : null}
+      {history.map(({ row, answers }) => {
+        const date = row.submitted_at ? new Date(row.submitted_at) : null;
+        const when = date && !Number.isNaN(date.getTime())
+          ? date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+          : 'An earlier check-in';
+        return <Pressable key={row.id} accessibilityRole="button" onPress={() => onReview(answers)} style={{ minHeight: 44, justifyContent: 'center' }}>
+          <Text style={{ color: skin.gold }}>{when} →</Text>
+        </Pressable>;
+      })}
+    </View>}
   </View>;
 }
