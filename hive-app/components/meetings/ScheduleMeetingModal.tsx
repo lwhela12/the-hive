@@ -1,3 +1,5 @@
+import { TimeInput } from '../ui/TimeInput';
+import { parseTimeInput, timeWindowError } from '../../lib/timeInput';
 import { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -90,8 +92,8 @@ export function ScheduleMeetingModal({
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [date, setDate] = useState(new Date());
-  // No end time until someone picks one — this is what makes it optional.
-  const [endTime, setEndTime] = useState<Date | null>(null);
+  const [startText, setStartText] = useState<string | null>(null);
+  const [endText, setEndText] = useState('');
   const [duration, setDuration] = useState(DEFAULT_MEETING_DURATION_MINUTES);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -103,8 +105,6 @@ export function ScheduleMeetingModal({
 
   // For iOS date/time pickers
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
   // Fetch community members when modal opens
   useEffect(() => {
@@ -188,17 +188,8 @@ export function ScheduleMeetingModal({
       return;
     }
 
-    // Same check hive.tsx's event form makes on its own end time — a window
-    // that runs backwards isn't a window.
-    if (endTime) {
-      const startMinutes = date.getHours() * 60 + date.getMinutes();
-      const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
-      if (endMinutes <= startMinutes) {
-        setError('The end time should be after the start time.');
-        return;
-      }
-    }
-
+    const timeError = timeWindowError(startText ?? getTimeInputValue(), endText, true);
+    if (timeError) { setError(timeError); return; }
     setLoading(true);
     setError('');
 
@@ -213,10 +204,6 @@ export function ScheduleMeetingModal({
       const minutes = date.getMinutes().toString().padStart(2, '0');
       const timeStr = `${hours}:${minutes}`; // HH:MM
 
-      const endTimeStr = endTime
-        ? `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`
-        : undefined;
-
       // Get the user's timezone
       const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -224,8 +211,8 @@ export function ScheduleMeetingModal({
         title: normalizeHiveBrandText(title).trim(),
         description: description.trim(),
         date: dateStr,
-        time: timeStr,
-        endTime: endTimeStr,
+        time: parseTimeInput(startText ?? timeStr)!,
+        endTime: parseTimeInput(endText) ?? undefined,
         duration: parseInt(duration) || Number(DEFAULT_MEETING_DURATION_MINUTES),
         attendeeIds: Array.from(selectedMembers),
         timezone: userTimezone,
@@ -239,7 +226,8 @@ export function ScheduleMeetingModal({
       setDescription('');
       setLocation('');
       setDate(new Date());
-      setEndTime(null);
+      setStartText(null);
+      setEndText('');
       setDuration(DEFAULT_MEETING_DURATION_MINUTES);
       setSelectedMembers(new Set());
       onClose();
@@ -260,25 +248,6 @@ export function ScheduleMeetingModal({
     }
   };
 
-  const onTimeChange = (_event: unknown, selectedTime?: Date) => {
-    setShowTimePicker(false);
-    if (selectedTime) {
-      // Preserve the date, update the time
-      const newDate = new Date(date);
-      newDate.setHours(selectedTime.getHours(), selectedTime.getMinutes());
-      setDate(newDate);
-    }
-  };
-
-  const onEndTimeChange = (_event: unknown, selectedTime?: Date) => {
-    setShowEndTimePicker(false);
-    if (selectedTime) {
-      const newEndTime = new Date(date);
-      newEndTime.setHours(selectedTime.getHours(), selectedTime.getMinutes());
-      setEndTime(newEndTime);
-    }
-  };
-
   // Web-specific handlers
   const handleWebDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDateStr = e.target.value;
@@ -290,42 +259,12 @@ export function ScheduleMeetingModal({
     }
   };
 
-  const handleWebTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTimeStr = e.target.value;
-    if (newTimeStr) {
-      const [hours, minutes] = newTimeStr.split(':').map(Number);
-      const newDate = new Date(date);
-      newDate.setHours(hours, minutes);
-      setDate(newDate);
-    }
-  };
-
-  const handleWebEndTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTimeStr = e.target.value;
-    if (!newTimeStr) {
-      setEndTime(null);
-      return;
-    }
-    const [hours, minutes] = newTimeStr.split(':').map(Number);
-    const newEndTime = new Date(date);
-    newEndTime.setHours(hours, minutes);
-    setEndTime(newEndTime);
-  };
-
   const formatDate = (d: Date) => {
     return d.toLocaleDateString('en-US', {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
       year: 'numeric',
-    });
-  };
-
-  const formatTime = (d: Date) => {
-    return d.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
     });
   };
 
@@ -343,13 +282,6 @@ export function ScheduleMeetingModal({
     return `${hours}:${minutes}`;
   };
 
-  const getEndTimeInputValue = () => {
-    if (!endTime) return '';
-    const hours = endTime.getHours().toString().padStart(2, '0');
-    const minutes = endTime.getMinutes().toString().padStart(2, '0');
-    return `${hours}:${minutes}`;
-  };
-
   return (
     <Modal
       visible={visible}
@@ -362,7 +294,7 @@ export function ScheduleMeetingModal({
         className="flex-1"
       >
         <ScrollView className="flex-1 bg-white">
-          <View className="p-6">
+          <View className="p-6" style={{ width: '100%', maxWidth: 680, alignSelf: 'center' }}>
             {/* Header */}
             <View className="flex-row justify-between items-center mb-6">
               <Text className="text-2xl font-bold text-gray-800">
@@ -437,7 +369,7 @@ export function ScheduleMeetingModal({
                   onChange={handleWebDateChange}
                   min={new Date().toISOString().split('T')[0]}
                   style={{
-                    width: '100%',
+                    width: '100%', maxWidth: 320, boxSizing: 'border-box',
                     padding: 16,
                     fontSize: 16,
                     borderRadius: 12,
@@ -447,6 +379,7 @@ export function ScheduleMeetingModal({
                 />
               ) : (
                 <Pressable
+                  style={{ maxWidth: 320, minHeight: 44 }}
                   onPress={() => setShowDatePicker(true)}
                   className="bg-white border border-gray-300 rounded-xl p-4"
                 >
@@ -458,28 +391,7 @@ export function ScheduleMeetingModal({
             {/* Time Picker */}
             <View className="mb-4">
               <Text className="text-gray-700 font-medium mb-2">Time</Text>
-              {Platform.OS === 'web' ? (
-                <input
-                  type="time"
-                  value={getTimeInputValue()}
-                  onChange={handleWebTimeChange}
-                  style={{
-                    width: '100%',
-                    padding: 16,
-                    fontSize: 16,
-                    borderRadius: 12,
-                    border: '1px solid #d1d5db',
-                    backgroundColor: 'white',
-                  }}
-                />
-              ) : (
-                <Pressable
-                  onPress={() => setShowTimePicker(true)}
-                  className="bg-white border border-gray-300 rounded-xl p-4"
-                >
-                  <Text className="text-base text-gray-800">{formatTime(date)}</Text>
-                </Pressable>
-              )}
+              <TimeInput accessibilityLabel="Start time (AM or PM)" value={startText ?? getTimeInputValue()} onChangeText={setStartText} />
             </View>
 
             {/* End Time — optional, same control as Time above. Nat,
@@ -489,40 +401,19 @@ export function ScheduleMeetingModal({
             <View className="mb-4">
               <View className="flex-row justify-between items-center mb-2">
                 <Text className="text-gray-700 font-medium">End Time (optional)</Text>
-                {endTime && (
-                  <Pressable onPress={() => setEndTime(null)}>
+                {!!endText && (
+                  <Pressable onPress={() => setEndText('')}>
                     <Text className="text-blue-500 text-sm">Clear</Text>
                   </Pressable>
                 )}
               </View>
-              {Platform.OS === 'web' ? (
-                <input
-                  type="time"
-                  value={getEndTimeInputValue()}
-                  onChange={handleWebEndTimeChange}
-                  style={{
-                    width: '100%',
-                    padding: 16,
-                    fontSize: 16,
-                    borderRadius: 12,
-                    border: '1px solid #d1d5db',
-                    backgroundColor: 'white',
-                  }}
-                />
-              ) : (
-                <Pressable
-                  onPress={() => setShowEndTimePicker(true)}
-                  className="bg-white border border-gray-300 rounded-xl p-4"
-                >
-                  <Text className="text-base text-gray-800">{endTime ? formatTime(endTime) : 'Not set'}</Text>
-                </Pressable>
-              )}
+              <TimeInput accessibilityLabel="End time (optional, AM or PM)" value={endText} onChangeText={setEndText} />
             </View>
 
             {/* Duration */}
             <View className="mb-4">
               <Text className="text-gray-700 font-medium mb-2">Duration</Text>
-              <View className="flex-row gap-2">
+              <View className="flex-row flex-wrap gap-2">
                 {[
                   { value: '60', label: '1 hour' },
                   { value: '120', label: '2 hours' },
@@ -531,7 +422,7 @@ export function ScheduleMeetingModal({
                   <Pressable
                     key={option.value}
                     onPress={() => setDuration(option.value)}
-                    className={`flex-1 py-3 rounded-xl border ${
+                    className={`px-4 py-3 rounded-xl border ${
                       duration === option.value
                         ? 'bg-honey-500 border-honey-500'
                         : 'bg-white border-gray-300'
@@ -558,7 +449,7 @@ export function ScheduleMeetingModal({
                 <Text className="text-gray-700 font-medium">
                   Invite Members ({selectedMembers.size}/{members.length})
                 </Text>
-                <View className="flex-row gap-2">
+                <View className="flex-row flex-wrap gap-2">
                   <Pressable onPress={selectAll}>
                     <Text className="text-blue-500 text-sm">All</Text>
                   </Pressable>
@@ -618,12 +509,14 @@ export function ScheduleMeetingModal({
             ) : null}
 
             {/* Submit Button */}
+            <View style={{ alignSelf: 'flex-start', maxWidth: '100%' }}>
             <Button
               title={loading ? 'Scheduling...' : 'Schedule Meeting'}
               onPress={handleSchedule}
               loading={loading}
               disabled={loading}
             />
+            </View>
           </View>
         </ScrollView>
 
@@ -638,25 +531,6 @@ export function ScheduleMeetingModal({
           />
         )}
 
-        {Platform.OS !== 'web' && showTimePicker && DateTimePicker && (
-          <DateTimePicker
-            value={date}
-            mode="time"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={onTimeChange}
-            minuteInterval={5}
-          />
-        )}
-
-        {Platform.OS !== 'web' && showEndTimePicker && DateTimePicker && (
-          <DateTimePicker
-            value={endTime ?? date}
-            mode="time"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={onEndTimeChange}
-            minuteInterval={5}
-          />
-        )}
       </KeyboardAvoidingView>
     </Modal>
   );

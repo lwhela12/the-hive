@@ -327,9 +327,10 @@ export function EventDatePicker({
     : '';
 
   return (
-    <View>
+    <View style={{ width: '100%', maxWidth: 320 }}>
       <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">{label}</Text>
       <Pressable
+        style={{ minHeight: 44 }}
         onPress={() => setOpen(true)}
         className="flex-row items-center justify-between bg-cream border border-gray-200 rounded-lg px-4 py-3 active:opacity-80"
       >

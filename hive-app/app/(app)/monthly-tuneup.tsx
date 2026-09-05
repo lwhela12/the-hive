@@ -1,3 +1,5 @@
+import { TimeInput } from '../../components/ui/TimeInput';
+import { parseTimeInput } from '../../lib/timeInput';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -315,6 +317,7 @@ function getMonthNameFromPeriod(period?: string | null) {
 const normalizeEventTimeInput = (value: string) => {
   const raw = value.trim();
   if (!raw) return { time: null, note: '' };
+  if (/^[\d:\s]+(?:am|pm)?$/i.test(raw)) return { time: parseTimeInput(raw), note: '' };
 
   // Postgres hands a `time` column back as "17:30:00", and the edit form used
   // to put that straight into this box — where the old exact-match pattern
@@ -2857,7 +2860,7 @@ export default function MonthlyTuneupScreen() {
         {/* A clock time is not something anybody dictates, so it keeps the plain
             box — same cream fill, same gold hairline as everything around it. */}
         {!eventAllDay && (
-          <TextInput
+          <TimeInput
             value={eventTime}
             onChangeText={setEventTime}
             placeholder="Time (optional) — 7:30 PM"
@@ -3468,7 +3471,7 @@ export default function MonthlyTuneupScreen() {
                   </Pressable>
                   {/* A clock time stays a plain box — nobody dictates "7:30 PM". */}
                   {!eventAllDay ? (
-                    <TextInput
+                    <TimeInput
                       value={eventTime}
                       onChangeText={setEventTime}
                       placeholder="Time (optional) — 7:30 PM"

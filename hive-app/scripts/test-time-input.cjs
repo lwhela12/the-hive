@@ -1,0 +1,30 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const ts = require('typescript');
+const vm = require('node:vm');
+function load(file, deps = {}) {
+ const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), {compilerOptions: {module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX}}).outputText;
+ const exports = {};
+ vm.runInNewContext(source, {exports, require: id => deps[id] ?? require(id)});
+ return exports;
+}
+const time = load('lib/timeInput.ts');
+for (const [input, expected] of [['18:00:00','18:00'],['6 pm','18:00'],['6:30 PM','18:30'],['12 AM','00:00'],['12 pm','12:00'],['00:00:00','00:00'],['23:59:59','23:59'],['',''],['25:00',null],['6:99 PM',null],['12:00:99',null],['0 PM',null],['13 PM',null],['nope',null]]) assert.equal(time.parseTimeInput(input), expected === '' ? null : expected, input);
+assert.equal(time.humanTimeInput('18:00:00'),'6:00 PM');
+assert.equal(time.humanTimeInput('00:00'),'12:00 AM');
+assert.equal(time.timeWindowError('6 PM','8 PM'),null);
+assert.equal(time.timeWindowError('',''),null);
+for (const args of [['8 PM','6 PM'],['6 PM','6 PM'],['','6 PM'],['bad',''],['','',true]]) assert.ok(time.timeWindowError(...args));
+const {TimeInput} = load('components/ui/TimeInput.tsx', {'react-native': {TextInput: 'input'}, '../../lib/timeInput': time});
+let changed;
+const element = TimeInput({value: '18:00:00', onChangeText: x => changed=x});
+assert.equal(element.props.value,'6:00 PM');
+assert.equal(element.props.style[0].width,180);
+assert.equal(element.props.style[0].minHeight,44);
+element.props.onChangeText('7:30 pm'); assert.equal(changed,'7:30 pm');
+element.props.onBlur({}); assert.equal(changed,'6:00 PM');
+const invalid=TimeInput({value:'bad',onChangeText:x=>changed=x});
+invalid.props.onBlur({});assert.equal(changed,'bad');
+const blank=TimeInput({value:'',onChangeText:x=>changed=x});blank.props.onBlur({});assert.equal(changed,'');
+for (const f of ['app/(app)/meetings.tsx','app/(app)/hive.tsx','components/meetings/ScheduleMeetingModal.tsx']) assert.match(fs.readFileSync(f,'utf8'), /maxWidth: 680/);
+console.log('PASS: 14 parser cases, noon/midnight display, 7 window cases, real TimeInput render/change/blur handlers, 3 editor width contracts. No network or submissions.');

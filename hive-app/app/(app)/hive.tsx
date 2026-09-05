@@ -1,3 +1,5 @@
+import { TimeInput } from '../../components/ui/TimeInput';
+import { parseTimeInput } from '../../lib/timeInput';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, ActivityIndicator, Animated, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -151,6 +153,7 @@ const formatSurveyDueDate = (dueDate: string) => {
 const normalizeEventTimeInput = (value: string) => {
   const raw = value.trim();
   if (!raw) return { time: null, note: '' };
+  if (/^[\d:\s]+(?:am|pm)?$/i.test(raw)) return { time: parseTimeInput(raw), note: '' };
 
   // Postgres hands a `time` column back as "17:30:00", and the edit form used
   // to put that straight into this box — where the old exact-match pattern
@@ -4071,7 +4074,7 @@ export default function HiveScreen() {
               to be a sheet that can scroll. */}
           <Pressable
             className="bg-white rounded-t-3xl"
-            style={{ maxHeight: '88%' }}
+            style={{ maxHeight: '88%', width: '100%', maxWidth: 680, alignSelf: 'center' }}
             onPress={(e) => e.stopPropagation()}
           >
             <BounceScrollView
@@ -4204,7 +4207,7 @@ export default function HiveScreen() {
                             {/* A clock time, so no microphone — it wears the same
                                 fill, hairline and placeholder ink as everything
                                 around it. */}
-                            <TextInput
+                            <TimeInput
                               placeholder="7:30 PM"
                               placeholderTextColor={FIELD_LOOK.placeholder}
                               selectionColor={FIELD_LOOK.ink}
@@ -4227,7 +4230,7 @@ export default function HiveScreen() {
                         {!eventAllDay && (
                           <View style={{ flexGrow: 1, flexBasis: 150 }}>
                             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Ends (optional)</Text>
-                            <TextInput
+                            <TimeInput
                               placeholder="9:00 PM"
                               placeholderTextColor={FIELD_LOOK.placeholder}
                               selectionColor={FIELD_LOOK.ink}

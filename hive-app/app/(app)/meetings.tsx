@@ -1,3 +1,5 @@
+import { TimeInput } from '../../components/ui/TimeInput';
+import { parseTimeInput, timeWindowError } from '../../lib/timeInput';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, RefreshControl, Pressable, Linking, useWindowDimensions, Platform, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from '../../components/ui/SafeArea';
@@ -737,6 +739,8 @@ export default function MeetingsScreen() {
   const handleSaveEdit = async () => {
     if (!editingEvent || meetingEditSaveInFlight.current) return;
 
+    const timeError = timeWindowError(editForm.event_time, editForm.end_time);
+    if (timeError) { showAlert('Check the time', timeError); return; }
     meetingEditSaveInFlight.current = true;
     setSavingEdit(true);
     try {
@@ -748,8 +752,8 @@ export default function MeetingsScreen() {
           description: editForm.description || null,
           location: editForm.location || null,
           date: parseAmericanDate(editForm.event_date) ?? editForm.event_date,
-          time: editForm.event_time || null,
-          endTime: editForm.end_time || null,
+          time: parseTimeInput(editForm.event_time),
+          endTime: parseTimeInput(editForm.end_time),
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
       });
@@ -1753,7 +1757,7 @@ export default function MeetingsScreen() {
         onRequestClose={closeEventEdit}
       >
         <SafeAreaView className="flex-1" style={{ backgroundColor: '#faf8f3' }} edges={['top']}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, width: '100%', maxWidth: 680, alignSelf: 'center' }}>
           <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
             <Pressable onPress={closeEventEdit} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
               <Text className="text-label text-base">Cancel</Text>
@@ -1836,7 +1840,8 @@ export default function MeetingsScreen() {
                 white fill and gold hairline as the boxes above it. */}
             <View className="mb-4">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className={FIELD_LABEL_CLASS}>Time (optional)</Text>
-              <TextInput
+              <TimeInput
+                accessibilityLabel="Start time (optional, AM or PM)"
                 value={editForm.event_time}
                 onChangeText={(text) => setEditForm((f) => ({ ...f, event_time: text }))}
                 className="rounded-xl px-4 py-3 text-base bg-white"
@@ -1852,7 +1857,8 @@ export default function MeetingsScreen() {
                 windo, like 5-7, i could only put in 5pm" (2026-08-21). */}
             <View className="mb-4">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className={FIELD_LABEL_CLASS}>Ends (optional)</Text>
-              <TextInput
+              <TimeInput
+                accessibilityLabel="End time (optional, AM or PM)"
                 value={editForm.end_time}
                 onChangeText={(text) => setEditForm((f) => ({ ...f, end_time: text }))}
                 className="rounded-xl px-4 py-3 text-base bg-white"
