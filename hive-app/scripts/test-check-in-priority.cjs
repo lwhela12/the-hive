@@ -125,3 +125,19 @@ for (const options of [{user:'other'}, {loading:true}, {loaded:null}, {user:'oth
   assert.ok(!rendered.includes('SurveyModal'), 'stale modal hidden before next fetch');
 }
 console.log('PASS: Pacific midnight/DST/year/leap boundaries, late clicks, date/time sorting, all future check-ins visible, HIVE context preserved, headers outside padded content, all member HIVEs, immutable records, rapid scope isolation, and receipt/draft/plate guards.');
+
+// Date-only survey dates must not shift backward in Pacific time.
+const modalSource = fs.readFileSync('components/surveys/SurveyModal.tsx', 'utf8');
+const dateFormatter = modalSource.slice(modalSource.indexOf('function formatSurveyDueDate('), modalSource.indexOf('export function SurveyModal('));
+const dateContext = { Date };
+vm.runInNewContext(ts.transpileModule(dateFormatter, {}).outputText, dateContext);
+const savedTimezone = process.env.TZ;
+process.env.TZ = 'America/Los_Angeles';
+assert.equal(dateContext.formatSurveyDueDate('2026-09-08'), 'Sep 8');
+assert.equal(dateContext.formatSurveyDueDate('2026-11-01'), 'Nov 1');
+assert.equal(dateContext.formatSurveyDueDate('invalid'), 'invalid');
+process.env.TZ = savedTimezone;
+assert.equal(moduleObject.exports.meetingLabel({event_date:'2026-09-08',event_time:'18:00:00'}, '2026-09-05'), 'Tue, Sep 8 · 6:00 PM PT');
+assert.ok(modalSource.indexOf('{draftLoaded && introduction}') < modalSource.indexOf('Completed work & helper credit'), 'personal question precedes context');
+assert.match(screen, /linkedMeeting\?\.community_id === item.member.community_id \? linkedMeeting : item.event/, 'saved answers follow the exact linked meeting');
+console.log('PASS: meeting time, date-only display across DST, personal question placement and linked receipt scope.');

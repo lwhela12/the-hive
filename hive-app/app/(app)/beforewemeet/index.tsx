@@ -11,7 +11,7 @@ import { LegacyCheckInAnswers } from '../../../components/surveys/LegacyCheckInA
 import { SurveyModal } from '../../../components/surveys/SurveyModal';
 import { SharedPlate } from '../../../components/surveys/SharedPlate';
 import { CheckInHiveCard } from '../../../components/surveys/CheckInHiveCard';
-import { checkInQuestions, groupCheckInHives, pacificToday, type MeetingPreview } from '../../../lib/checkInPresentation';
+import { checkInQuestions, groupCheckInHives, meetingLabel, pacificToday, type MeetingPreview } from '../../../lib/checkInPresentation';
 import {
   buildMergedPreMeeting,
   mergedPreMeetingQuestions,
@@ -88,7 +88,7 @@ export default function BeforeWeMeetScreen() {
   const [state, setState] = useState<'looking' | 'ready' | 'none' | 'broken'>('looking');
   const [today, setToday] = useState(pacificToday);
   const [loadedScope, setLoadedScope] = useState<string | null>(null);
-  const scope = `${profile?.id ?? ''}:${memberships.map(m => m.community_id).sort().join(':')}:${today}`;
+  const scope = `${profile?.id ?? ''}:${memberships.map(m => m.community_id).sort().join(':')}:${today}${meetingId ? `:${meetingId}` : ''}`;
   const ready = !authLoading && !!profile && state === 'ready' && loadedScope === scope
     && (!meetingId || (linkedMeeting?.id === meetingId && !!originMembership && !linkFailed))
     && (!originMembership || (communityId === originMembership.community_id && !wholeHive));
@@ -99,7 +99,8 @@ export default function BeforeWeMeetScreen() {
   // The email contains an opaque event ID. Resolve it only through the signed-in
   // member's event policy, then require membership before changing place.
   useEffect(() => {
-    if (!meetingId || authLoading || !profile) return;
+    if (!meetingId) { setLinkedMeeting(null); setLinkFailed(false); return; }
+    if (authLoading || !profile) return;
     let active = true;
     setLinkedMeeting(null); setLinkFailed(false);
     void supabase.from('events').select('id, community_id, event_date, event_time')
@@ -131,7 +132,7 @@ export default function BeforeWeMeetScreen() {
   );
 
   useEffect(() => {
-    if (authLoading || !profile) return;
+    if (authLoading || !profile || (meetingId && linkedMeeting?.id !== meetingId)) return;
     let cancelled = false;
     setState('looking');
     setLoadedScope(null);
@@ -254,9 +255,10 @@ export default function BeforeWeMeetScreen() {
       if (receiptError) { setState('broken'); return; }
       const hydrated: Record<string, SurveyAnswers> = {};
       for (const item of [...ordered.prominent, ...ordered.future, ...ordered.missing]) {
-        const exactOccurrence = item.event ? meetingOccurrence(item.event.id) : nextMeetingOccurrence(item.member.community_id);
+        const event = linkedMeeting?.community_id === item.member.community_id ? linkedMeeting : item.event;
+        const exactOccurrence = event ? meetingOccurrence(event.id) : nextMeetingOccurrence(item.member.community_id);
         const receipt = receipts?.find(r => r.community_id === item.member.community_id && r.occurrence === exactOccurrence)
-          ?? (item.event
+          ?? (event && event.id === item.event?.id
             ? receipts?.find(r => r.community_id === item.member.community_id && r.occurrence === nextMeetingOccurrence(item.member.community_id))
             : undefined);
         if (receipt) hydrated[item.member.community_id] = receipt.answers as SurveyAnswers;
@@ -313,7 +315,7 @@ export default function BeforeWeMeetScreen() {
     })();
 
     return () => { cancelled = true; };
-  }, [authLoading, profile?.id, memberships, hiveIds, today, scope]);
+  }, [authLoading, profile?.id, memberships, hiveIds, today, scope, meetingId, linkedMeeting]);
 
   // A meeting link or HIVE pill opens its source section after login.
   useEffect(() => {
@@ -401,6 +403,7 @@ export default function BeforeWeMeetScreen() {
         survey={forThisReader}
         initialAnswers={mine}
         introduction={personalQuestion}
+        timingLabel={meetingLabel(currentMeetings.find(m => m.community_id === selected), today)}
         isEditingResponse={!!mine}
         carryForwardItems={section ? todosByHive[`note_hive_${section.slug}`] ?? [] : []}
         carryForwardSections={section ? { [`note_hive_${section.slug}`]: todosByHive[`note_hive_${section.slug}`] ?? [] } : {}}

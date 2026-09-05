@@ -43,6 +43,7 @@ interface SurveyModalProps {
   draftScope?: string;
   closeLabel?: string;
   introduction?: React.ReactNode;
+  timingLabel?: string;
   isEditingResponse?: boolean;
   carryForwardItems?: CarryForwardItem[];
   /**
@@ -159,7 +160,11 @@ function cleanWishText(title: string | null | undefined, description: string | n
 }
 
 function formatSurveyDueDate(dueDate: string) {
-  const parsed = new Date(dueDate);
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(dueDate);
+  const parsed = new Date(dateOnly ? `${dueDate}T12:00:00Z` : dueDate);
+  if (dateOnly && !Number.isNaN(parsed.getTime())) {
+    return parsed.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
+  }
   if (Number.isNaN(parsed.getTime())) return dueDate;
 
   return parsed.toLocaleString('en-US', {
@@ -176,6 +181,7 @@ export function SurveyModal({
   draftScope,
   closeLabel = "Back to HIVE",
   introduction,
+  timingLabel,
   isEditingResponse = false,
   carryForwardItems = [],
   carryForwardSections,
@@ -750,15 +756,17 @@ export function SurveyModal({
                 {survey.description && (
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#6b7280', lineHeight: 21 }}>{survey.description}</Text>
                 )}
-                {survey.due_date && (
+                {(timingLabel || survey.due_date) && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, backgroundColor: tint.wash, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' }}>
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: tint.accent }}>
-                      📅 Due {formatSurveyDueDate(survey.due_date)}
+                      📅 {timingLabel ?? `Due ${formatSurveyDueDate(survey.due_date!)}`}
                     </Text>
                   </View>
                 )}
                 <View style={{ height: 1, backgroundColor: tint.line(0.3), marginTop: 20 }} />
               </View>
+
+              {draftLoaded && introduction}
 
               {seasonRecap && (seasonRecap.hangCount > 0 || seasonRecap.granted.length > 0) && (() => {
                 const grantedCount = seasonRecap.granted.reduce((sum, person) => sum + person.wishes.length, 0);
@@ -846,14 +854,13 @@ export function SurveyModal({
                 <Text style={{ color: '#5c5648' }}>Your active goals, HD and commitments are in the roster below. Update each status there once; use POP for changes, blockers and what help would move you forward.</Text>
               </View>}
               {/* Grouped? Then each section draws its own, below its heading. */}
-              {draftLoaded && introduction}
               {draftLoaded && !carryForwardSections && renderCarryForwardContext()}
 
               {/* A note block explains; it does not ask. So the numbers count
                   only the questions, and a person who reads "3 of 12" and then
                   counts the boxes finds twelve boxes. */}
               {draftLoaded && (() => {
-                let asked = 0;
+                let asked = introduction ? 1 : 0;
                 return survey.questions.map((q) => {
                   const drawn = renderQuestion(q, q.type === 'note' ? -1 : asked++);
                   const mine = carryForwardSections?.[q.id];

@@ -14,3 +14,9 @@ The August 21 handoff and older generic-meeting-email comments are historical.
 Validation: app typecheck and interface checks; Deno typecheck of both changed handlers; full web export; offline regression suite including the real sender with two HIVEs and a member whose first HIVE is already complete. The actual database save function is exercised against an isolated PostgreSQL engine by the existing atomic test.
 
 Live signed-in walkthrough and Nat's acceptance are separate from those checks. Record their results after deployment; never inherit an acceptance claim from this document.
+
+## September 5 signed-in verification
+
+On production `adc124d`, the actual Admin → Tech HIVE → Review Before we meet email rendered Tech's subject and blue seal. Clicking its real email button opened the September 8 Tech meeting's form, and closing it returned to Tech Meetings. No answers were changed or submitted and no mail was sent. The walkthrough caught a date-only timezone bug (September 8 appearing as September 7 at 5 PM); the follow-up uses the real meeting date/time, puts the plate question above context, and continues question numbering after it. Exact linked-meeting receipts also take precedence over a nearer meeting's answers.
+
+All 16 regression scripts, interface/type checks and the full web export passed after that correction. Live verification of the final correction and Nat's acceptance remain to be recorded. Approval switches are unchanged: message, mention and board reply approved; both check-in letters pending.
