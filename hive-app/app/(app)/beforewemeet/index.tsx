@@ -379,6 +379,9 @@ export default function BeforeWeMeetScreen() {
       if (original?.[id] !== undefined) own.answers[id] = original[id];
     }
     if (plate !== undefined) own.answers.q_plate = plate;
+    for (const key of ['q_hd_wish_id', 'q_hd_wish_reach']) {
+      if (answers[key] !== undefined) own.answers[key] = answers[key];
+    }
     if (answers[CARRY_FORWARD_ANSWER_KEY]) own.answers[CARRY_FORWARD_ANSWER_KEY] = answers[CARRY_FORWARD_ANSWER_KEY];
     const occurrence = event ? meetingOccurrence(event.id) : nextMeetingOccurrence(selected);
     const { error } = await submitCheckInOccurrence(row.id, own.answers as SurveyAnswers, selected, occurrence);
@@ -401,6 +404,7 @@ export default function BeforeWeMeetScreen() {
         key={`${row?.id}:${selected}:${currentMeetings.find(m => m.community_id === selected)?.id ?? 'next'}`}
         draftScope={`${profile?.id}:${row?.id}:${selected}:${currentMeetings.find(m => m.community_id === selected)?.id ?? 'next'}`}
         survey={forThisReader}
+        answerCommunityId={selected}
         initialAnswers={mine}
         introduction={personalQuestion}
         timingLabel={meetingLabel(currentMeetings.find(m => m.community_id === selected), today)}

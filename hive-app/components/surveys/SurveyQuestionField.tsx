@@ -455,12 +455,16 @@ export function SurveyQuestionField({
    */
   const isHdWish = question.id === 'q_hd_wish';
   const hdReach: 'hive' | 'all_hives' = answers?.q_hd_wish_reach === 'all_hives' ? 'all_hives' : 'hive';
+  const [writingNewWish, setWritingNewWish] = useState(false);
+  const [wishesLoaded, setWishesLoaded] = useState(false);
   const [pickableWishes, setPickableWishes] = useState<
-    { id: string; description: string; fromHive: string | null; reach: 'hive' | 'all_hives' }[]
+    { id: string; description: string; communityId: string; fromHive: string | null; reach: 'hive' | 'all_hives' }[]
   >([]);
   useEffect(() => {
     if (!isHdWish || !profile?.id || !communityId) return;
     let live = true;
+    setPickableWishes([]);
+    setWishesLoaded(false);
     (async () => {
       /**
        * This HIVE's wishes, plus every wish of yours that travels — whichever
@@ -486,6 +490,7 @@ export function SurveyQuestionField({
         .or(`community_id.eq.${communityId},share_scope.eq.all_hives`)
         .order('created_at', { ascending: false });
       if (!live) return;
+      setWishesLoaded(true);
       if (error) {
         console.warn('Could not load your wishes for the check-in', error);
         return;
@@ -495,6 +500,7 @@ export function SurveyQuestionField({
           .filter((wish) => !!String(wish.description ?? '').trim())
           .map((wish) => ({
             id: String(wish.id),
+            communityId: wish.community_id,
             description: String(wish.description).trim(),
             // Only says so when it came from somewhere else — a wish written
             // here does not need telling you where you are standing.
@@ -505,6 +511,15 @@ export function SurveyQuestionField({
     })();
     return () => { live = false; };
   }, [isHdWish, profile?.id, communityId]);
+  const selectedWish = pickableWishes.find(wish =>
+    textValue.trim() === wish.description && (!answers?.q_hd_wish_id || answers.q_hd_wish_id === wish.id));
+  const showNewWish = !selectedWish && (writingNewWish || !!textValue.trim() || (wishesLoaded && !pickableWishes.length));
+  const startNewWish = () => {
+    setWritingNewWish(true);
+    onChange('');
+    onSetAnswer?.('q_hd_wish_id', '');
+    onSetAnswer?.('q_hd_wish_reach', 'hive');
+  };
   const miqEntries = question.id === 'q_quarter_miq'
     ? ([
         ['Experiences', (profile as any)?.miq_experiences],
@@ -622,115 +637,67 @@ export function SurveyQuestionField({
       )}
 
       {isHdWish && (
-        <View style={{ backgroundColor: tint.wash, borderWidth: 1, borderColor: tint.line(0.5), borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10, gap: 8 }}>
-          {pickableWishes.length > 0 ? (
-            <>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink, lineHeight: 18 }}>
-                One you already have
-              </Text>
-              <View style={{ gap: 6 }}>
-                {pickableWishes.map((wish) => {
-                  const description = wish.description;
-                  const chosen = textValue.trim() === description;
-                  return (
-                    <Pressable
-                      key={wish.id}
-                      onPress={() => {
-                        onChange(chosen ? '' : description);
-                        // A wish you already have arrives with its own reach.
-                        // Without this, picking a HIVE-Wide wish and pressing
-                        // submit would quietly pull it back home.
-                        if (!chosen) onSetAnswer?.('q_hd_wish_reach', wish.reach);
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Make this your focus: ${description}`}
-                      style={{
-                        backgroundColor: chosen ? tint.accent : '#fffdf5',
-                        borderWidth: 1,
-                        borderColor: chosen ? tint.accent : tint.line(0.5),
-                        borderRadius: 10,
-                        paddingVertical: 9,
-                        paddingHorizontal: 12,
-                      }}
-                    >
-                      <Text style={{ fontFamily: chosen ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: chosen ? 'white' : '#5c5648', lineHeight: 19 }}>
-                        {description}
-                      </Text>
-                      {wish.fromHive ? (
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10.5, letterSpacing: 0.6, textTransform: 'uppercase', color: chosen ? 'rgba(255,255,255,0.85)' : '#9b8a6b', marginTop: 3 }}>
-                          from {wish.fromHive}
-                        </Text>
-                      ) : null}
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </>
-          ) : null}
-          {/* Nat, 2026-09-01, opening her own profile mid-check-in and finding
-              HD Wishes (0): *"i think then maybe the survey should say
-              something like, looks like you dont have one yet, would you like
-              to write one now or refine with clive."* A picker with nothing in
-              it explains nothing; the same space can say where you are and
-              offer the two ways forward. */}
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink, lineHeight: 18 }}>
-            {pickableWishes.length > 0
-              ? 'Or make a new one'
-              : 'This will be your first HD wish'}
-          </Text>
-          {pickableWishes.length === 0 ? (
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 19 }}>
-              Write it in the box below, or let Clive ask you the questions that find it.
+        <View style={{ backgroundColor: tint.wash, borderWidth: 1, borderColor: tint.line(0.5), borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10, gap: 10 }}>
+          {pickableWishes.length > 0 && <>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink }}>
+              Choose a wish for this meeting
             </Text>
-          ) : null}
-          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-            <Pressable
-              onPress={() => router.push({
-                pathname: '/(app)',
-                params: {
-                  prefill: textValue.trim()
-                    ? `Help me turn this into a High Definition wish for my HIVE — specific enough that somebody could actually grant it: "${textValue.trim()}"`
-                    : 'Help me find my High Definition wish for this HIVE. Ask me where I am, where I want to be, what I have tried and where I am stuck.',
-                },
-              })}
-              accessibilityRole="button"
-              style={{ backgroundColor: tint.accent, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14 }}
-            >
-              <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', fontSize: 13 }}>
-                Shape it with Clive ✨
-              </Text>
+            {pickableWishes.map(wish => {
+              const chosen = selectedWish?.id === wish.id;
+              return <Pressable key={wish.id} accessibilityRole="button"
+                accessibilityState={{ selected: chosen }}
+                accessibilityLabel={`${chosen ? 'Selected' : 'Choose'} wish: ${wish.description}. ${wish.reach === 'all_hives' ? 'HIVE-Wide' : 'This HIVE only'}`}
+                onPress={() => {
+                  setWritingNewWish(false);
+                  onChange(chosen ? '' : wish.description);
+                  onSetAnswer?.('q_hd_wish_id', chosen ? '' : wish.id);
+                  onSetAnswer?.('q_hd_wish_reach', wish.reach);
+                }}
+                style={{ backgroundColor: '#fffdf5', borderWidth: chosen ? 2 : 1,
+                  borderColor: chosen ? tint.accent : tint.line(0.5), borderRadius: 10,
+                  paddingVertical: 10, paddingHorizontal: 12, gap: 7 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink, lineHeight: 19 }}>
+                  {chosen ? '✓ Selected · ' : ''}{wish.description}
+                </Text>
+                <ReachPill reach={wish.reach} communityId={wish.communityId} />
+                {wish.fromHive && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#5c5648' }}>From {wish.fromHive}</Text>}
+              </Pressable>;
+            })}
+            {selectedWish && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 19 }}>
+              This uses your existing wish and keeps who can see it.
+            </Text>}
+          </>}
+          {!wishesLoaded && <Text style={{ color: '#5c5648' }}>Loading your wishes…</Text>}
+          {!showNewWish && <Pressable accessibilityRole="button" onPress={startNewWish}
+            style={{ alignSelf: 'flex-start', paddingVertical: 9 }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', color: tint.ink, fontSize: 13 }}>Write a new wish</Text>
+          </Pressable>}
+          {showNewWish && <>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink }}>New wish</Text>
+            <VoiceTextInput value={textValue} multiline communityId={communityId}
+              placeholder="What would you like this HIVE to help you with?"
+              onChangeText={next => { onChange(next); onSetAnswer?.('q_hd_wish_id', ''); }} />
+            <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/(app)', params: {
+              prefill: textValue.trim()
+                ? `Help me turn this into a High Definition wish for my HIVE — specific enough that somebody could actually grant it: "${textValue.trim()}"`
+                : 'Help me find my High Definition wish for this HIVE. Ask me where I am, where I want to be, what I have tried and where I am stuck.',
+            } })}
+              style={{ alignSelf: 'flex-start', backgroundColor: tint.accent, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', fontSize: 13 }}>Shape it with Clive ✨</Text>
             </Pressable>
-          </View>
-          {/* How far it travels, decided here rather than hunted for on the
-              profile afterwards. THE pill, the same shape as everywhere else,
-              and it starts at the safe end of the ladder. A HIVE whose ceiling
-              stops at its own walls is never offered the choice. */}
-          {onSetAnswer && community?.max_share_scope !== 'hive' ? (
-            <View style={{ gap: 5, marginTop: 2 }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink, lineHeight: 18 }}>
-                Who sees it
-              </Text>
-              {/* The same pill the profile wears, at the same size. Nat,
-                  2026-09-01: *"i think we need every toggle to look the same."*
-                  It was drawing at 'sm' beside a full-width question, which
-                  read as a different control rather than the one she already
-                  knows. Her own rule, from the day this component was made:
-                  one toggle, one pill, one shape everywhere. */}
-              <ReachPill
-                reach={hdReach}
-                size="md"
-                onToggle={() => onSetAnswer('q_hd_wish_reach', hdReach === 'all_hives' ? 'hive' : 'all_hives')}
-                communityId={communityId}
-              />
-            </View>
-          ) : null}
-          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: '#9b8a6b' }}>
-            Your answers here are saved — you can hop to Clive and come right back. Whatever ends up in the box becomes your HD.
-          </Text>
+            {onSetAnswer && community?.max_share_scope !== 'hive' && <View style={{ gap: 5 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink }}>Who sees this new wish</Text>
+              <ReachPill reach={hdReach} size="md" communityId={communityId}
+                onToggle={() => onSetAnswer('q_hd_wish_reach', hdReach === 'all_hives' ? 'hive' : 'all_hives')} />
+            </View>}
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#5c5648' }}>
+              Your draft stays here if you visit Clive. Submitting creates this wish and makes it your focus.
+            </Text>
+          </>}
         </View>
       )}
 
-      {(question.type === 'short' || question.type === 'long') && (
+      {!isHdWish && (question.type === 'short' || question.type === 'long') && (
         <VoiceTextInput
           value={textValue}
           onChangeText={onChange}

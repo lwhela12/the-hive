@@ -25,6 +25,7 @@ import {
 } from '../../lib/checkIns';
 import { supabase } from '../../lib/supabase';
 import { clearSpotlight } from '../../lib/spotlight';
+import { fileCheckInWish } from '../../lib/checkInWish';
 import { showAlert } from '../../lib/showAlert';
 import { getCycleStart } from '../../lib/meetingCycle';
 import { fetchCheckInActivityContext, type ActivityContext } from '../../lib/checkInActivityContext';
@@ -38,6 +39,8 @@ import { ThinkingBee } from '../ui/ThinkingBee';
 import { accentPalette, hiveSeal, HIVE_GOLD } from '../../lib/hiveBrand';
 interface SurveyModalProps {
   survey: Survey;
+  /** Data scope can differ from the shared check-in’s visual identity. */
+  answerCommunityId?: string | null;
   initialAnswers?: SurveyAnswers;
   /** Isolate drafts by member, HIVE and meeting/month occurrence. */
   draftScope?: string;
@@ -177,6 +180,7 @@ function formatSurveyDueDate(dueDate: string) {
 
 export function SurveyModal({
   survey,
+  answerCommunityId = survey.community_id,
   initialAnswers,
   draftScope,
   closeLabel = "Back to HIVE",
@@ -458,48 +462,11 @@ export function SurveyModal({
      * never told their answers were lost when they were not.
      */
     const hdWish = typeof finalAnswers.q_hd_wish === 'string' ? finalAnswers.q_hd_wish.trim() : '';
-    // How far it travels, chosen on the question itself. The safe end of the
-    // ladder is the default, always: a wish only leaves its HIVE because
-    // somebody said so.
-    const hdReach = finalAnswers.q_hd_wish_reach === 'all_hives' ? 'all_hives' : 'hive';
     let hdWishFiled: boolean | null = null;
     if (hdWish && viewerProfile?.id) {
       try {
-        // The same reach the picker offers: this HIVE's wishes plus every one
-        // of yours that travels. Matching only on this HIVE would file a
-        // second copy of a HIVE-Wide wish every time somebody picked one.
-        const { data: existing } = await (supabase as any)
-          .from('wishes')
-          .select('id, description')
-          .eq('user_id', viewerProfile.id)
-          .eq('is_active', true)
-          .or(`community_id.eq.${survey.community_id},share_scope.eq.all_hives`);
-        const already = (existing ?? []).find(
-          (wish: { description?: string }) => (wish.description ?? '').trim() === hdWish
-        ) as { id: string } | undefined;
-        // Unstar whatever holds the star first. One per member, enforced by a
-        // partial unique index — see `lib/spotlight.ts`. Skipping this is what
-        // made the very first one of these fail silently: a fulfilled wish
-        // from July still held Nat's star, and the insert was refused.
-        await clearSpotlight(viewerProfile.id);
-        const { error: wishWriteError } = already
-          ? await (supabase as any)
-              .from('wishes')
-              .update({ is_spotlight: true, share_scope: hdReach })
-              .eq('id', already.id)
-          : await (supabase as any).from('wishes').insert({
-              user_id: viewerProfile.id,
-              community_id: survey.community_id,
-              description: hdWish,
-              raw_input: hdWish,
-              status: 'public',
-              is_active: true,
-              is_spotlight: true,
-              share_scope: hdReach,
-              extracted_from: 'onboarding',
-            });
-        if (wishWriteError) console.warn('Could not file the HD wish', wishWriteError);
-        hdWishFiled = !wishWriteError;
+        await fileCheckInWish(supabase, viewerProfile.id, answerCommunityId, finalAnswers, clearSpotlight);
+        hdWishFiled = true;
       } catch (wishError) {
         console.warn('Could not file the HD wish from the check-in', wishError);
         hdWishFiled = false;
@@ -693,7 +660,7 @@ export function SurveyModal({
       // key, so it draft-saves and submits with everything else.
       answers={answers}
       onSetAnswer={setAnswer}
-      communityId={survey.community_id}
+      communityId={answerCommunityId}
       accent={accent}
     />
     </View>
