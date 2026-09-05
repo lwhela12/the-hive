@@ -38,11 +38,11 @@ export function CheckInAnswersPanel({ hiveId }: { hiveId: string }) {
         else {
           const rows = data ?? [];
           if (!rows.length) { setResponses([]); setLoading(false); return; }
-          void supabase.from('profiles').select('id, full_name').in('id', [...new Set(rows.map(r => r.user_id))]).then(({ data: people, error: nameError }) => {
+          void supabase.from('profiles').select('id, name').in('id', [...new Set(rows.map(r => r.user_id))]).then(({ data: people, error: nameError }) => {
             if (!current) return;
             setLoading(false);
             if (nameError) { setError('Could not load respondent names.'); return; }
-            setResponses(rows.map(r => ({ ...r, respondent: people?.find(p => p.id === r.user_id)?.full_name ?? r.user_id })));
+            setResponses(rows.map(r => ({ ...r, respondent: people?.find(p => p.id === r.user_id)?.name ?? r.user_id })));
           });
         }
       });
