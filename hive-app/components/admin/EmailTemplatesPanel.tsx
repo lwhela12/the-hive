@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { HIVE_GOLD } from '../../lib/hiveBrand';
 
 /**
- * EVERY TEMPLATED EMAIL, RENDERED, IN ONE PLACE. NOTHING SENDS FROM HERE.
+ * EVERY TEMPLATED EMAIL, RENDERED, IN ONE PLACE. OWNER-ONLY TEST COPIES.
  *
  * Nat, 2026-09-04: *"you'll make all the templates today, with the new logos &
  * i'll approve them all just once. Then we dont need to play this game each
@@ -142,9 +142,12 @@ export function EmailTemplatesPanel({
               }}
             >
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#fffdf5' }}>
-                {posting === 'sending' ? 'Sending…' : 'Send them to my inbox'}
+                {posting === 'sending' ? 'Sending test copies…' : state === 'ready' ? `Email me all ${templates.length} previews` : 'Email me all previews'}
               </Text>
             </Pressable>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: 'rgba(255,248,233,0.78)', paddingTop: 6 }}>
+              Test copies only—including unapproved templates. Approval controls member emails.
+            </Text>
             {posting === 'sent' ? (
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: 'rgba(255,248,233,0.66)', paddingTop: 6 }}>
                 On their way to you, and nobody else. Every subject starts with [Test].
@@ -190,6 +193,8 @@ export function EmailTemplatesPanel({
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                         <Switch value={template.approved === true} disabled={saving !== null}
                           trackColor={{ false: '#665c49', true: HIVE_GOLD }}
+                          // RN Web 0.21 uses separate active colours; thumbColor only affects OFF.
+                          {...(Platform.OS === 'web' ? { activeThumbColor: '#F6F4E5', activeTrackColor: HIVE_GOLD } : {})}
                           thumbColor="#F6F4E5" ios_backgroundColor="#665c49"
                           accessibilityLabel={`${template.name}: ${template.approved ? 'Approved' : 'Needs review'}`}
                           onValueChange={value => { void setApproval(template, value); }} />
