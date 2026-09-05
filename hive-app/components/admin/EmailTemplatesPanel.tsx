@@ -60,7 +60,7 @@ export function EmailTemplatesPanel({
   const [templates, setTemplates] = useState<Template[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [open, setOpen] = useState<string | null>(null);
-  const [posting, setPosting] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
+  const [posting, setPosting] = useState<'idle' | 'sending' | 'sent' | 'empty' | 'failed'>('idle');
 
   const loadVersion = useRef(0);
   const load = useCallback(async () => {
@@ -98,8 +98,9 @@ export function EmailTemplatesPanel({
       body: { send: true },
     });
     const sent = (data as { sent?: number; of?: number } | null);
-    setPosting(!error && sent?.sent === sent?.of && (sent?.of ?? 0) > 0 ? 'sent' : 'failed');
-  }, [scopeId]);
+    setPosting(!error && sent?.of === 0 && sent?.sent === 0 ? 'empty' : !error && sent?.sent === sent?.of && (sent?.of ?? 0) > 0 ? 'sent' : 'failed');
+    if (!error) void load();
+  }, [scopeId, load]);
 
   const setApproval = async (template: Template, approved: boolean) => {
     setSaving(template.key); setApprovalError(null);
@@ -131,24 +132,24 @@ export function EmailTemplatesPanel({
           <View style={{ paddingHorizontal: 12, paddingTop: 12 }}>
             <Pressable
               onPress={() => { void mailThemToMe(); }}
-              disabled={posting === 'sending' || state !== 'ready'}
+              disabled={posting === 'sending' || state !== 'ready' || templates.every(template => template.approved)}
               style={{
                 alignSelf: 'flex-start',
                 paddingHorizontal: 14,
                 paddingVertical: 7,
                 borderRadius: 999,
                 backgroundColor: 'rgba(255,248,233,0.14)',
-                opacity: posting === 'sending' || state !== 'ready' ? 0.5 : 1,
+                opacity: posting === 'sending' || state !== 'ready' || templates.every(template => template.approved) ? 0.5 : 1,
               }}
             >
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#fffdf5' }}>
-                {posting === 'sending' ? 'Sending test copies…' : state === 'ready' ? `Email me all ${templates.length} previews` : 'Email me all previews'}
+                {posting === 'sending' ? 'Sending test copies…' : state === 'ready' ? `Email me unapproved previews (${templates.filter(template => !template.approved).length})` : 'Email me unapproved previews'}
               </Text>
             </Pressable>
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: 'rgba(255,248,233,0.78)', paddingTop: 6 }}>
-              Test copies only—including unapproved templates. Approval controls member emails.
+              Test copies only, to you. Already approved templates are skipped; approval also controls member emails.
             </Text>
-            {posting === 'sent' ? (
+            {posting === 'empty' ? <Text style={{ color: '#fffdf5', fontSize: 12, paddingTop: 6 }}>All templates are already approved. No test copies sent.</Text> : posting === 'sent' ? (
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: 'rgba(255,248,233,0.66)', paddingTop: 6 }}>
                 On their way to you, and nobody else. Every subject starts with [Test].
               </Text>

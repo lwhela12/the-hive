@@ -19,8 +19,8 @@ const imported = id => {
 };
 new Function('require', 'exports', ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText)(imported, exportsObject);
 const html = renderToStaticMarkup(React.createElement(exportsObject.EmailTemplatesPanel, { Panel: ({ children }) => React.createElement(RN.View, null, children) }));
-assert.match(html, /Email me all 5 previews/);
-assert.match(html, /Test copies only—including unapproved templates. Approval controls member emails./);
+assert.match(html, /Email me unapproved previews \(2\)/);
+assert.match(html, /Already approved templates are skipped/);
 assert.equal((html.match(/role="switch"/g) || []).length, 5);
 assert.equal((html.match(/checked=""/g) || []).length, 3);
 assert.equal((html.match(/background-color:rgba\(246,244,229,1.00\)/g) || []).length, 5, 'every actual RN Web thumb must be cream, including ON');
@@ -29,4 +29,4 @@ if (process.env.HIVE_PREVIEW_FIXTURE) {
   const css = RN.StyleSheet.getSheet().textContent;
   fs.writeFileSync(process.env.HIVE_PREVIEW_FIXTURE, `<!doctype html><html><head><style>${css}</style></head><body style="background:#0b0b12;padding:24px;max-width:600px">${html}</body></html>`);
 }
-console.log('PASS: actual panel + RN Web rendered; dynamic all-five preview copy, 3 on/2 off, all 5 cream thumbs. No network.');
+console.log('PASS: actual panel + RN Web rendered; dynamic two-pending preview copy, 3 on/2 off, all 5 cream thumbs. No network.');

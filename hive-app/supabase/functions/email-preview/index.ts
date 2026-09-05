@@ -229,6 +229,9 @@ serve(async (req) => {
     } catch { /* an empty POST is not a request to send */ }
     if (!wantsSend) return errorResponse('Send { "send": true } to mail yourself the set.', 400);
 
+    // Only current-revision approvals count. Stale/missing approvals need review.
+    const pending = built.filter(template => !template.approved);
+    if (pending.length === 0) return jsonResponse({ sent: 0, of: 0, results: [], note: 'All templates are already approved.' });
     const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
     const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'HIVE <clive@the-hive.app>';
     if (!RESEND_API_KEY) return errorResponse('Email is not configured.', 500);
@@ -237,7 +240,7 @@ serve(async (req) => {
     if (!to) return errorResponse('Your profile has no email address on it.', 400);
 
     const results: { key: string; sent: boolean; reason?: string }[] = [];
-    for (const template of built) {
+    for (const template of pending) {
       const html = specimenBanner(template.name) + template.html;
       try {
         const res = await fetch('https://api.resend.com/emails', {
