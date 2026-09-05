@@ -194,7 +194,6 @@ serve(async (req) => {
      */
     const emailResult = await sendReachEmail(supabaseAdmin, post.author_id, 'boardReply', {
       ...genericLetter('boardReply', {
-        where: 'On the boards',
         buttonLabel: 'Read the reply',
         href: deepLink(`/board?postId=${encodeURIComponent(post_id)}`, community_id),
         hiveId: community_id,

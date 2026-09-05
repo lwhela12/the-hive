@@ -280,7 +280,6 @@ serve(async (req) => {
       const freshRecipients = recipientIds.filter((userId) => !alreadyTold.has(userId));
       const emailsSent = await sendReachEmails(supabaseAdmin, freshRecipients, 'mention', {
         ...genericLetter('mention', {
-          where: 'In your messages',
           buttonLabel: 'Go and see',
           href: deepLink(`/messages?roomId=${encodeURIComponent(room_id)}`, targetCommunityId),
           hiveId: targetCommunityId,
@@ -422,7 +421,6 @@ serve(async (req) => {
     {
       const emailResult = await sendReachEmail(supabaseAdmin, recipient_id, 'mention', {
         ...genericLetter('mention', {
-          where: 'In your messages',
           buttonLabel: 'Go and see',
           href: deepLink(`/messages?roomId=${encodeURIComponent(room_id)}`, community_id),
           hiveId: community_id,

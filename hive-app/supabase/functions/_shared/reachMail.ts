@@ -139,16 +139,15 @@ const GENERIC_LINE: Record<Reach, { line: string; said: string }> = {
 /**
  * The whole letter for one kind, with nothing in it that could name anybody.
  *
- * `where` is the only thing a caller still chooses, and it may only be an AREA
- * of the app — "On the boards", "In your messages" — never a board's or a
- * room's name. `hiveId` is kept because `sendReachEmail` asks it whether that
- * HIVE is mid-meeting and holds the letter if it is; it is never rendered.
+ * A caller chooses the button and where it lands, and nothing else. `hiveId` is
+ * kept because `sendReachEmail` asks it whether that HIVE is mid-meeting and
+ * holds the letter if it is; it is never rendered.
  * The letter wears the HIVE-Wide seal, which is the only one that is not
  * somebody's costume.
  */
 export function genericLetter(
   kind: Reach,
-  opts: { where: string; buttonLabel: string; href: string; hiveId: string | null },
+  opts: { buttonLabel: string; href: string; hiveId: string | null },
 ): Omit<Parameters<typeof reachEmailHtml>[0], 'toName'> & { subject: string } {
   const { line, said } = GENERIC_LINE[kind];
   return {
@@ -158,7 +157,6 @@ export function genericLetter(
     hiveAccent: null,
     hiveId: opts.hiveId,
     heading: line,
-    where: opts.where,
     said,
     buttonLabel: opts.buttonLabel,
     href: opts.href,
@@ -328,11 +326,22 @@ export function reachEmailHtml(opts: {
    * `tsconfig.json` excludes them from `tsc`.
    */
   hiveId: string | null;
-  /** "Brietta mentioned you on Things We Learned" */
+  /**
+   * "Somebody tagged you". The whole letter, really — the kicker above it says
+   * HIVE and the line below says what to do.
+   */
   heading: string;
-  /** The line under it: which board, which room, whose wish. */
-  where: string;
-  /** What they actually wrote. */
+  /**
+   * The one line under the heading.
+   *
+   * There used to be a `where` between these two — "In your messages", "Your
+   * meeting is tomorrow" — and once the letters went generic on 2026-09-04 it
+   * had nothing left to say. Nat read the result: a seal, then HIVE, then
+   * "You have a meeting tomorrow", then "Your meeting is tomorrow". The same
+   * sentence twice, and a third line under a kicker and a heading, which is
+   * two rules broken by one leftover slot. So the slot is gone rather than
+   * filled more carefully.
+   */
   said: string;
   buttonLabel: string;
   href: string;
@@ -343,8 +352,7 @@ export function reachEmailHtml(opts: {
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
       <div style="text-align: center; padding: 8px 0 4px;">${hiveSealImg(mark)}</div>
       <p style="text-align: center; color: ${mark.accent}; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 0 0 2px;">${escapeHtml(opts.hiveName)}</p>
-      <h1 style="color: ${mark.accent}; font-size: 21px; text-align: center; margin: 8px 0 4px;">${escapeHtml(opts.heading)}</h1>
-      <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">${escapeHtml(opts.where)}</p>
+      <h1 style="color: ${mark.accent}; font-size: 21px; text-align: center; margin: 8px 0 18px;">${escapeHtml(opts.heading)}</h1>
       <p style="font-size: 15px;">Hi ${name},</p>
       <div style="border-left: 3px solid ${mark.accent}; padding: 4px 0 4px 14px; margin: 14px 0; color: #4a4a4a; font-size: 15px; font-style: italic;">
         ${escapeHtml(opts.said)}

@@ -134,6 +134,38 @@ for (const { file, source } of ALL_SENDERS) {
   });
 }
 
+/**
+ * --- Half two and a bit: a letter built by hand still says a name.
+ *
+ * Every letter opens "Hi <first name>,". `sendReachEmail` fills that in from
+ * the recipient's own row, so the five senders cannot get it wrong. Anything
+ * that calls `reachEmailHtml` DIRECTLY has to pass `toName` itself — and on
+ * 2026-09-04 `email-preview` did not, so Nat approved five templates that
+ * said "Hi Nat," and read five specimens that said "Hi there,". The one
+ * promise that page makes is that the specimen IS the letter.
+ *
+ * TypeScript would have caught it in a second. It cannot: `tsconfig.json`
+ * excludes `supabase/functions`, because these run on Deno and import from
+ * URLs. Until that is fixed properly this guard covers the one call that
+ * matters. See the HIVE card, "Typecheck the edge functions".
+ */
+const HAND_BUILT = [
+  'supabase/functions/email-preview/index.ts',
+].map((file) => ({ file, source: read(file) }));
+
+for (const { file, source } of HAND_BUILT) {
+  const lines = source.split('\n');
+  lines.forEach((line, index) => {
+    if (!/reachEmailHtml\(/.test(line)) return;
+    if (/^\s*(\*|\/\/)/.test(line)) return; // a doc comment naming it is not a call
+    if (!/\btoName\b/.test(source)) {
+      failures.push(
+        `${file}:${index + 1} builds a letter without a toName, so it would open "Hi there," where a real one says a name.`,
+      );
+    }
+  });
+}
+
 // --- Half three: a member can turn it off.
 for (const [kind, column] of kinds) {
   if (!new RegExp(`column: '${column}'`).test(settings)) {

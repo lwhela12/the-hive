@@ -197,7 +197,6 @@ serve(async (req) => {
     if (mayTellAgain && !seatRow?.muted) {
       const emailResult = await sendReachEmail(supabaseAdmin, recipient_id, 'message', {
         ...genericLetter('message', {
-          where: 'In your messages',
           buttonLabel: 'Read it and reply',
           href: deepLink(`/messages?roomId=${encodeURIComponent(room_id)}`, community_id),
           hiveId: community_id,

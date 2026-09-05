@@ -294,7 +294,6 @@ serve(async (req) => {
         'mention',
         {
           ...genericLetter('mention', {
-            where: 'On the boards',
             buttonLabel: 'Go and see',
             href: deepLink(`/board?postId=${encodeURIComponent(post_id)}`, targetCommunityId),
             hiveId: targetCommunityId,
@@ -454,7 +453,6 @@ serve(async (req) => {
     if (!results.duplicate_skipped) {
       const emailResult = await sendReachEmail(supabaseAdmin, recipient_id, 'mention', {
         ...genericLetter('mention', {
-          where: 'On the boards',
           buttonLabel: 'Go and see',
           href: deepLink(`/board?postId=${encodeURIComponent(post_id)}`, community_id),
           hiveId: community_id,

@@ -85,6 +85,22 @@ serve(async (req) => {
   if (!(await isOwner(admin, auth.userId))) return errorResponse(refusal, 403);
 
   /**
+   * THE READER'S OWN NAME, BECAUSE A REAL LETTER CARRIES ONE.
+   *
+   * Every letter opens "Hi <first name>," — `sendReachEmail` fills it in after
+   * it has read the recipient's switch. This page was rendering the templates
+   * with no name at all, so the specimen said "Hi there," and the letter that
+   * lands says "Hi Nat,". Small, and it broke the only promise this page makes:
+   * what is approved here is character-for-character what arrives.
+   *
+   * Nat found it on 2026-09-04, in her inbox, after approving them.
+   */
+  const { data: reader } = await admin
+    .from('profiles').select('name, email').eq('id', auth.userId).maybeSingle();
+  const readerRow = reader as { name?: string | null; email?: string | null } | null;
+  const toName = readerRow?.name ?? '';
+
+  /**
    * NO HIVE IS PICKED, BECAUSE NO TEMPLATE NAMES ONE.
    *
    * This block used to read a `?hive=` slug and dress every sample in that
@@ -113,66 +129,63 @@ serve(async (req) => {
    * previews before every send, which is the half of The Build Standard the
    * 2026-09-04 amendment did not touch.
    */
+  const withName = <T,>(letter: T) => ({ ...letter, toName });
+
   const samples: Sample[] = [
     {
       key: 'message',
       name: 'Somebody sent you a message',
       when: 'When a message lands for you. One per conversation, then quiet until you have opened it.',
       kind: 'message',
-      letter: genericLetter('message', {
-        where: 'In your messages',
+      letter: withName(genericLetter('message', {
         buttonLabel: 'Read it and reply',
         href: 'https://app.the-hive.app/messages',
         hiveId: null,
-      }),
+      })),
     },
     {
       key: 'mention',
       name: 'Somebody tagged you',
       when: 'Somebody writes your name — or tags a whole HIVE, or everybody — on a board, in a room, or on a wish.',
       kind: 'mention',
-      letter: genericLetter('mention', {
-        where: 'On the boards',
+      letter: withName(genericLetter('mention', {
         buttonLabel: 'Go and see',
         href: 'https://app.the-hive.app/board',
         hiveId: null,
-      }),
+      })),
     },
     {
       key: 'boardReply',
       name: 'Somebody replied to your post',
       when: 'A reply on something you put on a board. A post nobody is tagged in sends nothing.',
       kind: 'boardReply',
-      letter: genericLetter('boardReply', {
-        where: 'On the boards',
+      letter: withName(genericLetter('boardReply', {
         buttonLabel: 'Read the reply',
         href: 'https://app.the-hive.app/board',
         hiveId: null,
-      }),
+      })),
     },
     {
       key: 'checkIn',
-      name: 'Before we meet is open',
+      name: 'Before we meet',
       when: 'The day before a HIVE meets, when Nat presses send. It covers every HIVE the reader is in.',
       kind: 'checkIn',
-      letter: genericLetter('checkIn', {
-        where: 'Your meeting is tomorrow',
+      letter: withName(genericLetter('checkIn', {
         buttonLabel: 'Open the check-in',
         href: 'https://app.the-hive.app/beforewemeet',
         hiveId: null,
-      }),
+      })),
     },
     {
       key: 'monthCheckIn',
-      name: 'End of the month is open',
+      name: 'End of the month',
       when: 'Three days before the month ends. One for everybody, whichever HIVEs they are in.',
       kind: 'monthCheckIn',
-      letter: genericLetter('monthCheckIn', {
-        where: 'Every HIVE',
+      letter: withName(genericLetter('monthCheckIn', {
         buttonLabel: 'Open the check-in',
         href: 'https://app.the-hive.app/endofmonth',
         hiveId: null,
-      }),
+      })),
     },
   ];
 
@@ -203,9 +216,7 @@ serve(async (req) => {
     const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'HIVE <clive@the-hive.app>';
     if (!RESEND_API_KEY) return errorResponse('Email is not configured.', 500);
 
-    const { data: me } = await admin
-      .from('profiles').select('email').eq('id', auth.userId).maybeSingle();
-    const to = (me as { email?: string | null } | null)?.email;
+    const to = readerRow?.email;
     if (!to) return errorResponse('Your profile has no email address on it.', 400);
 
     const results: { key: string; sent: boolean; reason?: string }[] = [];

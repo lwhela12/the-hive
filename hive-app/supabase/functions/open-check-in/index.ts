@@ -330,7 +330,6 @@ serve(async (req) => {
       // nothing else, so an inbox is told nothing a login is meant to keep.
       // The words live in `genericLetter`, one place for all of them.
       ...genericLetter(shape.kind, {
-        where: shape.kind === 'checkIn' ? 'Your meeting is tomorrow' : 'Every HIVE',
         buttonLabel: 'Open the check-in',
         href,
         hiveId: survey.community_id,
