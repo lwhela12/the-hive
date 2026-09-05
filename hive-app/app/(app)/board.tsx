@@ -282,10 +282,27 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const isHiveOwner = profile?.is_owner === true;
   const canCreateCategories = !!profile && !!communityId;
+  // A built-in board (Announcements, HIVE Approved, a General Discussion) can be
+  // renamed, re-iconed and MOVED between this HIVE and HIVE-Wide by an admin.
+  // It just cannot be deleted — that is the whole of what `is_system` protects,
+  // and archiving one was always allowed, so refusing an edit was never
+  // consistent with it.
+  //
+  // Nat, 2026-09-04: she opened HIVE Approved, picked HIVE-Wide, pressed Save
+  // and got "it is not yours to change" — on a board she owns, in a HIVE she
+  // admins. `is_system` was refusing here, so the "This one is built in"
+  // sentence further down could never fire and the alert that did was untrue.
   const canManageCategory = useCallback((category: BoardCategory | null) => {
-    if (!category || category.is_system) return false;
+    if (!category) return false;
     return isAdmin || category.created_by === profile?.id;
   }, [isAdmin, profile?.id]);
+  // Deleting is the one thing a built-in board is protected from. Every HIVE is
+  // promised these, and the database refuses it too (`.eq('is_system', false)`
+  // on the delete, plus the RLS policy).
+  const canDeleteCategory = useCallback((category: BoardCategory | null) => {
+    if (!category || category.is_system) return false;
+    return canManageCategory(category);
+  }, [canManageCategory]);
   const canArchiveCategory = useCallback((category: BoardCategory | null) => {
     if (!category) return false;
     return isAdmin || (!category.is_system && category.created_by === profile?.id);
@@ -1155,11 +1172,6 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       return false;
     }
 
-    if (editingTopic.is_system) {
-      showAlert('This one is built in', 'Every HIVE gets these boards, so they cannot be edited here.');
-      return false;
-    }
-
     try {
       const { error } = await (supabase as any)
         .from('board_categories')
@@ -1209,7 +1221,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   }, []);
 
   const handleDeleteTopic = useCallback((category: BoardCategory, onDone?: () => void) => {
-    if (!canManageCategory(category)) return;
+    if (!canDeleteCategory(category)) return;
 
     const count = postCounts?.[category.id]?.count ?? 0;
     const message = count > 0
@@ -1260,7 +1272,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     boardCategoryStorageKey,
     boardComposerStorageKey,
     boardPostStorageKey,
-    canManageCategory,
+    canDeleteCategory,
     invalidateCategories,
     postCounts,
     selectedCategoryId,
@@ -1862,7 +1874,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           </Text>
         </Pressable>
       )}
-      {canManageCategory(editingTopic) && (
+      {canDeleteCategory(editingTopic) && (
         <Pressable
           onPress={() => handleDeleteTopic(editingTopic, closeTopicComposer)}
           className="flex-row items-center border rounded-full px-3 py-2 active:opacity-75"
