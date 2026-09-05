@@ -31,8 +31,6 @@ type Template = {
   key: string;
   name: string;
   when: string;
-  off_switch: string;
-  column: string;
   subject: string;
   html: string;
 };
@@ -106,9 +104,7 @@ export function EmailTemplatesPanel({
       >
         <ScrollView style={scrollStyle} contentContainerStyle={{ paddingBottom: 6 }}>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: 'rgba(255,248,233,0.78)', paddingHorizontal: 12, paddingTop: 10 }}>
-            These are the same every time, for everybody.
-            {'\n'}None of them names a HIVE, a board or a person — the button does that, behind the login.
-            {'\n'}Read them once and they are approved.
+            Five letters, the same for everybody, every time. None of them names a HIVE, a board or a person.
             {'\n'}The Buzz is written fresh each month, so it still previews before it sends.
           </Text>
 
@@ -169,9 +165,6 @@ export function EmailTemplatesPanel({
                       </Text>
                       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: 'rgba(255,248,233,0.66)', paddingTop: 3 }}>
                         {template.when}
-                      </Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, lineHeight: 17, color: 'rgba(255,248,233,0.48)', paddingTop: 3 }}>
-                        Turn it off in Settings: “{template.off_switch}”
                       </Text>
                     </Pressable>
 

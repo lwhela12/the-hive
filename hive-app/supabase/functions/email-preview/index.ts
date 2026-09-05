@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { reachEmailHtml, genericLetter, plainTextFrom, REACH_COLUMNS, type Reach } from '../_shared/reachMail.ts';
+import { reachEmailHtml, genericLetter, plainTextFrom, type Reach } from '../_shared/reachMail.ts';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
 
 /**
@@ -65,8 +65,6 @@ type Sample = {
   name: string;
   /** When it goes. */
   when: string;
-  /** Which switch turns it off, in her words. */
-  offSwitch: string;
   kind: Reach;
   /** Subject and body together, from the one builder the real senders use. */
   letter: Parameters<typeof reachEmailHtml>[0] & { subject: string };
@@ -120,7 +118,6 @@ serve(async (req) => {
       key: 'message',
       name: 'Somebody sent you a message',
       when: 'When a message lands for you. One per conversation, then quiet until you have opened it.',
-      offSwitch: 'When a message lands for me',
       kind: 'message',
       letter: genericLetter('message', {
         where: 'In your messages',
@@ -133,7 +130,6 @@ serve(async (req) => {
       key: 'mention',
       name: 'Somebody tagged you',
       when: 'Somebody writes your name — or tags a whole HIVE, or everybody — on a board, in a room, or on a wish.',
-      offSwitch: 'When somebody tags me, or a HIVE I\u2019m in',
       kind: 'mention',
       letter: genericLetter('mention', {
         where: 'On the boards',
@@ -146,7 +142,6 @@ serve(async (req) => {
       key: 'boardReply',
       name: 'Somebody replied to your post',
       when: 'A reply on something you put on a board. A post nobody is tagged in sends nothing.',
-      offSwitch: 'When somebody replies to my post',
       kind: 'boardReply',
       letter: genericLetter('boardReply', {
         where: 'On the boards',
@@ -159,7 +154,6 @@ serve(async (req) => {
       key: 'checkIn',
       name: 'Before we meet is open',
       when: 'The day before a HIVE meets, when Nat presses send. It covers every HIVE the reader is in.',
-      offSwitch: 'Before we meet',
       kind: 'checkIn',
       letter: genericLetter('checkIn', {
         where: 'Your meeting is tomorrow',
@@ -172,7 +166,6 @@ serve(async (req) => {
       key: 'monthCheckIn',
       name: 'End of the month is open',
       when: 'Three days before the month ends. One for everybody, whichever HIVEs they are in.',
-      offSwitch: 'End of the month',
       kind: 'monthCheckIn',
       letter: genericLetter('monthCheckIn', {
         where: 'Every HIVE',
@@ -187,8 +180,6 @@ serve(async (req) => {
     key: sample.key,
     name: sample.name,
     when: sample.when,
-    off_switch: sample.offSwitch,
-    column: REACH_COLUMNS[sample.kind],
     subject: sample.letter.subject,
     html: reachEmailHtml(sample.letter),
   }));
