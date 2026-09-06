@@ -7,7 +7,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { supabase } from '../../lib/supabase';
-import { hiveAccent, hiveDisplayName, hiveOnDark, luminance } from '../../lib/hiveBrand';
+import { hiveAccent, hiveDisplayName, hiveOnDark, hiveSeal, luminance } from '../../lib/hiveBrand';
 import { HiveMark } from '../ui/HiveMark';
 import { WorldMark } from '../ui/WorldMark';
 import { ADMIN_DESTINATION, destinationsForPlace, activeKeyForPath } from '../../lib/navigation';
@@ -667,41 +667,20 @@ export const SideRail = memo(function SideRail({
           }}
         >
           {big ? (
-            // Just the bee (Nat 2026-08-03). The wordmark and the line about being
-            // a bee were saying the name and the motto to somebody already inside
-            // the app, on every screen, forever. The mark alone says it once.
+            // The place you are standing in wears its own simplified seal here:
+            // OG, Tech, Production, or HIVE-Wide. These are the small-format
+            // marks without the motto, built for exactly this size; the formal
+            // seals belong where they can be read at 120px or larger.
             //
-            // Two false starts worth recording. The first used bee_favicon.png,
-            // which is the SEAL — a gold sunburst ring with the bee inside it —
-            // and at this size the whole thing collapsed into a dark smudge
-            // ("hahaha what happened here"). The second would have been the plain
-            // bee on its own, which Nat asked for and then talked herself out of
-            // in the same breath: it is black, and so is this rail.
-            //
-            // So it sits on a cream coin. The bee is the brand's black and gold,
-            // the coin is the brand's cream, and a light disc on a dark rail is
-            // legible at any size — which the bee alone would not have been.
-            // CENTRED now (Nat 2026-08-04): "maybe we center the bee? so it's not
-            // confusing with the profile bubble." Both are light discs of nearly
-            // the same size, and stacked hard against the left edge they read as
-            // a pair — as if the bee were an account too. Moving the mark to the
-            // middle of the rail breaks the column, and the two stop rhyming.
+            // Centred (Nat 2026-08-04), so it does not rhyme with the profile
+            // bubble beneath it as if both were account avatars.
             <View style={{ flex: 1, paddingRight: 8, alignItems: 'center', justifyContent: 'center' }}>
-              <View
-                style={{
-                  width: 34, height: 34, borderRadius: 17,
-                  backgroundColor: '#FFF8E9',
-                  alignItems: 'center', justifyContent: 'center',
-                  overflow: 'hidden',
-                }}
-              >
-                <Image
-                  source={require('../../assets/BEE ONLY IN GOLD BG.png')}
-                  style={{ width: 30, height: 30 }}
-                  contentFit="contain"
-                  accessibilityLabel="HIVE"
-                />
-              </View>
+              <Image
+                source={hiveSeal(onHiveWide ? null : community?.slug)}
+                style={{ width: 40, height: 40 }}
+                contentFit="contain"
+                accessibilityLabel={`${onHiveWide ? 'HIVE-Wide' : hiveDisplayName(community?.name)} logo`}
+              />
             </View>
           ) : null}
           {/* ONE control for three sizes, stepping big → medium → small → big.

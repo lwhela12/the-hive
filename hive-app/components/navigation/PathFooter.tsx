@@ -67,23 +67,16 @@ export function PathFooter() {
   const page = [...NAV_DESTINATIONS, ADMIN_DESTINATION].find((d) => d.key === activeKey);
 
   /**
-   * A step only gets a handler when it leads somewhere you are not.
-   *
-   * The HIVE's own name and the word "Home" are the same door, so on Home the
-   * first step was a button that put you back on the page you were already
-   * reading — the nothing-happens bug the rail had, moved down to the footer.
-   * Now it reads as a plain label there, which is the truth: you are in it.
-   *
-   * The same applies to a screen you are standing deep inside. Meetings stays
-   * `/meetings` while you read June's summary, so a "Meetings" button here
-   * could only push the route it is already on and change nothing on screen.
-   * The way back up out of that depth belongs to the screen holding it — it is
-   * the one that can put its own list back — and it hands it over as a crumb of
-   * its own through `useDeepTrail`.
+   * Every named step is a door, including one that matches the current route.
+   * Nat's rule for the footer is literal: each step in the journey can be
+   * clicked to go back to it. A same-route press uses `replace`, so it still
+   * answers with a real refresh instead of becoming an inert label; screens
+   * with their own nested state can override that through `useDeepTrail`.
    */
-  const stepTo = (route: string) => (
-    pathname === route ? undefined : () => router.push(route as never)
-  );
+  const stepTo = (route: string) => () => {
+    if (pathname === route) router.replace(route as never);
+    else router.push(route as never);
+  };
 
   const placeRoute = wholeHive ? '/hive-wide' : '/hive';
   const place: Crumb = wholeHive

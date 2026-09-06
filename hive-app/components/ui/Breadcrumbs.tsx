@@ -24,10 +24,9 @@ import { View, Text, Pressable, Platform, ScrollView } from 'react-native';
  * liftable into Jammin' Sprouts, which Nat wants next, without dragging any of
  * HIVE's vocabulary along with it.
  *
- * Every step except the last is a way back. The last one is where you are, so
- * it is the only one wearing full-strength ink and the only one you cannot
- * press — a "button" that returns you to the page you are on is the same
- * nothing-happens bug we fixed in the rail.
+ * Every step with a handler is a way back. The last one is where you are and
+ * still wears full-strength ink; when its screen gives it a handler, it remains
+ * a real button and answers a same-page press instead of becoming decorative.
  *
  * ## They have to be hittable, and they have to look hittable
  *
@@ -130,7 +129,7 @@ export function Breadcrumbs({
     >
       {trail.map((item, index) => {
         const last = index === trail.length - 1;
-        const goes = !last && !!item.onPress;
+        const goes = !!item.onPress;
 
         const label = (lit: boolean) => (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
