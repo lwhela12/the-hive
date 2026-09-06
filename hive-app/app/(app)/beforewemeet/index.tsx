@@ -10,8 +10,9 @@ import { AppHeader } from '../../../components/navigation/AppHeader';
 import { LegacyCheckInAnswers } from '../../../components/surveys/LegacyCheckInAnswers';
 import { SurveyModal } from '../../../components/surveys/SurveyModal';
 import { SharedPlate } from '../../../components/surveys/SharedPlate';
+import { CheckInNextMeetings } from '../../../components/surveys/CheckInNextMeetings';
 import { CheckInHiveCard } from '../../../components/surveys/CheckInHiveCard';
-import { checkInQuestions, groupCheckInHives, meetingLabel, pacificToday, type MeetingPreview } from '../../../lib/checkInPresentation';
+import { checkInQuestions, groupCheckInHives, upcomingCheckIns, meetingLabel, pacificToday, type MeetingPreview } from '../../../lib/checkInPresentation';
 import {
   buildMergedPreMeeting,
   mergedPreMeetingQuestions,
@@ -60,7 +61,7 @@ import type { Survey, SurveyQuestion } from '../../../types';
  */
 export default function BeforeWeMeetScreen() {
   const router = useRouter();
-  const { from, hive, meeting } = useLocalSearchParams<{ from?: string; hive?: string; meeting?: string }>();
+  const { from, hive, meeting, browse } = useLocalSearchParams<{ from?: string; hive?: string; meeting?: string; browse?: string }>();
   const meetingId = typeof meeting === 'string' ? meeting : null;
   const [linkedMeeting, setLinkedMeeting] = useState<MeetingPreview | null>(null);
   const [linkFailed, setLinkFailed] = useState(false);
@@ -320,7 +321,7 @@ export default function BeforeWeMeetScreen() {
   // A meeting link or HIVE pill opens its source section after login.
   useEffect(() => {
     if (!isFocused) { originHandled.current = null; return; }
-    if (!ready) return;
+    if (!ready || browse === 'all') return;
     const requested = requestedHiveSlug
       ? memberships.find(item => item.community.slug === requestedHiveSlug)
       : null;
@@ -337,7 +338,7 @@ export default function BeforeWeMeetScreen() {
     originHandled.current = originKey;
     const section = merged?.sections.find(item => item.communityId === membership.community_id);
     if (section) setSelected(membership.community_id);
-  }, [groups.future, groups.prominent, isFocused, meetings, memberships, merged, profile?.id, ready, requestedHiveSlug, originMembership, currentMeetings]);
+  }, [groups.future, groups.prominent, isFocused, meetings, memberships, merged, profile?.id, ready, requestedHiveSlug, originMembership, currentMeetings, browse]);
 
   const done = useCallback(() => {
     router.replace(returnTo as never);
@@ -351,22 +352,21 @@ export default function BeforeWeMeetScreen() {
    * the collision that would otherwise let one section silently mirror another.
    * `splitMergedAnswers` puts the bare ids back on the way out.
    */
+  const selectedMembership = memberships.find(member => member.community_id === selected);
   const forThisReader: Survey | null = useMemo(() => {
     if (!row || !merged || !selected) return null;
     return {
       ...row,
-      // Data is filed under `selected` in onSubmit. This field is visual only:
-      // keep the HIVE where the person entered instead of changing costumes as
-      // they move through sections of the shared check-in.
-      community_id: originMembership?.community_id ?? null,
+      // Each HIVE's form carries the same identity as its own meeting.
+      community_id: selectedMembership?.community_id ?? null,
       due_date: currentMeetings.find(m => m.community_id === selected)?.event_date ?? row.due_date,
-      description: originMembership ? `Your ${hiveDisplayName(originMembership.community.name)} check-in.` : merged.description,
+      description: selectedMembership ? `Your ${hiveDisplayName(selectedMembership.community?.name)} check-in.` : merged.description,
       questions: mergedPreMeetingQuestions({ ...merged, sections: merged.sections.filter(s => s.communityId === selected) }).map(({ question, key }) => ({
         ...question,
         id: question.id,
       })),
     } as Survey;
-  }, [row, merged, selected, currentMeetings, originMembership]);
+  }, [row, merged, selected, currentMeetings, selectedMembership]);
 
   const onSubmit = useCallback(async (answers: SurveyAnswers) => {
     const event = currentMeetings.find(m => m.community_id === selected);
@@ -412,9 +412,14 @@ export default function BeforeWeMeetScreen() {
         carryForwardItems={section ? todosByHive[`note_hive_${section.slug}`] ?? [] : []}
         carryForwardSections={section ? { [`note_hive_${section.slug}`]: todosByHive[`note_hive_${section.slug}`] ?? [] } : {}}
         onSubmit={onSubmit}
+        renderSuccess={close => <CheckInNextMeetings community={selectedMembership?.community}
+          upcoming={upcomingCheckIns(memberships.filter(member => merged?.sections.some(section => section.communityId === member.community_id)), currentMeetings, saved, selected, today)}
+          onContinue={event => router.replace(`/beforewemeet?meeting=${encodeURIComponent(event.id)}` as never)}
+          onBrowse={() => { setSelected(null); router.replace('/beforewemeet?browse=all' as never); }}
+          onDone={close} />}
         closeLabel={originMembership ? "Back to Meetings" : "Back to check-ins"}
-        hiveSlug={originMembership?.community?.slug}
-        hiveAccent={hiveAccent(originMembership?.community)}
+        hiveSlug={selectedMembership?.community?.slug}
+        hiveAccent={hiveAccent(selectedMembership?.community)}
         onClose={originMembership ? done : () => setSelected(null)}
       />
     );

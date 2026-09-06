@@ -33,6 +33,27 @@ for (const submitted of [false, true]) {
   assert.equal(called,1); assert.equal(render().props.visible,false,`${door} must dismiss even when caller stays mounted`);
  }
 }
+// An optional continuation replaces the generic completion only after success.
+for (const submitted of [false, true]) {
+  let index = 0, called = 0, dismissed = 0;
+  const states = [{}, false, submitted, false, null, true];
+  const { SurveyModal } = load('components/surveys/SurveyModal.tsx', {
+    react: { Fragment: 'Fragment', useState: value => { const i=index++; return [i in states ? states[i] : value, next => states[i]=next]; }, useEffect() {}, useCallback:fn=>fn, useMemo:fn=>fn() },
+    'react/jsx-runtime': { jsx, jsxs: jsx },
+    'react-native': { Modal:'Modal', View:'View', Text:'Text', ScrollView:'ScrollView', Pressable:'Pressable', useWindowDimensions:()=>({width:390}) },
+    '../../lib/hooks/useAuth': { useAuth:()=>({profile:null}) },
+    '../../lib/hiveBrand': { HIVE_GOLD:'#bd9348', hiveSeal:()=>1, accentPalette:()=>({line:()=>'',accent:'#bd9348'}) },
+    '../../lib/checkIns': { getSeasonCheckInKind:()=>null, checkInDisplayName:x=>x, isPreMeetingCheckInSurvey:()=>true, isEndOfMonthCheckInSurvey:()=>false },
+    '../../lib/carryForward': { normalizeCarryForwardResponse:()=>[], CARRY_FORWARD_STATUS_OPTIONS:[] },
+    '../ui/CloseButton': { CloseButton:'CloseButton' },
+  });
+  let close;
+  const tree = SurveyModal({ survey:{id:'test',title:'Before we meet',questions:[],community_id:null}, onSubmit:async()=>({error:null}), onClose:()=>dismissed++,
+    renderSuccess:fn=>{called++;close=fn;return 'WEEK_INVITATION';} });
+  assert.equal(called, submitted ? 1 : 0);
+  assert.equal(JSON.stringify(tree).includes('WEEK_INVITATION'),submitted);
+  if(submitted){close();assert.equal(dismissed,1);assert.equal(states[3],true);}
+}
 for(const page of ['beforewemeet','endofmonth']) {
  const source=fs.readFileSync(root+`app/(app)/${page}/index.tsx`,'utf8');
  assert.ok(source.includes('if (!isFocused) return null;'));

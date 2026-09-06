@@ -51,3 +51,19 @@ export function meetingLabel(event?: MeetingPreview, today = pacificToday()): st
   const time = match ? `${Number(match[1]) % 12 || 12}:${match[2]} ${Number(match[1]) >= 12 ? 'PM' : 'AM'} PT` : 'Time to be confirmed';
   return `${day} · ${time}`;
 }
+
+/** Seven Pacific calendar days including today; a suggestion window, never an access gate. */
+export function upcomingCheckIns<T extends { community_id: string }>(
+  members: T[], meetings: MeetingPreview[], saved: Record<string, unknown>,
+  completedHive: string, today = pacificToday(),
+): { member: T; event: MeetingPreview }[] {
+  const end = new Date(`${today}T12:00:00Z`);
+  end.setUTCDate(end.getUTCDate() + 7);
+  const until = end.toISOString().slice(0, 10);
+  const grouped = groupCheckInHives(members, meetings, today);
+  return [...grouped.prominent, ...grouped.future]
+    .filter((item): item is { member: T; event: MeetingPreview } => !!item.event
+      && item.member.community_id !== completedHive
+      && !Object.prototype.hasOwnProperty.call(saved, item.member.community_id)
+      && item.event.event_date < until);
+}

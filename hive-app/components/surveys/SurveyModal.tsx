@@ -47,6 +47,8 @@ interface SurveyModalProps {
   closeLabel?: string;
   introduction?: React.ReactNode;
   timingLabel?: string;
+  /** Only rendered after a successful save and its follow-up writes finish. */
+  renderSuccess?: (close: () => void) => React.ReactNode;
   isEditingResponse?: boolean;
   carryForwardItems?: CarryForwardItem[];
   /**
@@ -186,6 +188,7 @@ export function SurveyModal({
   closeLabel = "Back to HIVE",
   introduction,
   timingLabel,
+  renderSuccess,
   isEditingResponse = false,
   carryForwardItems = [],
   carryForwardSections,
@@ -691,7 +694,8 @@ export function SurveyModal({
           </View>
 
           {submitted ? (
-            <View style={{ alignItems: 'center', padding: 48 }}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+            {renderSuccess ? renderSuccess(handleClose) : <View style={{ alignItems: 'center', padding: 48 }}>
               <Image source={cliveIcon} style={{ width: 72, height: 72, borderRadius: 36, marginBottom: 16 }} contentFit="cover" cachePolicy="memory-disk" />
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', textAlign: 'center', marginBottom: 10 }}>All done!</Text>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, color: '#6b7280', textAlign: 'center', lineHeight: 22, marginBottom: 32 }}>
@@ -702,7 +706,8 @@ export function SurveyModal({
               <Pressable onPress={handleClose} style={{ backgroundColor: tint.accent, borderRadius: 14, paddingHorizontal: 32, paddingVertical: 14 }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>{closeLabel}</Text>
               </Pressable>
-            </View>
+            </View>}
+            </ScrollView>
           ) : (
             <ScrollView
               showsVerticalScrollIndicator={true}

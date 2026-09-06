@@ -24,3 +24,11 @@ All 16 regression scripts, interface/type checks and the full web export passed 
 ## Existing wish selection
 
 Nat accepted the email/form direction and flagged that the new-wish audience switch appeared to describe her existing HIVE-Wide wish. Existing cards now display their saved reach; selecting one hides the duplicate answer box and keeps its audience. A separate Write a new wish action opens the composer and new-wish audience switch. Existing saves only update focus, even when an older draft carries an incorrect reach. The selected wish ID/reach is retained in per-HIVE check-in receipts, and data scope is independent from shared survey branding. Offline component/save regressions cover these paths and failed reads before any wish writes.
+
+## Finish nearby HIVEs after saving
+
+After a successful Before we meet save, the confirmation names the saved HIVE and offers the member's other unanswered meetings in the next seven Pacific calendar days (today through six days from today). Cards show each HIVE's own seal, date and time. Continuing opens its exact meeting link, so branding, answers, drafts, wishes and receipts remain scoped to that HIVE. The existing personal plate choice carries through the session. Completed sections drop out, and their exact meeting receipts suppress subsequent day-before reminders.
+
+Done for now uses the normal close path. Other upcoming meetings opens the complete check-in list without automatically reopening the source form. No seven-day access restriction was added; far-future and undated check-ins remain accessible. No sender schedule, approval, real member answers or meeting dates were changed.
+
+Validation: all 18 regression scripts, interface/type checks and full web export. The new isolated journey test executes the actual screen's save/continuation callbacks and the actual confirmation component for Tuesday/Wednesday/Thursday, verifies exact receipt routing, branding, shared plate, all-list escape, and reminder suppression; it covers month/year/DST/leap boundaries. The actual modal renders the invitation only in its submitted state and closes through its own dismissal handler. A standalone rendering script is included for layout review, but browser policy blocked opening its local HTML, so no visual-acceptance claim is made from that fixture.
