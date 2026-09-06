@@ -17,7 +17,7 @@ export function MentionBubbles({ suggestions, members, query, loading, disabled,
     <ScrollView horizontal keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
       {suggestions.map(target => {
         const selected = selectedIds.includes(target.id);
-        const slug = target.group === 'hive_wide' ? null : target.handle === 'og' ? 'default' : target.handle;
+        const slug = target.group === 'hive_wide' ? null : target.handle === 'og' ? 'default' : target.handle === 'production' ? 'show' : target.handle;
         return <Pressable key={target.id} accessibilityRole="button" accessibilityLabel={`Mention ${target.name}`}
           accessibilityState={{ selected, disabled: disabled || target.disabled }} disabled={disabled || target.disabled}
           onPress={() => onSelect(target)} style={{ alignItems: 'center', width: 78, padding: 5, gap: 4, borderRadius: 12, borderWidth: 1,
