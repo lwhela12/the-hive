@@ -20,7 +20,7 @@ const {SurveyQuestionField}=load('components/surveys/SurveyQuestionField.tsx',{
   '../../lib/hiveBrand':{HIVE_GOLD:'gold',accentPalette:()=>({line:()=>'',ink:'navy'})},
   '../ui/ReachPill':{ReachPill:'ReachPill'},
 });
-function render(){index=0;const tree=SurveyQuestionField({question:{id:'q_hd_wish',type:'long',text:'Your wish'},index:3,value:answers.q_hd_wish,answers,communityId:'tech',onChange:value=>answers.q_hd_wish=value,onSetAnswer:(key,value)=>answers[key]=value}); const nodes=[];function walk(n){if(!n||typeof n!=='object')return;if(Array.isArray(n)){n.forEach(walk);return;}nodes.push(n);walk(n.props?.children);}walk(tree);return nodes;}
+function render(extra={}){index=0;const tree=SurveyQuestionField({question:{id:'q_hd_wish',type:'long',text:'Your wish'},index:3,value:answers.q_hd_wish,answers,communityId:'tech',onChange:value=>answers.q_hd_wish=value,onSetAnswer:(key,value)=>answers[key]=value,...extra}); const nodes=[];function walk(n){if(!n||typeof n!=='object')return;if(Array.isArray(n)){n.forEach(walk);return;}nodes.push(n);walk(n.props?.children);}walk(tree);return nodes;}
 let nodes=render();
 assert.equal(nodes.find(n=>n.type==='ReachPill').props.reach,'all_hives');
 assert.ok(!nodes.some(n=>n.type==='ReachPill'&&n.props.onToggle),'existing wish is a visibility label, not a switch');
@@ -34,6 +34,43 @@ nodes=render();assert.equal(answers.q_hd_wish_id,'');
 assert.equal(answers.q_hd_wish_reach,'hive');
 assert.ok(nodes.some(n=>n.type?.name==='VoiceTextInput'));
 assert.ok(nodes.some(n=>n.type==='ReachPill'&&n.props.onToggle),'only new wish has visibility switch');
+// Status and focus share one card; status controls are siblings of the focus
+// button so changing a status cannot inadvertently select/deselect the wish.
+const review={id:'wide',type:'wish',label:'My existing wish',sourceLabel:'Tech HIVE · Wish'};
+const missing={id:'missing',type:'wish',label:'A wish no longer pickable',sourceLabel:'Tech HIVE · Wish'};
+const reviewProps={wishReviewItems:[review,missing],renderWishReview:item=>jsx('WishStatus',{id:item.id})};
+nodes=render(reviewProps);
+assert.equal(nodes.filter(n=>n.type==='WishStatus'&&n.props.id==='wide').length,1);
+assert.equal(nodes.filter(n=>n.type==='WishStatus'&&n.props.id==='missing').length,1,'unavailable wishes retain their status note');
+assert.ok(!nodes.some(n=>n.type==='Pressable'&&JSON.stringify(n.props.children).includes('WishStatus')),'status controls never nested in focus button');
+const carry=load('lib/carryForward.ts');
+for(const grouped of [false,true]) for(const hasWish of [false,true]) {
+ let state=[{q_carry_forward_items:[{...review,status:'needs_attention',note:'Please help'}]},false,false,false,null,true],cursor=0;
+ const task={id:'task',type:'action_item',label:'A different task',sourceLabel:'Tech HIVE'};
+ const {SurveyModal}=load('components/surveys/SurveyModal.tsx',{
+  react:{Fragment:'Fragment',useState:value=>{const i=cursor++;if(!(i in state))state[i]=value;return[state[i],next=>state[i]=typeof next==='function'?next(state[i]):next];},useEffect(){},useCallback:fn=>fn,useMemo:fn=>fn()},
+  'react/jsx-runtime':{jsx,jsxs:jsx},'react-native':{View:'View',Text:'Text',Pressable:'Pressable',Modal:'Modal',ScrollView:'ScrollView',useWindowDimensions:()=>({width:390})},
+  '../../lib/hooks/useAuth':{useAuth:()=>({profile:null})},
+  '../../lib/hiveBrand':{HIVE_GOLD:'gold',hiveSeal:()=>1,accentPalette:()=>({line:()=>'',ink:'navy'})},
+  '../../lib/checkIns':{getSeasonCheckInKind:()=>null,checkInDisplayName:x=>x,isPreMeetingCheckInSurvey:()=>true,isEndOfMonthCheckInSurvey:()=>false},
+  '@react-native-async-storage/async-storage':{default:{setItem:async()=>{}}},
+  '../../lib/carryForward':carry,'./SurveyQuestionField':{SurveyQuestionField:'Question'},'../ui/ComposerBar':{ComposerBar:'ComposerBar'},
+ });
+ const walk=n=>{if(!n||typeof n!=='object')return[];if(Array.isArray(n))return n.flatMap(walk);return[n,...walk(n.props?.children)];};
+ const modal=()=>{cursor=0;return SurveyModal({survey:{id:'test',title:'Before we meet',questions:[{id:'note_hive_tech',type:'note',text:'Tech HIVE'},...(hasWish?[{id:'q_hd_wish',type:'long',text:'Your wish'}]:[])],community_id:'tech'},carryForwardItems:[review,task],carryForwardSections:grouped?{note_hive_tech:[review,task]}:undefined,onClose(){},onSubmit:async()=>({error:null})});};
+ let all=walk(modal());
+ assert.ok(all.some(n=>n.type==='Text'&&n.props.children===task.label),'other tasks remain in roster');
+ assert.equal(all.filter(n=>n.type==='Text'&&n.props.children===review.label).length,hasWish?0:1,'move wishes only when the form has a wish question');
+ if(hasWish){
+  let field=all.find(n=>n.type==='Question'&&n.props.question.id==='q_hd_wish');
+  assert.equal(field.props.wishReviewItems.length,1);
+  let controls=walk(field.props.renderWishReview(review));
+  assert.equal(controls.find(n=>n.type==='ComposerBar').props.value,'Please help','prior draft note survives relocation');
+  controls.find(n=>n.type==='Pressable'&&JSON.stringify(n.props.children).includes('Keep active')).props.onPress();
+  assert.equal(state[0].q_carry_forward_items[0].status,'keep_active');
+  assert.equal(state[0].q_carry_forward_items[0].note,'Please help');
+ }
+}
 const {fileCheckInWish}=load('lib/checkInWish.ts');
 function fixture(rows,error=null){const writes=[];let cleared=0;return{writes,get cleared(){return cleared;},clear:async()=>{cleared++;return{error:null};},client:{from(){let result={data:rows,error};return{select(){return this;},eq(){return this;},or(){return this;},update(payload){writes.push({kind:'update',payload});result={error:null};return this;},insert(payload){writes.push({kind:'insert',payload});result={error:null};return this;},then(resolve,reject){return Promise.resolve(result).then(resolve,reject);}};}}};}
 (async()=>{

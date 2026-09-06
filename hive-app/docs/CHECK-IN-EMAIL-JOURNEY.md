@@ -32,3 +32,10 @@ After a successful Before we meet save, the confirmation names the saved HIVE an
 Done for now uses the normal close path. Other upcoming meetings opens the complete check-in list without automatically reopening the source form. No seven-day access restriction was added; far-future and undated check-ins remain accessible. No sender schedule, approval, real member answers or meeting dates were changed.
 
 Validation: all 18 regression scripts, interface/type checks and full web export. The new isolated journey test executes the actual screen's save/continuation callbacks and the actual confirmation component for Tuesday/Wednesday/Thursday, verifies exact receipt routing, branding, shared plate, all-list escape, and reminder suppression; it covers month/year/DST/leap boundaries. The actual modal renders the invitation only in its submitted state and closes through its own dismissal handler. A standalone rendering script is included for layout review, but browser policy blocked opening its local HTML, so no visual-acceptance claim is made from that fixture.
+
+
+## One wish section (2026-09-05)
+
+When a check-in includes the HD wish question, each wish appears there once: focus choice, existing visibility label, status controls and optional status note share one card. Wishes leave the earlier roster; other open items stay there. Forms without the HD question retain the full roster. Unavailable picker wishes still have their status notes in the wish section. Existing answer keys, focus persistence, reach and status semantics are unchanged.
+
+Validation: typecheck and web export pass; all regression scripts pass, including grouped/flat roster placement, forms without a wish question, preserved status notes and status buttons outside the focus button. No real answers submitted or email approvals changed during verification.

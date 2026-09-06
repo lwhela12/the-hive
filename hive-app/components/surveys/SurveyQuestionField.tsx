@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import type { CarryForwardItem } from '../../lib/carryForward';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ComposerBar } from '../ui/ComposerBar';
@@ -416,8 +417,12 @@ export function SurveyQuestionField({
   answers,
   onSetAnswer,
   accent = HIVE_GOLD,
+  wishReviewItems = [],
+  renderWishReview,
 }: {
   question: SurveyQuestion;
+  wishReviewItems?: CarryForwardItem[];
+  renderWishReview?: (item: CarryForwardItem) => ReactNode;
   index: number;
   value: any;
   onChange: (value: any) => void;
@@ -644,7 +649,10 @@ export function SurveyQuestionField({
             </Text>
             {pickableWishes.map(wish => {
               const chosen = selectedWish?.id === wish.id;
-              return <Pressable key={wish.id} accessibilityRole="button"
+              const review = wishReviewItems.find(item => item.id === wish.id);
+              return <View key={wish.id} style={{ backgroundColor: '#fffdf5', borderWidth: chosen ? 2 : 1,
+                borderColor: chosen ? tint.accent : tint.line(0.5), borderRadius: 10, padding: 12, gap: 10 }}>
+                <Pressable accessibilityRole="button"
                 accessibilityState={{ selected: chosen }}
                 accessibilityLabel={`${chosen ? 'Selected' : 'Choose'} wish: ${wish.description}. ${wish.reach === 'all_hives' ? 'HIVE-Wide' : 'This HIVE only'}`}
                 onPress={() => {
@@ -653,20 +661,30 @@ export function SurveyQuestionField({
                   onSetAnswer?.('q_hd_wish_id', chosen ? '' : wish.id);
                   onSetAnswer?.('q_hd_wish_reach', wish.reach);
                 }}
-                style={{ backgroundColor: '#fffdf5', borderWidth: chosen ? 2 : 1,
-                  borderColor: chosen ? tint.accent : tint.line(0.5), borderRadius: 10,
-                  paddingVertical: 10, paddingHorizontal: 12, gap: 7 }}>
+                style={{ gap: 7, paddingVertical: 4 }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink, lineHeight: 19 }}>
                   {chosen ? '✓ Selected · ' : ''}{wish.description}
                 </Text>
                 <ReachPill reach={wish.reach} communityId={wish.communityId} />
                 {wish.fromHive && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#5c5648' }}>From {wish.fromHive}</Text>}
-              </Pressable>;
+                </Pressable>
+                {review && renderWishReview && <View style={{ gap: 7 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#5c5648' }}>Wish status</Text>
+                  {renderWishReview(review)}
+                </View>}
+              </View>;
             })}
             {selectedWish && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 19 }}>
               This uses your existing wish and keeps who can see it.
             </Text>}
           </>}
+          {wishReviewItems.filter(item => !pickableWishes.some(wish => wish.id === item.id)).map(item => (
+            <View key={item.id} style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: tint.line(0.5), borderRadius: 10, padding: 12, gap: 10 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink }}>{item.detail || item.label}</Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#5c5648' }}>Wish status</Text>
+              {renderWishReview?.(item)}
+            </View>
+          ))}
           {!wishesLoaded && <Text style={{ color: '#5c5648' }}>Loading your wishes…</Text>}
           {!showNewWish && <Pressable accessibilityRole="button" onPress={startNewWish}
             style={{ alignSelf: 'flex-start', paddingVertical: 9 }}>

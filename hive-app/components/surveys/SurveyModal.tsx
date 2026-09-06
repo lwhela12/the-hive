@@ -526,6 +526,57 @@ export function SurveyModal({
     setAnswer(CARRY_FORWARD_ANSWER_KEY, next);
   };
 
+  // A wish is reviewed where the member chooses their meeting focus. Keep
+  // the original answer keys so existing drafts and saved status notes survive.
+  const hasWishQuestion = survey.questions.some(q => q.id === 'q_hd_wish');
+  const wishReviewItems = carryForwardItems.filter(item => item.type === 'wish');
+  const renderCarryForwardControls = (item: CarryForwardItem) => {
+    const response = carryForwardResponsesByKey.get(carryForwardItemKey(item));
+    const activeStatus = response?.status ?? 'keep_active';
+    return <View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 10 }}>
+        {CARRY_FORWARD_STATUS_OPTIONS.map((option) => {
+          const active = option.value === activeStatus;
+          const activeStyle = CARRY_FORWARD_STATUS_STYLE[option.value];
+          return (
+            <Pressable
+              key={option.value}
+              onPress={() => updateCarryForwardItem(item, { status: option.value })}
+              style={({ pressed }) => ({
+                backgroundColor: active ? activeStyle.backgroundColor : pressed ? '#fbf0d7' : '#fffdf5',
+                borderColor: active ? activeStyle.borderColor : tint.line(0.42),
+                borderWidth: 1,
+                borderRadius: 999,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+              })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: active ? activeStyle.color : '#8a6b30' }}>
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {activeStatus === 'needs_attention' && <Text style={{ color: '#92400e', fontSize: 12, marginBottom: 8 }}>Keep this open and flag it in your saved check-in for Admin review. Add what needs attention below. This does not notify anyone.</Text>}
+
+      {/* The shared message bar, so a note on your roster looks and
+          behaves like every other box you write in — mic inside the
+          box's own border rather than on a strip welded underneath. */}
+      <ComposerBar
+        tone="light"
+        variant="form"
+        value={response?.note ?? ''}
+        onChangeText={(next) => updateCarryForwardItem(item, {
+          note: typeof next === 'function' ? next(response?.note ?? '') : next,
+        })}
+        placeholder={`Optional note for ${activeStatus ? getCarryForwardStatusLabel(activeStatus).toLowerCase() : 'this item'}...`}
+        minHeight={44}
+      />
+    </View>;
+  };
+
   const renderCarryForwardContext = (
     items: CarryForwardItem[] = carryForwardItems,
     heading = 'Still on your roster',
@@ -551,7 +602,8 @@ export function SurveyModal({
       );
     }
 
-    if (items.length === 0) return null;
+    const rosterItems = hasWishQuestion ? items.filter(item => item.type !== 'wish') : items;
+    if (rosterItems.length === 0) return null;
 
     return (
       <View style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: tint.line(0.55), borderRadius: 18, padding: 16, marginBottom: 24 }}>
@@ -559,14 +611,11 @@ export function SurveyModal({
           {heading}
         </Text>
         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#7f715f', lineHeight: 19, marginBottom: 14 }}>
-          HIVE found these open tasks, wishes, HD boards, threads, and recent POP notes. Mark what should happen next.
+          Update the status of your other open items.
         </Text>
 
         <View style={{ gap: 12 }}>
-          {items.map((item) => {
-            const response = carryForwardResponsesByKey.get(carryForwardItemKey(item));
-            const activeStatus = response?.status ?? 'keep_active';
-
+          {rosterItems.map((item) => {
             return (
               <View
                 key={carryForwardItemKey(item)}
@@ -596,46 +645,7 @@ export function SurveyModal({
                   </View>
                 </View>
 
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 10 }}>
-                  {CARRY_FORWARD_STATUS_OPTIONS.map((option) => {
-                    const active = option.value === activeStatus;
-                    const activeStyle = CARRY_FORWARD_STATUS_STYLE[option.value];
-                    return (
-                      <Pressable
-                        key={option.value}
-                        onPress={() => updateCarryForwardItem(item, { status: option.value })}
-                        style={({ pressed }) => ({
-                          backgroundColor: active ? activeStyle.backgroundColor : pressed ? '#fbf0d7' : '#fffdf5',
-                          borderColor: active ? activeStyle.borderColor : tint.line(0.42),
-                          borderWidth: 1,
-                          borderRadius: 999,
-                          paddingHorizontal: 10,
-                          paddingVertical: 6,
-                        })}
-                      >
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: active ? activeStyle.color : '#8a6b30' }}>
-                          {option.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                {activeStatus === 'needs_attention' && <Text style={{ color: '#92400e', fontSize: 12, marginBottom: 8 }}>Keep this open and flag it in your saved check-in for Admin review. Add what needs attention below. This does not notify anyone.</Text>}
-
-                {/* The shared message bar, so a note on your roster looks and
-                    behaves like every other box you write in — mic inside the
-                    box's own border rather than on a strip welded underneath. */}
-                <ComposerBar
-                  tone="light"
-                  variant="form"
-                  value={response?.note ?? ''}
-                  onChangeText={(next) => updateCarryForwardItem(item, {
-                    note: typeof next === 'function' ? next(response?.note ?? '') : next,
-                  })}
-                  placeholder={`Optional note for ${activeStatus ? getCarryForwardStatusLabel(activeStatus).toLowerCase() : 'this item'}...`}
-                  minHeight={44}
-                />
+                {renderCarryForwardControls(item)}
               </View>
             );
           })}
@@ -653,8 +663,10 @@ export function SurveyModal({
         </View>
       )}
     <SurveyQuestionField
+      wishReviewItems={q.id === 'q_hd_wish' ? wishReviewItems : undefined}
+      renderWishReview={q.id === 'q_hd_wish' ? renderCarryForwardControls : undefined}
       hangEvents={currentActivity?.data?.hangs}
-      question={isStaple && q.id === 'q_hangs_recap' ? { ...q, type: 'hangs' } : isStaple && q.id === 'q_hive_help_recap' ? { ...q, type: 'long', text: 'Any reflection on this HIVE’s Help activity? Completion is handled in your roster — no need to report it twice.' } : q}
+      question={q.id === 'q_hd_wish' ? { ...q, text: 'Your HD wish for this meeting' } : isStaple && q.id === 'q_hangs_recap' ? { ...q, type: 'hangs' } : isStaple && q.id === 'q_hive_help_recap' ? { ...q, type: 'long', text: 'Any reflection on this HIVE’s Help activity? Completion is handled in your roster — no need to report it twice.' } : q}
       index={index}
       value={answers[q.id]}
       onChange={(value) => setAnswer(q.id, value)}
