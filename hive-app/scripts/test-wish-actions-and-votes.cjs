@@ -25,6 +25,18 @@ assert.equal(meetingVoteResults(['a'],votes,'different_question',options).voted,
   assert.equal(writes[0].share_scope,undefined,'archive never changes who could see the wish');
  }
  const carry=load('lib/carryForward.ts');
+ for(const mode of ['success','error','no-match','wrong-scope','ceiling','missing-ceiling']) {
+  const filters=[],writes=[];
+  const q={update(v){writes.push(v);return q;},eq(k,v){filters.push([k,v]);return q;},in(k,v){filters.push([k,Array.from(v)]);return q;},select(){return q;},maybeSingle:async()=>({data:['no-match','error'].includes(mode)?null:{id:'wish',share_scope:mode==='wrong-scope'?'hive':'all_hives'},error:mode==='error'?Error('denied'):null})};
+  const source={select(){return source;},eq(){return source;},single:async()=>({data:{max_share_scope:mode==='ceiling'?'hive':mode==='missing-ceiling'?null:'all_hives'},error:null})};
+  const {setOwnedWishReach}=load('lib/wishMutations.ts',{'./supabase':{supabase:{from:t=>t==='communities'?source:q}}});
+  const result=await setOwnedWishReach('wish','og','owner','all_hives');
+  assert.equal(!!result.error,mode!=='success');
+  if(['ceiling','missing-ceiling'].includes(mode)) {assert.equal(writes.length,0);continue;}
+  assert.equal(JSON.stringify(writes),JSON.stringify([{share_scope:'all_hives'}]));
+  assert.deepEqual(filters.slice(0,3),[['id','wish'],['community_id','og'],['user_id','owner']]);
+  assert.deepEqual(filters.at(-1),['share_scope',['hive','all_hives']],'never downgrade a public wish');
+ }
  assert.ok(!carry.CARRY_FORWARD_STATUS_OPTIONS.some(o=>o.value==='needs_attention'));
  const old=carry.normalizeCarryForwardResponse([{id:'wish',type:'wish',label:'Existing wish',status:'needs_attention',note:'A note already written'}])[0];
  assert.equal(old.status,'keep_active');assert.equal(old.note,'A note already written');

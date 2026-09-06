@@ -117,3 +117,16 @@ export async function archiveOwnedWish(wishId: string, communityId: string, owne
     .select('id').maybeSingle();
   return { error: error ?? (!data ? new Error('That wish could not be archived.') : null) };
 }
+
+/** Change only an owned wish's everyday reach; public publication stays in the editor. */
+export async function setOwnedWishReach(wishId: string, communityId: string, ownerId: string, reach: 'hive' | 'all_hives') {
+  if (reach === 'all_hives') {
+    const { data: source, error } = await supabase.from('communities').select('max_share_scope').eq('id', communityId).single();
+    if (error || !source || !['all_hives', 'public'].includes(source.max_share_scope ?? '')) return { error: error ?? new Error('This HIVE keeps its wishes here.') };
+  }
+  const { data, error } = await supabase.from('wishes').update({ share_scope: reach })
+    .eq('id', wishId).eq('community_id', communityId).eq('user_id', ownerId)
+    .eq('status', 'public').eq('is_active', true).in('share_scope', ['hive', 'all_hives'])
+    .select('id, share_scope').maybeSingle();
+  return { error: error ?? (!data || data.share_scope !== reach ? new Error('Your wish visibility did not save.') : null) };
+}

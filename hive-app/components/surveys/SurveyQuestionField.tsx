@@ -1,7 +1,7 @@
 import { WishManageModal } from '../wishes/WishManageModal';
 import { AddWishModal } from '../wishes/AddWishModal';
 import { EditButton } from '../ui/EditButton';
-import { archiveOwnedWish, deleteWishById } from '../../lib/wishMutations';
+import { archiveOwnedWish, deleteWishById, setOwnedWishReach } from '../../lib/wishMutations';
 import { invalidateWishQueries } from '../../lib/queryClient';
 import { showAlert } from '../../lib/showAlert';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -456,7 +456,7 @@ export function SurveyQuestionField({
   // "peek at your profile". Nat, 2026-08-13: "if you tell someone 'leave
   // this screen, navigate to this other screen & come back', it'll never
   // work. Ever."
-  const { profile, community } = useAuth();
+  const { profile, community, memberships = [] } = useAuth();
   const router = useRouter();
   const [miqLaterDismissed, setMiqLaterDismissed] = useState(false);
   /**
@@ -536,6 +536,7 @@ export function SurveyQuestionField({
   const [manageTarget, setManageTarget] = useState<Wish | null>(null);
   const [editTarget, setEditTarget] = useState<Wish | null>(null);
   const [pendingWishAction, setPendingWishAction] = useState<{ wish: Wish; action: 'archive' | 'delete' } | null>(null);
+  const [savingReach, setSavingReach] = useState(false);
   const grantedIds: string[] = Array.isArray(answers?.q_hd_granted_wish_ids) ? answers.q_hd_granted_wish_ids : [];
   const selectedReview = selectedWish ? wishReviewItems.find(item => item.id === selectedWish.id) : undefined;
   const retireWishChoice = (id: string) => {
@@ -549,6 +550,24 @@ export function SurveyQuestionField({
   const removeWish = (wish: Wish, action: 'archive' | 'delete') => {
     if (!profile?.id || wish.user_id !== profile.id) return;
     setPendingWishAction({ wish, action });
+  };
+  const toggleSelectedWishReach = async () => {
+    if (!selectedWish || !profile?.id || selectedWish.record.user_id !== profile.id || savingReach) return;
+    const next = selectedWish.reach === 'all_hives' ? 'hive' : 'all_hives';
+    setSavingReach(true);
+    try {
+      const { error } = await setOwnedWishReach(selectedWish.id, selectedWish.communityId, profile.id, next);
+      if (error) throw error;
+      setPickableWishes(previous => previous.map(wish => wish.id === selectedWish.id
+        ? { ...wish, reach: next, record: { ...wish.record, share_scope: next } } : wish));
+      onSetAnswer?.('q_hd_wish_reach', next);
+      if (next === 'hive' && selectedWish.communityId !== communityId) retireWishChoice(selectedWish.id);
+      await invalidateWishQueries(selectedWish.communityId, profile.id);
+    } catch {
+      showAlert('That did not save', 'Your wish visibility was not changed. Please try again.');
+    } finally {
+      setSavingReach(false);
+    }
   };
   const confirmWishAction = async () => {
     if (!pendingWishAction || !profile?.id || pendingWishAction.wish.user_id !== profile.id) return;
@@ -692,8 +711,14 @@ export function SurveyQuestionField({
           <View accessibilityRole="radiogroup" accessibilityLabel="Meeting focus" style={{ gap: 8 }}>
             {pickableWishes.filter(wish => !grantedIds.includes(wish.id)).map(wish => {
               const chosen = selectedWish?.id === wish.id;
-              return <View key={wish.id} style={{ flexDirection: 'row', gap: 10, alignItems: 'center', paddingHorizontal: 14,
+              const sourceCommunity = memberships.find(member => member.community_id === wish.communityId)?.community
+                ?? (community?.id === wish.communityId ? community : null);
+              const canToggleReach = wish.record.user_id === profile?.id
+                && ['hive', 'all_hives'].includes(wish.record.share_scope ?? '')
+                && (wish.reach === 'all_hives' || (!!sourceCommunity && ['all_hives', 'public'].includes(sourceCommunity.max_share_scope ?? '')));
+              return <View key={wish.id} style={{ padding: 14,
                 borderWidth: 1, borderColor: tint.line(0.5), borderRadius: 12, backgroundColor: chosen ? tint.wash : '#fffdf5' }}>
+                <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
                 <Pressable accessibilityRole="radio"
                 accessibilityState={{ checked: chosen }}
                 accessibilityLabel={`${chosen ? 'Selected' : 'Choose'} wish: ${wish.title || wish.description}`}
@@ -704,15 +729,19 @@ export function SurveyQuestionField({
                   onSetAnswer?.('q_hd_wish_id', wish.id);
                   onSetAnswer?.('q_hd_wish_reach', wish.reach);
                 }}
-                style={{ flex: 1, flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 14 }}>
+                style={{ flex: 1, flexDirection: 'row', gap: 10, alignItems: 'flex-start', minHeight: 30 }}>
                 <Text style={{ color: tint.ink, fontSize: 19 }}>{chosen ? '●' : '○'}</Text>
                 <View style={{ flex: 1, gap: 6 }}>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: tint.ink, lineHeight: 20 }}>{wish.title || wish.description}</Text>
                   {chosen && wish.title && wish.title !== wish.description && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: '#5c5648' }}>{wish.description}</Text>}
-                  {chosen && <ReachPill reach={wish.reach} communityId={wish.communityId} />}
                 </View>
                 </Pressable>
                 {chosen && <EditButton accessibilityLabel="Manage wish" onPress={() => setManageTarget(wish.record)} />}
+                </View>
+                {chosen && <View style={{ marginLeft: 29, marginTop: 6 }}>
+                  <ReachPill reach={wish.reach} communityId={wish.communityId} busy={savingReach}
+                    onToggle={canToggleReach ? toggleSelectedWishReach : undefined} />
+                </View>}
               </View>;
             })}
             <Pressable accessibilityRole="radio" accessibilityState={{ checked: showNewWish }} accessibilityLabel="Write a new wish" onPress={startNewWish}

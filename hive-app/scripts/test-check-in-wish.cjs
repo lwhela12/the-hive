@@ -9,7 +9,7 @@ function load(file, mocks = {}) {
     {module,exports:module.exports,require:name=>mocks[name]??{},console,Date,Map,Set});
   return module.exports;
 }
-const wish = {id:'wide',title:'My wish',description:'My existing wish',communityId:'og',fromHive:'OG HIVE',reach:'all_hives',record:{id:'wide',status:'public',community_id:'og',user_id:'owner',description:'My existing wish'}};
+const wish = {id:'wide',title:'My wish',description:'My existing wish',communityId:'og',fromHive:'OG HIVE',reach:'all_hives',record:{id:'wide',status:'public',share_scope:'all_hives',community_id:'og',user_id:'owner',description:'My existing wish'}};
 const nextWish={...wish,id:'next',title:'Next wish',description:'My next focus',record:{...wish.record,id:'next',description:'My next focus'}};
 let states=[false,false,true,[wish,nextWish]], index=0, answers={};
 const jsx=(type,props)=>({type,props});
@@ -35,7 +35,7 @@ nodes=render(reviewProps);
 assert.equal(answers.q_hd_wish_id,'wide');
 assert.equal(nodes.find(n=>n.type==='ReachPill').props.reach,'all_hives');
 assert.equal(nodes.filter(n=>n.type==='WishStatus').length,1);
-assert.ok(!nodes.some(n=>n.type==='ReachPill'&&n.props.onToggle));
+assert.ok(nodes.some(n=>n.type==='ReachPill'&&n.props.onToggle),'owned wish uses the shared interactive reach switch');
 assert.ok(!nodes.some(n=>n.type==='Pressable'&&JSON.stringify(n.props.children).includes('WishStatus')));
 nodes.find(n=>n.props.accessibilityLabel==='Manage wish').props.onPress();
 nodes=render(reviewProps);
