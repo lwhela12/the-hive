@@ -7,7 +7,6 @@ import { useAuth } from '../../../lib/hooks/useAuth';
 import { usePageSkin } from '../../../lib/pageSkin';
 import { useSurveys, type SurveyAnswers } from '../../../lib/hooks/useSurveys';
 import { AppHeader } from '../../../components/navigation/AppHeader';
-import { LegacyCheckInAnswers } from '../../../components/surveys/LegacyCheckInAnswers';
 import { SurveyModal } from '../../../components/surveys/SurveyModal';
 import { SharedPlate } from '../../../components/surveys/SharedPlate';
 import { CheckInNextMeetings } from '../../../components/surveys/CheckInNextMeetings';
@@ -80,7 +79,6 @@ export default function BeforeWeMeetScreen() {
 
   const [plate, setPlate] = useState<string | undefined>();
   const [selected, setSelected] = useState<string | null>(null);
-  const [review, setReview] = useState<Record<string, SurveyAnswers>>({});
   const [meetings, setMeetings] = useState<MeetingPreview[]>([]);
   const [saved, setSaved] = useState<Record<string, SurveyAnswers>>({});
   const [row, setRow] = useState<Survey | null>(null);
@@ -140,7 +138,6 @@ export default function BeforeWeMeetScreen() {
     setLoadedScope(null);
     setSelected(null);
     originHandled.current = null;
-    setReview({});
     setPlate(undefined);
     setTodosByHive({});
     setTodoErrors({});
@@ -379,7 +376,7 @@ export default function BeforeWeMeetScreen() {
     if (!own) return { error: 'No section' };
     // Preserve historic numeric energy; capacity has its own string key.
     for (const id of ['q_energy_level', 'q_energy_mode', 'q_feeling_today', 'q_plate']) {
-      const original = review[selected] ?? saved[selected];
+      const original = saved[selected];
       if (original?.[id] !== undefined) own.answers[id] = original[id];
     }
     if (plate !== undefined) own.answers.q_plate = plate;
@@ -389,9 +386,9 @@ export default function BeforeWeMeetScreen() {
     if (answers[CARRY_FORWARD_ANSWER_KEY]) own.answers[CARRY_FORWARD_ANSWER_KEY] = answers[CARRY_FORWARD_ANSWER_KEY];
     const occurrence = event ? meetingOccurrence(event.id) : nextMeetingOccurrence(selected);
     const { error } = await submitCheckInOccurrence(row.id, own.answers as SurveyAnswers, selected, occurrence);
-    if (!error) { setSaved(previous => ({ ...previous, [selected]: own.answers as SurveyAnswers })); setReview(previous => { const next = { ...previous }; delete next[selected]; return next; }); }
+    if (!error) { setSaved(previous => ({ ...previous, [selected]: own.answers as SurveyAnswers })); }
     return { error };
-  }, [row, merged, selected, meetings, profile, submitCheckInOccurrence, plate, saved, review, currentMeetings]);
+  }, [row, merged, selected, meetings, profile, submitCheckInOccurrence, plate, saved, currentMeetings]);
 
   if (!isFocused) return null;
   if (meetingId && linkFailed) return <View style={{ flex: 1, padding: 24, justifyContent: 'center', gap: 16, backgroundColor: skin.page }}>
@@ -401,7 +398,7 @@ export default function BeforeWeMeetScreen() {
   const personalQuestion = <SharedPlate scope={`check-in-plate:${profile?.id}:${row?.id}:${today}`} onChange={setPlate} />;
 
   if (ready && forThisReader && selected) {
-    const mine = review[selected] ?? saved[selected];
+    const mine = saved[selected];
     const section = merged?.sections.find(s => s.communityId === selected);
     return (
       <SurveyModal
@@ -436,7 +433,6 @@ export default function BeforeWeMeetScreen() {
     return <View key={member.community_id}><CheckInHiveCard community={member.community} event={event}
       disabled={!section} onPress={() => setSelected(member.community_id)}
       status={!section ? 'Check-in questions not available yet' : saved[member.community_id] ? 'Saved — review' : 'Ready to fill in'} />
-      {row && profile && <LegacyCheckInAnswers surveyId={row.id} userId={profile.id} communityId={member.community_id} onReview={answers => { setReview(r => ({ ...r, [member.community_id]: answers })); if (section) setSelected(member.community_id); }} />}
     </View>;
   };
 

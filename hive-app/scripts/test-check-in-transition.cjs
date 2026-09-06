@@ -15,8 +15,8 @@ assert.equal(JSON.stringify(transitionAnswers(wide,null)),JSON.stringify({person
 assert.equal(transitionAnswers(wide,'c'),null);
 for(const page of ['beforewemeet','endofmonth']) {
  const text=fs.readFileSync(`app/(app)/${page}/index.tsx`,'utf8');
- assert.ok(text.includes('LegacyCheckInAnswers'));
- assert.ok(text.includes('setReview('));
+ assert.ok(!text.includes('LegacyCheckInAnswers'));
+ assert.ok(!text.includes('setReview('));
 }
 assert.ok(!fs.readFileSync('lib/checkInTransition.ts','utf8').includes('meetingOccurrence('));
-console.log('PASS: migration231 bare per-HIVE answers, scoped shared keys, no cross-HIVE or personal leakage, explicit review wiring, no inferred occurrence.');
+console.log('PASS: migration231 bare per-HIVE answers, scoped shared keys, no cross-HIVE or personal leakage, retired history links, no inferred occurrence.');

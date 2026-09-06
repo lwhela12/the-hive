@@ -7,7 +7,6 @@ import { useAuth } from '../../../lib/hooks/useAuth';
 import { usePageSkin } from '../../../lib/pageSkin';
 import { useSurveys, type SurveyAnswers } from '../../../lib/hooks/useSurveys';
 import { AppHeader } from '../../../components/navigation/AppHeader';
-import { LegacyCheckInAnswers } from '../../../components/surveys/LegacyCheckInAnswers';
 import { SurveyModal } from '../../../components/surveys/SurveyModal';
 import { CheckInHiveCard } from '../../../components/surveys/CheckInHiveCard';
 import { checkInQuestions, PLATE_QUESTION, type MeetingPreview } from '../../../lib/checkInPresentation';
@@ -88,7 +87,6 @@ export default function EndOfMonthScreen() {
 
   const [meetings, setMeetings] = useState<MeetingPreview[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [review, setReview] = useState<Record<string, SurveyAnswers>>({});
   const [saved, setSaved] = useState<Record<string, SurveyAnswers>>({});
   const [todos, setTodos] = useState<Record<string, CarryForwardItem[]>>({});
   const month = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }).slice(0, 7);
@@ -218,7 +216,7 @@ export default function EndOfMonthScreen() {
         if (answers[key] !== undefined) own.answers[key] = answers[key];
       }
       const { error } = await submitCheckInOccurrence(survey.id, own.answers as SurveyAnswers, selected, `month:${month}`);
-      if (!error) { setSaved(previous => ({ ...previous, [selected]: answers })); setReview(previous => { const next = { ...previous }; delete next[selected]; return next; }); }
+      if (!error) { setSaved(previous => ({ ...previous, [selected]: answers })); }
       return { error };
     }
 
@@ -234,7 +232,6 @@ export default function EndOfMonthScreen() {
     if (result.error) return result;
 
     setSaved(previous => ({ ...previous, month: answers }));
-    setReview(previous => { const next = { ...previous }; delete next.month; return next; });
     return { error: null };
   }, [survey, merged, selected, month, askedDate, submitCheckInOccurrence, profile?.id]);
 
@@ -252,7 +249,7 @@ export default function EndOfMonthScreen() {
           description: selected === 'month' ? 'Your month, and anything for the Buzz.' : 'Just this HIVE. Review your commitments, then save.',
           questions: mergedPreMeetingQuestions(part).map(e => e.question) }}
         draftScope={`${profile?.id}:${survey.id}:${askedDate ?? month}:${selected}`}
-        initialAnswers={review[selected] ?? saved[selected]}
+        initialAnswers={saved[selected]}
         isEditingResponse={!!saved[selected]}
         carryForwardItems={todos[selected] ?? []}
         onSubmit={onSubmit}
@@ -271,7 +268,6 @@ export default function EndOfMonthScreen() {
         {memberships.map(m => <CheckInHiveCard key={m.community_id} community={m.community}
           event={meetings.find(event => event.community_id === m.community_id)} onPress={() => setSelected(m.community_id)}
           status={saved[m.community_id] ? 'Saved — review' : 'Review commitments'} />)}
-        {profile && [null, ...memberships.map(m => m.community_id)].map(id => <LegacyCheckInAnswers key={id ?? 'month'} scopeLabel={id ? hiveDisplayName(memberships.find(m => m.community_id === id)?.community?.name) : 'Your month'} surveyId={survey.id} userId={profile.id} communityId={id} onReview={answers => { const key = id ?? 'month'; setReview(r => ({ ...r, [key]: answers })); setSelected(key); }} />)}
         <Pressable accessibilityRole="link" onPress={() => router.push('/settings' as never)} style={{ padding: 12 }}>
           <Text style={{ color: skin.gold }}>Email settings →</Text>
           <Text style={{ color: skin.inkSoft }}>Switch off individual HIVE emails, including check-in reminders and the Buzz. This does not choose email versus text or stop personal messages.</Text>
