@@ -43,12 +43,15 @@ function ArrivalFact({
   return (
     <View style={{ width: '100%', flexDirection: 'row', alignItems: 'flex-start', gap: (isTV ? 10 : 7) * scale }}>
       <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.82}
         style={{
-          width: (isTV ? 78 : 58) * scale,
+          width: Math.max(70, (isTV ? 82 : 70) * scale),
           fontFamily: 'Lato_700Bold',
           fontSize: Math.max(9, (isTV ? 10 : 9) * scale),
           lineHeight: Math.max(14, (isTV ? 18 : 15) * scale),
-          letterSpacing: (isTV ? 1.2 : 0.9) * scale,
+          letterSpacing: 0.6,
           color: danger ? '#b3261e' : '#9a8060',
           textAlign: 'right',
         }}
