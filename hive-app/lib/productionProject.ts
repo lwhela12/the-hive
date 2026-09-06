@@ -2,11 +2,11 @@ import { parseActionItemDescription } from './actionItemDisplay';
 import { fetchCheckInActionItems } from './checkInActionItems';
 import { supabase } from './supabase';
 
-export type ProductionProjectAssignment = {
+export type ProductionProjectJob = {
   id: string;
   description: string;
   assignedTo: string | null;
-  assigneeName: string;
+  personName: string;
   completed: boolean;
   completedAt: string | null;
   relatedBoardPostId: string;
@@ -16,11 +16,11 @@ export type ProductionProjectAssignment = {
   latestFindingAt: string | null;
 };
 
-export type ProductionProjectWorkstream = {
+export type ProductionProjectJobGroup = {
   relatedBoardPostId: string;
   description: string;
-  assigneeNames: string[];
-  assignmentCount: number;
+  people: string[];
+  jobCount: number;
   completedCount: number;
   completed: boolean;
   findingCount: number;
@@ -28,24 +28,24 @@ export type ProductionProjectWorkstream = {
   latestFinding: string | null;
 };
 
-export function groupProductionWorkstreams(assignments: ProductionProjectAssignment[]): ProductionProjectWorkstream[] {
-  const grouped = new Map<string, ProductionProjectWorkstream>();
-  for (const item of assignments) {
+export function groupProductionJobs(jobs: ProductionProjectJob[]): ProductionProjectJobGroup[] {
+  const grouped = new Map<string, ProductionProjectJobGroup>();
+  for (const item of jobs) {
     const current = grouped.get(item.relatedBoardPostId) ?? {
       relatedBoardPostId: item.relatedBoardPostId,
       description: item.description,
-      assigneeNames: [],
-      assignmentCount: 0,
+      people: [],
+      jobCount: 0,
       completedCount: 0,
       completed: false,
       findingCount: item.findingCount,
       fileCount: item.fileCount,
       latestFinding: item.latestFinding,
     };
-    if (!current.assigneeNames.includes(item.assigneeName)) current.assigneeNames.push(item.assigneeName);
-    current.assignmentCount += 1;
+    if (!current.people.includes(item.personName)) current.people.push(item.personName);
+    current.jobCount += 1;
     if (item.completed) current.completedCount += 1;
-    current.completed = current.completedCount === current.assignmentCount;
+    current.completed = current.completedCount === current.jobCount;
     grouped.set(item.relatedBoardPostId, current);
   }
   return [...grouped.values()].sort((a, b) => {
@@ -85,7 +85,7 @@ function cleanFinding(value: string | null) {
 /** Join each Production assignment to the board thread holding its findings. */
 export async function fetchProductionProjectStatus(
   communityId: string,
-): Promise<{ assignments: ProductionProjectAssignment[]; error: string | null }> {
+): Promise<{ assignments: ProductionProjectJob[]; error: string | null }> {
   const result = await fetchCheckInActionItems<AssignmentRow>(() => (supabase as any)
     .from('action_items')
     .select('id, description, assigned_to, completed, completed_at, created_at, related_board_post_id, assignee:profiles!assigned_to(name)')
@@ -133,7 +133,7 @@ export async function fetchProductionProjectStatus(
       id: row.id,
       description: parseActionItemDescription(row.description).text,
       assignedTo: row.assigned_to,
-      assigneeName: row.assignee?.name?.trim() || 'Unassigned',
+      personName: row.assignee?.name?.trim() || 'Nobody yet',
       completed: !!row.completed,
       completedAt: row.completed_at,
       relatedBoardPostId: row.related_board_post_id!,
@@ -141,12 +141,12 @@ export async function fetchProductionProjectStatus(
       fileCount: threadFindings.reduce((total, finding) => total + attachmentCount(finding.attachments), 0),
       latestFinding: cleanFinding(latestWithText?.content ?? null),
       latestFindingAt: threadFindings[0]?.created_at ?? null,
-    } satisfies ProductionProjectAssignment;
+    } satisfies ProductionProjectJob;
   });
 
   assignments.sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
-    return a.assigneeName.localeCompare(b.assigneeName) || a.description.localeCompare(b.description);
+    return a.personName.localeCompare(b.personName) || a.description.localeCompare(b.description);
   });
   return { assignments, error: null };
 }

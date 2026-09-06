@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { HiveMark } from './HiveMark';
 import { WorldMark } from './WorldMark';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { accentWash, hiveAccent, hiveDisplayName, hiveTagMark } from '../../lib/hiveBrand';
 import { hiveChipLook, reachChipLook, type ScopeKey } from '../../lib/scopeLook';
 
 /**
@@ -96,6 +96,7 @@ export function ScopePicker<K extends string>({
   if (options.length < 2) return null;
 
   const accent = hiveAccent(community);
+  const hiveMarkColour = hiveTagMark(community);
   const hiveLook = hiveChipLook(accent, 'light', hiveDisplayName(community?.name));
 
   return (
@@ -155,7 +156,7 @@ export function ScopePicker<K extends string>({
               }}
             >
               <View style={{ width: 18, alignItems: 'center', opacity: selected ? 1 : 0.55 }}>
-                {option.rung === 'hive' && <HiveMark size={15} colour={hiveLook.accent} />}
+                {option.rung === 'hive' && <HiveMark size={15} colour={hiveMarkColour} />}
                 {option.rung === 'all_hives' && <WorldMark size={17} />}
                 {option.rung === 'public' && <Text style={{ fontSize: 15 }}>📣</Text>}
               </View>

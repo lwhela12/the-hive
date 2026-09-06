@@ -2,7 +2,7 @@ import { View, Text } from 'react-native';
 import { HiveMark } from './HiveMark';
 import { WorldMark } from './WorldMark';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { hiveAccent, hiveDisplayName, hiveTagMark } from '../../lib/hiveBrand';
 import {
   CHIP, normaliseScope, travels, hiveChipLook, reachChipLook, scopeSpoken,
   type ChipSize, type ScopeKey,
@@ -111,6 +111,7 @@ export function ScopeBadge({
     ?? null;
 
   const hive = hiveChipLook(hiveAccent(owner), tone, hiveDisplayName(owner?.name));
+  const hiveMarkColour = hiveTagMark(owner);
   const showReach = travels(key);
 
   // The hexagon appears when it tells you something you didn't already know.
@@ -153,7 +154,7 @@ export function ScopeBadge({
       ) : null}
       {showHive && (
         <Chip size={chipSize} look={hive}>
-          <HiveMark size={s.mark} colour={hive.accent} />
+          <HiveMark size={s.mark} colour={hiveMarkColour} />
         </Chip>
       )}
       {showReach && (

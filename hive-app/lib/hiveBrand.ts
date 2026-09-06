@@ -91,6 +91,22 @@ export function hiveOnDark(slug?: string | null): string {
   return mark ? mark.onDark : HIVE_GOLD;
 }
 
+/**
+ * The hexagon used inside a small HIVE label.
+ *
+ * Production's dark Stage Purple is the page chrome. In an 11px hexagon it is
+ * easily mistaken for HIVE-Wide's near-black mark, so its labels use Curtain
+ * Violet — the same purple hexagon already used in the side rail. Other HIVEs
+ * keep their normal accent.
+ */
+export function hiveTagMark(
+  community?: { accent_color?: string | null; slug?: string | null } | null,
+): string {
+  return community?.slug?.trim().toLowerCase() === 'show'
+    ? hiveOnDark('show')
+    : hiveAccent(community);
+}
+
 /** A HIVE's emoji and written-down accent, by slug. Anything else is the bee. */
 export function hiveMark(slug?: string | null): HiveMark {
   return HIVE_MARKS[(slug ?? '').trim().toLowerCase()] ?? DEFAULT_MARK;

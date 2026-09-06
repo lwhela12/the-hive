@@ -2,7 +2,7 @@ import { Pressable, Text, View } from 'react-native';
 import { HiveMark } from './HiveMark';
 import { WorldMark } from './WorldMark';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { hiveAccent, hiveDisplayName, hiveTagMark } from '../../lib/hiveBrand';
 import { hiveChipLook, HIVE_WIDE_INK } from '../../lib/scopeLook';
 import type { Community } from '../../types';
 
@@ -66,6 +66,7 @@ export function ReachPill({
     ?? null;
 
   const accent = hiveAccent(owner);
+  const markColour = hiveTagMark(owner);
   const shell = hiveChipLook(accent, 'light', hiveDisplayName(owner?.name));
   const travels = reach === 'all_hives';
   const words = travels
@@ -95,7 +96,7 @@ export function ReachPill({
       {/* One box for both marks, so the words never shuffle sideways when the
           pill turns round. */}
       <View style={{ width: dims.mark + 2, height: dims.mark + 2, alignItems: 'center', justifyContent: 'center' }}>
-        {travels ? <WorldMark size={dims.mark + 2} /> : <HiveMark size={dims.mark} colour={accent} />}
+        {travels ? <WorldMark size={dims.mark + 2} /> : <HiveMark size={dims.mark} colour={markColour} />}
       </View>
       <Text
         numberOfLines={1}
