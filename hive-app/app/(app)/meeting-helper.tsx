@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { userFacingError } from '../../lib/userFacingError';
 import { hiveAccent } from '../../lib/hiveBrand';
+import { SCOPE_LADDER } from '../../lib/hiveWide';
 import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { CHECK_INS_COMING_SOON_MESSAGE, hasMeetingDeck } from '../../lib/checkIns';
@@ -124,6 +125,7 @@ const PLAIN_FIELD = {
 type DeckSlideKey =
   | 'room'
   | 'outline'
+  | 'whatis'
   /**
    * Everyone says "I'm <name>" out loud, one at a time, before the business
    * starts. Nat, 2026-08-19: "in all of the meeting helpers we want to add in
@@ -432,10 +434,11 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
    * who actually walked in is a real question.
    */
   tech: {
-    slides: ['room', 'outline', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
+    slides: ['room', 'outline', 'whatis', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
     agenda: [
       { key: 'room', label: 'Arrivals' },
       { key: 'outline', label: 'Outline' },
+      { key: 'whatis', label: 'What is HIVE?' },
       { key: 'news', label: 'News from Nat' },
       { key: 'treasurer', label: 'Honey Pot' },
       { key: 'meetups', label: 'Plan' },
@@ -607,6 +610,19 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
       'Everything we decided tonight is on your to-do list',
     ],
   },
+};
+
+// Tech's meeting introduction, condensed from note_what_a_hive_is in checkIns.
+// HIVE-Wide keeps the same meaning as its shared visibility label.
+const HIVE_INTRO = {
+  title: 'What is HIVE?',
+  lead: 'A small group helping each other get where we want to go.',
+  points: [
+    { heading: 'A High Definition wish', body: 'One clear ask that someone here can help with.' },
+    { heading: 'The HummDinger', body: 'We take one wish at a time and find out who can help.' },
+    { heading: 'Tech HIVE', body: 'Our group for building, learning, and helping each other move forward.' },
+    { heading: 'HIVE-Wide', body: SCOPE_LADDER.find((rung) => rung.key === 'all_hives')!.meaning },
+  ],
 };
 
 /**
@@ -2289,6 +2305,27 @@ export default function MeetingHelperScreen() {
           />
         </View>
       ) : null}
+    </View>
+  );
+
+  const renderWhatIsHive = () => (
+    <View testID="what-is-hive-slide" style={{ flex: 1, justifyContent: 'center', gap: sz(28, 16) }}>
+      <SlideTitle>{HIVE_INTRO.title}</SlideTitle>
+      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(32, 20), lineHeight: sz(44, 28), color: CHARCOAL }}>
+        {HIVE_INTRO.lead}
+      </Text>
+      <View style={{ gap: sz(22, 16), maxWidth: 900 }}>
+        {HIVE_INTRO.points.map((point) => (
+          <View key={point.heading} style={{ borderLeftWidth: 3, borderLeftColor: GOLD, paddingLeft: sz(20, 12), gap: 4 }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(24, 17), lineHeight: sz(32, 24), color: GOLD_DEEP }}>
+              {point.heading}
+            </Text>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(24, 17), lineHeight: sz(34, 25), color: CHARCOAL }}>
+              {point.body}
+            </Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 
@@ -4687,6 +4724,7 @@ export default function MeetingHelperScreen() {
   const SLIDE_RENDERERS: Record<DeckSlideKey, () => React.ReactNode> = {
     room: renderRoom,
     outline: renderOutline,
+    whatis: renderWhatIsHive,
     rollcall: renderRollCall,
     news: renderNews,
     treasurer: renderTreasurer,

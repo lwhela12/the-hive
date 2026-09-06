@@ -61,7 +61,9 @@ assert.ok(!modal.includes('Ionicons name="square-outline"'),'open tasks use the 
 assert.ok(modal.includes('Add findings, photos or files →'),'Production jobs open the board thread that holds the work');
 assert.ok(modal.includes(".eq('related_user_id', viewerProfile.id)"));
 assert.ok(modal.includes(".eq('community_id', survey.community_id)"));
-for(const page of ['beforewemeet','endofmonth']) assert.ok(fs.readFileSync(`app/(app)/${page}/index.tsx`,'utf8').includes('CheckInHiveCard'));
+assert.ok(fs.readFileSync('app/(app)/beforewemeet/index.tsx','utf8').includes('CheckInHiveCard'));
+// Month-end became one continuous HIVE-Wide form in the accepted Sep 6 release.
+assert.ok(fs.readFileSync('app/(app)/endofmonth/index.tsx','utf8').includes('<EndOfMonthForm'), 'month-end keeps its continuous form');
 const field=fs.readFileSync('components/surveys/SurveyQuestionField.tsx','utf8');
 assert.ok(!field.includes("Anything to add? Stories, suggestions"),'hang ratings do not collect unread free text');
 assert.ok(!field.includes("Anything else you'd like to share?"),'HIVE Help ratings do not collect unread free text');
