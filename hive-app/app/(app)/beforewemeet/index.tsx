@@ -24,6 +24,7 @@ import {
 import { meetingOccurrence, nextMeetingOccurrence } from '../../../supabase/functions/_shared/checkInSession';
 import { hiveDisplayName, hiveAccent } from '../../../lib/hiveBrand';
 import { fetchCarryForwardItems } from '../../../lib/hooks/useCarryForwardContext';
+import { hiveDeepLinkAction } from '../../../lib/hiveDeepLink';
 import { CARRY_FORWARD_ANSWER_KEY, type CarryForwardItem } from '../../../lib/carryForward';
 import type { Survey, SurveyQuestion } from '../../../types';
 
@@ -69,6 +70,7 @@ export default function BeforeWeMeetScreen() {
   const returnTo = (meetingId || from === 'meetings') ? '/meetings' : from === 'hive' ? '/hive' : '/hive-wide';
   const requestedHiveSlug = typeof hive === 'string' ? hive : null;
   const originHandled = useRef<string | null>(null);
+  const handledHiveLinkRef = useRef<string | null>(null);
   const isFocused = useIsFocused();
   const { loading: authLoading, profile, communityId, memberships, switchCommunity, wholeHive } = useAuth();
   const originMembership = meetingId
@@ -118,8 +120,22 @@ export default function BeforeWeMeetScreen() {
   }, [meetingId, authLoading, profile?.id, memberships, today]);
 
   useEffect(() => {
-    if (!originMembership || authLoading) return;
-    if (wholeHive || communityId !== originMembership.community_id) void switchCommunity(originMembership.community_id);
+    if (!originMembership) {
+      handledHiveLinkRef.current = null;
+      return;
+    }
+    if (authLoading) return;
+    const action = hiveDeepLinkAction({
+      requestedHiveId: originMembership.community_id,
+      handledHiveId: handledHiveLinkRef.current,
+      currentCommunityId: communityId,
+      wholeHive,
+    });
+    if (action === 'ignore') return;
+    // A linked meeting/HIVE chooses the opening context once. After that, the
+    // sidebar belongs to the person using it and must not be bounced back.
+    handledHiveLinkRef.current = originMembership.community_id;
+    if (action === 'switch') void switchCommunity(originMembership.community_id);
   }, [originMembership, authLoading, wholeHive, communityId, switchCommunity]);
 
   useEffect(() => {

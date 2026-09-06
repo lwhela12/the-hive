@@ -29,6 +29,7 @@ import { CHECK_INS_COMING_SOON_MESSAGE, checkInDisplayName, hasTailoredCheckIns,
 import { useSurveys, isMonthlyCheckInSurvey } from '../../lib/hooks/useSurveys';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
+import { hiveDeepLinkAction } from '../../lib/hiveDeepLink';
 import type { Meeting, Event } from '../../types';
 
 /**
@@ -339,6 +340,7 @@ export default function MeetingsScreen() {
   const [uploadingAudioCount, setUploadingAudioCount] = useState(0);
   const [notesDropActive, setNotesDropActive] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
+  const handledHiveLinkRef = useRef<string | null>(null);
 
   // Nat, 2026-08-24, switching HIVEs from inside an open meeting summary:
   // "i shouldnt be able to have a crossover screen, right? ... nothing
@@ -356,10 +358,23 @@ export default function MeetingsScreen() {
   // exact sealed summary. Holding until the switch finishes avoids briefly
   // showing the same id against whichever HIVE the app remembered last.
   useEffect(() => {
-    if (!requestedHiveId) return;
+    if (!requestedHiveId) {
+      handledHiveLinkRef.current = null;
+      return;
+    }
     if (!memberships.some((membership) => membership.community_id === requestedHiveId)) return;
-    if (!wholeHive && communityId === requestedHiveId) return;
-    void switchCommunity(requestedHiveId);
+    const action = hiveDeepLinkAction({
+      requestedHiveId,
+      handledHiveId: handledHiveLinkRef.current,
+      currentCommunityId: communityId,
+      wholeHive,
+    });
+    if (action === 'ignore') return;
+    // A link chooses its HIVE once. Mark it handled even when the reader was
+    // already standing there; otherwise the first later sidebar switch makes
+    // this effect wake up and silently force them back to the linked HIVE.
+    handledHiveLinkRef.current = requestedHiveId;
+    if (action === 'switch') void switchCommunity(requestedHiveId);
   }, [requestedHiveId, memberships, wholeHive, communityId, switchCommunity]);
 
   useEffect(() => {

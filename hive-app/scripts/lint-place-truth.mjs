@@ -54,10 +54,14 @@ const compile = (name) => {
 };
 compile('navigation');
 compile('hiveSwitchRoute');
+compile('hiveDeepLink');
 
 const nav = await import(pathToFileURL(path.join(tmp, 'navigation.mjs')).href);
 const { routeAfterHiveSwitch } = await import(
   pathToFileURL(path.join(tmp, 'hiveSwitchRoute.mjs')).href
+);
+const { hiveDeepLinkAction } = await import(
+  pathToFileURL(path.join(tmp, 'hiveDeepLink.mjs')).href
 );
 fs.rmSync(tmp, { recursive: true, force: true });
 
@@ -95,6 +99,13 @@ for (const route of ['/endofmonth', '/endofmonth?from=meetings&hive=default', '/
 }
 check(placeForRoute('/meetings') === 'hive', 'Returning to Meetings must restore the selected HIVE.');
 check(placeForRoute('/beforewemeet') === 'either', 'Individual pre-meeting check-ins keep their existing context.');
+
+// A linked HIVE chooses the opening context exactly once. The already-matching
+// case is the regression that made Meetings silently undo the next sidebar tap.
+check(hiveDeepLinkAction({ requestedHiveId: null, handledHiveId: null, currentCommunityId: 'og', wholeHive: false }) === 'ignore', 'A page without a HIVE link must leave context alone.');
+check(hiveDeepLinkAction({ requestedHiveId: 'og', handledHiveId: null, currentCommunityId: 'og', wholeHive: false }) === 'consume', 'An already-matching HIVE link must be consumed.');
+check(hiveDeepLinkAction({ requestedHiveId: 'og', handledHiveId: null, currentCommunityId: 'tech', wholeHive: false }) === 'switch', 'A fresh HIVE link must switch to its requested HIVE.');
+check(hiveDeepLinkAction({ requestedHiveId: 'og', handledHiveId: 'og', currentCommunityId: 'tech', wholeHive: false }) === 'ignore', 'A handled HIVE link must not override a later sidebar switch.');
 
 // An unwritten route is HIVE-only. The allow-list is the safe way round: a page
 // added next month shows one HIVE's answer rather than wearing HIVE-Wide's name.

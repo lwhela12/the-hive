@@ -17,6 +17,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { clearSpotlight } from '../../lib/spotlight';
+import { hiveDeepLinkAction } from '../../lib/hiveDeepLink';
 import { userFacingError } from '../../lib/userFacingError';
 import { invalidateWishQueries, queryClient, queryKeys } from '../../lib/queryClient';
 import {
@@ -762,9 +763,17 @@ export default function MonthlyTuneupScreen() {
   const switchedForLinkRef = useRef<string | null>(null);
   useEffect(() => {
     if (!requestedHiveId || !isMemberOfRequested) return;
-    if (switchedForLinkRef.current === requestedHiveId) return;
-    if (!wholeHive && communityId === requestedHiveId) return;
+    const action = hiveDeepLinkAction({
+      requestedHiveId,
+      handledHiveId: switchedForLinkRef.current,
+      currentCommunityId: communityId,
+      wholeHive,
+    });
+    if (action === 'ignore') return;
+    // The URL gets one say about where this visit begins. Consume that say even
+    // when it already matches, or it will undo a later sidebar HIVE switch.
     switchedForLinkRef.current = requestedHiveId;
+    if (action !== 'switch') return;
     // `switchCommunity` also steps down out of HIVE-Wide — and then decides
     // where to leave you, from a path it is holding in a ref. It has already
     // dropped this screen once (2026-08-16, `6bbdbb2`: the tune-up is not in

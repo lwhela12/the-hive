@@ -9,6 +9,7 @@ import { AppHeader } from '../../components/navigation';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useConversations } from '../../lib/hooks/useConversations';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
+import { hiveDeepLinkAction } from '../../lib/hiveDeepLink';
 import type { Conversation } from '../../types';
 
 /**
@@ -60,10 +61,17 @@ export default function ChatScreen() {
   const switchedForLinkRef = useRef<string | null>(null);
   useEffect(() => {
     if (!requestedHiveId || !isMemberOfRequested) return;
-    if (switchedForLinkRef.current === requestedHiveId) return;
-    if (!wholeHive && communityId === requestedHiveId) return;
+    const action = hiveDeepLinkAction({
+      requestedHiveId,
+      handledHiveId: switchedForLinkRef.current,
+      currentCommunityId: communityId,
+      wholeHive,
+    });
+    if (action === 'ignore') return;
+    // Consume the link even when it already matches. If we return first, the
+    // link remains armed and overrides the person's next sidebar HIVE choice.
     switchedForLinkRef.current = requestedHiveId;
-    void switchCommunity(requestedHiveId);
+    if (action === 'switch') void switchCommunity(requestedHiveId);
   }, [requestedHiveId, isMemberOfRequested, wholeHive, communityId, switchCommunity]);
 
   const {
