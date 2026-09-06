@@ -24,6 +24,14 @@ import { CHECK_INS_COMING_SOON_MESSAGE, hasMeetingDeck } from '../../lib/checkIn
 import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { useDeckSession } from '../../lib/hooks/useDeckSession';
 import { fetchHoneyPotLedger } from '../../lib/honeyPot';
+import {
+  type DuesTransactionRecognitionRow,
+  duesTransactionsCoverMember,
+  getCurrentDuesPeriod,
+  getDuesPeriodEndDate,
+  getQuarterlyDuesReminderEvent,
+  isQuarterlyDuesReminderEvent,
+} from '../../lib/dues';
 import { getCycleStart } from '../../lib/meetingCycle';
 import { EditButton } from '../../components/ui/EditButton';
 import { getWishQuickTitle, pickSpotlightWish } from '../../lib/wishDisplay';
@@ -1042,6 +1050,7 @@ export default function MeetingHelperScreen() {
   const [notes, setNotes] = useState<MeetingHelperNotes>({});
   const [events, setEvents] = useState<DeckEvent[]>([]);
   const [honeyPotBalance, setHoneyPotBalance] = useState<number | null>(null);
+  const [duesLedgerRows, setDuesLedgerRows] = useState<DuesTransactionRecognitionRow[] | null>(null);
   const [hangIdeas, setHangIdeas] = useState<HangIdea[]>([]);
   const [wishes, setWishes] = useState<DeckWish[]>([]);
   const [grantedWishes, setGrantedWishes] = useState<GrantedWish[]>([]);
@@ -1307,14 +1316,30 @@ export default function MeetingHelperScreen() {
           .or('status.is.null,status.eq.scheduled')
           .order('event_date', { ascending: true })
           .order('event_time', { ascending: true });
-        setEvents((data ?? []) as DeckEvent[]);
+        const calendarEvents = [...((data ?? []) as DeckEvent[])];
+        if (deckIsOg) {
+          const reminder = getQuarterlyDuesReminderEvent(communityId);
+          const alreadyOnCalendar = calendarEvents.some((event) => (
+            event.event_date === reminder.event_date && /\bdues?\b/i.test(event.title)
+          ));
+          if (!alreadyOnCalendar) calendarEvents.push(reminder as DeckEvent);
+        }
+        setEvents(calendarEvents.sort((a, b) => (
+          a.event_date.localeCompare(b.event_date)
+          || (a.event_time ?? '').localeCompare(b.event_time ?? '')
+        )));
       })().catch((error) => console.warn('Could not load events', error)),
 
       // Treasurer: Honey Pot balance
       (async () => {
         const ledger = await fetchHoneyPotLedger(communityId);
         setHoneyPotBalance(ledger.balance);
-      })().catch((error) => console.warn('Could not load Honey Pot', error)),
+        setDuesLedgerRows(ledger.transactions);
+      })().catch((error) => {
+        console.warn('Could not load Honey Pot', error);
+        setHoneyPotBalance(null);
+        setDuesLedgerRows(null);
+      }),
 
       // Meet Ups: freshest ideas from the hang board
       (async () => {
@@ -1551,6 +1576,11 @@ export default function MeetingHelperScreen() {
         setHelperPosts((posts ?? []) as HangIdea[]);
       })().catch((error) => console.warn('Could not load helper posts', error)),
     ]);
+  }, [communityId, deckIsOg]);
+
+  useEffect(() => {
+    setHoneyPotBalance(null);
+    setDuesLedgerRows(null);
   }, [communityId]);
 
   useEffect(() => {
@@ -2852,6 +2882,21 @@ export default function MeetingHelperScreen() {
     );
   };
 
+  const currentDuesPeriod = getCurrentDuesPeriod();
+  const currentDuesEnd = getDuesPeriodEndDate(currentDuesPeriod);
+  const currentDuesEndLabel = currentDuesEnd.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+  });
+  const duesPaidCount = duesLedgerRows === null
+    ? null
+    : members.filter((member) => (
+      duesTransactionsCoverMember(duesLedgerRows, member, currentDuesPeriod)
+    )).length;
+  const duesStillDueCount = duesPaidCount === null
+    ? null
+    : Math.max(0, members.length - duesPaidCount);
+
   const renderTreasurer = () => (
     <View style={{ flex: 1 }}>
       <Kicker>{deck.treasurer.kicker}</Kicker>
@@ -2892,6 +2937,28 @@ export default function MeetingHelperScreen() {
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(24, 14), color: MUTED }}>·</Text>
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(24, 14), color: GOLD_DEEP }}>
               CashApp $HiveLV
+            </Text>
+          </View>
+          <View
+            style={{
+              alignItems: 'center',
+              gap: sz(5, 3),
+              marginTop: sz(14, 9),
+              backgroundColor: tintWash(0.16),
+              borderWidth: 1,
+              borderColor: GOLD_SOFT,
+              borderRadius: sz(18, 14),
+              paddingHorizontal: sz(28, 18),
+              paddingVertical: sz(12, 8),
+            }}
+          >
+            <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(23, 15), color: GOLD_DEEP }}>
+              Q{currentDuesPeriod.quarter} ends {currentDuesEndLabel}
+            </Text>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: MUTED }}>
+              {duesPaidCount === null
+                ? 'Checking the ledger…'
+                : `${duesPaidCount} of ${members.length} recorded · ${duesStillDueCount} still due`}
             </Text>
           </View>
         </View>
@@ -3119,6 +3186,7 @@ export default function MeetingHelperScreen() {
     const eventEmoji = (event: DeckEvent) => {
       if (event.event_type === 'meeting') return '🐝';
       if (event.event_type === 'birthday') return '🎂';
+      if (isQuarterlyDuesReminderEvent(event)) return '🍯';
       if (isAwayEvent(event)) return '✈️';
       return '📌';
     };

@@ -2,6 +2,7 @@ import { useQueries } from '@tanstack/react-query';
 import { supabase } from '../supabase';
 import { queryKeys } from '../queryClient';
 import { fetchHoneyPotBalance } from '../honeyPot';
+import { getQuarterlyDuesReminderEvent } from '../dues';
 import type {
   Wish,
   WishGranter,
@@ -32,7 +33,11 @@ type BirthdayMember = Pick<Profile, 'id' | 'name' | 'birthday'> & {
  * could keep the real data hidden behind a spinner. Removed rather than left
  * wired up "for later". An unread query is never actually free.
  */
-export function useHiveDataQuery(communityId?: string, userId?: string) {
+export function useHiveDataQuery(
+  communityId?: string,
+  userId?: string,
+  includeOgDuesReminder = false,
+) {
   // Use local date to avoid timezone issues (toISOString uses UTC which can be wrong date)
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -226,13 +231,23 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
   const isLoading = results.some((r) => r.isLoading);
   const isRefetching = results.some((r) => r.isRefetching);
 
+  const upcomingEvents = [
+    ...((eventsResult.data || []) as Event[]),
+    ...((birthdayEventsResult.data || []) as Event[]),
+  ];
+
+  if (communityId && includeOgDuesReminder) {
+    const duesReminder = getQuarterlyDuesReminderEvent(communityId, now);
+    const alreadyOnCalendar = upcomingEvents.some((event) => (
+      event.event_date === duesReminder.event_date && /\bdues?\b/i.test(event.title)
+    ));
+    if (!alreadyOnCalendar) upcomingEvents.push(duesReminder as unknown as Event);
+  }
+
   return {
     publicWishes: wishesResult.data || [],
     grantedWishes: grantedWishesResult.data || [],
-    upcomingEvents: [
-      ...((eventsResult.data || []) as Event[]),
-      ...((birthdayEventsResult.data || []) as Event[]),
-    ].sort((a, b) => {
+    upcomingEvents: upcomingEvents.sort((a, b) => {
       const dateCompare = a.event_date.localeCompare(b.event_date);
       if (dateCompare !== 0) return dateCompare;
       return (a.event_time || '').localeCompare(b.event_time || '');

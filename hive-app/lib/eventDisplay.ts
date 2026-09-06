@@ -9,6 +9,7 @@ export function getEventEmoji(event: {
   if (event.event_type === 'meeting') return '🐝';
 
   const title = (event.title ?? '').toLowerCase();
+  if (/\bdues?\b/.test(title)) return '🍯';
   if (/\b(out of town|travel|traveling|trip|away|galavant|vacation|flight)\b/.test(title) || event.end_date) return '✈️';
   if (/\b(pool|swim|beach|lake|river)\b/.test(title)) return '🏖️';
   if (/\b(bday|birthday)\b/.test(title)) return '🎂';

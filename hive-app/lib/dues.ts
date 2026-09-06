@@ -1,3 +1,5 @@
+import { HONEY_POT_CASH_APP_HANDLE } from './honeyPotPayment';
+
 export const QUARTERLY_DUES_AMOUNT = 25;
 export const ANNUAL_DUES_AMOUNT = QUARTERLY_DUES_AMOUNT * 4;
 
@@ -37,15 +39,65 @@ export const getCurrentDuesPeriod = (date = new Date()): DuesPeriod => ({
 export const getDuesPeriodStartDate = (period: DuesPeriod): Date =>
   new Date(period.year, (period.quarter - 1) * 3, 1);
 
-export const isDuesPeriodStartDay = (
-  date = new Date(),
-  period = getCurrentDuesPeriod(date)
-): boolean => {
-  const startDate = getDuesPeriodStartDate(period);
-  return date.getFullYear() === startDate.getFullYear()
-    && date.getMonth() === startDate.getMonth()
-    && date.getDate() === startDate.getDate();
+/**
+ * The last local calendar day of a dues quarter.
+ *
+ * OG settles its quarter at the END of the quarter. The old Home reminder used
+ * the first day, which could say Q3 was due on July 1 while the thing Nat
+ * actually needed to remember was September 30.
+ */
+export const getDuesPeriodEndDate = (period: DuesPeriod): Date =>
+  new Date(period.year, period.quarter * 3, 0);
+
+const formatLocalDateKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+export const QUARTERLY_DUES_REMINDER_ID_PREFIX = 'quarterly-dues-reminder-';
+
+export type QuarterlyDuesReminderEvent = {
+  id: string;
+  community_id: string;
+  title: string;
+  description: string;
+  event_date: string;
+  end_date: null;
+  event_time: null;
+  event_type: 'custom';
+  created_at: string;
+  visibility: 'members';
+  invited_scope: 'members';
 };
+
+/**
+ * One calendar-shaped reminder, generated from the date instead of stored as
+ * a second source of truth. It appears in HIVE's calendars and can be added to
+ * Apple or Google Calendar, while the Honey Pot ledger remains the authority
+ * on whether a member has paid.
+ */
+export const getQuarterlyDuesReminderEvent = (
+  communityId: string,
+  date = new Date()
+): QuarterlyDuesReminderEvent => {
+  const period = getCurrentDuesPeriod(date);
+  const endDate = getDuesPeriodEndDate(period);
+
+  return {
+    id: `${QUARTERLY_DUES_REMINDER_ID_PREFIX}${period.year}-q${period.quarter}`,
+    community_id: communityId,
+    title: `OG HIVE Q${period.quarter} dues due`,
+    description: `Quarterly dues are $${QUARTERLY_DUES_AMOUNT}. Pay ${HONEY_POT_CASH_APP_HANDLE} by the end of Q${period.quarter}.`,
+    event_date: formatLocalDateKey(endDate),
+    end_date: null,
+    event_time: null,
+    event_type: 'custom',
+    created_at: endDate.toISOString(),
+    visibility: 'members',
+    invited_scope: 'members',
+  };
+};
+
+export const isQuarterlyDuesReminderEvent = (event: { id?: string | null }) =>
+  (event.id ?? '').startsWith(QUARTERLY_DUES_REMINDER_ID_PREFIX);
 
 export const getDuesAmountForCoverage = (coverage: DuesCoverage) => {
   if (coverage === 'quarter') return QUARTERLY_DUES_AMOUNT;

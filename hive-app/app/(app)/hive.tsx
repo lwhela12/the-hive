@@ -85,8 +85,8 @@ import {
   type DuesPeriod,
   duesTransactionsCoverMember,
   getCurrentDuesPeriod,
-  getDuesPeriodStartDate,
-  isDuesPeriodStartDay,
+  getDuesPeriodEndDate,
+  isQuarterlyDuesReminderEvent,
 } from '../../lib/dues';
 import { HONEY_POT_CASH_APP_HANDLE } from '../../lib/honeyPotPayment';
 import type { Profile, Wish, WishGranter, Event, ActionItem } from '../../types';
@@ -254,6 +254,7 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
   // Half the members keep Apple Calendar and half keep Google, so the button
   // asks rather than guessing (Nat, 2026-09-03).
   const addToCalendar = useAddToCalendar();
+  const router = useRouter();
   // Who you are, so an event you can only SEE does not hand you the address and
   // the joining link (migration 148).
   const { memberships, profile, refreshProfile } = useAuth();
@@ -308,6 +309,7 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
         const seenScope = (event as any).visibility ?? 'members';
         const invitedScope = (event as any).invited_scope ?? seenScope;
         const isOwnBirthday = event.event_type === 'birthday' && !!profile?.id && event.related_user_id === profile.id;
+        const isDuesReminder = isQuarterlyDuesReminderEvent(event);
         const isEditingThisBirthday = editingBirthdayId === event.id;
         return (
         <Pressable
@@ -325,6 +327,10 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
             // in-progress draft.
             if (event.event_type === 'birthday') {
               if (isOwnBirthday && !isEditingThisBirthday) startEditingBirthday(event);
+              return;
+            }
+            if (isDuesReminder) {
+              router.push('/honey-pot' as any);
               return;
             }
             onEditEvent(event);
@@ -1195,7 +1201,7 @@ export default function HiveScreen() {
       setHomeActionItems(items.filter((item) => !item.archived_at));
 
       const currentPeriod = getCurrentDuesPeriod();
-      const currentDueDateKey = formatDateKey(getDuesPeriodStartDate(currentPeriod));
+      const currentDueDateKey = formatDateKey(getDuesPeriodEndDate(currentPeriod));
       setDismissedDuesPeriodKeys(new Set(
         items
           .filter((item) => (
@@ -1290,7 +1296,7 @@ export default function HiveScreen() {
 
   const getCurrentDuesReminderPeriodKey = useCallback((item: ActionItem) => {
     const currentPeriod = getCurrentDuesPeriod();
-    const currentDueDateKey = formatDateKey(getDuesPeriodStartDate(currentPeriod));
+    const currentDueDateKey = formatDateKey(getDuesPeriodEndDate(currentPeriod));
     return isQuarterlyDuesActionItem(item, currentPeriod, currentDueDateKey)
       ? getDuesPeriodKey(currentPeriod)
       : null;
@@ -1556,7 +1562,7 @@ export default function HiveScreen() {
     const now = new Date();
     const completedAt = now.toISOString();
     const period = getCurrentDuesPeriod(now);
-    const dueDate = getDuesPeriodStartDate(period);
+    const dueDate = getDuesPeriodEndDate(period);
     const dueDateKey = formatDateKey(dueDate);
     const description = getQuarterlyDuesActionTitle(period);
     const existingItem = homeActionItems.find(item => (
@@ -2086,7 +2092,11 @@ export default function HiveScreen() {
     isLoading,
     loading,
     refetch,
-  } = useHiveDataQuery(communityId ?? undefined, profile?.id);
+  } = useHiveDataQuery(
+    communityId ?? undefined,
+    profile?.id,
+    duesEnabled && community?.slug === 'default',
+  );
 
   /**
    * Places this HIVE has been before, offered as you type.
@@ -2881,7 +2891,7 @@ export default function HiveScreen() {
       const today = new Date();
       const { year, quarter } = getCurrentDuesPeriod(today);
       const period = { year, quarter };
-      const dueDate = getDuesPeriodStartDate(period);
+      const dueDate = getDuesPeriodEndDate(period);
       const dueDateKey = formatDateKey(dueDate);
       const duesReminderDismissed = dismissedDuesPeriodKeys.has(getDuesPeriodKey(period));
       const duesReminderAction = homeActionItems.find(item => (
@@ -2891,11 +2901,11 @@ export default function HiveScreen() {
       if (!duesStatusChecked || duesCoveredThisQuarter || duesReminderAction || duesReminderDismissed) return [];
 
       const dueDateLabel = formatDateShort(dueDate);
-      const isDueToday = isDuesPeriodStartDay(today, period);
+      const isDueToday = formatDateKey(today) === dueDateKey;
       return [{
         id: `quarterly-dues-${year}-q${quarter}`,
         emoji: '🍯',
-        title: isDueToday ? 'Quarterly dues are due today!' : 'Quarterly dues are still due',
+        title: isDueToday ? 'Quarterly dues are due today!' : `Q${quarter} dues are due ${dueDateLabel}`,
         detail: duesStatusLoading
           ? 'Checking payment status...'
           : `Due ${dueDateLabel} · $${QUARTERLY_DUES_AMOUNT} for Q${quarter} ${year} · ${HONEY_POT_CASH_APP_HANDLE}`,
