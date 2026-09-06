@@ -16,6 +16,7 @@ import {
   useArrivalBoard,
 } from '../../lib/hooks/useArrivalBoard';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
+import { surveyUsesLegacyEnergy } from '../../lib/arrivalSurveySelection';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
@@ -157,6 +158,7 @@ export default function ArrivalBoardScreen() {
                   member={member}
                   response={responsesByUser.get(member.id)}
                   isTV={isTV}
+                  showLegacyEnergy={surveyUsesLegacyEnergy(survey)}
                 />
               </View>
             ))}

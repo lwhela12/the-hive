@@ -22,19 +22,21 @@ export function ArrivalMemberCard({
   response,
   isTV,
   compact = false,
+  showLegacyEnergy = false,
 }: {
   member: ArrivalBoardMember;
   response?: SurveyResponse;
   isTV: boolean;
   compact?: boolean;
+  showLegacyEnergy?: boolean;
 }) {
   const answers = response?.answers ?? {};
   const checkedIn = !!response;
   const nameToday = getTextAnswer(answers, 'q_name_today') || getFirstName(member.name);
   const feeling = getTextAnswer(answers, 'q_feeling_today');
   const feelingNote = getTextAnswer(answers, 'q_feeling_note');
-  const energyLevel = getNumberAnswer(answers, 'q_energy_level');
-  const energyMode = getTextAnswer(answers, 'q_energy_mode');
+  const energyLevel = showLegacyEnergy ? getNumberAnswer(answers, 'q_energy_level') : null;
+  const energyMode = showLegacyEnergy ? getTextAnswer(answers, 'q_energy_mode') : '';
   const plate = getTextAnswer(answers, 'q_plate');
   const hardOut = personalHardOut(answers.q_hard_out).label;
   const attendance = getAttendance(response);

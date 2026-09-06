@@ -38,6 +38,7 @@ import { NEW_MEETING_WISH_ID, meetingWishCopy } from '../../lib/meetingWishCaptu
 import { parseFocusAnswer, focusAnswerDidIt, focusAnswerScore } from '../../components/surveys/SurveyQuestionField';
 import { Avatar } from '../../components/ui/Avatar';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
+import { surveyUsesLegacyEnergy } from '../../lib/arrivalSurveySelection';
 import { DeckVideo } from '../../components/meetings/DeckVideo';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
 import { ComposerBar } from '../../components/ui/ComposerBar';
@@ -2259,6 +2260,7 @@ export default function MeetingHelperScreen() {
                 response={responsesByUser.get(member.id)}
                 isTV={isTV}
                 compact
+                showLegacyEnergy={surveyUsesLegacyEnergy(survey)}
               />
             </View>
           ))}

@@ -2,6 +2,10 @@ type ArrivalSurveyScope = {
   community_id?: string | null;
 };
 
+type ArrivalSurveyQuestions = ArrivalSurveyScope & {
+  questions?: Array<{ id?: string | null }> | null;
+};
+
 export type ArrivalAttendance = 'in_person' | 'remote' | 'missing' | 'unknown';
 
 export function getArrivalAttendance(answers?: Record<string, unknown>): ArrivalAttendance {
@@ -15,6 +19,12 @@ export function getArrivalAttendance(answers?: Record<string, unknown>): Arrival
     || raw.includes('on the call')
   ) return 'remote';
   return 'in_person';
+}
+
+/** Only show bolts when the active form itself still asks for numeric energy. */
+export function surveyUsesLegacyEnergy(survey?: ArrivalSurveyQuestions | null): boolean {
+  const questionIds = new Set((survey?.questions ?? []).map((question) => question.id));
+  return questionIds.has('q_energy_level') && !questionIds.has('q_plate');
 }
 
 /**

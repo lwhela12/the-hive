@@ -23,6 +23,7 @@ vm.runInNewContext(compiledSelection, {
 });
 const { selectActiveArrivalCheckIn } = selectionModule.exports;
 const { getArrivalAttendance } = selectionModule.exports;
+const { surveyUsesLegacyEnergy } = selectionModule.exports;
 const activeSurveys = [
   { id: 'old-tech', community_id: 'tech', title: 'Monthly check-in' },
   { id: 'current-shared', community_id: null, title: 'Before we meet' },
@@ -45,6 +46,12 @@ if (fallback?.id !== 'old-tech') {
 }
 if (getArrivalAttendance({ q_attendance: "💻 I'll be on the call" }) !== 'remote') {
   failures.push('Arrivals must recognise the current Before we meet call option as remote attendance.');
+}
+if (surveyUsesLegacyEnergy({ questions: [{ id: 'q_energy_level' }, { id: 'q_plate' }] })) {
+  failures.push('Arrivals must hide retired energy bolts when the active form asks about plate capacity.');
+}
+if (!surveyUsesLegacyEnergy({ questions: [{ id: 'q_energy_level' }] })) {
+  failures.push('Arrivals must keep energy bolts for a legacy form that still asks the energy question.');
 }
 
 // Nat, 2026-08-24, after the Room slide's ordering was quietly moved once
