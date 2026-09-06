@@ -4,13 +4,41 @@ export const PLATE_QUESTION: SurveyQuestion = {
   id: 'q_plate', text: 'How much is on your plate right now?', type: 'choice', required: false,
   options: ['🍽️ Plenty of room — hand me something', "🥄 A bit on there, and I've got room for this", "🍲 Pretty full — I'll take one small thing", '🫙 Full to the brim — I want to listen this time'],
 };
+export const FEELING_QUESTION: SurveyQuestion = {
+  id: 'q_feeling_today',
+  text: 'How are you feeling coming into this meeting?',
+  type: 'choice',
+  required: false,
+  options: [
+    '😊 Great — bring it on!',
+    '😌 Good & steady',
+    '😴 Tired, but here',
+    '🫠 Overwhelmed — please go gently',
+    '🤒 Under the weather — love me from a distance',
+    '💛 Sad or low — extra hugs welcome',
+    '🖤 Sad or low — love me from a distance',
+    '🌀 All over the place',
+  ],
+};
+export const FEELING_NOTE_QUESTION: SurveyQuestion = {
+  id: 'q_feeling_note',
+  text: 'Anything you want the room to know? (Optional)',
+  type: 'short',
+  required: false,
+};
 export const HD_FOCUS_QUESTION: SurveyQuestion = {
   id: 'q_hd_wish',
   text: 'Choose your HD wish for this month',
   type: 'long',
   required: false,
 };
-const capacityIds = new Set(['q_plate', 'q_energy_level', 'q_energy_mode', 'q_feeling_today']);
+const standardizedArrivalIds = new Set([
+  'q_plate',
+  'q_energy_level',
+  'q_energy_mode',
+  FEELING_QUESTION.id,
+  FEELING_NOTE_QUESTION.id,
+]);
 const productionHomeworkIds = new Set([
   'q_show_progress',
   'q_on_board',
@@ -28,7 +56,7 @@ export function checkInQuestions(questions: SurveyQuestion[], month = false, hiv
   const productionMeeting = !month && ['show', 'production'].includes((hiveSlug ?? '').trim().toLowerCase());
   const alreadyHasHdFocus = questions.some(q => q.id === HD_FOCUS_QUESTION.id);
   const presented = questions.filter(q => (
-    !capacityIds.has(q.id)
+    !standardizedArrivalIds.has(q.id)
     && q.id !== 'q_contact'
     // Production HIVE is one shared project. Its assigned jobs and their live
     // status are already drawn above the questions; asking members to retype
@@ -63,6 +91,13 @@ export function checkInQuestions(questions: SurveyQuestion[], month = false, hiv
     if (q.id === 'q_hive_help_recap') return { ...q, type: 'focus' as const, text: 'How did this month’s HIVE Help go?' };
     return q;
   });
+
+  // The plate picker sits immediately above the survey. These two compact,
+  // optional asks complete the arrival context and already render on the
+  // member's card, so the room can respond with care before business starts.
+  if (!month) {
+    presented.unshift({ ...FEELING_QUESTION }, { ...FEELING_NOTE_QUESTION });
+  }
 
   // Every Before we meet check-in arrives at the HummDinger with one chosen
   // HD. Older HIVE question rows do not all contain that field, so add the

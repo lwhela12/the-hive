@@ -8,6 +8,15 @@ type ArrivalSurveyQuestions = ArrivalSurveyScope & {
 
 export type ArrivalAttendance = 'in_person' | 'remote' | 'missing' | 'unknown';
 
+export function isCurrentArrivalRequest(
+  requestedCommunityId: string,
+  activeCommunityId: string | null | undefined,
+  requestId: number,
+  latestRequestId: number,
+): boolean {
+  return requestedCommunityId === activeCommunityId && requestId === latestRequestId;
+}
+
 export function getArrivalAttendance(answers?: Record<string, unknown>): ArrivalAttendance {
   const raw = String(answers?.q_attendance ?? '').toLowerCase();
   if (!raw) return 'unknown';

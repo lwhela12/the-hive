@@ -13,6 +13,7 @@ import {
 import { isPreMeetingCheckInSurvey } from '../checkIns';
 import {
   getArrivalAttendance,
+  isCurrentArrivalRequest,
   selectActiveArrivalCheckIn,
   type ArrivalAttendance,
 } from '../arrivalSurveySelection';
@@ -144,11 +145,16 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
   const [responsesByUser, setResponsesByUser] = useState<Map<string, SurveyResponse>>(new Map());
   const [nextMeeting, setNextMeeting] = useState<ArrivalBoardMeeting | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
-  const loadingRef = useRef(false);
+  const loadingCommunityRef = useRef<string | null>(null);
+  const requestSequenceRef = useRef(0);
+  const activeCommunityRef = useRef(communityId);
+  activeCommunityRef.current = communityId;
 
   const refresh = useCallback(async () => {
-    if (!communityId || loadingRef.current) return;
-    loadingRef.current = true;
+    if (!communityId || loadingCommunityRef.current === communityId) return;
+    const requestedCommunityId = communityId;
+    const requestId = ++requestSequenceRef.current;
+    loadingCommunityRef.current = requestedCommunityId;
 
     try {
       const today = getLocalIsoDate(new Date());
@@ -263,6 +269,10 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
         });
       }
 
+      // A HIVE switch can finish while this request is in flight. Never let a
+      // late Tech response paint its members into the OG room (or vice versa).
+      if (!isCurrentArrivalRequest(requestedCommunityId, activeCommunityRef.current, requestId, requestSequenceRef.current)) return;
+
       setSurvey(activeCheckIn);
       setResponsePeriod(period);
       setMembers(memberRows);
@@ -270,14 +280,29 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
       setNextMeeting((meetingRes.data?.[0] as ArrivalBoardMeeting | undefined) ?? null);
       setLastUpdatedAt(new Date());
     } catch (error) {
-      console.warn('Could not load the Arrival Board', error);
+      if (isCurrentArrivalRequest(requestedCommunityId, activeCommunityRef.current, requestId, requestSequenceRef.current)) {
+        console.warn('Could not load the Arrival Board', error);
+      }
     } finally {
-      loadingRef.current = false;
-      setLoading(false);
+      if (loadingCommunityRef.current === requestedCommunityId) {
+        loadingCommunityRef.current = null;
+      }
+      if (isCurrentArrivalRequest(requestedCommunityId, activeCommunityRef.current, requestId, requestSequenceRef.current)) {
+        setLoading(false);
+      }
     }
   }, [communityId]);
 
   useEffect(() => {
+    // The header changes HIVE immediately. Clear the old room in the same
+    // render cycle so nobody sees the prior HIVE while the new one loads.
+    setLoading(true);
+    setSurvey(null);
+    setResponsePeriod(null);
+    setMembers([]);
+    setResponsesByUser(new Map());
+    setNextMeeting(null);
+    setLastUpdatedAt(null);
     void refresh();
   }, [refresh]);
 

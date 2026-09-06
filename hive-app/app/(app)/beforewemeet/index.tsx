@@ -379,7 +379,7 @@ export default function BeforeWeMeetScreen() {
     const own = splitMergedAnswers({ ...merged, sections: merged.sections.filter(s => s.communityId === selected) }, Object.fromEntries(Object.entries(answers).map(([key, value]) => [`${selected}:${key}`, value])), [])[0];
     if (!own) return { error: 'No section' };
     // Preserve historic numeric energy; capacity has its own string key.
-    for (const id of ['q_energy_level', 'q_energy_mode', 'q_feeling_today', 'q_plate']) {
+    for (const id of ['q_energy_level', 'q_energy_mode', 'q_plate']) {
       const original = saved[selected];
       if (original?.[id] !== undefined) own.answers[id] = original[id];
     }

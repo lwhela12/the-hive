@@ -24,6 +24,7 @@ vm.runInNewContext(compiledSelection, {
 const { selectActiveArrivalCheckIn } = selectionModule.exports;
 const { getArrivalAttendance } = selectionModule.exports;
 const { surveyUsesLegacyEnergy } = selectionModule.exports;
+const { isCurrentArrivalRequest } = selectionModule.exports;
 const activeSurveys = [
   { id: 'old-tech', community_id: 'tech', title: 'Monthly check-in' },
   { id: 'current-shared', community_id: null, title: 'Before we meet' },
@@ -55,6 +56,13 @@ if (surveyUsesLegacyEnergy({ community_id: 'tech', questions: [{ id: 'q_energy_l
 }
 if (!surveyUsesLegacyEnergy({ community_id: 'tech', questions: [{ id: 'q_energy_level' }] })) {
   failures.push('Arrivals must keep energy bolts for a legacy form that still asks the energy question.');
+}
+if (
+  isCurrentArrivalRequest('tech', 'og', 1, 2)
+  || isCurrentArrivalRequest('tech', 'tech', 1, 2)
+  || !isCurrentArrivalRequest('og', 'og', 2, 2)
+) {
+  failures.push('A late Arrival response must only render into the HIVE that requested it.');
 }
 
 // Nat, 2026-08-24, after the Room slide's ordering was quietly moved once

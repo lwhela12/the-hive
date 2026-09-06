@@ -4,7 +4,7 @@ const ts = require('typescript');
 const assert = require('node:assert/strict');
 const moduleObject = { exports: {} };
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/checkInPresentation.ts','utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:moduleObject.exports,module:moduleObject,Date,Set});
-const {checkInQuestions,PLATE_QUESTION,HD_FOCUS_QUESTION,meetingLabel}=moduleObject.exports;
+const {checkInQuestions,PLATE_QUESTION,FEELING_QUESTION,FEELING_NOTE_QUESTION,HD_FOCUS_QUESTION,meetingLabel}=moduleObject.exports;
 const questions=[
   {id:'q_energy_level',type:'scale',text:'Energy'},
   {id:'q_plate',type:'choice',text:'Plate'},
@@ -29,7 +29,7 @@ assert.equal(meeting.some(q=>q.id==='q_pop_priorities'),false,'meeting focus rep
 assert.equal(meeting.filter(q=>q.id==='q_hd_wish').length,1,'every meeting gets one HD focus picker');
 assert.equal(meeting.find(q=>q.id==='q_hd_wish').text,HD_FOCUS_QUESTION.text);
 const missingBoth=checkInQuestions([{id:'q_attendance',type:'choice',text:'Coming?'},{id:'q_hard_out',type:'short',text:'Hard out?'},{id:'custom',type:'long',text:'Custom'}]);
-assert.deepEqual(Array.from(missingBoth,q=>q.id),['q_attendance','q_hard_out','q_hd_wish','custom'],'older HIVE rows receive the shared picker after hard out');
+assert.deepEqual(Array.from(missingBoth,q=>q.id),['q_feeling_today','q_feeling_note','q_attendance','q_hard_out','q_hd_wish','custom'],'older HIVE rows receive the shared arrivals and picker');
 const alreadyHasBoth=checkInQuestions([...questions,{id:'q_hd_wish',type:'long',text:'Old HD copy'}]);
 assert.equal(alreadyHasBoth.filter(q=>q.id==='q_hd_wish').length,1,'never show two HD focus pickers');
 assert.equal(alreadyHasBoth.some(q=>q.id==='q_pop_priorities'),false,'HD focus wins over the old priorities essay');
@@ -42,7 +42,7 @@ const production=checkInQuestions([
   {id:'q_show_obstacles',type:'long',text:'Retype blockers'},
   {id:'q_biggest_question',type:'long',text:'Retype questions'},
 ],false,'show');
-assert.deepEqual(Array.from(production,q=>q.id),['q_attendance','q_hard_out'],'Production uses its live jobs instead of parallel survey homework');
+assert.deepEqual(Array.from(production,q=>q.id),['q_feeling_today','q_feeling_note','q_attendance','q_hard_out'],'Production uses compact arrival context plus its live jobs');
 assert.equal(production.some(q=>q.id==='q_hd_wish'),false,'Production has one shared show instead of personal HD focus');
 assert.equal(adapted.find(q=>q.id==='q_hive_help_recap').type,'focus','HIVE Help stays a structured rating');
 assert.match(adapted.find(q=>q.id==='q_attendance').options[1],/email me the recap/);
@@ -50,6 +50,9 @@ assert.match(adapted.find(q=>q.id==='q_newsletter').text,/Buzz.*shows.*shout-out
 assert.match(adapted.find(q=>q.id==='q_month_story').text,/so far/);
 assert.equal(adapted.find(q=>q.id==='custom').text,'Admin custom question');
 assert.equal([PLATE_QUESTION,...adapted].filter(q=>q.id==='q_plate').length,1);
+assert.equal(meeting.filter(q=>q.id===FEELING_QUESTION.id).length,1,'Before we meet has one feeling choice');
+assert.equal(meeting.filter(q=>q.id===FEELING_NOTE_QUESTION.id).length,1,'Before we meet has one optional context note');
+assert.match(FEELING_QUESTION.options.join(' '),/Overwhelmed.*Under the weather.*Sad or low/);
 assert.match(meetingLabel({id:'a',community_id:'a',event_date:'2026-09-10',event_time:'18:30:00'}),/Sep 10.*6:30 PM PT/);
 assert.equal(meetingLabel(), 'No meeting scheduled yet');
 assert.match(meetingLabel({event_date:'2026-09-10'}),/Time to be confirmed/);
