@@ -47,10 +47,13 @@ if (fallback?.id !== 'old-tech') {
 if (getArrivalAttendance({ q_attendance: "💻 I'll be on the call" }) !== 'remote') {
   failures.push('Arrivals must recognise the current Before we meet call option as remote attendance.');
 }
-if (surveyUsesLegacyEnergy({ questions: [{ id: 'q_energy_level' }, { id: 'q_plate' }] })) {
+if (surveyUsesLegacyEnergy({ community_id: null, questions: [{ id: 'q_energy_level' }] })) {
+  failures.push('Arrivals must never show copied energy history for the shared Before we meet survey.');
+}
+if (surveyUsesLegacyEnergy({ community_id: 'tech', questions: [{ id: 'q_energy_level' }, { id: 'q_plate' }] })) {
   failures.push('Arrivals must hide retired energy bolts when the active form asks about plate capacity.');
 }
-if (!surveyUsesLegacyEnergy({ questions: [{ id: 'q_energy_level' }] })) {
+if (!surveyUsesLegacyEnergy({ community_id: 'tech', questions: [{ id: 'q_energy_level' }] })) {
   failures.push('Arrivals must keep energy bolts for a legacy form that still asks the energy question.');
 }
 

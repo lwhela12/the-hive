@@ -23,6 +23,7 @@ export function getArrivalAttendance(answers?: Record<string, unknown>): Arrival
 
 /** Only show bolts when the active form itself still asks for numeric energy. */
 export function surveyUsesLegacyEnergy(survey?: ArrivalSurveyQuestions | null): boolean {
+  if (!survey || survey.community_id == null) return false;
   const questionIds = new Set((survey?.questions ?? []).map((question) => question.id));
   return questionIds.has('q_energy_level') && !questionIds.has('q_plate');
 }
