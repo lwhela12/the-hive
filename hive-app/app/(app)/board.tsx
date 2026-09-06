@@ -369,6 +369,26 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
    */
   const placingRoutePost = resolvesRoutePost && !routePostReady;
   const trailCategoryName = selectedCategory?.name ?? deepLinkCategoryName;
+  const resetBoardToList = useCallback(() => {
+    setSelectedCategoryId(null);
+    setSelectedPostId(null);
+    setShowComposer(false);
+    setEditingPost(null);
+    setShowTopicComposer(false);
+    setEditingTopic(null);
+    setShowAddLinkedWishModal(false);
+    setSelectedLinkedWish(null);
+    setManagingLinkedWish(null);
+    setEditingLinkedWish(null);
+    setLinkedWishToGrant(null);
+    setGrantThreadContext(null);
+    setThreadSearch('');
+    if (boardCategoryStorageKey) removeStoredItem(boardCategoryStorageKey);
+    if (boardPostStorageKey) removeStoredItem(boardPostStorageKey);
+    if (boardComposerStorageKey) removeStoredItem(boardComposerStorageKey);
+    if (boardDirectOpenStorageKey) removeStoredItem(boardDirectOpenStorageKey);
+  }, [boardCategoryStorageKey, boardComposerStorageKey, boardDirectOpenStorageKey, boardPostStorageKey]);
+
   useDeepTrail(
     trailCategoryName && !placingRoutePost
       ? [{
@@ -386,12 +406,11 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     // i wanted to go back to boards, that woudl be cool." The board and the
     // thread are this screen's state while the route stays `/board`, so the
     // page crumb had nowhere to navigate to and did nothing. It sheds both now.
-    selectedCategory
-      ? () => {
-          setSelectedPostId(null);
-          setSelectedCategoryId(null);
-        }
-      : undefined,
+    //
+    // That reset must also forget the stored board. Clearing only React state
+    // painted the grid for one frame, then the restore effect below reopened
+    // the remembered board — Nat's 2026-09-06 "it just blinked here" report.
+    selectedCategory ? resetBoardToList : undefined,
   );
 
   const canManageThread = useCallback((post: Pick<BoardPost, 'author_id'>) => {
@@ -508,26 +527,6 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     ]);
     setRefreshing(false);
   };
-
-  const resetBoardToList = useCallback(() => {
-    setSelectedCategoryId(null);
-    setSelectedPostId(null);
-    setShowComposer(false);
-    setEditingPost(null);
-    setShowTopicComposer(false);
-    setEditingTopic(null);
-    setShowAddLinkedWishModal(false);
-    setSelectedLinkedWish(null);
-    setManagingLinkedWish(null);
-    setEditingLinkedWish(null);
-    setLinkedWishToGrant(null);
-    setGrantThreadContext(null);
-    setThreadSearch('');
-    if (boardCategoryStorageKey) removeStoredItem(boardCategoryStorageKey);
-    if (boardPostStorageKey) removeStoredItem(boardPostStorageKey);
-    if (boardComposerStorageKey) removeStoredItem(boardComposerStorageKey);
-    if (boardDirectOpenStorageKey) removeStoredItem(boardDirectOpenStorageKey);
-  }, [boardCategoryStorageKey, boardComposerStorageKey, boardDirectOpenStorageKey, boardPostStorageKey]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
