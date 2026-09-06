@@ -1603,6 +1603,9 @@ export function mergedPreMeetingQuestions(
   }));
 
   for (const section of merged.sections) {
+    // A commitments-only HIVE still needs its section for saving, but has no
+    // questions to introduce after the to-do list.
+    if (section.questions.length === 0) continue;
     // A section that is here because of the DATE says so — otherwise a member
     // opening End of the month in the last three days of a quarter meets nine
     // extra questions with nothing telling them why, or that they will be gone
