@@ -58,6 +58,14 @@ export function parseActionItemDescription(description: string): ParsedActionIte
     text = text.slice(0, dashIndex).trim();
   }
 
+  // Production assignments put the field questions on following bullet
+  // lines. Keep the job title scannable and carry the questions as context.
+  const lineIndex = text.indexOf('\n');
+  if (!elaboration && lineIndex > 0) {
+    elaboration = text.slice(lineIndex + 1).replace(/^\s*[·•-]\s*/gm, '').trim();
+    text = text.slice(0, lineIndex).trim();
+  }
+
   const context = [elaboration, mentionTag, reLabel ? `re: ${reLabel}` : null]
     .filter(Boolean)
     .join(' · ') || null;

@@ -45,7 +45,7 @@ import { ThinkingBee } from '../../components/ui/ThinkingBee';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { AppHeader } from '../../components/navigation';
 import { showAlert } from '../../lib/showAlert';
-import { fetchProductionProjectStatus, type ProductionProjectAssignment } from '../../lib/productionProject';
+import { fetchProductionProjectStatus, groupProductionWorkstreams, type ProductionProjectAssignment } from '../../lib/productionProject';
 import { getMentionedMembers, hasBroadcastMention } from '../../lib/mentions';
 import { useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import {
@@ -1018,6 +1018,10 @@ export default function MeetingHelperScreen() {
     { id: string; description: string; assignedTo: string | null; relatedUserId: string | null; assigneeName: string }[]
   >([]);
   const [productionAssignments, setProductionAssignments] = useState<ProductionProjectAssignment[]>([]);
+  const productionWorkstreams = useMemo(
+    () => groupProductionWorkstreams(productionAssignments),
+    [productionAssignments],
+  );
   // Tonight's live recap for the Wrap-Up slide — because the meeting happens
   // IN the app now, the summary is just "what changed today".
   const [tonightRecap, setTonightRecap] = useState<{
@@ -2497,22 +2501,25 @@ export default function MeetingHelperScreen() {
         </View>
         )}
       </View>
-      {deckSlug === 'show' && productionAssignments.length > 0 && (
+      {deckSlug === 'show' && productionWorkstreams.length > 0 && (
         <View style={{ marginTop: sz(18, 12), gap: sz(10, 7) }}>
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
             Production project status
           </Text>
           <View style={{ backgroundColor: CARD, borderWidth: 1, borderColor: GOLD_SOFT, borderRadius: sz(18, 13), padding: sz(18, 12), gap: sz(10, 7) }}>
-            {productionAssignments.map((item) => (
-              <View key={`${item.assignedTo}:${item.relatedBoardPostId}`} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sz(10, 7) }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), color: GOLD_DEEP }}>
+              {productionWorkstreams.filter(item => !item.completed).length} open · {productionWorkstreams.filter(item => item.completed).length} done · {productionWorkstreams.filter(item => item.findingCount > 0 || item.fileCount > 0).length} with findings
+            </Text>
+            {productionWorkstreams.map((item) => (
+              <View key={item.relatedBoardPostId} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sz(10, 7) }}>
                 <Ionicons name={item.completed ? 'checkmark-circle' : 'ellipse-outline'} size={sz(22, 16)} color={GOLD} />
                 <View style={{ flex: 1, gap: sz(3, 2) }}>
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(24, 17), color: CHARCOAL }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold' }}>{getFirstName(item.assigneeName)} · </Text>
+                    <Text style={{ fontFamily: 'Lato_700Bold' }}>{item.assigneeNames.map(getFirstName).join(', ')} · </Text>
                     {item.description}
                   </Text>
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 10), color: MUTED }}>
-                    {item.completed ? 'Done' : 'Still to do'} · {item.findingCount === 0 && item.fileCount === 0
+                    {item.completed ? 'Done' : item.completedCount > 0 ? `${item.completedCount}/${item.assignmentCount} done` : 'Still to do'} · {item.findingCount === 0 && item.fileCount === 0
                       ? 'No findings added yet'
                       : `${item.findingCount} update${item.findingCount === 1 ? '' : 's'}${item.fileCount ? ` · ${item.fileCount} file${item.fileCount === 1 ? '' : 's'}` : ''}`}
                   </Text>

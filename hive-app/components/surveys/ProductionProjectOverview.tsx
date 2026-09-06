@@ -2,11 +2,16 @@ import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { fetchProductionProjectStatus, type ProductionProjectAssignment } from '../../lib/productionProject';
+import {
+  fetchProductionProjectStatus,
+  groupProductionWorkstreams,
+  type ProductionProjectAssignment,
+  type ProductionProjectWorkstream,
+} from '../../lib/productionProject';
 
 type Props = { communityId: string; accent: string; isManager: boolean };
 
-function findingsLabel(item: ProductionProjectAssignment) {
+function findingsLabel(item: ProductionProjectWorkstream) {
   if (item.findingCount === 0 && item.fileCount === 0) return 'No findings added yet';
   return [
     item.findingCount > 0 ? `${item.findingCount} update${item.findingCount === 1 ? '' : 's'}` : '',
@@ -52,10 +57,11 @@ export function ProductionProjectOverview({ communityId, accent, isManager }: Pr
     );
   }
 
-  const openCount = assignments.filter(item => !item.completed).length;
-  const doneCount = assignments.length - openCount;
-  const waitingCount = assignments.filter(item => item.findingCount === 0 && item.fileCount === 0).length;
-  const visibleAssignments = expanded ? assignments : assignments.slice(0, 4);
+  const workstreams = groupProductionWorkstreams(assignments);
+  const openCount = workstreams.filter(item => !item.completed).length;
+  const doneCount = workstreams.length - openCount;
+  const waitingCount = workstreams.filter(item => item.findingCount === 0 && item.fileCount === 0).length;
+  const visibleWorkstreams = expanded ? workstreams : workstreams.slice(0, 4);
 
   return (
     <View style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: `${accent}55`, borderRadius: 18, padding: 16, marginBottom: 18, gap: 12 }}>
@@ -73,14 +79,16 @@ export function ProductionProjectOverview({ communityId, accent, isManager }: Pr
       {state === 'loading' && <Text style={{ color: '#7f715f' }}>Gathering the team’s jobs…</Text>}
       {state === 'error' && <Text style={{ color: '#991b1b' }}>Production status could not load. Reopen this check-in to try again.</Text>}
       {state === 'ready' && assignments.length === 0 && <Text style={{ color: '#7f715f' }}>No production jobs are assigned yet.</Text>}
-      {visibleAssignments.map((item) => (
-        <View key={`${item.assignedTo}:${item.relatedBoardPostId}`} style={{ borderTopWidth: 1, borderTopColor: `${accent}33`, paddingTop: 11, gap: 5 }}>
+      {visibleWorkstreams.map((item) => (
+        <View key={item.relatedBoardPostId} style={{ borderTopWidth: 1, borderTopColor: `${accent}33`, paddingTop: 11, gap: 5 }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
             <Ionicons name={item.completed ? 'checkmark-circle' : 'ellipse-outline'} size={21} color={accent} />
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={{ fontFamily: 'Lato_700Bold', color: '#2d2d2d', lineHeight: 19 }}>{item.description}</Text>
               <Text style={{ fontFamily: 'Lato_400Regular', color: '#6b7280', fontSize: 12 }}>
-                {item.assigneeName} · {item.completed ? 'Done' : 'Still to do'} · {findingsLabel(item)}
+                {item.assigneeNames.join(', ')} · {item.completed
+                  ? 'Done'
+                  : item.completedCount > 0 ? `${item.completedCount}/${item.assignmentCount} done` : 'Still to do'} · {findingsLabel(item)}
               </Text>
               {item.latestFinding ? <Text numberOfLines={2} style={{ fontFamily: 'Lato_400Regular', color: '#6b6255', fontSize: 12, lineHeight: 17 }}>
                 Latest: {item.latestFinding}
@@ -92,10 +100,10 @@ export function ProductionProjectOverview({ communityId, accent, isManager }: Pr
           </Pressable>
         </View>
       ))}
-      {assignments.length > 4 ? (
+      {workstreams.length > 4 ? (
         <Pressable accessibilityRole="button" onPress={() => setExpanded(value => !value)} style={{ minHeight: 40, justifyContent: 'center', alignSelf: 'flex-start', paddingHorizontal: 8 }}>
           <Text style={{ fontFamily: 'Lato_700Bold', color: accent, fontSize: 13 }}>
-            {expanded ? 'Show the short view' : `See all ${assignments.length} jobs`}
+            {expanded ? 'Show the short view' : `See all ${workstreams.length} jobs`}
           </Text>
         </Pressable>
       ) : null}

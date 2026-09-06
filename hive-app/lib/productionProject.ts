@@ -16,6 +16,44 @@ export type ProductionProjectAssignment = {
   latestFindingAt: string | null;
 };
 
+export type ProductionProjectWorkstream = {
+  relatedBoardPostId: string;
+  description: string;
+  assigneeNames: string[];
+  assignmentCount: number;
+  completedCount: number;
+  completed: boolean;
+  findingCount: number;
+  fileCount: number;
+  latestFinding: string | null;
+};
+
+export function groupProductionWorkstreams(assignments: ProductionProjectAssignment[]): ProductionProjectWorkstream[] {
+  const grouped = new Map<string, ProductionProjectWorkstream>();
+  for (const item of assignments) {
+    const current = grouped.get(item.relatedBoardPostId) ?? {
+      relatedBoardPostId: item.relatedBoardPostId,
+      description: item.description,
+      assigneeNames: [],
+      assignmentCount: 0,
+      completedCount: 0,
+      completed: false,
+      findingCount: item.findingCount,
+      fileCount: item.fileCount,
+      latestFinding: item.latestFinding,
+    };
+    if (!current.assigneeNames.includes(item.assigneeName)) current.assigneeNames.push(item.assigneeName);
+    current.assignmentCount += 1;
+    if (item.completed) current.completedCount += 1;
+    current.completed = current.completedCount === current.assignmentCount;
+    grouped.set(item.relatedBoardPostId, current);
+  }
+  return [...grouped.values()].sort((a, b) => {
+    if (a.completed !== b.completed) return a.completed ? 1 : -1;
+    return a.description.localeCompare(b.description);
+  });
+}
+
 type AssignmentRow = {
   id: string;
   description: string;

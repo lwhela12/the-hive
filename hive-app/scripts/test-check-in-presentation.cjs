@@ -68,6 +68,7 @@ assert.ok(!field.includes("Anything else you'd like to share?"),'HIVE Help ratin
 const meetingHelper=fs.readFileSync('app/(app)/meeting-helper.tsx','utf8');
 assert.ok(meetingHelper.includes('Production project status'),'Production Meeting Helper shows the live project status');
 assert.ok(meetingHelper.includes('Open findings thread →'),'Production Meeting Helper links status back to evidence');
+assert.ok(meetingHelper.includes('groupProductionWorkstreams'),'shared Production jobs are grouped instead of repeated per assignee');
 assert.ok(!meetingHelper.includes("{ key: 'q_show_obstacles', label: \"What's stuck\" }"),'Production Meeting Helper does not depend on retired survey homework');
 const carryForward=fs.readFileSync('lib/hooks/useCarryForwardContext.ts','utf8');
 assert.ok(carryForward.includes('related_board_post_id'),'check-in tasks retain their board thread link');
