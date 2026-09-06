@@ -439,16 +439,18 @@ export default function BeforeWeMeetScreen() {
       <AppHeader title="Before we meet" />
       <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }} style={{ backgroundColor: skin.page }}>
         <Text style={{ color: skin.inkSoft }}>
-          Open any HIVE whenever you have something to add. We only send the reminder when its meeting is close.
+          Check in any time. If you haven’t checked in, reminders only go out the day before or day of your meeting.
         </Text>
-        {personalQuestion}
-        {groups.prominent.length > 0 && <Text style={{ color: skin.ink, fontFamily: 'Lato_700Bold', fontSize: 18 }}>Meeting soon</Text>}
+        {groups.prominent.length + groups.future.length > 0 && <Text style={{ color: skin.ink, fontFamily: 'Lato_700Bold', fontSize: 18 }}>Upcoming meetings</Text>}
         {groups.prominent.map(renderHive)}
-        {groups.future.length > 0 && <Text style={{ color: skin.ink, fontFamily: 'Lato_700Bold', fontSize: 18 }}>Anytime</Text>}
         {groups.future.map(renderHive)}
         {groups.missing.length > 0 && <Text style={{ color: skin.inkSoft, fontFamily: 'Lato_700Bold', marginTop: 8 }}>No meeting date yet · still open</Text>}
         {groups.missing.map(renderHive)}
-        <Pressable accessibilityRole="button" onPress={done}><Text style={{ color: skin.gold }}>Done for now</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={done}
+          style={({ pressed }) => ({ alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 22, paddingVertical: 12, minHeight: 44,
+            backgroundColor: skin.gold, opacity: pressed ? 0.8 : 1 })}>
+          <Text style={{ color: '#172033', fontFamily: 'Lato_700Bold', fontSize: 14 }}>Done for now</Text>
+        </Pressable>
       </ScrollView>
     </View>
   );

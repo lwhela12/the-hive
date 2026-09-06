@@ -114,8 +114,9 @@ function renderScreen({ user = 'user', loading = false, loaded = 'user:far:missi
   return JSON.stringify(output.exports.default());
 }
 const open = renderScreen();
-assert.match(open, /Meeting soon/);
-assert.match(open, /Anytime/);
+assert.match(open, /Upcoming meetings/);
+assert.ok(!open.includes('Anytime'));
+assert.ok(!open.includes('SharedPlate'), 'plate belongs inside the selected check-in, not the meeting list');
 assert.match(open, /2027-02-01/, 'future cards are visible without waiting or expanding anything');
 assert.match(open, /Saved — review/);
 for (const options of [{user:'other'}, {loading:true}, {loaded:null}, {user:'other',selected:'todayEarly'}]) {

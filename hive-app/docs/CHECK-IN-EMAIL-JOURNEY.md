@@ -50,3 +50,10 @@ Personal hard-out uses No/Yes and separate hour/minute/AM/PM inputs, without tag
 Wish focus is a radio choice among active wishes or Write a new wish. Only the chosen wish shows audience and active/attention controls, with a note when needed. Mark granted opens the existing grant modal, preserves helper-credit and linked-board handling, and clears that wish from focus after successful granting so another/new wish can be selected. Cross-HIVE granting uses the wish's source HIVE and does not inherit another HIVE's admin role. Granting saves through its own explicit modal action; selecting focus and writing a new wish save on check-in submission. New-wish mode offers Write my own or Refine with Clive; the existing-wish privacy explanation and generic new-wish paragraphs are removed.
 
 Validation: full typecheck/web build and all regression scripts passed. Offline tests exercise disclosure, draft preservation, grant-to-new-focus, grant cancellation, ownership/failure/credit/link behavior, clock validation and legacy/noon/midnight cases. No member check-ins or wishes were submitted/granted during agent testing; no email switches changed.
+
+
+## Meeting-list annotations (2026-09-05)
+
+Nat explicitly approved the completion page; preserve that design. On browse=all, removed the plate question from above the meeting list; it remains the first question inside each individual check-in with existing shared-draft behavior. Replaced ambiguous Anytime/Meeting soon buckets with one Upcoming meetings heading, retaining chronological groups and all future meetings. Done for now is a compact gold pill with dark text. Copy now states the day-before-or-day-of reminder limit; the sender still targets the day before and no additional send path or approval switch was changed.
+
+Validation: typecheck, web build, check-in-priority and continuation regressions pass. Existing card review/saved state and approved success page remain intact.
