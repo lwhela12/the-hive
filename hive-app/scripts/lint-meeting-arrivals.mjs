@@ -22,6 +22,7 @@ vm.runInNewContext(compiledSelection, {
   exports: selectionModule.exports,
 });
 const { selectActiveArrivalCheckIn } = selectionModule.exports;
+const { getArrivalAttendance } = selectionModule.exports;
 const activeSurveys = [
   { id: 'old-tech', community_id: 'tech', title: 'Monthly check-in' },
   { id: 'current-shared', community_id: null, title: 'Before we meet' },
@@ -41,6 +42,9 @@ const fallback = selectActiveArrivalCheckIn(
 );
 if (fallback?.id !== 'old-tech') {
   failures.push('Arrivals must keep the HIVE-specific survey as a fallback when no shared check-in exists.');
+}
+if (getArrivalAttendance({ q_attendance: "💻 I'll be on the call" }) !== 'remote') {
+  failures.push('Arrivals must recognise the current Before we meet call option as remote attendance.');
 }
 
 // Nat, 2026-08-24, after the Room slide's ordering was quietly moved once

@@ -11,7 +11,11 @@ import {
   type SurveyResponse,
 } from './useSurveys';
 import { isPreMeetingCheckInSurvey } from '../checkIns';
-import { selectActiveArrivalCheckIn } from '../arrivalSurveySelection';
+import {
+  getArrivalAttendance,
+  selectActiveArrivalCheckIn,
+  type ArrivalAttendance,
+} from '../arrivalSurveySelection';
 
 const POLL_INTERVAL_MS = 20 * 1000;
 
@@ -89,13 +93,9 @@ export function formatEventTimeRange(start: string, end?: string | null) {
 
 // "Will we see you at the meeting?" — parsed loosely so copy tweaks to the
 // options don't break the logic.
-export type MeetingAttendance = 'in_person' | 'remote' | 'missing' | 'unknown';
+export type MeetingAttendance = ArrivalAttendance;
 export function getAttendance(response?: SurveyResponse): MeetingAttendance {
-  const raw = String((response?.answers as Record<string, unknown> | undefined)?.q_attendance ?? '').toLowerCase();
-  if (!raw) return 'unknown';
-  if (raw.includes('miss') || raw.includes("can't") || raw.includes('cant')) return 'missing';
-  if (raw.includes('remote') || raw.includes('joining') || raw.includes('zoom')) return 'remote';
-  return 'in_person';
+  return getArrivalAttendance(response?.answers as Record<string, unknown> | undefined);
 }
 
 // Arrival order: first to check in takes the 1 spot, and the order reshuffles
