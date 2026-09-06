@@ -389,6 +389,11 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     if (boardDirectOpenStorageKey) removeStoredItem(boardDirectOpenStorageKey);
   }, [boardCategoryStorageKey, boardComposerStorageKey, boardDirectOpenStorageKey, boardPostStorageKey]);
 
+  const resetThreadToBoard = useCallback(() => {
+    setSelectedPostId(null);
+    if (boardPostStorageKey) removeStoredItem(boardPostStorageKey);
+  }, [boardPostStorageKey]);
+
   useDeepTrail(
     trailCategoryName && !placingRoutePost
       ? [{
@@ -397,9 +402,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           // (deliberately — see `deepLinkCategoryName` above), so its trail
           // segment names the thread's home without pretending there's
           // somewhere to step back to.
-          onPress: selectedCategory && selectedPostId
-            ? () => setSelectedPostId(null)
-            : undefined,
+          onPress: selectedCategory && selectedPostId ? resetThreadToBoard : undefined,
         }]
       : [],
     // Nat's own example, 2026-08-06: "if i was all the way inside that thread &
@@ -915,13 +918,10 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       return;
     }
 
-    setSelectedPostId(null);
+    resetThreadToBoard();
     invalidatePosts();
     refetchPostCounts();
-    if (boardPostStorageKey) {
-      removeStoredItem(boardPostStorageKey);
-    }
-  }, [boardPostStorageKey, invalidatePosts, refetchPostCounts, returnHomeFromRouteTarget, shouldReturnHomeFromRoute]);
+  }, [invalidatePosts, refetchPostCounts, resetThreadToBoard, returnHomeFromRouteTarget, shouldReturnHomeFromRoute]);
 
   const handleCreatePost = async (title: string, content: string, attachments?: Attachment[]) => {
     if (!profile || !selectedBoardCommunityId || !selectedCategory) {

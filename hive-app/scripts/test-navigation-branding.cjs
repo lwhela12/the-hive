@@ -32,6 +32,10 @@ assert.ok(
   'Back to Boards clears the remembered board instead of reopening it after one frame',
 );
 assert.ok(
+  boards.includes('selectedCategory && selectedPostId ? resetThreadToBoard : undefined'),
+  'a board crumb clears the remembered thread instead of reopening it after one frame',
+);
+assert.ok(
   boards.indexOf('const resetBoardToList = useCallback') < boards.indexOf('useDeepTrail('),
   'the complete board reset is available to the footer trail',
 );
