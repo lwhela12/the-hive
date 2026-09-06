@@ -17,6 +17,7 @@ type ActionItemRow = {
   description: string;
   due_date?: string | null;
   created_at?: string | null;
+  related_board_post_id?: string | null;
 };
 
 type WishRow = {
@@ -112,7 +113,7 @@ export async function fetchCarryForwardItems(
 ): Promise<CarryForwardItem[]> {
     const actionItemsPromise = fetchCheckInActionItems<ActionItemRow>(() => (supabase as any)
       .from('action_items')
-      .select('id, description, due_date, created_at')
+      .select('id, description, due_date, created_at, related_board_post_id')
       .eq('community_id', communityId)
       .eq('assigned_to', userId)
       .or('completed.is.false,completed.is.null')
@@ -215,6 +216,7 @@ export async function fetchCarryForwardItems(
         detail: item.due_date ? `Due ${item.due_date}` : null,
         sourceLabel: 'To-do',
         createdAt: item.created_at ?? null,
+        relatedBoardPostId: item.related_board_post_id ?? null,
       });
     });
 

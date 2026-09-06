@@ -58,6 +58,7 @@ assert.ok(!modal.includes('q_show_progress: lines.join'),'context never writes a
 assert.ok(!modal.includes('This cycle’s scheduled Hangs'),'no redundant Hangs preamble');
 assert.ok(!modal.includes('Ionicons name="checkbox"'),'task completion uses the app-wide circular control');
 assert.ok(!modal.includes('Ionicons name="square-outline"'),'open tasks use the app-wide circular control');
+assert.ok(modal.includes('Add findings, photos or files →'),'Production jobs open the board thread that holds the work');
 assert.ok(modal.includes(".eq('related_user_id', viewerProfile.id)"));
 assert.ok(modal.includes(".eq('community_id', survey.community_id)"));
 for(const page of ['beforewemeet','endofmonth']) assert.ok(fs.readFileSync(`app/(app)/${page}/index.tsx`,'utf8').includes('CheckInHiveCard'));
@@ -65,6 +66,11 @@ const field=fs.readFileSync('components/surveys/SurveyQuestionField.tsx','utf8')
 assert.ok(!field.includes("Anything to add? Stories, suggestions"),'hang ratings do not collect unread free text');
 assert.ok(!field.includes("Anything else you'd like to share?"),'HIVE Help ratings do not collect unread free text');
 const meetingHelper=fs.readFileSync('app/(app)/meeting-helper.tsx','utf8');
-assert.ok(meetingHelper.includes('What got done since we last met'),'Production Meeting Helper reads completed jobs from live task data');
+assert.ok(meetingHelper.includes('Production project status'),'Production Meeting Helper shows the live project status');
+assert.ok(meetingHelper.includes('Open findings thread →'),'Production Meeting Helper links status back to evidence');
 assert.ok(!meetingHelper.includes("{ key: 'q_show_obstacles', label: \"What's stuck\" }"),'Production Meeting Helper does not depend on retired survey homework');
+const carryForward=fs.readFileSync('lib/hooks/useCarryForwardContext.ts','utf8');
+assert.ok(carryForward.includes('related_board_post_id'),'check-in tasks retain their board thread link');
+const beforeWeMeet=fs.readFileSync('app/(app)/beforewemeet/index.tsx','utf8');
+assert.ok(beforeWeMeet.includes('ProductionProjectOverview'),'the Production manager sees the whole operation even without an assigned job');
 console.log('PASS: runtime copy/IDs/input immutability, preseeded roster, one help ask, recap choice, structured ratings, circular tasks, meeting date/time and scoped context.');

@@ -19,6 +19,8 @@ export interface CarryForwardItem {
   detail?: string | null;
   sourceLabel: string;
   createdAt?: string | null;
+  /** The board thread that holds this task's brief and findings. */
+  relatedBoardPostId?: string | null;
 }
 
 export interface CarryForwardResponseItem extends CarryForwardItem {
@@ -71,6 +73,7 @@ export function normalizeCarryForwardResponse(value: unknown): CarryForwardRespo
         sourceLabel: typeof record.sourceLabel === 'string' ? record.sourceLabel : 'Carry-forward',
         detail: typeof record.detail === 'string' ? record.detail : null,
         createdAt: typeof record.createdAt === 'string' ? record.createdAt : null,
+        relatedBoardPostId: typeof record.relatedBoardPostId === 'string' ? record.relatedBoardPostId : null,
         note: typeof record.note === 'string' ? record.note : null,
       };
     })

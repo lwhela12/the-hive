@@ -11,6 +11,7 @@ import { SurveyModal } from '../../../components/surveys/SurveyModal';
 import { SharedPlate } from '../../../components/surveys/SharedPlate';
 import { CheckInNextMeetings } from '../../../components/surveys/CheckInNextMeetings';
 import { CheckInHiveCard } from '../../../components/surveys/CheckInHiveCard';
+import { ProductionProjectOverview } from '../../../components/surveys/ProductionProjectOverview';
 import { checkInQuestions, groupCheckInHives, upcomingCheckIns, meetingLabel, pacificToday, type MeetingPreview } from '../../../lib/checkInPresentation';
 import {
   buildMergedPreMeeting,
@@ -409,7 +410,14 @@ export default function BeforeWeMeetScreen() {
         survey={forThisReader}
         answerCommunityId={selected}
         initialAnswers={mine}
-        introduction={personalQuestion}
+        introduction={selectedMembership?.community?.slug === 'show' ? <>
+          <ProductionProjectOverview
+            communityId={selected}
+            accent={hiveAccent(selectedMembership.community)}
+            isManager={selectedMembership.role === 'admin'}
+          />
+          {personalQuestion}
+        </> : personalQuestion}
         timingLabel={meetingLabel(currentMeetings.find(m => m.community_id === selected), today)}
         isEditingResponse={!!mine}
         carryForwardItems={section ? todosByHive[`note_hive_${section.slug}`] ?? [] : []}

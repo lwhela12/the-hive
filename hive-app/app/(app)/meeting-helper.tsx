@@ -45,6 +45,7 @@ import { ThinkingBee } from '../../components/ui/ThinkingBee';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { AppHeader } from '../../components/navigation';
 import { showAlert } from '../../lib/showAlert';
+import { fetchProductionProjectStatus, type ProductionProjectAssignment } from '../../lib/productionProject';
 import { getMentionedMembers, hasBroadcastMention } from '../../lib/mentions';
 import { useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import {
@@ -1016,6 +1017,7 @@ export default function MeetingHelperScreen() {
   const [completedAssists, setCompletedAssists] = useState<
     { id: string; description: string; assignedTo: string | null; relatedUserId: string | null; assigneeName: string }[]
   >([]);
+  const [productionAssignments, setProductionAssignments] = useState<ProductionProjectAssignment[]>([]);
   // Tonight's live recap for the Wrap-Up slide — because the meeting happens
   // IN the app now, the summary is just "what changed today".
   const [tonightRecap, setTonightRecap] = useState<{
@@ -1443,6 +1445,14 @@ export default function MeetingHelperScreen() {
           assigneeName: (row.assignee?.name ?? 'Someone') as string,
         })));
       })().catch((error) => console.warn('Could not load assists', error)),
+
+      // Production is a shared project: this joins every assigned job to the
+      // board thread where the team records findings, photos and files.
+      (async () => {
+        const result = await fetchProductionProjectStatus(communityId);
+        if (result.error) console.warn(result.error);
+        setProductionAssignments(result.assignments);
+      })().catch((error) => console.warn('Could not load Production status', error)),
 
       // Live notes jotted on the HummDinger spotlight. These used to live in
       // component state only, so the list under each member vanished on reload
@@ -2487,19 +2497,36 @@ export default function MeetingHelperScreen() {
         </View>
         )}
       </View>
-      {deckSlug === 'show' && completedAssists.length > 0 && (
+      {deckSlug === 'show' && productionAssignments.length > 0 && (
         <View style={{ marginTop: sz(18, 12), gap: sz(10, 7) }}>
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
-            What got done since we last met
+            Production project status
           </Text>
           <View style={{ backgroundColor: CARD, borderWidth: 1, borderColor: GOLD_SOFT, borderRadius: sz(18, 13), padding: sz(18, 12), gap: sz(10, 7) }}>
-            {completedAssists.map((item) => (
-              <View key={item.id} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sz(10, 7) }}>
-                <Ionicons name="checkmark-circle" size={sz(22, 16)} color={GOLD} />
-                <Text style={{ flex: 1, fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(24, 17), color: CHARCOAL }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold' }}>{getFirstName(item.assigneeName)} · </Text>
-                  {parseActionItemDescription(item.description).text}
-                </Text>
+            {productionAssignments.map((item) => (
+              <View key={`${item.assignedTo}:${item.relatedBoardPostId}`} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sz(10, 7) }}>
+                <Ionicons name={item.completed ? 'checkmark-circle' : 'ellipse-outline'} size={sz(22, 16)} color={GOLD} />
+                <View style={{ flex: 1, gap: sz(3, 2) }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(24, 17), color: CHARCOAL }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold' }}>{getFirstName(item.assigneeName)} · </Text>
+                    {item.description}
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 10), color: MUTED }}>
+                    {item.completed ? 'Done' : 'Still to do'} · {item.findingCount === 0 && item.fileCount === 0
+                      ? 'No findings added yet'
+                      : `${item.findingCount} update${item.findingCount === 1 ? '' : 's'}${item.fileCount ? ` · ${item.fileCount} file${item.fileCount === 1 ? '' : 's'}` : ''}`}
+                  </Text>
+                  {item.latestFinding ? <Text numberOfLines={2} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 10), lineHeight: sz(18, 14), color: MUTED }}>
+                    Latest: {item.latestFinding}
+                  </Text> : null}
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => router.push({ pathname: '/board', params: { postId: item.relatedBoardPostId, from: 'meeting-helper', open: String(Date.now()) } })}
+                    style={{ alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(12, 9), color: GOLD_DEEP }}>Open findings thread →</Text>
+                  </Pressable>
+                </View>
               </View>
             ))}
           </View>

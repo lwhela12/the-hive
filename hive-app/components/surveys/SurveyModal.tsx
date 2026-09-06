@@ -5,6 +5,7 @@ import { ActivityIndicator, View, Text, ScrollView, Pressable, Modal, useWindowD
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 const cliveIcon = require('../../assets/Clive_logo.png');
 import {
@@ -202,6 +203,7 @@ export function SurveyModal({
   hiveAccent = HIVE_GOLD,
   hiveSlug,
 }: SurveyModalProps) {
+  const router = useRouter();
   /**
    * Nat, 2026-09-01: every survey still wore honey gold inside Tech HIVE and
    * Production HIVE — the number chips, the selected answers, the submit
@@ -589,6 +591,7 @@ export function SurveyModal({
     items: CarryForwardItem[] = carryForwardItems,
     heading = hiveSlug === 'show' || hiveSlug === 'production' ? 'Your Production HIVE jobs' : 'Still to do',
   ) => {
+    const isProduction = hiveSlug === 'show' || hiveSlug === 'production';
     if (carryForwardLoading) {
       return (
         <View style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: tint.line(0.45), borderRadius: 16, padding: 16, marginBottom: 24, alignItems: 'center' }}>
@@ -624,7 +627,9 @@ export function SurveyModal({
           {heading}
         </Text>
         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#7f715f', lineHeight: 19, marginBottom: 14 }}>
-          Tick off anything else you’ve finished.
+          {isProduction
+            ? 'Open each job’s thread to add findings, photos or files. Tick it done when the work and the record are complete.'
+            : 'Tick off anything else you’ve finished.'}
         </Text>
 
         <View style={{ gap: 12 }}>
@@ -667,6 +672,15 @@ export function SurveyModal({
                 </View>
 
                 {renderCarryForwardControls(item)}
+                {isProduction && item.type === 'action_item' && item.relatedBoardPostId ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => router.push({ pathname: '/board', params: { postId: item.relatedBoardPostId!, from: 'beforewemeet', open: String(Date.now()) } })}
+                    style={{ alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', paddingHorizontal: 4 }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', color: tint.accent, fontSize: 13 }}>Add findings, photos or files →</Text>
+                  </Pressable>
+                ) : null}
               </View>
             );
           })}
