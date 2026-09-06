@@ -255,7 +255,6 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
   // Half the members keep Apple Calendar and half keep Google, so the button
   // asks rather than guessing (Nat, 2026-09-03).
   const addToCalendar = useAddToCalendar();
-  const router = useRouter();
   // Who you are, so an event you can only SEE does not hand you the address and
   // the joining link (migration 148).
   const { memberships, profile, refreshProfile } = useAuth();
@@ -310,7 +309,6 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
         const seenScope = (event as any).visibility ?? 'members';
         const invitedScope = (event as any).invited_scope ?? seenScope;
         const isOwnBirthday = event.event_type === 'birthday' && !!profile?.id && event.related_user_id === profile.id;
-        const isDuesReminder = isQuarterlyDuesReminderEvent(event);
         const isEditingThisBirthday = editingBirthdayId === event.id;
         return (
         <Pressable
@@ -328,10 +326,6 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
             // in-progress draft.
             if (event.event_type === 'birthday') {
               if (isOwnBirthday && !isEditingThisBirthday) startEditingBirthday(event);
-              return;
-            }
-            if (isDuesReminder) {
-              router.push('/honey-pot' as any);
               return;
             }
             onEditEvent(event);
@@ -1056,6 +1050,11 @@ export default function HiveScreen() {
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+  // The quarter-end reminder begins as a generated calendar card. Opening it
+  // still uses the normal event editor. Its first save creates the real event
+  // row that can hold Nat's visibility choice; the generated copy then drops
+  // out through the existing same-day dues-event de-duplication.
+  const [eventDraftSource, setEventDraftSource] = useState<'dues-reminder' | null>(null);
   const [eventTitle, setEventTitle] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [eventEndDate, setEventEndDate] = useState('');
@@ -1086,7 +1085,9 @@ export default function HiveScreen() {
   }, []);
 
   const openEditEvent = useCallback((event: Event) => {
-    setEditingEvent(event);
+    const isGeneratedDuesReminder = isQuarterlyDuesReminderEvent(event);
+    setEditingEvent(isGeneratedDuesReminder ? null : event);
+    setEventDraftSource(isGeneratedDuesReminder ? 'dues-reminder' : null);
     setEventTitle(event.title);
     setEventDate(formatDateForInput(event.event_date));
     setEventEndDate(event.end_date ? formatDateForInput(event.end_date) : '');
@@ -2303,6 +2304,7 @@ export default function HiveScreen() {
   // Open event modal for creating
   const openCreateEvent = () => {
     setEditingEvent(null);
+    setEventDraftSource(null);
     setEventTitle('');
     setEventDate('');
     setEventEndDate('');
@@ -2320,6 +2322,7 @@ export default function HiveScreen() {
   const closeEventModal = () => {
     setShowEventModal(false);
     setEditingEvent(null);
+    setEventDraftSource(null);
     setEventError(null);
     setEventTitle('');
     setEventDate('');
@@ -4120,12 +4123,13 @@ export default function HiveScreen() {
             {(() => {
               const canEdit = !!profile && !!communityId;
               const isViewOnly = editingEvent && !canEdit;
+              const isEditingDraft = !!editingEvent || eventDraftSource === 'dues-reminder';
 
               return (
                 <>
                   <View className="flex-row items-center justify-between mb-4">
                     <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xl text-charcoal">
-                      {isViewOnly ? 'Event Details' : editingEvent ? 'Edit Event' : 'Add Event'}
+                      {isViewOnly ? 'Event Details' : isEditingDraft ? 'Edit Event' : 'Add Event'}
                     </Text>
                     {editingEvent && canEdit && (
                       <Pressable onPress={deleteEvent} className="p-2 active:opacity-70">
@@ -4340,7 +4344,7 @@ export default function HiveScreen() {
                           className={`flex-1 bg-gold py-3 rounded-lg ${savingEvent ? 'opacity-50' : 'active:bg-gold/80'}`}
                         >
                           <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-center text-white">
-                            {savingEvent ? 'Saving...' : editingEvent ? 'Save' : 'Create'}
+                            {savingEvent ? 'Saving...' : isEditingDraft ? 'Save' : 'Create'}
                           </Text>
                         </Pressable>
                       </View>
