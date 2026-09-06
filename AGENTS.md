@@ -9,7 +9,7 @@ HIVE is an Expo / React Native app for a small community network. The current pr
 - wishes and wish-granting flows
 - messages / rooms / reactions
 - Daily Swarm prompts and member overlap
-- Hummdinger/community rhythm rather than a single old "Queen Bee only" center
+- Hummdinger/community rhythm rather than a rotating single-member spotlight
 
 Treat consistency across screens as important. If an interaction pattern is improved in one major surface, check whether the same pattern should be shared elsewhere instead of duplicating one-off UI.
 

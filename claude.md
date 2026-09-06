@@ -170,53 +170,12 @@ What Clive currently knows and does:
   default, so the deep path gets a much larger `max_tokens` — a small cap would
   be eaten by reasoning and truncate the reply.
 
-**Queen Bee is retired.** The idea — one member a month getting the community's
-focus — is gone. Clive's prompt has an explicit instruction saying so, and
-telling him what replaced it: every member's HD wish is live at once, the
-monthly check-in gathers what everyone is working on, and HIVE Help is the
-shared act of kindness each month.
-
-> **A retired feature that is still a callable tool is not retired.** On
-> 2026-08-04 someone had to surgically remove `get_current_queen_bee`,
-> `add_queen_bee_update` and the `queen_bee_preference` write from the live
-> assistant, because he was still perfectly able to use them. Do not
-> reintroduce them. Do not add a tool for anything the product no longer does.
-
-### Queen Bee leftovers — cleaned up 2026-08-09
-
-The app-layer surface is gone: `lib/claude.ts`, `app/onboarding/*`, the admin
-"Set Queen Bee" modal, and `components/hive/QueenBeeCard.tsx` were already
-deleted by earlier sessions (this list had gone stale — none of them were
-still in the tree when checked). `lib/newsletterHeaders.ts`'s banner-matching
-bug was already fixed too. What was still real and got removed this session:
-`types/index.ts`'s `QueenBee`/`QueenBeeStatus`/`QueenBeePreference`/
-`QueenBeeUpdate` types and the `queen_bee`/`queen_bee_update` union members;
-and — the one that mattered — **Clive's context builder
-(`supabase/functions/chat/context/index.ts`) was still live-querying
-`queen_bees` for the current month and would have injected a "Current Queen
-Bee" section into his prompt if any row ever matched it.** Dormant (no
-current-month row existed), but a real gap in "Queen Bee is retired," not
-cosmetic. Removed the query, its types in `context/types.ts`, the token
-budget entry, a stale line in the board-activity summarizer prompt, the
-`notify` function's `queen_bee_update` message type, and a title-generator
-example. `types/index.ts` also lost `MonthlyHighlight` (zero importers,
-discovered while tracing `queen_bee_id`'s only other reference).
-
-**The tables are gone too, as of the same night.** Nat, asked directly: "we
-dont want any queen bee anything anywhere... not from our history, but from
-our current playbooks." Migration `160_no_queen_bee_anywhere.sql` dropped
-`queen_bees`, `queen_bee_updates`, `monthly_highlights`, and
-`events.related_queen_bee_id` (zero rows ever used that column). The actual
-history — Charlee ran Feb 2026 ("Act Submission Time"), Izzy ran March
-("Artist Space Optimization"), Lucas ran a second March-dated one ("Claude
-Code for Beginners"), Infiniti's April was logged "upcoming" and never
-filled in, no January row exists at all — is written into
-`Receipts/2026-08-09_dead-code-deletion.md` in Nat's brain folder, not the
-live schema. If a session ever needs the history again, that receipt is
-where it lives now, not a query. Left alone:
-`apply-meeting-notes/index.ts`'s defensive `delete summaryBase.queen_bee_highlights`
-(harmless, still protects old stored summaries from a field that no longer
-exists anywhere upstream).
+**The former rotating single-member spotlight is retired.** Every member's HD
+wish is live at once, the monthly check-in gathers what everyone is working on,
+and HIVE Help is the shared act of kindness each month. Do not add profile
+schedule/preference fields, dedicated status types, board-category values,
+assistant tools or prompt context for the retired program. Its history lives in
+`Receipts/2026-08-09_dead-code-deletion.md`, not in the current app or schema.
 
 **New finding, not yet acted on:** `supabase/functions/chat/context/summarizers.ts`
 and its `summarizeBoardActivity` function have zero callers anywhere in the
@@ -359,8 +318,8 @@ rather than reconstructing DDL. The main groups:
 - **Clive** — `conversations`, `conversation_projects`, `chat_messages`,
   `context_summaries`, `user_insights`, `agent_action_requests` (the propose /
   apply flow).
-- **Meetings** — `meetings`, `action_items`, `events`, transcription jobs,
-  monthly highlights.
+- **Meetings** — `meetings`, `action_items`, `events`, transcription jobs and
+  meeting summaries.
 - **Rhythm** — `surveys` and `survey_responses` (the monthly check-in),
   `daily_question_answers`, `monthly_focus` (the HIVE Focus — one row with no
   `community_id` is the shared one; a row naming a HIVE replaces it for them).

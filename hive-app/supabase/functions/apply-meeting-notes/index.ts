@@ -1103,7 +1103,6 @@ serve(async (req) => {
       : await analyzeMeetingNotes(supabaseAdmin, meeting, existingSummary, members, sourceFiles);
     const title = analysis.title?.trim() || existingSummary.title || 'HIVE Meeting';
     const summaryBase = { ...existingSummary };
-    delete summaryBase.queen_bee_highlights;
     const commonSummaryPayload = {
       ...summaryBase,
       imported_file: sourceFiles[0]?.base64 ? stripFileData(sourceFiles[0]) : sourceFiles[0] ?? null,

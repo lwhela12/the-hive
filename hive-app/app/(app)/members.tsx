@@ -1946,15 +1946,6 @@ function MemberDetailPage({
               {/* Self actions: the round pencil + one Tune-up pill. No "You"
                   chip (you know who you are), admin shows as a quiet chip —
                   so every profile header reads the same, member to member. */}
-              {/* A crown chip reading "Queen Bee: <month>" used to sit beside
-                  the role. Queen Bee — one member a month getting the
-                  community's focus — was dissolved in April 2026 and the
-                  Hummdinger session took its place, and this card was the last
-                  place a member could still see it. It read from a plain text
-                  column on the profile rather than the `queen_bees` table, so
-                  the sweep that cleared Admin, the newsletter headers and Home
-                  went straight past it (2026-08-06). The column itself is left
-                  alone; nothing in the app reads it now. */}
               {roleLabel && (
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
                   <View style={{ backgroundColor: '#fffaf0', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.35)' }}>

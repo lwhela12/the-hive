@@ -22,13 +22,7 @@ type BirthdayMember = Pick<Profile, 'id' | 'name' | 'birthday'> & {
 /**
  * Everything Home needs, fetched in parallel.
  *
- * A Queen Bee round-trip sat at the top of this list until 2026-08-06 — two
- * queries against `queen_bees` and `monthly_highlights` on every Home load,
- * handed back as `queenBees`, and read by nothing. Queen Bee was dissolved in
- * April 2026 and replaced by the Hummdinger session, so Home was paying for a
- * fetch it threw away.
- *
- * Four more of exactly that shape were still here as of 2026-08-11:
+ * Four unread queries were still here as of 2026-08-11:
  * `fallbackAdmin`, `meetings`, `nextMeeting` and `userSkills` were all fetched
  * on every Home load and none of the four was ever read — `hive.tsx`'s one
  * call site destructures only `publicWishes`, `grantedWishes`, `upcomingEvents`,
@@ -36,8 +30,7 @@ type BirthdayMember = Pick<Profile, 'id' | 'name' | 'birthday'> & {
  * blanket `isLoading` this hook returns (which gates Home's spinner and pull-
  * to-refresh) waited on all nine queries finishing, so a slow, useless fetch
  * could keep the real data hidden behind a spinner. Removed rather than left
- * wired up "for later" — the lesson from Queen Bee was that an unread query is
- * never actually free, and CLAUDE.md already tells this exact story once.
+ * wired up "for later". An unread query is never actually free.
  */
 export function useHiveDataQuery(communityId?: string, userId?: string) {
   // Use local date to avoid timezone issues (toISOString uses UTC which can be wrong date)

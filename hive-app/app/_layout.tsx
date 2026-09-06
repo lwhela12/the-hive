@@ -923,10 +923,10 @@ function RootLayoutInner() {
           >
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(app)" />
-            {/* app/onboarding/ was removed on 2026-08-06 — it was a reachable URL
-                still selling a 12-person community and Queen Bee Month, both
-                retired, and nothing linked to it. A Stack.Screen naming a route
-                that has no folder throws at runtime, so the line goes with it. */}
+            {/* app/onboarding/ was removed on 2026-08-06. Nothing linked to it,
+                and its setup copy described a product HIVE no longer offered.
+                A Stack.Screen naming a route that has no folder throws at
+                runtime, so the line went with it. */}
             <Stack.Screen name="join" />
           </Stack>
         </ThemeProvider>

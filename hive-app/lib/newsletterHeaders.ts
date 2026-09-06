@@ -37,12 +37,9 @@ export type NewsletterHeader = {
  * Order matters — the most specific phrases sit above the general ones, so
  * "compliment corner" doesn't get eaten by "corner" or a stray "wins".
  *
- * The "Our Current Queen Bee" header came out on 2026-08-06. Queen Bee — one
- * member a month getting the community's focus — was dissolved in April 2026 and
- * replaced by the Hummdinger session, where everyone's wish is live at once. Its
- * art matched the generic words "spotlight" and "member of the month" as well as
- * "queen bee", so an ordinary section title would have printed a gold banner
- * announcing a person the HIVE no longer picks.
+ * Retired header art stays out of this list. Broad matches such as "spotlight"
+ * or "member of the month" made ordinary section titles select obsolete art,
+ * so current headers use only the phrases that actually belong to them.
  */
 export const NEWSLETTER_HEADERS: NewsletterHeader[] = [
   {

@@ -23,8 +23,7 @@ import type { Wish } from '../../types';
  * Home's real public-wish list comes from `useHiveDataQuery`, which is
  * cached and asks for the three profile fields a wish card actually draws.
  *
- * This is the fourth unread query found in this app (Queen Bee, then the
- * four in `useHiveDataQuery`, now these). An unread query is never free:
+ * This was another unread query found in this app. An unread query is never free:
  * it costs a round trip, and a broken one hides its own breakage.
  */
 export function useWishes({ loadWishes = false }: { loadWishes?: boolean } = {}) {

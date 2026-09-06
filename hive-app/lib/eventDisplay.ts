@@ -25,8 +25,8 @@ export function getEventEmoji(event: {
 // Family-icon counterpart: returns a HiveIcon name when the event type has
 // earned its own drawing; null falls back to the smart emoji.
 //
-// The 'crown' went with Queen Bee, retired April 2026. Nothing maps to it now,
-// so it is gone from the list of icons an event can ask for.
+// The retired crown artwork has no current event type, so it stays out of the
+// icon list.
 export function getEventHiveIcon(event: {
   title?: string | null;
   event_type?: string | null;
