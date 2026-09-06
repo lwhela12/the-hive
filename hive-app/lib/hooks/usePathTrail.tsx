@@ -143,12 +143,16 @@ export function useDeepTrail(crumbs: Crumb[], onPagePress?: () => void) {
   if (ownPath.current === null) ownPath.current = nowPath;
 
   const id = useRef<symbol>(Symbol('trail'));
-  const signature = crumbs.map((c) => c.label).join(' › ');
+  const signature = crumbs
+    .map((c) => `${c.label}:${c.onPress ? 'back' : 'here'}`)
+    .join(' › ');
+  const pagePressShape = onPagePress ? 'back' : 'here';
 
   // The crumbs carry onPress handlers, which are new functions on every render
-  // and so cannot be compared. The labels are what gets drawn; if those are
-  // unchanged there is nothing to redraw, and the handlers close over current
-  // state either way.
+  // and so cannot be compared directly. Keep the current values in refs and
+  // give the trail stable forwarding handlers. The signature still records
+  // whether each step is a door: opening a thread can turn its board name from
+  // the current location into "Back to that board" without changing the label.
   const latest = useRef(crumbs);
   latest.current = crumbs;
   // Same reason as the crumb handlers: a new function every render, closing
@@ -163,7 +167,16 @@ export function useDeepTrail(crumbs: Crumb[], onPagePress?: () => void) {
       contribute(me, null, mine);
       return;
     }
-    contribute(me, latest.current, mine, latestPagePress.current);
+    const liveCrumbs = latest.current.map((crumb, index) => ({
+      ...crumb,
+      onPress: crumb.onPress
+        ? () => latest.current[index]?.onPress?.()
+        : undefined,
+    }));
+    const livePagePress = latestPagePress.current
+      ? () => latestPagePress.current?.()
+      : undefined;
+    contribute(me, liveCrumbs, mine, livePagePress);
     return () => contribute(me, null, mine);
-  }, [signature, contribute, focused]);
+  }, [signature, pagePressShape, contribute, focused]);
 }

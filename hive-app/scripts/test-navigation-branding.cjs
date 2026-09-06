@@ -5,6 +5,7 @@ const sideRail = fs.readFileSync('components/navigation/SideRail.tsx', 'utf8');
 const pathFooter = fs.readFileSync('components/navigation/PathFooter.tsx', 'utf8');
 const breadcrumbs = fs.readFileSync('components/ui/Breadcrumbs.tsx', 'utf8');
 const boards = fs.readFileSync('app/(app)/board.tsx', 'utf8');
+const pathTrail = fs.readFileSync('lib/hooks/usePathTrail.tsx', 'utf8');
 
 assert.ok(
   sideRail.includes('source={hiveSeal(onHiveWide ? null : community?.slug)}'),
@@ -33,6 +34,14 @@ assert.ok(
 assert.ok(
   boards.indexOf('const resetBoardToList = useCallback') < boards.indexOf('useDeepTrail('),
   'the complete board reset is available to the footer trail',
+);
+assert.ok(
+  pathTrail.includes("`${c.label}:${c.onPress ? 'back' : 'here'}`"),
+  'a crumb becoming clickable refreshes the rendered trail even when its label stays the same',
+);
+assert.ok(
+  pathTrail.includes('() => latest.current[index]?.onPress?.()'),
+  'deep crumb presses always call the screen’s current handler',
 );
 
 console.log('Navigation branding: every footer door works and the rail wears the active place seal.');
