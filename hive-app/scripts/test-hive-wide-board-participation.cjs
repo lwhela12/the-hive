@@ -16,6 +16,13 @@ const lineBreakFix = fs.readFileSync(
   ),
   'utf8',
 );
+const perHiveBoards = fs.readFileSync(
+  path.resolve(
+    __dirname,
+    '../supabase/migrations/242_each_hive_gets_to_brag.sql',
+  ),
+  'utf8',
+);
 
 assert.match(migration, /name = 'Brag Board'/, 'The existing board is renamed in place');
 assert.match(migration, /reach = 'all_hives'/, 'The board reaches every HIVE');
@@ -53,5 +60,15 @@ assert.doesNotMatch(
   /update public\.board_posts(?![\s\S]*category_id = brag_board_id)/,
   'The line-break repair stays scoped to the Brag Board',
 );
+assert.match(perHiveBoards, /name = 'Tech HIVE Brag Board'/, 'The software board names Tech HIVE');
+assert.match(perHiveBoards, /'OG HIVE Brag Board'/, 'OG gets its own Brag Board');
+assert.match(perHiveBoards, /where slug = 'default'/, 'The OG board belongs to OG HIVE');
+assert.match(perHiveBoards, /'all_hives'/, 'Both boards remain visible HIVE-Wide');
+assert.match(
+  perHiveBoards,
+  /Art, acro, crochet, resin bugs, organized spaces/,
+  'The OG welcome includes the accomplishments Nat named',
+);
+assert.match(perHiveBoards, /is_pinned,[\s\S]*true,[\s\S]*'all_hives'/, 'OG starts with a pinned HIVE-Wide welcome');
 
-console.log('PASS: one Tech-owned Brag Board reaches every HIVE with visible stages and full member participation. Offline only.');
+console.log('PASS: Tech and OG each own a HIVE-Wide Brag Board with the right invitation. Offline only.');
