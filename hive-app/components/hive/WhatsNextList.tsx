@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useWhatsNext, type WhatsNextItem } from '../../lib/hooks/useWhatsNext';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { hiveAccent, accentOnDark } from '../../lib/hiveBrand';
+import { hiveTagMark } from '../../lib/hiveBrand';
 
 
 /**
@@ -81,7 +81,7 @@ export function WhatsNextList({
           first={index === 0}
           accent={
             item.communityId
-              ? accentOnDark(hiveAccent(memberships.find((m) => m.community_id === item.communityId)?.community))
+              ? hiveTagMark(memberships.find((m) => m.community_id === item.communityId)?.community)
               : 'transparent'
           }
           onPress={

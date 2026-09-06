@@ -94,17 +94,17 @@ export function hiveOnDark(slug?: string | null): string {
 /**
  * The hexagon used inside a small HIVE label.
  *
- * Production's dark Stage Purple is the page chrome. In an 11px hexagon it is
- * easily mistaken for HIVE-Wide's near-black mark, so its labels use Curtain
- * Violet — the same purple hexagon already used in the side rail. Other HIVEs
- * keep their normal accent.
+ * Tech's Circuit Navy and Production's Stage Purple are page chrome. In an
+ * 11px hexagon either is easily mistaken for HIVE-Wide's near-black mark, so
+ * their labels use the light half of their branch pair — Signal Blue and
+ * Curtain Violet — exactly like the side rail. Other HIVEs keep their normal
+ * accent.
  */
 export function hiveTagMark(
   community?: { accent_color?: string | null; slug?: string | null } | null,
 ): string {
-  return community?.slug?.trim().toLowerCase() === 'show'
-    ? hiveOnDark('show')
-    : hiveAccent(community);
+  const slug = community?.slug?.trim().toLowerCase();
+  return slug === 'tech' || slug === 'show' ? hiveOnDark(slug) : hiveAccent(community);
 }
 
 /** A HIVE's emoji and written-down accent, by slug. Anything else is the bee. */

@@ -61,7 +61,7 @@ import {
 } from '../../components/hive/skeletons';
 import { AppHeader } from '../../components/navigation';
 import { userFacingError } from '../../lib/userFacingError';
-import { hiveAccent } from '../../lib/hiveBrand';
+import { hiveAccent, hiveTagMark } from '../../lib/hiveBrand';
 import { useAddToCalendar } from '../../components/ui/AddToCalendarDialog';
 import { ScopeBadge } from '../../components/ui/ScopeBadge';
 import { EventScopeFields, saveBirthdayScope, type EventAudience } from '../../components/events/EventAudienceToggle';
@@ -346,7 +346,7 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
               {event.event_type === 'meeting' ? (
                 <HiveMark
                   size={22}
-                  colour={hiveAccent(
+                  colour={hiveTagMark(
                     memberships.find((m) => m.community_id === (event as any).community_id)?.community,
                   )}
                 />

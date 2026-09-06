@@ -12,7 +12,7 @@ import {
 import { getMessagesRoomLabel } from './hiveWideRoom';
 import { HiveMark } from '../ui/HiveMark';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { hiveAccent, accentWash } from '../../lib/hiveBrand';
+import { hiveAccent, accentWash, hiveTagMark } from '../../lib/hiveBrand';
 
 import type { ChatRoom, Profile, RoomMessage } from '../../types';
 
@@ -45,6 +45,7 @@ export const ChatRoomItem = memo(function ChatRoomItem({
 }: ChatRoomItemProps) {
   const { community } = useAuth();
   const roomAccent = hiveAccent(community);
+  const roomMark = hiveTagMark(community);
   const otherMembers = getOtherRoomMembers(room, currentUserId);
   const otherMember = otherMembers[0];
   const customization = getRoomCustomization(room, currentUserId);
@@ -107,7 +108,7 @@ export const ChatRoomItem = memo(function ChatRoomItem({
             borderColor: accentWash(roomAccent, 0.35),
           }}
         >
-          <HiveMark size={24} colour={roomAccent} />
+          <HiveMark size={24} colour={roomMark} />
         </View>
       );
     }

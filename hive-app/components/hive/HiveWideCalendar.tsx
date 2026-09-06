@@ -3,9 +3,8 @@ import { View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { HiveMark } from '../ui/HiveMark';
 import {
-  accentOnDark,
-  hiveAccent,
   hiveDisplayName,
+  hiveTagMark,
   normalizeHiveBrandText,
 } from '../../lib/hiveBrand';
 import { formatDateShort, formatTimeRange } from '../../lib/dateUtils';
@@ -25,8 +24,9 @@ import type { Community } from '../../types';
  * The marker is a bee sitting on a honeycomb cell filled in that HIVE's accent
  * — the same cell the rail, the wishes and the meetings box already use, so a
  * gold cell means OG wherever you see one. Two HIVEs meeting the same day is
- * two bees side by side. The accents go through `accentOnDark` because this
- * lives on HIVE-Wide's night sky, where Tech's blue is otherwise unreadable.
+ * two bees side by side. The cells use the shared small-mark colour, so Tech
+ * carries Signal Blue and Production carries Curtain Violet here just as they
+ * do in the rail.
  *
  * Tapping a marked day names what's there under the grid. A meeting of a HIVE
  * you belong to is a door — it steps you into that HIVE's Meetings page, same
@@ -247,7 +247,7 @@ export function HiveWideCalendar({
                   {hivesToday.map((hiveId) => (
                     <BeeOnCell
                       key={hiveId}
-                      colour={accentOnDark(hiveAccent(hives.find((h) => h.id === hiveId)))}
+                      colour={hiveTagMark(hives.find((h) => h.id === hiveId))}
                       size={markSize}
                     />
                   ))}
@@ -265,7 +265,7 @@ export function HiveWideCalendar({
           {selectedMeetings.map((meeting) => {
             const hive = hives.find((h) => h.id === meeting.community_id);
             const name = hiveDisplayName(hive?.name);
-            const colour = accentOnDark(hiveAccent(hive));
+            const colour = hiveTagMark(hive);
             // The whole window, not only the start — Nat: "i couldnt add
             // window, like 5-7, i could only put in 5pm" (migration 202).
             // `hive_wide_meeting_days` carries the end time as of migration

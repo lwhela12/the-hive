@@ -26,7 +26,7 @@ import { SelectedImage, pickSingleImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { uploadAttachments, uploadSingleImage } from '../../lib/attachmentUpload';
 import { sendMentionNotifications } from '../../lib/mentionableMembers';
-import { hiveDisplayName, hiveAccent, accentWash } from '../../lib/hiveBrand';
+import { hiveDisplayName, hiveAccent, accentWash, hiveTagMark } from '../../lib/hiveBrand';
 import { HiveMark } from '../ui/HiveMark';
 import { SPACE_SKIN } from '../../lib/pageSkin';
 import { getMessagesRoomLabel, getMessagesRoomSubtitle } from './hiveWideRoom';
@@ -398,6 +398,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
     // in all 3 places").
     if (room.room_type === 'community') {
       const accent = hiveAccent(community);
+      const markColour = hiveTagMark(community);
       return (
         <View
           style={{
@@ -411,7 +412,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
             borderColor: accentWash(accent, 0.35),
           }}
         >
-          <HiveMark size={size * 0.48} colour={accent} />
+          <HiveMark size={size * 0.48} colour={markColour} />
         </View>
       );
     }

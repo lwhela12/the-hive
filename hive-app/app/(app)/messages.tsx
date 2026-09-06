@@ -21,7 +21,7 @@ import { useHiveWideRoom } from '../../lib/hooks/useHiveWideRoom';
 import { usePageSkin } from '../../lib/pageSkin';
 import { showAlert } from '../../lib/showAlert';
 import { getMessagesRoomLabel } from '../../components/messaging/hiveWideRoom';
-import { hiveDisplayName, hiveAccent, accentWash } from '../../lib/hiveBrand';
+import { hiveDisplayName, hiveAccent, accentWash, hiveTagMark } from '../../lib/hiveBrand';
 import { HiveMark } from '../../components/ui/HiveMark';
 import {
   getOtherRoomMembers,
@@ -60,6 +60,7 @@ function RoomBubble({
 }) {
   const { community } = useAuth();
   const roomAccent = hiveAccent(community);
+  const roomMark = hiveTagMark(community);
   const customization = getRoomCustomization(room, currentUserId);
   const roomName = getMessagesRoomLabel(room, currentUserId, hiveName);
   const otherMember = getOtherRoomMembers(room, currentUserId)[0];
@@ -90,7 +91,7 @@ function RoomBubble({
         borderColor: accentWash(roomAccent, 0.35),
       }}
     >
-      <HiveMark size={26} colour={roomAccent} />
+      <HiveMark size={26} colour={roomMark} />
     </View>
   ) : (
     <Avatar name={otherMember?.name || roomName} url={otherMember?.avatar_url} size={54} />

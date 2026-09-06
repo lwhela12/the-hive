@@ -54,7 +54,7 @@ type Buzz = {
   created_at: string;
   visibility: string;
   community_id: string;
-  community?: Pick<Community, 'id' | 'name' | 'accent_color'> | null;
+  community?: Pick<Community, 'id' | 'name' | 'slug' | 'accent_color'> | null;
   /** Written but never sent or published — owners only (2026-08-12). */
   unsent?: boolean;
   /** When it was actually emailed to the list, if it ever was. */
@@ -227,7 +227,7 @@ export default function BuzzScreen() {
 
     const { data } = await supabase
       .from('board_posts')
-      .select('id, title, content, created_at, visibility, community_id, community:communities(id, name, accent_color)')
+      .select('id, title, content, created_at, visibility, community_id, community:communities(id, name, slug, accent_color)')
       .in('category_id', boardIds)
       // `archived_at`, not `status`. This filtered on `status <> 'archived'`,
       // and the column's own constraint only permits 'active' or 'completed' —

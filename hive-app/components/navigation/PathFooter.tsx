@@ -6,7 +6,7 @@ import { HiveMark } from '../ui/HiveMark';
 import { WorldMark } from '../ui/WorldMark';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { usePathTrail, usePagePress } from '../../lib/hooks/usePathTrail';
-import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { hiveDisplayName, hiveTagMark } from '../../lib/hiveBrand';
 import { usePageSkin } from '../../lib/pageSkin';
 import { useBottomInset } from '../../lib/safeAreaBottom';
 import { NAV_DESTINATIONS, ADMIN_DESTINATION, activeKeyForPath } from '../../lib/navigation';
@@ -94,7 +94,7 @@ export function PathFooter() {
       }
     : {
         label: hiveDisplayName(community?.name),
-        mark: <HiveMark size={10} colour={hiveAccent(community)} />,
+        mark: <HiveMark size={10} colour={hiveTagMark(community)} />,
         onPress: stepTo(placeRoute),
       };
 

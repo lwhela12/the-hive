@@ -27,7 +27,7 @@ import { loadHiveWideWelcomeSeen, persistHiveWideWelcomeSeen } from '../../lib/r
 import { supabase } from '../../lib/supabase';
 import { useAuth, type HiveMembership } from '../../lib/hooks/useAuth';
 import { useAppNews } from '../../lib/hooks/useAppNews';
-import { accentOnDark, accentWash, hiveAccent, hiveDisplayName, normalizeHiveBrandText } from '../../lib/hiveBrand';
+import { accentOnDark, accentWash, hiveAccent, hiveDisplayName, hiveTagMark, normalizeHiveBrandText } from '../../lib/hiveBrand';
 import { formatDateLong } from '../../lib/dateUtils';
 import { getLocalIsoDate } from '../../lib/hooks/useArrivalBoard';
 import { useOpenFeedback } from '../../lib/openFeedback';
@@ -71,7 +71,7 @@ type WideWish = {
   title: string | null;
   description: string;
   user: { name: string | null; avatar_url: string | null } | null;
-  community: { name: string; accent_color: string | null } | null;
+  community: { name: string; slug: string | null; accent_color: string | null } | null;
 };
 
 type HiveEvent = {
@@ -310,7 +310,7 @@ function WideWishCard({ wish, onOpenMembers }: { wish: WideWish; onOpenMembers: 
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: INK_FAINT }}>
               {wish.user?.name?.split(/\s+/)[0] ?? 'Someone'}
             </Text>
-            <HiveMark size={10} colour={accentOnDark(hiveAccent(wish.community))} />
+            <HiveMark size={10} colour={hiveTagMark(wish.community)} />
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: INK_FAINT }}>
               {wish.community?.name ? hiveDisplayName(wish.community.name) : ''}
             </Text>
@@ -546,11 +546,10 @@ function WayIntoYourHive({
           rail's own recipe — dark ground, coloured comb, cream name — which is
           what "continuity" means here.
 
-          It works for all three because the edge, comb and arrow go through
-          `accentOnDark`, which lifts a colour until it can be read on black:
-          gold (#bd9348) is already light enough and passes through untouched,
-          Tech's #2f4a63 comes back a pale blue, Production's purple a pale
-          purple. The thin fill uses the raw colour, because it is doing the
+          It works for all three because the edge and arrow go through
+          `accentOnDark`, while the comb uses the shared small-mark colour:
+          Honey for OG, Signal Blue for Tech, Curtain Violet for Production.
+          The thin fill uses the raw page colour, because it is doing the
           opposite job — it only has to say which HIVE without lighting up.
 
           ## The label is the HIVE's name and nothing else
@@ -603,7 +602,7 @@ function WayIntoYourHive({
                 borderColor: colour,
               }}
             >
-              <HiveMark size={14} colour={colour} />
+              <HiveMark size={14} colour={hiveTagMark(m.community)} />
               <View style={{ flex: 1 }}>
                 <Text
                   style={{ fontFamily: 'Lato_700Bold', fontSize: 14.5, lineHeight: 19, color: INK }}
@@ -773,7 +772,7 @@ export default function HiveWideScreen() {
       // is the whole point of the scope.
       const { data: wishRows } = await supabase
         .from('wishes')
-        .select('id, title, description, user:profiles!user_id(name, avatar_url), community:communities(name, accent_color)')
+        .select('id, title, description, user:profiles!user_id(name, avatar_url), community:communities(name, slug, accent_color)')
         .eq('share_scope', 'all_hives')
         .eq('status', 'public')
         .or('is_active.is.true,is_active.is.null')

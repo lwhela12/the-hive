@@ -1,5 +1,5 @@
 import type { Community, Profile } from '../types';
-import { hiveAccent } from './hiveBrand';
+import { hiveTagMark } from './hiveBrand';
 import {
   getMentionedGroups,
   getMentionedMembers,
@@ -26,7 +26,7 @@ export type MentionableMember = Pick<Profile, 'id' | 'name'> & { avatar_url?: st
 /** Just enough of a membership row to name and colour a HIVE. */
 type MembershipLike = {
   community_id: string;
-  community?: Pick<Community, 'id' | 'name' | 'accent_color'> | null;
+  community?: Pick<Community, 'id' | 'name' | 'slug' | 'accent_color'> | null;
 };
 
 /**
@@ -87,7 +87,7 @@ export function taggableHivesFromMemberships(memberships?: MembershipLike[] | nu
       return {
         id,
         name: (community?.name ?? '').trim() || 'HIVE',
-        accent: hiveAccent(community),
+        accent: hiveTagMark(community),
       } as TaggableHive;
     })
     .filter((hive): hive is TaggableHive => !!hive)
@@ -96,13 +96,13 @@ export function taggableHivesFromMemberships(memberships?: MembershipLike[] | nu
 
 /** One HIVE, in the same shape, for the place you are standing right now. */
 export function taggableHiveFromCommunity(
-  community?: Pick<Community, 'id' | 'name' | 'accent_color'> | null
+  community?: Pick<Community, 'id' | 'name' | 'slug' | 'accent_color'> | null
 ): TaggableHive | null {
   if (!community?.id) return null;
   return {
     id: community.id,
     name: (community.name ?? '').trim() || 'HIVE',
-    accent: hiveAccent(community),
+    accent: hiveTagMark(community),
   };
 }
 
@@ -142,8 +142,9 @@ export async function fetchMentionableMembersForHives(
  * Every HIVE there is, in taggable shape.
  *
  * Any member of any HIVE may read every HIVE's name and colour — that is
- * migration 137, Nat's call, made knowingly — and a name and a colour are
- * exactly the two facts a typed "@og" needs in order to resolve. Members
+ * migration 137, Nat's call, made knowingly — and a name, slug and colour are
+ * exactly the three facts a typed "@og" needs in order to resolve and wear
+ * the same small mark as the rest of the app. Members
  * stay private; this list says nothing about who is inside.
  *
  * Cached in the module for the same ten minutes as the member lists: new
@@ -160,7 +161,7 @@ export async function fetchAllTaggableHives(): Promise<TaggableHive[]> {
 
   const { data, error } = await supabase
     .from('communities')
-    .select('id, name, accent_color');
+    .select('id, name, slug, accent_color');
 
   if (error) {
     console.warn('[Mentions] HIVE list load failed', error);

@@ -3,7 +3,7 @@ import { View, Text, Pressable } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { accentOnDark, accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { accentOnDark, accentWash, hiveAccent, hiveDisplayName, hiveTagMark } from '../../lib/hiveBrand';
 import { formatDateLong } from '../../lib/dateUtils';
 import { showAlert } from '../../lib/showAlert';
 import { startHiveTour } from '../../lib/hooks/useTourMarks';
@@ -34,7 +34,7 @@ export type PendingInviteForMe = Pick<
   CommunityInvite,
   'id' | 'community_id' | 'email' | 'role' | 'expires_at' | 'created_at'
 > & {
-  community: Pick<Community, 'id' | 'name' | 'accent_color'> | null;
+  community: Pick<Community, 'id' | 'name' | 'slug' | 'accent_color'> | null;
   inviter: Pick<Profile, 'id' | 'name'> | null;
 };
 
@@ -244,7 +244,7 @@ export function PendingInviteDoor({
       // free. Same narrowed joins as app/join.tsx: only names are rendered.
       const { data, error } = await supabase
         .from('community_invites')
-        .select('id, community_id, email, role, expires_at, created_at, community:communities(id, name, accent_color), inviter:profiles!community_invites_invited_by_fkey(id, name)')
+        .select('id, community_id, email, role, expires_at, created_at, community:communities(id, name, slug, accent_color), inviter:profiles!community_invites_invited_by_fkey(id, name)')
         .is('accepted_at', null)
         .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
         .order('created_at', { ascending: false });
@@ -318,6 +318,7 @@ export function PendingInviteDoor({
         const name = hiveDisplayName(invite.community?.name);
         const raw = hiveAccent(invite.community);
         const colour = accentOnDark(raw);
+        const markColour = hiveTagMark(invite.community);
         const inviterName = invite.inviter?.name?.trim();
         const joining = joiningId === invite.id;
         return (
@@ -333,7 +334,7 @@ export function PendingInviteDoor({
           >
             <View style={{ backgroundColor: accentWash(raw, 0.22), padding: 16, gap: 10 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
-                <HiveMark size={16} colour={colour} />
+                <HiveMark size={16} colour={markColour} />
                 <Text
                   style={{
                     flex: 1,
