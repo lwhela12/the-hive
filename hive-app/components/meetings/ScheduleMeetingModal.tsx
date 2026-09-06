@@ -11,6 +11,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { ComposerBar } from '../ui/ComposerBar';
+import { LocationSearchInput } from '../ui/LocationSearchInput';
 import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
 import { userFacingError } from '../../lib/userFacingError';
@@ -346,15 +347,11 @@ export function ScheduleMeetingModal({
               canSubmit={!loading}
             />
 
-            <ComposerBar
-              variant="form"
-              tone="light"
-              containerClassName="mb-4"
+            <LocationSearchInput
               label="Location (optional)"
               value={location}
               onChangeText={setLocation}
-              placeholder="Physical address for in-person meetings"
-              multiline={false}
+              placeholder="Search for a place or address"
               onSubmit={handleSchedule}
               canSubmit={!loading}
             />

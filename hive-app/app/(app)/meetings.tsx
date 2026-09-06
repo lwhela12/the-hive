@@ -22,6 +22,7 @@ import { hiveAccent, normalizeHiveBrandText } from '../../lib/hiveBrand';
 import { useAddToCalendar } from '../../components/ui/AddToCalendarDialog';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { ComposerBar } from '../../components/ui/ComposerBar';
+import { LocationSearchInput } from '../../components/ui/LocationSearchInput';
 import { FIELD_LOOK } from '../../components/ui/Input';
 import { EditButton } from '../../components/ui/EditButton';
 import { confirmAction, showAlert } from '../../lib/showAlert';
@@ -1826,23 +1827,13 @@ export default function MeetingsScreen() {
               submitting={savingEdit}
             />
 
-            {/* Where to meet is words — "Joe's Coffee", "the big park by the
-                library" — and people dictate addresses all day long, so this
-                one keeps the microphone. */}
-            <ComposerBar
-              variant="form"
-              containerClassName="mb-4"
+            <LocationSearchInput
               label="Location / Address"
               value={editForm.location}
-              onChangeText={(next) => setEditForm((f) => ({
-                ...f,
-                location: typeof next === 'function' ? next(f.location ?? '') : next,
-              }))}
-              placeholder="e.g., 123 Main St or Joe's Coffee"
-              multiline={false}
+              onChangeText={(next) => setEditForm((f) => ({ ...f, location: next }))}
+              placeholder="Search for a place or address"
               onSubmit={handleSaveEdit}
               canSubmit={!!editForm.title.trim() && !savingEdit}
-              submitting={savingEdit}
             />
 
             <View className="mb-4">

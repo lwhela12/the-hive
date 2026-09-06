@@ -64,6 +64,7 @@ import {
 import { SurveyQuestionField } from '../../components/surveys/SurveyQuestionField';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
+import { LocationSearchInput } from '../../components/ui/LocationSearchInput';
 import { WishCombCard } from '../../components/profile/WishCombCard';
 import { WishManageModal } from '../../components/wishes/WishManageModal';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
@@ -2804,13 +2805,10 @@ export default function MonthlyTuneupScreen() {
             style={inputStyle}
           />
         )}
-        <ComposerBar
-          tone="light"
-          variant="form"
+        <LocationSearchInput
           value={eventLocation}
           onChangeText={setEventLocation}
           placeholder="Location (optional)"
-          multiline={false}
         />
         <EventAudienceToggle value={eventAudience} onChange={setEventAudience} />
         {eventError ? (
@@ -3415,13 +3413,10 @@ export default function MonthlyTuneupScreen() {
                       style={inputStyle}
                     />
                   ) : null}
-                  <ComposerBar
-          tone="light"
-                    variant="form"
+                  <LocationSearchInput
                     value={eventLocation}
                     onChangeText={setEventLocation}
                     placeholder="Location (optional)"
-                    multiline={false}
                   />
                   <EventAudienceToggle value={eventAudience} onChange={setEventAudience} />
                   {eventError ? (

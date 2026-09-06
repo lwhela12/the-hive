@@ -92,6 +92,11 @@ verify_jwt = false
 [functions.create-event]
 verify_jwt = false
 
+# Venue and address suggestions. Auth is checked in the function and the
+# provider key stays in Supabase rather than shipping in the app bundle.
+[functions.location-search]
+verify_jwt = false
+
 # Daily meeting reminder - uses service_role key
 # Sends push notifications the day before a scheduled meeting
 # No user auth required (triggered by cron or manual HTTP call)

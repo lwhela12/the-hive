@@ -93,6 +93,7 @@ import type { Profile, Wish, WishGranter, Event, ActionItem } from '../../types'
 
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
+import { LocationSearchInput } from '../../components/ui/LocationSearchInput';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 type WishWithGranters = Wish & {
   user?: Profile | null;
@@ -2098,21 +2099,7 @@ export default function HiveScreen() {
     duesEnabled && community?.slug === 'default',
   );
 
-  /**
-   * Places this HIVE has been before, offered as you type.
-   *
-   * Nat, 2026-08-05: *"as you type, it can start trying to guess the location
-   * with a drop down? Like how it does in google maps and apple maps? what do
-   * you think?"*
-   *
-   * A real map lookup would mean a paid Google Places key, a billing account,
-   * and every keystroke in this box leaving the app — for a group that meets at
-   * the same handful of places. So it suggests from the addresses this HIVE has
-   * actually used. It costs nothing, tells nobody, is instant, and it gets
-   * better the more the HIVE meets. It will never find a restaurant you have
-   * never been to; that is the trade, and it is the right one until somebody
-   * needs the other thing.
-   */
+  /** Places this HIVE has used appear before the remote place lookup catches up. */
   const knownLocations = useMemo(() => {
     const seen = new Map<string, string>();
     [...upcomingEvents, ...pastEvents].forEach((event) => {
@@ -2121,19 +2108,6 @@ export default function HiveScreen() {
     });
     return [...seen.values()];
   }, [upcomingEvents, pastEvents]);
-
-  const locationSuggestions = useMemo(() => {
-    const typed = eventLocation.trim().toLowerCase();
-    // Before you type, the places you use most are the useful guess. Once you
-    // start, only what matches — and never the thing you have already typed in
-    // full, which would be a suggestion to change nothing.
-    const pool = knownLocations.filter((place) => {
-      const lower = place.toLowerCase();
-      if (lower === typed) return false;
-      return typed.length === 0 || lower.includes(typed);
-    });
-    return pool.slice(0, 4);
-  }, [knownLocations, eventLocation]);
 
   // Surveys
   const {
@@ -4314,58 +4288,15 @@ export default function HiveScreen() {
                           Extra details like doors/showtime can go in the time box too. We’ll save the first time and keep your note.
                         </Text>
                       )}
-                      {/* A place is words — "the back room at Esther's Kitchen"
-                          is exactly the sort of thing you say out loud. */}
-                      <ComposerBar
-                        variant="form"
-                        containerClassName={locationSuggestions.length > 0 ? 'mb-1' : 'mb-3'}
+                      <LocationSearchInput
+                        containerClassName="mb-3"
                         placeholder="Location (optional)"
                         value={eventLocation}
                         onChangeText={setEventLocation}
-                        multiline={false}
+                        knownLocations={knownLocations}
                         onSubmit={saveEvent}
                         canSubmit={!savingEvent}
-                        submitting={savingEvent}
                       />
-                      {/* Where this HIVE has met before. See `knownLocations`
-                          for why these come from your own past events rather
-                          than from a map service. */}
-                      {locationSuggestions.length > 0 && (
-                        <View className="mb-3" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                          {locationSuggestions.map((place) => (
-                            <Pressable
-                              key={place}
-                              onPress={() => setEventLocation(place)}
-                              accessibilityRole="button"
-                              accessibilityLabel={`Use ${place}`}
-                              style={({ pressed }) => ({
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 5,
-                                paddingHorizontal: 10,
-                                paddingVertical: 6,
-                                borderRadius: 999,
-                                borderWidth: 1,
-                                borderColor: FIELD_LOOK.border,
-                                backgroundColor: pressed ? '#fdf3dc' : FIELD_LOOK.fill,
-                              })}
-                            >
-                              <Text style={{ fontSize: 11 }}>📍</Text>
-                              <Text
-                                numberOfLines={1}
-                                style={{
-                                  fontFamily: 'Lato_400Regular',
-                                  fontSize: 12.5,
-                                  color: '#8a6b30',
-                                  maxWidth: 220,
-                                }}
-                              >
-                                {place}
-                              </Text>
-                            </Pressable>
-                          ))}
-                        </View>
-                      )}
                       {/* The mic was on a strip under this box. It is inside the
                           border now, on the box's own footer. */}
                       <ComposerBar
