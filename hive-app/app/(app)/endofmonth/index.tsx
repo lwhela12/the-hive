@@ -214,7 +214,7 @@ export default function EndOfMonthScreen() {
       const own = splitMergedAnswers({ ...merged, personal: [], sections: merged.sections.filter(s => s.communityId === selected) }, Object.fromEntries(Object.entries(answers).map(([key, value]) => [`${selected}:${key}`, value])), [])[0];
       if (!own) return { error: 'No section' };
       if (answers[CARRY_FORWARD_ANSWER_KEY]) own.answers[CARRY_FORWARD_ANSWER_KEY] = answers[CARRY_FORWARD_ANSWER_KEY];
-      for (const key of ['q_hd_wish_id', 'q_hd_wish_reach']) {
+      for (const key of ['q_hd_wish_id', 'q_hd_wish_reach', 'q_hd_wish_mode', 'q_hd_granted_wish_ids']) {
         if (answers[key] !== undefined) own.answers[key] = answers[key];
       }
       const { error } = await submitCheckInOccurrence(survey.id, own.answers as SurveyAnswers, selected, `month:${month}`);

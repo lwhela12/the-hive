@@ -1,3 +1,4 @@
+import { personalHardOut } from '../../lib/personalHardOut';
 import { Text, View } from 'react-native';
 import { Avatar } from '../ui/Avatar';
 import {
@@ -34,7 +35,7 @@ export function ArrivalMemberCard({
   const feelingNote = getTextAnswer(answers, 'q_feeling_note');
   const energyLevel = getNumberAnswer(answers, 'q_energy_level');
   const energyMode = getTextAnswer(answers, 'q_energy_mode');
-  const hardOut = getTextAnswer(answers, 'q_hard_out');
+  const hardOut = personalHardOut(answers.q_hard_out).label;
   const attendance = getAttendance(response);
   const energyDots = energyLevel !== null ? getEnergyDots(energyLevel) : null;
   const scale = compact ? 0.78 : 1;

@@ -1,3 +1,4 @@
+import { personalHardOutError } from '../../lib/personalHardOut';
 import { Fragment, useState, useEffect, useCallback, useMemo } from 'react';
 import { ActivityIndicator, View, Text, ScrollView, Pressable, Modal, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
@@ -424,6 +425,8 @@ export function SurveyModal({
       setError(`Please answer: ${missing.map(q => `"${q.text.slice(0, 30)}..."`).join(', ')}`);
       return;
     }
+    const departureError = survey.questions.some(q => q.id === 'q_hard_out') ? personalHardOutError(answers.q_hard_out) : null;
+    if (departureError) { setError(departureError); return; }
     setSubmitting(true);
     setError(null);
     const finalAnswers: SurveyAnswers = carryForwardItems.length > 0
@@ -535,7 +538,7 @@ export function SurveyModal({
     const activeStatus = response?.status ?? 'keep_active';
     return <View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 10 }}>
-        {CARRY_FORWARD_STATUS_OPTIONS.map((option) => {
+        {CARRY_FORWARD_STATUS_OPTIONS.filter(option => item.type !== 'wish' || ['keep_active', 'needs_attention'].includes(option.value)).map((option) => {
           const active = option.value === activeStatus;
           const activeStyle = CARRY_FORWARD_STATUS_STYLE[option.value];
           return (
@@ -564,7 +567,7 @@ export function SurveyModal({
       {/* The shared message bar, so a note on your roster looks and
           behaves like every other box you write in — mic inside the
           box's own border rather than on a strip welded underneath. */}
-      <ComposerBar
+      {(item.type !== 'wish' || activeStatus === 'needs_attention' || !!response?.note) && <ComposerBar
         tone="light"
         variant="form"
         value={response?.note ?? ''}
@@ -573,7 +576,7 @@ export function SurveyModal({
         })}
         placeholder={`Optional note for ${activeStatus ? getCarryForwardStatusLabel(activeStatus).toLowerCase() : 'this item'}...`}
         minHeight={44}
-      />
+      />}
     </View>;
   };
 
@@ -666,7 +669,7 @@ export function SurveyModal({
       wishReviewItems={q.id === 'q_hd_wish' ? wishReviewItems : undefined}
       renderWishReview={q.id === 'q_hd_wish' ? renderCarryForwardControls : undefined}
       hangEvents={currentActivity?.data?.hangs}
-      question={q.id === 'q_hd_wish' ? { ...q, text: 'Your HD wish for this meeting' } : isStaple && q.id === 'q_hangs_recap' ? { ...q, type: 'hangs' } : isStaple && q.id === 'q_hive_help_recap' ? { ...q, type: 'long', text: 'Any reflection on this HIVE’s Help activity? Completion is handled in your roster — no need to report it twice.' } : q}
+      question={q.id === 'q_hard_out' ? { ...q, text: 'Do you have a hard out?' } : q.id === 'q_hd_wish' ? { ...q, text: 'Your HD wish for this meeting' } : isStaple && q.id === 'q_hangs_recap' ? { ...q, type: 'hangs' } : isStaple && q.id === 'q_hive_help_recap' ? { ...q, type: 'long', text: 'Any reflection on this HIVE’s Help activity? Completion is handled in your roster — no need to report it twice.' } : q}
       index={index}
       value={answers[q.id]}
       onChange={(value) => setAnswer(q.id, value)}
@@ -831,11 +834,9 @@ export function SurveyModal({
                 );
               })()}
 
-              {isStaple && survey.community_id && <View style={{ backgroundColor: tint.wash, borderRadius: 14, padding: 14, marginBottom: 18, gap: 6 }}>
+              {isStaple && survey.community_id && contextState === 'ready' && completedContext.length > 0 && <View style={{ backgroundColor: tint.wash, borderRadius: 14, padding: 14, marginBottom: 18, gap: 6 }}>
                 <Text style={{ color: tint.ink, fontFamily: 'Lato_700Bold' }}>Completed work & helper credit</Text>
-                <Text style={{ color: '#5c5648' }}>{contextState === 'loading' ? 'Loading this HIVE’s completed work…' : contextState === 'error' ? 'Completed work could not load. Your answers are still yours to write.' : completedContext.length ? 'A reminder, not a pre-written answer:' : 'No completed work recorded for this cycle yet.'}</Text>
                 {completedContext.map((line, index) => <Text key={index} style={{ color: '#5c5648' }}>• {line}</Text>)}
-                <Text style={{ color: '#5c5648' }}>Your active goals, HD and commitments are in the roster below. Update each status there once; use POP for changes, blockers and what help would move you forward.</Text>
               </View>}
               {/* Grouped? Then each section draws its own, below its heading. */}
               {draftLoaded && !carryForwardSections && renderCarryForwardContext()}
@@ -846,7 +847,8 @@ export function SurveyModal({
               {draftLoaded && (() => {
                 let asked = introduction ? 1 : 0;
                 return survey.questions.map((q) => {
-                  const drawn = renderQuestion(q, q.type === 'note' ? -1 : asked++);
+                  const redundantHiveHeading = q.type === 'note' && q.id.startsWith('note_hive_') && survey.questions.filter(question => question.type === 'note' && question.id.startsWith('note_hive_')).length === 1 && !!survey.community_id;
+                  const drawn = redundantHiveHeading ? null : renderQuestion(q, q.type === 'note' ? -1 : asked++);
                   const mine = carryForwardSections?.[q.id];
                   if (!mine?.length) return drawn;
                   // This HIVE's own open things, under this HIVE's heading and

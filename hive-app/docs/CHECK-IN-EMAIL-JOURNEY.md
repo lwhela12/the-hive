@@ -39,3 +39,14 @@ Validation: all 18 regression scripts, interface/type checks and full web export
 When a check-in includes the HD wish question, each wish appears there once: focus choice, existing visibility label, status controls and optional status note share one card. Wishes leave the earlier roster; other open items stay there. Forms without the HD question retain the full roster. Unavailable picker wishes still have their status notes in the wish section. Existing answer keys, focus persistence, reach and status semantics are unchanged.
 
 Validation: typecheck and web export pass; all regression scripts pass, including grouped/flat roster placement, forms without a wish question, preserved status notes and status buttons outside the focus button. No real answers submitted or email approvals changed during verification.
+
+
+## Browser annotation pass (2026-09-05)
+
+Nat's seven annotations supersede the initial one-wish layout above. Shared plate loses its save explanation; completed-work context renders only with real completed items; its roster explanation is removed. A sole per-HIVE note heading is hidden when the form already names that HIVE, while multi-HIVE/season headings and roster placement remain.
+
+Personal hard-out uses No/Yes and separate hour/minute/AM/PM inputs, without tags or mic. Existing No/Nope values select No. Valid old times populate the clock; unsupported old prose is retained visibly for correction. Incomplete or invalid departure times block submission. The existing q_hard_out answer stays human-readable; ArrivalMemberCard (including Meeting Helper) formats times and suppresses No/Nope labels. The meeting's official countdown continues using its separate setting.
+
+Wish focus is a radio choice among active wishes or Write a new wish. Only the chosen wish shows audience and active/attention controls, with a note when needed. Mark granted opens the existing grant modal, preserves helper-credit and linked-board handling, and clears that wish from focus after successful granting so another/new wish can be selected. Cross-HIVE granting uses the wish's source HIVE and does not inherit another HIVE's admin role. Granting saves through its own explicit modal action; selecting focus and writing a new wish save on check-in submission. New-wish mode offers Write my own or Refine with Clive; the existing-wish privacy explanation and generic new-wish paragraphs are removed.
+
+Validation: full typecheck/web build and all regression scripts passed. Offline tests exercise disclosure, draft preservation, grant-to-new-focus, grant cancellation, ownership/failure/credit/link behavior, clock validation and legacy/noon/midnight cases. No member check-ins or wishes were submitted/granted during agent testing; no email switches changed.

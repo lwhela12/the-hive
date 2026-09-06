@@ -105,20 +105,21 @@ export function useWishes({ loadWishes = false }: { loadWishes?: boolean } = {})
   const grantWish = async (
     wishId: string,
     granterIds: string[],
-    thankYouMessage?: string
+    thankYouMessage?: string,
+    wishCommunityId = communityId,
   ) => {
-    if (!profile || !communityId) {
+    if (!profile || !wishCommunityId) {
       return { error: new Error('Not authenticated') };
     }
 
     const fulfilledAt = new Date().toISOString();
-    const isAdmin = communityRole === 'admin' || profile.role === 'admin';
+    const isAdmin = (wishCommunityId === communityId && communityRole === 'admin') || profile.role === 'admin';
 
     const { data: wishLink } = await (supabase as any)
       .from('wishes')
       .select('source_board_post_id, user_id')
       .eq('id', wishId)
-      .eq('community_id', communityId)
+      .eq('community_id', wishCommunityId)
       .maybeSingle();
 
     if (!wishLink || (!isAdmin && wishLink.user_id !== profile.id)) {
@@ -131,12 +132,13 @@ export function useWishes({ loadWishes = false }: { loadWishes?: boolean } = {})
       .update({
         status: 'fulfilled',
         is_active: false,
+        is_spotlight: false,
         fulfilled_at: fulfilledAt,
         fulfilled_by: profile.id,
         thank_you_message: thankYouMessage || null,
       })
       .eq('id', wishId)
-      .eq('community_id', communityId);
+      .eq('community_id', wishCommunityId);
 
     if (!isAdmin) {
       wishUpdateQuery = wishUpdateQuery.eq('user_id', profile.id);
@@ -158,7 +160,7 @@ export function useWishes({ loadWishes = false }: { loadWishes?: boolean } = {})
         completion_note: thankYouMessage || 'Completed from linked wish.',
       })
       .eq('source_wish_id', wishId)
-      .eq('community_id', communityId);
+      .eq('community_id', wishCommunityId);
 
     if (boardError) {
       console.log('Linked board completion skipped (non-blocking):', boardError);
@@ -175,7 +177,7 @@ export function useWishes({ loadWishes = false }: { loadWishes?: boolean } = {})
           granted_wish_id: wishId,
         })
         .eq('id', wishLink.source_board_post_id)
-        .eq('community_id', communityId);
+        .eq('community_id', wishCommunityId);
 
       if (postError) {
         console.log('Linked thread completion skipped (non-blocking):', postError);
@@ -187,7 +189,7 @@ export function useWishes({ loadWishes = false }: { loadWishes?: boolean } = {})
       const granterInserts = granterIds.map((granterId) => ({
         wish_id: wishId,
         granter_id: granterId,
-        community_id: communityId,
+        community_id: wishCommunityId,
       }));
 
       const { error: granterError } = await supabase
@@ -196,13 +198,13 @@ export function useWishes({ loadWishes = false }: { loadWishes?: boolean } = {})
 
       if (granterError) {
         await fetchWishes();
-        await invalidateWishQueries(communityId, profile.id);
+        await invalidateWishQueries(wishCommunityId, profile.id);
         return { error: granterError };
       }
     }
 
     await fetchWishes();
-    await invalidateWishQueries(communityId, profile.id);
+    await invalidateWishQueries(wishCommunityId, profile.id);
     celebrateWishGranted();
     return { error: null };
   };

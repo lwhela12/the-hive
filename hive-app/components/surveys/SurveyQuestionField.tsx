@@ -1,3 +1,6 @@
+import { CheckInWishGrant } from './CheckInWishGrant';
+import type { Wish } from '../../types';
+import { HardOutInput } from './HardOutInput';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { CarryForwardItem } from '../../lib/carryForward';
 import { Pressable, Text, View } from 'react-native';
@@ -463,7 +466,7 @@ export function SurveyQuestionField({
   const [writingNewWish, setWritingNewWish] = useState(false);
   const [wishesLoaded, setWishesLoaded] = useState(false);
   const [pickableWishes, setPickableWishes] = useState<
-    { id: string; description: string; communityId: string; fromHive: string | null; reach: 'hive' | 'all_hives' }[]
+    { id: string; title?: string | null; description: string; communityId: string; fromHive: string | null; reach: 'hive' | 'all_hives'; record: Wish }[]
   >([]);
   useEffect(() => {
     if (!isHdWish || !profile?.id || !communityId) return;
@@ -488,7 +491,7 @@ export function SurveyQuestionField({
        */
       const { data, error } = await (supabase as any)
         .from('wishes')
-        .select('id, description, share_scope, community_id, community:communities(name)')
+        .select('*, community:communities(name)')
         .eq('user_id', profile.id)
         .eq('status', 'public')
         .eq('is_active', true)
@@ -505,6 +508,8 @@ export function SurveyQuestionField({
           .filter((wish) => !!String(wish.description ?? '').trim())
           .map((wish) => ({
             id: String(wish.id),
+            title: wish.title,
+            record: wish,
             communityId: wish.community_id,
             description: String(wish.description).trim(),
             // Only says so when it came from somewhere else — a wish written
@@ -518,9 +523,16 @@ export function SurveyQuestionField({
   }, [isHdWish, profile?.id, communityId]);
   const selectedWish = pickableWishes.find(wish =>
     textValue.trim() === wish.description && (!answers?.q_hd_wish_id || answers.q_hd_wish_id === wish.id));
-  const showNewWish = !selectedWish && (writingNewWish || !!textValue.trim() || (wishesLoaded && !pickableWishes.length));
+  const showNewWish = !selectedWish && (writingNewWish || answers?.q_hd_wish_mode === 'new' || (wishesLoaded && !answers?.q_hd_wish_id && !!textValue.trim()));
+  const [writeOwnWish, setWriteOwnWish] = useState(false);
+  const [grantTarget, setGrantTarget] = useState<Wish | null>(null);
+  const grantedIds: string[] = Array.isArray(answers?.q_hd_granted_wish_ids) ? answers.q_hd_granted_wish_ids : [];
+  const selectedReview = selectedWish ? wishReviewItems.find(item => item.id === selectedWish.id) : undefined;
   const startNewWish = () => {
+    if (showNewWish) return;
     setWritingNewWish(true);
+    setWriteOwnWish(false);
+    onSetAnswer?.('q_hd_wish_mode', 'new');
     onChange('');
     onSetAnswer?.('q_hd_wish_id', '');
     onSetAnswer?.('q_hd_wish_reach', 'hive');
@@ -642,80 +654,81 @@ export function SurveyQuestionField({
       )}
 
       {isHdWish && (
-        <View style={{ backgroundColor: tint.wash, borderWidth: 1, borderColor: tint.line(0.5), borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10, gap: 10 }}>
-          {pickableWishes.length > 0 && <>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink }}>
-              Choose a wish for this meeting
-            </Text>
-            {pickableWishes.map(wish => {
+        <View style={{ gap: 12, marginBottom: 10 }}>
+          <View accessibilityRole="radiogroup" accessibilityLabel="Meeting focus" style={{ gap: 8 }}>
+            {pickableWishes.filter(wish => !grantedIds.includes(wish.id)).map(wish => {
               const chosen = selectedWish?.id === wish.id;
-              const review = wishReviewItems.find(item => item.id === wish.id);
-              return <View key={wish.id} style={{ backgroundColor: '#fffdf5', borderWidth: chosen ? 2 : 1,
-                borderColor: chosen ? tint.accent : tint.line(0.5), borderRadius: 10, padding: 12, gap: 10 }}>
-                <Pressable accessibilityRole="button"
-                accessibilityState={{ selected: chosen }}
-                accessibilityLabel={`${chosen ? 'Selected' : 'Choose'} wish: ${wish.description}. ${wish.reach === 'all_hives' ? 'HIVE-Wide' : 'This HIVE only'}`}
+              return <Pressable key={wish.id} accessibilityRole="radio"
+                accessibilityState={{ checked: chosen }}
+                accessibilityLabel={`${chosen ? 'Selected' : 'Choose'} wish: ${wish.title || wish.description}`}
                 onPress={() => {
                   setWritingNewWish(false);
-                  onChange(chosen ? '' : wish.description);
-                  onSetAnswer?.('q_hd_wish_id', chosen ? '' : wish.id);
+                  onSetAnswer?.('q_hd_wish_mode', 'existing');
+                  onChange(wish.description);
+                  onSetAnswer?.('q_hd_wish_id', wish.id);
                   onSetAnswer?.('q_hd_wish_reach', wish.reach);
                 }}
-                style={{ gap: 7, paddingVertical: 4 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink, lineHeight: 19 }}>
-                  {chosen ? '✓ Selected · ' : ''}{wish.description}
-                </Text>
-                <ReachPill reach={wish.reach} communityId={wish.communityId} />
-                {wish.fromHive && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#5c5648' }}>From {wish.fromHive}</Text>}
-                </Pressable>
-                {review && renderWishReview && <View style={{ gap: 7 }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#5c5648' }}>Wish status</Text>
-                  {renderWishReview(review)}
-                </View>}
-              </View>;
+                style={{ flexDirection: 'row', gap: 10, alignItems: 'center', padding: 14,
+                  borderWidth: 1, borderColor: tint.line(0.5), borderRadius: 12, backgroundColor: chosen ? tint.wash : '#fffdf5' }}>
+                <Text style={{ color: tint.ink, fontSize: 19 }}>{chosen ? '●' : '○'}</Text>
+                <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: 14, color: tint.ink, lineHeight: 20 }}>{wish.title || wish.description}</Text>
+              </Pressable>;
             })}
-            {selectedWish && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 19 }}>
-              This uses your existing wish and keeps who can see it.
-            </Text>}
-          </>}
-          {wishReviewItems.filter(item => !pickableWishes.some(wish => wish.id === item.id)).map(item => (
-            <View key={item.id} style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: tint.line(0.5), borderRadius: 10, padding: 12, gap: 10 }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink }}>{item.detail || item.label}</Text>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#5c5648' }}>Wish status</Text>
-              {renderWishReview?.(item)}
-            </View>
-          ))}
-          {!wishesLoaded && <Text style={{ color: '#5c5648' }}>Loading your wishes…</Text>}
-          {!showNewWish && <Pressable accessibilityRole="button" onPress={startNewWish}
-            style={{ alignSelf: 'flex-start', paddingVertical: 9 }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', color: tint.ink, fontSize: 13 }}>Write a new wish</Text>
-          </Pressable>}
-          {showNewWish && <>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink }}>New wish</Text>
-            <VoiceTextInput value={textValue} multiline communityId={communityId}
-              placeholder="What would you like this HIVE to help you with?"
-              onChangeText={next => { onChange(next); onSetAnswer?.('q_hd_wish_id', ''); }} />
-            <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/(app)', params: {
-              prefill: textValue.trim()
-                ? `Help me turn this into a High Definition wish for my HIVE — specific enough that somebody could actually grant it: "${textValue.trim()}"`
-                : 'Help me find my High Definition wish for this HIVE. Ask me where I am, where I want to be, what I have tried and where I am stuck.',
-            } })}
-              style={{ alignSelf: 'flex-start', backgroundColor: tint.accent, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14 }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', fontSize: 13 }}>Shape it with Clive ✨</Text>
+            <Pressable accessibilityRole="radio" accessibilityState={{ checked: showNewWish }} accessibilityLabel="Write a new wish" onPress={startNewWish}
+              style={{ flexDirection: 'row', gap: 10, alignItems: 'center', padding: 14, borderWidth: 1, borderColor: tint.line(0.5), borderRadius: 12, backgroundColor: showNewWish ? tint.wash : '#fffdf5' }}>
+              <Text style={{ color: tint.ink, fontSize: 19 }}>{showNewWish ? '●' : '○'}</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: tint.ink }}>Write a new wish</Text>
             </Pressable>
-            {onSetAnswer && community?.max_share_scope !== 'hive' && <View style={{ gap: 5 }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink }}>Who sees this new wish</Text>
-              <ReachPill reach={hdReach} size="md" communityId={communityId}
-                onToggle={() => onSetAnswer('q_hd_wish_reach', hdReach === 'all_hives' ? 'hive' : 'all_hives')} />
-            </View>}
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#5c5648' }}>
-              Your draft stays here if you visit Clive. Submitting creates this wish and makes it your focus.
-            </Text>
-          </>}
+          </View>
+          {!wishesLoaded && <Text style={{ color: '#5c5648' }}>Loading your wishes…</Text>}
+          {selectedWish && <View style={{ gap: 10, paddingHorizontal: 14 }}>
+            {selectedWish.title && selectedWish.title !== selectedWish.description && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: '#5c5648' }}>{selectedWish.description}</Text>}
+            <ReachPill reach={selectedWish.reach} communityId={selectedWish.communityId} />
+            {selectedReview && renderWishReview?.(selectedReview)}
+            <Pressable accessibilityRole="button" accessibilityLabel="Mark this wish granted" onPress={() => setGrantTarget(selectedWish.record)} style={{ alignSelf: 'flex-start', paddingVertical: 9 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: tint.ink }}>Mark granted ✓</Text>
+            </Pressable>
+          </View>}
+          {showNewWish && <View style={{ gap: 12, paddingHorizontal: 14 }}>
+            <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
+              <Pressable accessibilityRole="button" onPress={() => setWriteOwnWish(true)} style={{ padding: 12, borderRadius: 10, backgroundColor: tint.wash }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', color: tint.ink }}>Write my own</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/(app)', params: {
+                prefill: textValue.trim()
+                  ? `Help me turn this into a High Definition wish for my HIVE — specific enough that somebody could actually grant it: "${textValue.trim()}"`
+                  : 'Help me find my High Definition wish for this HIVE. Ask me where I am, where I want to be, what I have tried and where I am stuck.',
+              } })} style={{ padding: 12, borderRadius: 10, backgroundColor: tint.accent }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', color: 'white' }}>Refine with Clive ✨</Text>
+              </Pressable>
+            </View>
+            {(writeOwnWish || !!textValue.trim()) && <>
+              <VoiceTextInput value={textValue} multiline communityId={communityId}
+                placeholder="What would you like this HIVE to help you with?"
+                onChangeText={next => { onChange(next); onSetAnswer?.('q_hd_wish_id', ''); }} />
+              {onSetAnswer && community?.max_share_scope !== 'hive' && <View style={{ gap: 5 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: tint.ink }}>Who sees it</Text>
+                <ReachPill reach={hdReach} size="md" communityId={communityId}
+                  onToggle={() => onSetAnswer('q_hd_wish_reach', hdReach === 'all_hives' ? 'hive' : 'all_hives')} />
+              </View>}
+            </>}
+          </View>}
+          {grantTarget && <CheckInWishGrant wish={grantTarget} onClose={() => setGrantTarget(null)} onGranted={() => {
+            const id = grantTarget.id;
+            setPickableWishes(previous => previous.filter(wish => wish.id !== id));
+            onSetAnswer?.('q_hd_granted_wish_ids', [...grantedIds, id]);
+            if (selectedWish?.id === id) {
+              onChange('');
+              onSetAnswer?.('q_hd_wish_id', '');
+              onSetAnswer?.('q_hd_wish_mode', '');
+            }
+            setGrantTarget(null);
+          }} />}
         </View>
       )}
 
-      {!isHdWish && (question.type === 'short' || question.type === 'long') && (
+      {question.id === 'q_hard_out' && <HardOutInput value={value} onChange={onChange} accent={accent} />}
+      {!isHdWish && question.id !== 'q_hard_out' && (question.type === 'short' || question.type === 'long') && (
         <VoiceTextInput
           value={textValue}
           onChangeText={onChange}

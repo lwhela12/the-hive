@@ -379,7 +379,7 @@ export default function BeforeWeMeetScreen() {
       if (original?.[id] !== undefined) own.answers[id] = original[id];
     }
     if (plate !== undefined) own.answers.q_plate = plate;
-    for (const key of ['q_hd_wish_id', 'q_hd_wish_reach']) {
+    for (const key of ['q_hd_wish_id', 'q_hd_wish_reach', 'q_hd_wish_mode', 'q_hd_granted_wish_ids']) {
       if (answers[key] !== undefined) own.answers[key] = answers[key];
     }
     if (answers[CARRY_FORWARD_ANSWER_KEY]) own.answers[CARRY_FORWARD_ANSWER_KEY] = answers[CARRY_FORWARD_ANSWER_KEY];

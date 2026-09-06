@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SurveyQuestionField } from './SurveyQuestionField';
 import { PLATE_QUESTION } from '../../lib/checkInPresentation';
@@ -13,6 +13,5 @@ export function SharedPlate({ scope, onChange }: { scope: string; onChange: (val
     {ready && <SurveyQuestionField question={PLATE_QUESTION} index={0} value={value} onChange={next => {
       setValue(next); onChange(next); void AsyncStorage.setItem(scope, next).catch(() => {});
     }} />}
-    <Text style={{ color: '#5c5648' }}>Your choice saves with this check-in.</Text>
   </View>;
 }

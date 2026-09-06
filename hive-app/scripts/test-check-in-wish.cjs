@@ -9,40 +9,53 @@ function load(file, mocks = {}) {
     {module,exports:module.exports,require:name=>mocks[name]??{},console,Date,Map,Set});
   return module.exports;
 }
-const wish = {id:'wide',description:'My existing wish',communityId:'tech',fromHive:null,reach:'all_hives'};
-let states=[false,false,true,[wish]], index=0, answers={};
+const wish = {id:'wide',title:'My wish',description:'My existing wish',communityId:'og',fromHive:'OG HIVE',reach:'all_hives',record:{id:'wide',community_id:'og',user_id:'owner',description:'My existing wish'}};
+const nextWish={...wish,id:'next',title:'Next wish',description:'My next focus',record:{...wish.record,id:'next',description:'My next focus'}};
+let states=[false,false,true,[wish,nextWish]], index=0, answers={};
 const jsx=(type,props)=>({type,props});
 const {SurveyQuestionField}=load('components/surveys/SurveyQuestionField.tsx',{
-  react:{useState:value=>{const i=index++;if(!(i in states))states[i]=value;return[states[i],next=>states[i]=next];},useEffect(){}},
+  react:{useState:value=>{const i=index++;if(!(i in states))states[i]=value;return[states[i],next=>states[i]=typeof next==='function'?next(states[i]):next];},useEffect(){}},
   'react/jsx-runtime':{jsx,jsxs:jsx},'react-native':{View:'View',Text:'Text',Pressable:'Pressable'},
   'expo-router':{useRouter:()=>({push(){}})},
   '../../lib/hooks/useAuth':{useAuth:()=>({profile:{id:'owner'},community:{max_share_scope:'all_hives'}})},
   '../../lib/hiveBrand':{HIVE_GOLD:'gold',accentPalette:()=>({line:()=>'',ink:'navy'})},
   '../ui/ReachPill':{ReachPill:'ReachPill'},
+  './CheckInWishGrant':{CheckInWishGrant:'Grant'},
 });
 function render(extra={}){index=0;const tree=SurveyQuestionField({question:{id:'q_hd_wish',type:'long',text:'Your wish'},index:3,value:answers.q_hd_wish,answers,communityId:'tech',onChange:value=>answers.q_hd_wish=value,onSetAnswer:(key,value)=>answers[key]=value,...extra}); const nodes=[];function walk(n){if(!n||typeof n!=='object')return;if(Array.isArray(n)){n.forEach(walk);return;}nodes.push(n);walk(n.props?.children);}walk(tree);return nodes;}
-let nodes=render();
-assert.equal(nodes.find(n=>n.type==='ReachPill').props.reach,'all_hives');
-assert.ok(!nodes.some(n=>n.type==='ReachPill'&&n.props.onToggle),'existing wish is a visibility label, not a switch');
-assert.ok(!nodes.some(n=>n.type?.name==='VoiceTextInput'),'no duplicate answer box before choosing new');
+const review={id:'wide',type:'wish',label:'My existing wish',sourceLabel:'OG HIVE · Wish'};
+const reviewProps={wishReviewItems:[review],renderWishReview:item=>jsx('WishStatus',{id:item.id})};
+let nodes=render(reviewProps);
+assert.ok(!nodes.some(n=>n.type==='WishStatus'||n.type==='ReachPill'||n.type?.name==='VoiceTextInput'),'only choices until a wish is selected');
 nodes.find(n=>n.props?.accessibilityLabel?.startsWith('Choose wish')).props.onPress();
-assert.equal(answers.q_hd_wish_id,'wide');
-nodes=render();assert.ok(nodes.some(n=>n.props?.accessibilityState?.selected));
-assert.ok(!nodes.some(n=>n.type==='ReachPill'&&n.props.onToggle));
-nodes.find(n=>n.type==='Pressable'&&JSON.stringify(n.props.children).includes('Write a new wish')).props.onPress();
-nodes=render();assert.equal(answers.q_hd_wish_id,'');
-assert.equal(answers.q_hd_wish_reach,'hive');
-assert.ok(nodes.some(n=>n.type?.name==='VoiceTextInput'));
-assert.ok(nodes.some(n=>n.type==='ReachPill'&&n.props.onToggle),'only new wish has visibility switch');
-// Status and focus share one card; status controls are siblings of the focus
-// button so changing a status cannot inadvertently select/deselect the wish.
-const review={id:'wide',type:'wish',label:'My existing wish',sourceLabel:'Tech HIVE · Wish'};
-const missing={id:'missing',type:'wish',label:'A wish no longer pickable',sourceLabel:'Tech HIVE · Wish'};
-const reviewProps={wishReviewItems:[review,missing],renderWishReview:item=>jsx('WishStatus',{id:item.id})};
 nodes=render(reviewProps);
-assert.equal(nodes.filter(n=>n.type==='WishStatus'&&n.props.id==='wide').length,1);
-assert.equal(nodes.filter(n=>n.type==='WishStatus'&&n.props.id==='missing').length,1,'unavailable wishes retain their status note');
-assert.ok(!nodes.some(n=>n.type==='Pressable'&&JSON.stringify(n.props.children).includes('WishStatus')),'status controls never nested in focus button');
+assert.equal(answers.q_hd_wish_id,'wide');
+assert.equal(nodes.find(n=>n.type==='ReachPill').props.reach,'all_hives');
+assert.equal(nodes.filter(n=>n.type==='WishStatus').length,1);
+assert.ok(!nodes.some(n=>n.type==='ReachPill'&&n.props.onToggle));
+assert.ok(!nodes.some(n=>n.type==='Pressable'&&JSON.stringify(n.props.children).includes('WishStatus')));
+nodes.find(n=>n.props.accessibilityLabel==='Mark this wish granted').props.onPress();
+nodes=render(reviewProps);let grant=nodes.find(n=>n.type==='Grant');
+assert.equal(grant.props.wish.community_id,'og');
+grant.props.onClose();assert.equal(answers.q_hd_wish_id,'wide','cancel preserves focus');
+nodes=render(reviewProps);nodes.find(n=>n.props.accessibilityLabel==='Mark this wish granted').props.onPress();
+nodes=render(reviewProps);nodes.find(n=>n.type==='Grant').props.onGranted();
+nodes=render(reviewProps);
+assert.equal(answers.q_hd_wish_id,'');assert.equal(answers.q_hd_wish,'');
+assert.ok(!nodes.some(n=>n.props.accessibilityLabel?.startsWith('Selected wish')));
+assert.ok(answers.q_hd_granted_wish_ids.includes('wide'));
+nodes.find(n=>n.props.accessibilityLabel==='Choose wish: Next wish').props.onPress();
+assert.equal(answers.q_hd_wish_id,'next','a granted wish can be followed by a different focus');
+nodes=render(reviewProps);
+nodes.find(n=>n.props.accessibilityLabel==='Write a new wish').props.onPress();
+nodes=render(reviewProps);
+assert.ok(!nodes.some(n=>n.type?.name==='VoiceTextInput'),'new wish first offers own writing or Clive');
+nodes.find(n=>n.type==='Pressable'&&JSON.stringify(n.props.children).includes('Write my own')).props.onPress();
+nodes=render(reviewProps);assert.ok(nodes.some(n=>n.type?.name==='VoiceTextInput'));
+assert.ok(nodes.some(n=>n.type==='ReachPill'&&n.props.onToggle));
+answers.q_hd_wish='New draft';
+nodes.find(n=>n.props.accessibilityLabel==='Write a new wish').props.onPress();
+assert.equal(answers.q_hd_wish,'New draft','clicking selected new option preserves draft');
 const carry=load('lib/carryForward.ts');
 for(const grouped of [false,true]) for(const hasWish of [false,true]) {
  let state=[{q_carry_forward_items:[{...review,status:'needs_attention',note:'Please help'}]},false,false,false,null,true],cursor=0;
