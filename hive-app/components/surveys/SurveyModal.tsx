@@ -695,7 +695,7 @@ export function SurveyModal({
       wishReviewItems={q.id === 'q_hd_wish' ? wishReviewItems : undefined}
       renderWishReview={q.id === 'q_hd_wish' ? renderCarryForwardControls : undefined}
       hangEvents={currentActivity?.data?.hangs}
-      question={q.id === 'q_hard_out' ? { ...q, text: 'Do you have a hard out?' } : q.id === 'q_hd_wish' ? { ...q, text: 'Your HD wish for this meeting' } : isStaple && q.id === 'q_hangs_recap' ? { ...q, type: 'hangs' } : q}
+      question={q.id === 'q_hard_out' ? { ...q, text: 'Do you have a hard out?' } : isStaple && q.id === 'q_hangs_recap' ? { ...q, type: 'hangs' } : q}
       index={index}
       value={answers[q.id]}
       onChange={(value) => setAnswer(q.id, value)}

@@ -4,7 +4,7 @@ const ts = require('typescript');
 const assert = require('node:assert/strict');
 const moduleObject = { exports: {} };
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/checkInPresentation.ts','utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:moduleObject.exports,module:moduleObject,Date,Set});
-const {checkInQuestions,PLATE_QUESTION,meetingLabel}=moduleObject.exports;
+const {checkInQuestions,PLATE_QUESTION,HD_FOCUS_QUESTION,meetingLabel}=moduleObject.exports;
 const questions=[
   {id:'q_energy_level',type:'scale',text:'Energy'},
   {id:'q_plate',type:'choice',text:'Plate'},
@@ -20,10 +20,19 @@ const questions=[
 ];
 const before=JSON.stringify(questions);
 const adapted=checkInQuestions(questions,true);
+const meeting=checkInQuestions(questions,false);
 assert.equal(JSON.stringify(questions),before,'never mutate persisted questions');
 assert.equal(adapted.some(q=>['q_energy_level','q_plate','q_contact'].includes(q.id)),false);
 assert.equal(adapted.some(q=>['q_pop_progress','q_pop_obstacles'].includes(q.id)),false,'preseeded roster replaces duplicate progress and obstacle boxes');
 assert.equal(adapted.find(q=>q.id==='q_pop_priorities').text,'What should the room help you move forward?');
+assert.equal(meeting.some(q=>q.id==='q_pop_priorities'),false,'meeting focus replaces the duplicate priorities essay');
+assert.equal(meeting.filter(q=>q.id==='q_hd_wish').length,1,'every meeting gets one HD focus picker');
+assert.equal(meeting.find(q=>q.id==='q_hd_wish').text,HD_FOCUS_QUESTION.text);
+const missingBoth=checkInQuestions([{id:'q_attendance',type:'choice',text:'Coming?'},{id:'q_hard_out',type:'short',text:'Hard out?'},{id:'custom',type:'long',text:'Custom'}]);
+assert.deepEqual(Array.from(missingBoth,q=>q.id),['q_attendance','q_hard_out','q_hd_wish','custom'],'older HIVE rows receive the shared picker after hard out');
+const alreadyHasBoth=checkInQuestions([...questions,{id:'q_hd_wish',type:'long',text:'Old HD copy'}]);
+assert.equal(alreadyHasBoth.filter(q=>q.id==='q_hd_wish').length,1,'never show two HD focus pickers');
+assert.equal(alreadyHasBoth.some(q=>q.id==='q_pop_priorities'),false,'HD focus wins over the old priorities essay');
 assert.equal(adapted.find(q=>q.id==='q_hive_help_recap').type,'focus','HIVE Help stays a structured rating');
 assert.match(adapted.find(q=>q.id==='q_attendance').options[1],/email me the recap/);
 assert.match(adapted.find(q=>q.id==='q_newsletter').text,/Buzz.*shows.*shout-out/);

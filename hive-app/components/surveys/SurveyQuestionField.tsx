@@ -728,7 +728,7 @@ export function SurveyQuestionField({
                   {chosen && wish.title && wish.title !== wish.description && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: '#5c5648' }}>{wish.description}</Text>}
                 </View>
                 </Pressable>
-                {chosen && <EditButton accessibilityLabel="Manage wish" onPress={() => setManageTarget(wish.record)} />}
+                <EditButton accessibilityLabel={`Manage wish: ${wish.title || wish.description}`} onPress={() => setManageTarget(wish.record)} />
                 </View>
                 {chosen && <View style={{ marginLeft: 29, marginTop: 6 }}>
                   <ReachPill reach={wish.reach} communityId={wish.communityId} busy={savingReach}

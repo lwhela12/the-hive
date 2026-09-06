@@ -4,10 +4,17 @@ export const PLATE_QUESTION: SurveyQuestion = {
   id: 'q_plate', text: 'How much is on your plate right now?', type: 'choice', required: false,
   options: ['🍽️ Plenty of room — hand me something', "🥄 A bit on there, and I've got room for this", "🍲 Pretty full — I'll take one small thing", '🫙 Full to the brim — I want to listen this time'],
 };
+export const HD_FOCUS_QUESTION: SurveyQuestion = {
+  id: 'q_hd_wish',
+  text: 'Choose your HD wish for this month',
+  type: 'long',
+  required: false,
+};
 const capacityIds = new Set(['q_plate', 'q_energy_level', 'q_energy_mode', 'q_feeling_today']);
-/** Presentation only: stable IDs/old answers remain untouched; never convert energy to capacity. */
+/** Presentation only: persisted survey rows and old answers remain untouched; never convert energy to capacity. */
 export function checkInQuestions(questions: SurveyQuestion[], month = false): SurveyQuestion[] {
-  return questions.filter(q => (
+  const alreadyHasHdFocus = questions.some(q => q.id === HD_FOCUS_QUESTION.id);
+  const presented = questions.filter(q => (
     !capacityIds.has(q.id)
     && q.id !== 'q_contact'
     // The live roster above the questions already brings completed and open
@@ -16,8 +23,10 @@ export function checkInQuestions(questions: SurveyQuestion[], month = false): Su
     // retired. Keep stored answers and stable ids untouched.
     && !['q_pop_progress', 'q_show_progress'].includes(q.id)
     // One room-help question is enough. `q_pop_priorities` is the surviving
-    // answer because Meeting Helper already reads it onto the member's POP.
+    // free-text answer in End of the month. Before a meeting, the actionable
+    // version is the member's HD focus below.
     && q.id !== 'q_pop_obstacles'
+    && (month || q.id !== 'q_pop_priorities' || !alreadyHasHdFocus)
   )).map(q => {
     if (month && ['q_newsletter', 'q_eom_newsletter', 'q_shoutout'].includes(q.id)) return { ...q, text: 'Anything for the Buzz? Upcoming shows, events, a plug, or a shout-out for someone — include names, dates and links.' };
     if (month && /how (did|has|is).*(month|things)|how.*month.*(go|been)/i.test(q.text)) return { ...q, text: 'How are things going so far this month?' };
@@ -27,10 +36,24 @@ export function checkInQuestions(questions: SurveyQuestion[], month = false): Su
         ? '😢 Missing this one — please email me the recap'
         : option),
     };
-    if (q.id === 'q_pop_priorities') return { ...q, text: 'What should the room help you move forward?' };
+    if (q.id === 'q_pop_priorities') return month
+      ? { ...q, text: 'What should the room help you move forward?' }
+      : { ...HD_FOCUS_QUESTION };
+    if (q.id === 'q_hd_wish') return { ...q, text: HD_FOCUS_QUESTION.text };
     if (q.id === 'q_hive_help_recap') return { ...q, type: 'focus' as const, text: 'How did this month’s HIVE Help go?' };
     return q;
   });
+
+  // Every Before we meet check-in arrives at the HummDinger with one chosen
+  // HD. Older HIVE question rows do not all contain that field, so add the
+  // shared picker after the hard-out question when there is nothing to replace.
+  // This changes presentation only; persisted survey rows and old answers stay
+  // untouched.
+  if (!month && !presented.some(q => q.id === HD_FOCUS_QUESTION.id)) {
+    const hardOutIndex = presented.findIndex(q => q.id === 'q_hard_out');
+    presented.splice(hardOutIndex >= 0 ? hardOutIndex + 1 : 0, 0, { ...HD_FOCUS_QUESTION });
+  }
+  return presented;
 }
 export type MeetingPreview = { id: string; community_id: string; event_date: string; event_time?: string | null };
 export const pacificToday = (now = new Date()): string => now.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
