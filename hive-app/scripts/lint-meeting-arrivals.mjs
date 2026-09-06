@@ -1,11 +1,47 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import vm from 'node:vm';
+import ts from 'typescript';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const meetingHelper = fs.readFileSync(path.join(root, 'app/(app)/meeting-helper.tsx'), 'utf8');
 const meetings = fs.readFileSync(path.join(root, 'app/(app)/meetings.tsx'), 'utf8');
+const arrivalSelection = fs.readFileSync(path.join(root, 'lib/arrivalSurveySelection.ts'), 'utf8');
 const failures = [];
+
+// The shared Before we meet form is where current answers are saved. An older
+// HIVE-specific survey may remain active during cutover, but must not hide a
+// member's new response on the Arrivals board.
+const compiledSelection = ts.transpileModule(arrivalSelection, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText;
+const selectionModule = { exports: {} };
+vm.runInNewContext(compiledSelection, {
+  module: selectionModule,
+  exports: selectionModule.exports,
+});
+const { selectActiveArrivalCheckIn } = selectionModule.exports;
+const activeSurveys = [
+  { id: 'old-tech', community_id: 'tech', title: 'Monthly check-in' },
+  { id: 'current-shared', community_id: null, title: 'Before we meet' },
+];
+const selected = selectActiveArrivalCheckIn(
+  activeSurveys,
+  'tech',
+  (survey) => /monthly check-in|before we meet/i.test(survey.title),
+);
+if (selected?.id !== 'current-shared') {
+  failures.push('Arrivals must prefer the shared Before we meet survey while an older HIVE survey is still active.');
+}
+const fallback = selectActiveArrivalCheckIn(
+  activeSurveys.slice(0, 1),
+  'tech',
+  (survey) => /monthly check-in/i.test(survey.title),
+);
+if (fallback?.id !== 'old-tech') {
+  failures.push('Arrivals must keep the HIVE-specific survey as a fallback when no shared check-in exists.');
+}
 
 // Nat, 2026-08-24, after the Room slide's ordering was quietly moved once
 // (removed 2026-07-22, put back with a visible second door 2026-08-24 by a

@@ -694,9 +694,9 @@ const INTRO_PROMPT =
 
 // Nat's POP formula — the backbone of the HummDinger sesh.
 const POP_SECTIONS = [
-  { key: 'q_pop_progress', label: 'Progress', prompt: 'credit where credit is due' },
-  { key: 'q_pop_obstacles', label: 'Obstacles', prompt: 'where are you stuck?' },
-  { key: 'q_pop_priorities', label: 'Priorities', prompt: "what's your focus & how can HIVE support you?" },
+  { key: 'q_pop_progress', label: 'Progress', prompt: 'What moved?' },
+  { key: 'q_pop_obstacles', label: 'Obstacles', prompt: 'What’s stuck?' },
+  { key: 'q_pop_priorities', label: 'Priorities', prompt: 'What’s next?' },
 ] as const;
 
 // Same forgiving parser the tune-up uses — "7", "7pm", "around 7:30 PM" all work.
@@ -770,8 +770,8 @@ const withoutTimeNotes = (description?: string | null) =>
     .join('\n\n')
     .trim();
 
-const POP_ALT_PHRASING =
-  'Where are you · Where do you want to be · What have you tried · Where are you stuck';
+const HD_STORY_PATH =
+  'Where are you?  →  Where do you want to be?  →  What have you tried?  →  Where are you stuck?';
 
 type MeetingHelperNotes = {
   news?: string;
@@ -3752,36 +3752,55 @@ export default function MeetingHelperScreen() {
           >
             {'“I’m ‹your name›, here’s my background, and this is what I’m building right now.”'}
           </Text>
-          <Text
-            style={{
-              fontFamily: 'Lato_400Regular',
-              fontStyle: 'italic',
-              fontSize: sz(18, 11),
-              lineHeight: sz(26, 16),
-              color: MUTED,
-              marginTop: sz(6, 4),
-            }}
-          >
-            Everyone’s own words from the check-in are already on their bubble.
-          </Text>
         </View>
       ) : null}
       <Text
         style={{
-          fontFamily: 'Lato_400Regular',
-          fontStyle: 'italic',
-          fontSize: sz(20, 12),
-          lineHeight: sz(30, 18),
-          color: MUTED,
-          marginTop: sz(12, 8),
+          fontFamily: 'Lato_700Bold',
+          fontSize: sz(17, 11),
+          lineHeight: sz(24, 16),
+          color: GOLD_DEEP,
+          marginTop: sz(12, 7),
+          letterSpacing: 0.3,
         }}
       >
-        {POP_ALT_PHRASING}
+        Pick either path for each HD:
+      </Text>
+
+      <View
+        style={{
+          backgroundColor: CARD,
+          borderWidth: 1,
+          borderColor: GOLD_SOFT,
+          borderRadius: sz(14, 11),
+          paddingHorizontal: sz(16, 11),
+          paddingVertical: sz(9, 7),
+          marginTop: sz(7, 5),
+        }}
+      >
+        <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(16, 12), color: CHARCOAL }}>
+          1 · Talk it through
+        </Text>
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 9.5), lineHeight: sz(18, 14), color: GOLD_DEEP, marginTop: sz(2, 1) }}>
+          {HD_STORY_PATH}
+        </Text>
+      </View>
+
+      <Text
+        style={{
+          fontFamily: 'Lato_700Bold',
+          fontSize: sz(14, 10),
+          lineHeight: sz(20, 14),
+          color: MUTED,
+          marginTop: sz(7, 5),
+        }}
+      >
+        OR · 2 · Use POP
       </Text>
 
       {/* POP-formula header — a legend, not a headline. Kept deliberately
           slim so the member bubbles below get the room (Nat 2026-07-24). */}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(12, 7), marginTop: sz(14, 10) }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(12, 7), marginTop: sz(5, 4) }}>
         {POP_SECTIONS.map((section) => (
           <View
             key={section.key}

@@ -11,6 +11,7 @@ import {
   type SurveyResponse,
 } from './useSurveys';
 import { isPreMeetingCheckInSurvey } from '../checkIns';
+import { selectActiveArrivalCheckIn } from '../arrivalSurveySelection';
 
 const POLL_INTERVAL_MS = 20 * 1000;
 
@@ -197,26 +198,11 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
       // have opened on Tuesday showing an empty room while every member had
       // in fact checked in.
       const activeSurveys = (surveysRes.data ?? []) as Survey[];
-      /**
-       * A HIVE'S OWN CHECK-IN WINS WHILE IT EXISTS; THE SHARED ONE IS THE
-       * FALLBACK.
-       *
-       * Both are in this list during the changeover, and both can match the
-       * same title patterns — Production's own row and the merged one are
-       * literally both called "Before we meet". Leaving `find` to pick would
-       * have meant whichever the database happened to return first, which is a
-       * coin flip that decides whose answers light up the room.
-       *
-       * Own-first is the right order in both states: while the per-HIVE rows
-       * are live the deck reads the survey people are actually answering, and
-       * the moment they are switched off at the October cutover it reads the
-       * merged one without another line changing.
-       */
-      const own = activeSurveys.filter((survey) => survey.community_id === communityId);
-      const shared = activeSurveys.filter((survey) => survey.community_id == null);
-      const pick = (list: Survey[]) =>
-        list.find(isMonthlyCheckInSurvey) ?? list.find((survey) => isPreMeetingCheckInSurvey(survey));
-      const activeCheckIn = pick(own) ?? pick(shared) ?? null;
+      const activeCheckIn = selectActiveArrivalCheckIn(
+        activeSurveys,
+        communityId,
+        (survey) => isPreMeetingCheckInSurvey(survey) || isMonthlyCheckInSurvey(survey),
+      );
       const period = activeCheckIn ? (meetingRes.data?.[0]?.event_date?.slice(0, 7) ?? getSurveyResponsePeriod(activeCheckIn)) : null;
 
       const memberRows = ((membersRes.data ?? []) as unknown as { profiles: ArrivalBoardMember | ArrivalBoardMember[] | null }[])
