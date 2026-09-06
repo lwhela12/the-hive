@@ -16,7 +16,7 @@ assert.doesNotMatch(component, /ComposerBar|VoiceMicButton|attachment/i);
 assert.match(edge, /verifySupabaseJwt/);
 assert.match(edge, /FOURSQUARE_PLACES_API_KEY/);
 assert.match(edge, /GEOAPIFY_API_KEY/);
-assert.match(edge, /places-api\.foursquare\.com\/autocomplete/);
+assert.match(edge, /places-api\.foursquare\.com\/places\/search/);
 assert.match(edge, /api\.geoapify\.com\/v1\/geocode\/autocomplete/);
 assert.match(edge, /X-Places-Api-Version/);
 assert.match(edge, /LAS_VEGAS/);

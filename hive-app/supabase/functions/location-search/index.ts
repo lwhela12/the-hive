@@ -7,10 +7,16 @@ const MAX_QUERY_LENGTH = 120;
 const MAX_SESSION_TOKEN_LENGTH = 160;
 
 type FoursquareResult = {
-  type?: string;
-  text?: { primary?: string; secondary?: string };
-  place?: { fsq_place_id?: string };
-  geo?: { name?: string; cc?: string; type?: string };
+  fsq_place_id?: string;
+  name?: string;
+  location?: {
+    address?: string;
+    formatted_address?: string;
+    locality?: string;
+    region?: string;
+    postcode?: string;
+    country?: string;
+  };
 };
 
 type GeoapifyResult = {
@@ -49,14 +55,11 @@ serve(async (req) => {
 
   const providerRequests: Promise<{ provider: string; response: Response | null }>[] = [];
   if (foursquareKey) {
-    const url = new URL('https://places-api.foursquare.com/autocomplete');
+    const url = new URL('https://places-api.foursquare.com/places/search');
     url.searchParams.set('query', query);
     url.searchParams.set('ll', LAS_VEGAS);
     url.searchParams.set('radius', '100000');
-    url.searchParams.set('types', 'place,geo');
-    url.searchParams.set('bias', 'place');
     url.searchParams.set('limit', '6');
-    if (sessionToken) url.searchParams.set('session_token', sessionToken);
     providerRequests.push(fetch(url, {
       headers: {
         Authorization: `Bearer ${foursquareKey}`,
@@ -86,8 +89,14 @@ serve(async (req) => {
   const foursquareResponse = responses.find((item) => item.provider === 'Foursquare')?.response;
   const geoapifyResponse = responses.find((item) => item.provider === 'Geoapify')?.response;
 
-  if (foursquareResponse && !foursquareResponse.ok) console.error('Foursquare returned:', foursquareResponse.status);
-  if (geoapifyResponse && !geoapifyResponse.ok) console.error('Geoapify returned:', geoapifyResponse.status);
+  if (foursquareResponse && !foursquareResponse.ok) {
+    const providerError = cleanText(await foursquareResponse.clone().text());
+    console.error('Foursquare returned:', foursquareResponse.status, providerError.slice(0, 500));
+  }
+  if (geoapifyResponse && !geoapifyResponse.ok) {
+    const providerError = cleanText(await geoapifyResponse.clone().text());
+    console.error('Geoapify returned:', geoapifyResponse.status, providerError.slice(0, 500));
+  }
 
   const foursquarePayload = foursquareResponse?.ok
     ? await foursquareResponse.json().catch(() => ({ results: [] }))
@@ -100,14 +109,21 @@ serve(async (req) => {
     ? foursquarePayload.results
     : [];
   const results = foursquareResults.flatMap((result, index) => {
-    const label = cleanText(result.text?.primary || result.geo?.name);
-    const detail = cleanText(result.text?.secondary);
+    const label = cleanText(result.name);
+    const location = result.location;
+    const detail = cleanText(location?.formatted_address) || cleanText([
+      location?.address,
+      location?.locality,
+      location?.region,
+      location?.postcode,
+      location?.country,
+    ].filter(Boolean).join(', '));
     if (!label) return [];
     const value = detail && !label.toLocaleLowerCase().includes(detail.toLocaleLowerCase())
       ? `${label}, ${detail}`
       : label;
     return [{
-      id: cleanText(result.place?.fsq_place_id) || `geo:${label}:${index}`,
+      id: cleanText(result.fsq_place_id) || `foursquare:${label}:${index}`,
       label,
       detail: detail || undefined,
       value,
