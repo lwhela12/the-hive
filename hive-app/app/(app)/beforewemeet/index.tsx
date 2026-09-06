@@ -89,6 +89,7 @@ export default function BeforeWeMeetScreen() {
   const [state, setState] = useState<'looking' | 'ready' | 'none' | 'broken'>('looking');
   const [today, setToday] = useState(pacificToday);
   const [loadedScope, setLoadedScope] = useState<string | null>(null);
+  const [todoErrors, setTodoErrors] = useState<Record<string, string | null>>({});
   const scope = `${profile?.id ?? ''}:${memberships.map(m => m.community_id).sort().join(':')}:${today}${meetingId ? `:${meetingId}` : ''}`;
   const ready = !authLoading && !!profile && state === 'ready' && loadedScope === scope
     && (!meetingId || (linkedMeeting?.id === meetingId && !!originMembership && !linkFailed))
@@ -142,6 +143,7 @@ export default function BeforeWeMeetScreen() {
     setReview({});
     setPlate(undefined);
     setTodosByHive({});
+    setTodoErrors({});
 
 
     void (async () => {
@@ -288,6 +290,7 @@ export default function BeforeWeMeetScreen() {
             const where = hiveDisplayName(m.community?.name);
             return {
               communityId: m.community_id,
+              error: null,
               slug: (m.community?.slug ?? '').trim().toLowerCase(),
               items: items.map((item: CarryForwardItem) => ({
                 ...item,
@@ -295,7 +298,7 @@ export default function BeforeWeMeetScreen() {
               })),
             };
           } catch {
-            return { communityId: m.community_id, slug: '', items: [] as CarryForwardItem[] };
+            return { communityId: m.community_id, slug: '', items: [] as CarryForwardItem[], error: 'Your to-dos could not load. Please reopen this check-in to try again.' };
           }
         }),
       );
@@ -313,6 +316,7 @@ export default function BeforeWeMeetScreen() {
         if (roster.items.length) bySection[`note_hive_${roster.slug}`] = roster.items;
       }
       setTodosByHive(bySection);
+      setTodoErrors(Object.fromEntries(rosters.map(roster => [roster.communityId, roster.error])));
     })();
 
     return () => { cancelled = true; };
@@ -411,6 +415,8 @@ export default function BeforeWeMeetScreen() {
         isEditingResponse={!!mine}
         carryForwardItems={section ? todosByHive[`note_hive_${section.slug}`] ?? [] : []}
         carryForwardSections={section ? { [`note_hive_${section.slug}`]: todosByHive[`note_hive_${section.slug}`] ?? [] } : {}}
+        carryForwardLoading={!(selected in todoErrors)}
+        carryForwardError={todoErrors[selected]}
         onSubmit={onSubmit}
         renderSuccess={close => <CheckInNextMeetings community={selectedMembership?.community}
           upcoming={upcomingCheckIns(memberships.filter(member => merged?.sections.some(section => section.communityId === member.community_id)), currentMeetings, saved, selected, today)}

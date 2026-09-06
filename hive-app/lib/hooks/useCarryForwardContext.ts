@@ -1,3 +1,5 @@
+import { fetchCheckInActionItems } from '../checkInActionItems';
+import { hasMeaningfulActionItemText } from '../actionItemDisplay';
 import { useQuery } from '@tanstack/react-query';
 import { CARRY_FORWARD_ANSWER_KEY, type CarryForwardItem } from '../carryForward';
 import { supabase } from '../supabase';
@@ -108,15 +110,15 @@ export async function fetchCarryForwardItems(
   userId: string,
   survey: Survey
 ): Promise<CarryForwardItem[]> {
-    const actionItemsPromise = (supabase as any)
+    const actionItemsPromise = fetchCheckInActionItems<ActionItemRow>(() => (supabase as any)
       .from('action_items')
       .select('id, description, due_date, created_at')
       .eq('community_id', communityId)
       .eq('assigned_to', userId)
-      .eq('completed', false)
+      .or('completed.is.false,completed.is.null')
       .is('archived_at', null)
       .order('created_at', { ascending: false })
-      .limit(8);
+      .order('id'));
 
     const wishesPromise = supabase
       .from('wishes')
@@ -198,14 +200,14 @@ export async function fetchCarryForwardItems(
       boardPostsData = (boardPostsRes.data ?? []) as BoardPostRow[];
     }
 
-    if (actionItemsRes.error) console.warn('Could not load carry-forward tasks', actionItemsRes.error);
+    if (actionItemsRes.error) throw new Error('Your to-dos could not load. Please reopen this check-in to try again.');
     if (wishesRes.error) console.warn('Could not load carry-forward wishes', wishesRes.error);
     if (hdBoardsRes.error && !hdBoardsData) console.warn('Could not load carry-forward HD boards', hdBoardsRes.error);
     if (previousPopRes.error) console.warn('Could not load previous POP response', previousPopRes.error);
 
     const nextItems: CarryForwardItem[] = [];
 
-    ((actionItemsRes.data ?? []) as ActionItemRow[]).forEach((item) => {
+    ((actionItemsRes.data ?? []) as ActionItemRow[]).filter(item => hasMeaningfulActionItemText(item.description)).forEach((item) => {
       nextItems.push({
         id: item.id,
         type: 'action_item',

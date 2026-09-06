@@ -57,3 +57,12 @@ Validation: full typecheck/web build and all regression scripts passed. Offline 
 Nat explicitly approved the completion page; preserve that design. On browse=all, removed the plate question from above the meeting list; it remains the first question inside each individual check-in with existing shared-draft behavior. Replaced ambiguous Anytime/Meeting soon buckets with one Upcoming meetings heading, retaining chronological groups and all future meetings. Done for now is a compact gold pill with dark text. Copy now states the day-before-or-day-of reminder limit; the sender still targets the day before and no additional send path or approval switch was changed.
 
 Validation: typecheck, web build, check-in-priority and continuation regressions pass. Existing card review/saved state and approved success page remain intact.
+
+
+## Completed work and remaining tasks (2026-09-05)
+
+Check-ins celebrate actual unarchived completed work in “You got this done ✓”; helper contributions have a separate credit section. “Still to do” has task checkboxes, with Done moving the item into the completed section and Undo restoring it before submission. Existing notes survive both moves; attention and archive controls remain. Wish review stays in its own focus question. Empty completed panels, save explanations and repeated single-HIVE headings remain absent.
+
+Task queries page through the full scoped list instead of silently stopping at eight open or twenty completed items. Mention-only accidental jots are excluded; archived records stay excluded. Task-load failures remain visible for the affected HIVE. Submission verifies actual completion/archive state, including silent permission failures, and retains the draft with a retry message if updates fail after answers save.
+
+Validation: typecheck, web export, task-write/error/pagination fixtures and check-in regression suites. The approved completion screen and email approval/scheduling behavior are unchanged. User-requested personal record corrections are documented privately in the Brain receipt, not in this repository.

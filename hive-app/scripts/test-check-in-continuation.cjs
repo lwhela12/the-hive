@@ -33,12 +33,13 @@ const {default:Screen}=load('app/(app)/beforewemeet/index.tsx',{
  '../../../lib/carryForward':{CARRY_FORWARD_ANSWER_KEY:'_carry_forward'},'../../../components/surveys/SurveyModal':{SurveyModal:'SurveyModal'},'../../../components/surveys/CheckInNextMeetings':{CheckInNextMeetings:'CheckInNextMeetings'},
  '../../../components/surveys/CheckInHiveCard':{CheckInHiveCard:'CheckInHiveCard'},
 });
-function render(hive){routeHive=hive;const scope=`user:${members.map(m=>m.community_id).sort().join(':')}:2026-09-07${browse?'':`:${hive}`}`;values=[browse?null:meetings.find(m=>m.id===hive),false,'Shared plate answer',browse?null:hive,{},meetings,saved,{id:'survey'}, {sections:members.map(m=>({communityId:m.community_id,slug:m.community.slug,questions:[]}))},{},'ready','2026-09-07',scope];index=0;return Screen();}
+function render(hive){routeHive=hive;const scope=`user:${members.map(m=>m.community_id).sort().join(':')}:2026-09-07${browse?'':`:${hive}`}`;values=[browse?null:meetings.find(m=>m.id===hive),false,'Shared plate answer',browse?null:hive,{},meetings,saved,{id:'survey'}, {sections:members.map(m=>({communityId:m.community_id,slug:m.community.slug,questions:[]}))},{},'ready','2026-09-07',scope,Object.fromEntries(members.map(m=>[m.community_id,null]))];index=0;return Screen();}
 function nodes(tree){const out=[];function walk(n){if(!n||typeof n!=='object')return;if(Array.isArray(n)){n.forEach(walk);return;}out.push(n);walk(n.props?.children);}walk(tree);return out;}
 (async()=>{
  for(const [hive,expected] of [['tech','og,show'],['og','show'],['show','']]){
   let tree=render(hive);assert.equal(tree.type,'SurveyModal');assert.equal(tree.props.survey.community_id,hive);assert.equal(tree.props.hiveSlug,hive);
   assert.ok(tree.props.draftScope.endsWith(`:${hive}`));
+  assert.equal(tree.props.carryForwardLoading,false);assert.equal(tree.props.carryForwardError,null);
   await tree.props.onSubmit({q_note:`Only ${hive}`,q_hd_wish_id:`wish-${hive}`}); saved=values[6];
   assert.equal(receiptRows.at(-1).occurrence,`meeting:${hive}`);assert.equal(receiptRows.at(-1).answers.q_plate,'Shared plate answer');
   tree=render(hive);let closed=0;const success=tree.props.renderSuccess(()=>closed++);

@@ -1,3 +1,4 @@
+import { fetchCheckInActionItems } from '../../lib/checkInActionItems';
 import { personalHardOutError } from '../../lib/personalHardOut';
 import { Fragment, useState, useEffect, useCallback, useMemo } from 'react';
 import { ActivityIndicator, View, Text, ScrollView, Pressable, Modal, useWindowDimensions } from 'react-native';
@@ -30,7 +31,7 @@ import { fileCheckInWish } from '../../lib/checkInWish';
 import { showAlert } from '../../lib/showAlert';
 import { getCycleStart } from '../../lib/meetingCycle';
 import { fetchCheckInActivityContext, type ActivityContext } from '../../lib/checkInActivityContext';
-import { parseActionItemDescription } from '../../lib/actionItemDisplay';
+import { hasMeaningfulActionItemText, parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { Avatar } from '../ui/Avatar';
 import { CloseButton } from '../ui/CloseButton';
@@ -374,7 +375,7 @@ export function SurveyModal({
   }, [draftId]);
 
   const isStaple = isPreMeetingCheckInSurvey(survey) || isEndOfMonthCheckInSurvey(survey);
-  const [completedContext, setCompletedContext] = useState<string[]>([]);
+  const [completedContext, setCompletedContext] = useState<{ id: string; text: string; helperName?: string }[]>([]);
   const [contextState, setContextState] = useState<'loading' | 'ready' | 'error'>('loading');
   useEffect(() => {
     let active = true;
@@ -383,14 +384,14 @@ export function SurveyModal({
     (async () => {
       const since = await getCycleStart(survey.community_id, new Date(survey.due_date ?? Date.now()).toISOString().slice(0, 10));
       const [own, helpers] = await Promise.all([
-        supabase.from('action_items').select('id, description').eq('community_id', survey.community_id).eq('assigned_to', viewerProfile.id).eq('completed', true).is('archived_at', null).gte('completed_at', since.toISOString()).order('completed_at', { ascending: false }).limit(20),
-        supabase.from('action_items').select('id, description, assignee:profiles!assigned_to(name)').eq('community_id', survey.community_id).eq('related_user_id', viewerProfile.id).neq('assigned_to', viewerProfile.id).eq('completed', true).is('archived_at', null).gte('completed_at', since.toISOString()).order('completed_at', { ascending: false }).limit(20),
+        fetchCheckInActionItems<{ id: string; description: string }>(() => supabase.from('action_items').select('id, description').eq('community_id', survey.community_id).eq('assigned_to', viewerProfile.id).eq('completed', true).is('archived_at', null).gte('completed_at', since.toISOString()).order('completed_at', { ascending: false }).order('id')),
+        fetchCheckInActionItems<{ id: string; description: string; assignee: { name: string } | null }>(() => supabase.from('action_items').select('id, description, assignee:profiles!assigned_to(name)').eq('community_id', survey.community_id).eq('related_user_id', viewerProfile.id).neq('assigned_to', viewerProfile.id).eq('completed', true).is('archived_at', null).gte('completed_at', since.toISOString()).order('completed_at', { ascending: false }).order('id')),
       ]);
       if (!active) return;
       if (own.error || helpers.error) { setContextState('error'); return; }
       setCompletedContext([
-        ...(own.data ?? []).map(item => parseActionItemDescription(item.description).text),
-        ...(helpers.data ?? []).map((item: any) => `${parseActionItemDescription(item.description).text} — ${item.assignee?.name ?? 'A HIVE member'} helped`),
+        ...(own.data ?? []).filter(item => hasMeaningfulActionItemText(item.description)).map(item => ({ id: item.id, text: parseActionItemDescription(item.description).text })),
+        ...(helpers.data ?? []).filter(item => hasMeaningfulActionItemText(item.description)).map((item: any) => ({ id: item.id, text: parseActionItemDescription(item.description).text, helperName: item.assignee?.name ?? 'A HIVE member' })),
       ]);
       setContextState('ready');
     })().catch(() => { if (active) setContextState('error'); });
@@ -441,15 +442,18 @@ export function SurveyModal({
       setError('Could not save your responses. Please try again.');
       return;
     }
-    // Ticking a to-do off in the roster now actually ticks it off. Answers are
-    // already saved by this point, so a task that will not move costs a warning
-    // in the console and nothing else (see `applyCarryForwardStatuses`).
+    // Keep the draft available to retry if task updates fail after the answers save.
     if (viewerProfile?.id && carryForwardItems.length > 0) {
-      await applyCarryForwardStatuses(
+      const taskResult = await applyCarryForwardStatuses(
         supabase as never,
         viewerProfile.id,
         normalizeCarryForwardResponse(finalAnswers[CARRY_FORWARD_ANSWER_KEY]),
       );
+      if (taskResult.error) {
+        setSubmitting(false);
+        setError('Your answers are saved, but your to-do updates could not save. Please submit again to retry.');
+        return;
+      }
     }
     /**
      * The HD wish becomes a real wish, not a sentence in a survey.
@@ -538,13 +542,13 @@ export function SurveyModal({
     const activeStatus = response?.status ?? 'keep_active';
     return <View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 10 }}>
-        {CARRY_FORWARD_STATUS_OPTIONS.filter(option => item.type !== 'wish' || ['keep_active', 'needs_attention'].includes(option.value)).map((option) => {
+        {CARRY_FORWARD_STATUS_OPTIONS.filter(option => item.type === 'action_item' ? ['needs_attention', 'archive'].includes(option.value) : item.type !== 'wish' || ['keep_active', 'needs_attention'].includes(option.value)).map((option) => {
           const active = option.value === activeStatus;
           const activeStyle = CARRY_FORWARD_STATUS_STYLE[option.value];
           return (
             <Pressable
               key={option.value}
-              onPress={() => updateCarryForwardItem(item, { status: option.value })}
+              onPress={() => updateCarryForwardItem(item, { status: item.type === 'action_item' && active ? 'keep_active' : option.value })}
               style={({ pressed }) => ({
                 backgroundColor: active ? activeStyle.backgroundColor : pressed ? '#fbf0d7' : '#fffdf5',
                 borderColor: active ? activeStyle.borderColor : tint.line(0.42),
@@ -567,7 +571,7 @@ export function SurveyModal({
       {/* The shared message bar, so a note on your roster looks and
           behaves like every other box you write in — mic inside the
           box's own border rather than on a strip welded underneath. */}
-      {(item.type !== 'wish' || activeStatus === 'needs_attention' || !!response?.note) && <ComposerBar
+      {(!['wish', 'action_item'].includes(item.type) || activeStatus === 'needs_attention' || !!response?.note) && <ComposerBar
         tone="light"
         variant="form"
         value={response?.note ?? ''}
@@ -582,7 +586,7 @@ export function SurveyModal({
 
   const renderCarryForwardContext = (
     items: CarryForwardItem[] = carryForwardItems,
-    heading = 'Still on your roster',
+    heading = 'Still to do',
   ) => {
     if (carryForwardLoading) {
       return (
@@ -605,8 +609,13 @@ export function SurveyModal({
       );
     }
 
-    const rosterItems = hasWishQuestion ? items.filter(item => item.type !== 'wish') : items;
-    if (rosterItems.length === 0) return null;
+    const visibleItems = hasWishQuestion ? items.filter(item => item.type !== 'wish') : items;
+    const archivedItems = visibleItems.filter(item => item.type === 'action_item' && carryForwardResponsesByKey.get(carryForwardItemKey(item))?.status === 'archive');
+    const rosterItems = visibleItems.filter(item => {
+      const status = carryForwardResponsesByKey.get(carryForwardItemKey(item))?.status;
+      return item.type !== 'action_item' || (status !== 'archive' && (!isStaple || status !== 'done'));
+    });
+    if (rosterItems.length === 0 && archivedItems.length === 0) return null;
 
     return (
       <View style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: tint.line(0.55), borderRadius: 18, padding: 16, marginBottom: 24 }}>
@@ -614,11 +623,13 @@ export function SurveyModal({
           {heading}
         </Text>
         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#7f715f', lineHeight: 19, marginBottom: 14 }}>
-          Update the status of your other open items.
+          Tick off anything else you’ve finished.
         </Text>
 
         <View style={{ gap: 12 }}>
           {rosterItems.map((item) => {
+            const parsed = item.type === 'action_item' ? parseActionItemDescription(item.label) : null;
+            const detail = [parsed?.elaboration, parsed?.reLabel, item.detail].filter(Boolean).join(' · ');
             return (
               <View
                 key={carryForwardItemKey(item)}
@@ -631,18 +642,24 @@ export function SurveyModal({
                 }}
               >
                 <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
-                  <View style={{ backgroundColor: tint.wash, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, flexShrink: 0 }}>
+                  {item.type === 'action_item' ? <Pressable
+                    accessibilityRole="checkbox"
+                    accessibilityLabel={`Mark done: ${parseActionItemDescription(item.label).text}`}
+                    accessibilityState={{ checked: carryForwardResponsesByKey.get(carryForwardItemKey(item))?.status === 'done' }}
+                    onPress={() => updateCarryForwardItem(item, { status: carryForwardResponsesByKey.get(carryForwardItemKey(item))?.status === 'done' ? 'keep_active' : 'done' })}
+                    style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+                  ><Ionicons name={carryForwardResponsesByKey.get(carryForwardItemKey(item))?.status === 'done' ? 'checkbox' : 'square-outline'} size={24} color={tint.accent} /></Pressable> : <View style={{ backgroundColor: tint.wash, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, flexShrink: 0 }}>
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8a6b30' }}>
                       {item.sourceLabel}
                     </Text>
-                  </View>
+                  </View>}
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', lineHeight: 19 }}>
-                      {item.label}
+                      {item.type === 'action_item' ? parseActionItemDescription(item.label).text : item.label}
                     </Text>
-                    {item.detail ? (
+                    {detail ? (
                       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#6b7280', lineHeight: 17, marginTop: 3 }}>
-                        {item.detail}
+                        {detail}
                       </Text>
                     ) : null}
                   </View>
@@ -652,6 +669,10 @@ export function SurveyModal({
               </View>
             );
           })}
+          {archivedItems.map(item => <View key={carryForwardItemKey(item)} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Text style={{ flex: 1, color: '#6b7280' }}>Archived · {parseActionItemDescription(item.label).text}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Undo archive: ${parseActionItemDescription(item.label).text}`} onPress={() => updateCarryForwardItem(item, { status: 'keep_active' })} style={{ padding: 12 }}><Text style={{ color: tint.ink }}>Undo</Text></Pressable>
+          </View>)}
         </View>
       </View>
     );
@@ -669,7 +690,7 @@ export function SurveyModal({
       wishReviewItems={q.id === 'q_hd_wish' ? wishReviewItems : undefined}
       renderWishReview={q.id === 'q_hd_wish' ? renderCarryForwardControls : undefined}
       hangEvents={currentActivity?.data?.hangs}
-      question={q.id === 'q_hard_out' ? { ...q, text: 'Do you have a hard out?' } : q.id === 'q_hd_wish' ? { ...q, text: 'Your HD wish for this meeting' } : isStaple && q.id === 'q_hangs_recap' ? { ...q, type: 'hangs' } : isStaple && q.id === 'q_hive_help_recap' ? { ...q, type: 'long', text: 'Any reflection on this HIVE’s Help activity? Completion is handled in your roster — no need to report it twice.' } : q}
+      question={q.id === 'q_hard_out' ? { ...q, text: 'Do you have a hard out?' } : q.id === 'q_hd_wish' ? { ...q, text: 'Your HD wish for this meeting' } : isStaple && q.id === 'q_hangs_recap' ? { ...q, type: 'hangs' } : isStaple && q.id === 'q_hive_help_recap' ? { ...q, type: 'long', text: 'Any reflection on this HIVE’s Help activity?' } : q}
       index={index}
       value={answers[q.id]}
       onChange={(value) => setAnswer(q.id, value)}
@@ -834,12 +855,29 @@ export function SurveyModal({
                 );
               })()}
 
-              {isStaple && survey.community_id && contextState === 'ready' && completedContext.length > 0 && <View style={{ backgroundColor: tint.wash, borderRadius: 14, padding: 14, marginBottom: 18, gap: 6 }}>
-                <Text style={{ color: tint.ink, fontFamily: 'Lato_700Bold' }}>Completed work & helper credit</Text>
-                {completedContext.map((line, index) => <Text key={index} style={{ color: '#5c5648' }}>• {line}</Text>)}
-              </View>}
+              {isStaple && (() => {
+                const own = completedContext.filter(item => !item.helperName);
+                const helpers = completedContext.filter(item => !!item.helperName);
+                const newlyDone = carryForwardItems.filter(item => item.type === 'action_item' && carryForwardResponsesByKey.get(carryForwardItemKey(item))?.status === 'done' && !own.some(done => done.id === item.id));
+                return <>
+                  {contextState === 'error' && <Text style={{ color: '#92400e', marginBottom: 12 }}>Completed work couldn’t load. Your to-dos are below.</Text>}
+                  {(own.length > 0 || newlyDone.length > 0) && <View style={{ backgroundColor: tint.wash, borderRadius: 16, padding: 16, marginBottom: 18, gap: 12 }}>
+                    <Text style={{ color: tint.ink, fontFamily: 'LibreBaskerville_700Bold', fontSize: 17 }}>You got this done ✓</Text>
+                    {own.map(item => <View key={item.id} style={{ flexDirection: 'row', gap: 10 }}>
+                      <Text style={{ color: tint.ink }}>✓</Text><Text style={{ color: '#5c5648', flex: 1, lineHeight: 21 }}>{item.text}</Text>
+                    </View>)}
+                    {newlyDone.map(item => <Pressable key={item.id} accessibilityRole="checkbox" accessibilityState={{ checked: true }} accessibilityLabel={`Mark still to do: ${parseActionItemDescription(item.label).text}`} onPress={() => updateCarryForwardItem(item, { status: 'keep_active' })} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 }}>
+                      <Ionicons name="checkbox" size={24} color={tint.accent} /><Text style={{ color: '#5c5648', flex: 1, lineHeight: 21 }}>{parseActionItemDescription(item.label).text}</Text><Text style={{ color: tint.ink }}>Undo</Text>
+                    </Pressable>)}
+                  </View>}
+                  {helpers.length > 0 && <View style={{ padding: 16, marginBottom: 18, gap: 10 }}>
+                    <Text style={{ color: tint.ink, fontFamily: 'Lato_700Bold' }}>A little help from your HIVE</Text>
+                    {helpers.map(item => <Text key={item.id} style={{ color: '#5c5648', lineHeight: 21 }}>{item.helperName} · {item.text}</Text>)}
+                  </View>}
+                </>;
+              })()}
               {/* Grouped? Then each section draws its own, below its heading. */}
-              {draftLoaded && !carryForwardSections && renderCarryForwardContext()}
+              {draftLoaded && (!carryForwardSections || carryForwardLoading || carryForwardError) && renderCarryForwardContext()}
 
               {/* A note block explains; it does not ask. So the numbers count
                   only the questions, and a person who reads "3 of 12" and then
@@ -856,7 +894,7 @@ export function SurveyModal({
                   return (
                     <Fragment key={`${q.id}_section`}>
                       {drawn}
-                      {renderCarryForwardContext(mine, 'Still on your roster here')}
+                      {renderCarryForwardContext(mine)}
                     </Fragment>
                   );
                 });

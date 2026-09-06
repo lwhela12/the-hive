@@ -139,6 +139,6 @@ assert.equal(dateContext.formatSurveyDueDate('2026-11-01'), 'Nov 1');
 assert.equal(dateContext.formatSurveyDueDate('invalid'), 'invalid');
 process.env.TZ = savedTimezone;
 assert.equal(moduleObject.exports.meetingLabel({event_date:'2026-09-08',event_time:'18:00:00'}, '2026-09-05'), 'Tue, Sep 8 · 6:00 PM PT');
-assert.ok(modalSource.indexOf('{draftLoaded && introduction}') < modalSource.indexOf('Completed work & helper credit'), 'personal question precedes context');
+assert.ok(modalSource.indexOf('{draftLoaded && introduction}') < modalSource.indexOf('You got this done ✓'), 'personal question precedes context');
 assert.match(screen, /linkedMeeting\?\.community_id === item.member.community_id \? linkedMeeting : item.event/, 'saved answers follow the exact linked meeting');
 console.log('PASS: meeting time, date-only display across DST, personal question placement and linked receipt scope.');

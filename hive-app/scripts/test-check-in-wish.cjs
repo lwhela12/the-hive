@@ -67,12 +67,23 @@ for(const grouped of [false,true]) for(const hasWish of [false,true]) {
   '../../lib/hiveBrand':{HIVE_GOLD:'gold',hiveSeal:()=>1,accentPalette:()=>({line:()=>'',ink:'navy'})},
   '../../lib/checkIns':{getSeasonCheckInKind:()=>null,checkInDisplayName:x=>x,isPreMeetingCheckInSurvey:()=>true,isEndOfMonthCheckInSurvey:()=>false},
   '@react-native-async-storage/async-storage':{default:{setItem:async()=>{}}},
+  '../../lib/actionItemDisplay':load('lib/actionItemDisplay.ts'),
   '../../lib/carryForward':carry,'./SurveyQuestionField':{SurveyQuestionField:'Question'},'../ui/ComposerBar':{ComposerBar:'ComposerBar'},
  });
  const walk=n=>{if(!n||typeof n!=='object')return[];if(Array.isArray(n))return n.flatMap(walk);return[n,...walk(n.props?.children)];};
  const modal=()=>{cursor=0;return SurveyModal({survey:{id:'test',title:'Before we meet',questions:[{id:'note_hive_tech',type:'note',text:'Tech HIVE'},...(hasWish?[{id:'q_hd_wish',type:'long',text:'Your wish'}]:[])],community_id:'tech'},carryForwardItems:[review,task],carryForwardSections:grouped?{note_hive_tech:[review,task]}:undefined,onClose(){},onSubmit:async()=>({error:null})});};
  let all=walk(modal());
  assert.ok(all.some(n=>n.type==='Text'&&n.props.children===task.label),'other tasks remain in roster');
+ all.find(n=>n.props.accessibilityLabel==='Mark done: A different task').props.onPress();
+ all=walk(modal());
+ assert.ok(all.some(n=>n.props.accessibilityLabel==='Mark still to do: A different task'&&n.props.accessibilityState.checked));
+ assert.ok(!all.some(n=>n.props.accessibilityLabel==='Mark done: A different task'));
+ all.find(n=>n.props.accessibilityLabel==='Mark still to do: A different task').props.onPress();
+ all=walk(modal());
+ assert.ok(all.some(n=>n.props.accessibilityLabel==='Mark done: A different task'));
+ assert.equal(state[0].q_carry_forward_items.find(i=>i.id==='task').status,'keep_active');
+ assert.equal(state[0].q_carry_forward_items.find(i=>i.id===review.id).note,'Please help');
+
  assert.equal(all.filter(n=>n.type==='Text'&&n.props.children===review.label).length,hasWish?0:1,'move wishes only when the form has a wish question');
  if(hasWish){
   let field=all.find(n=>n.type==='Question'&&n.props.question.id==='q_hd_wish');

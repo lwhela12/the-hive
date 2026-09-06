@@ -21,7 +21,7 @@ assert.equal(value,'7:30 PM');assert.equal(hard.personalHardOutError(value),null
 nodes=render();nodes.find(n=>n.props.accessibilityLabel==='No hard out').props.onPress();assert.equal(value,'No');
 const carry=load('lib/carryForward.ts');
 (async()=>{
-for(const completed of [[],['Finished the venue booking']]) for(const hiveCount of [1,2]) {
+for(const completed of [[],[{id:'done',text:'Finished the venue booking'}]]) for(const hiveCount of [1,2]) {
  let index=0,saves=0;
  const states=[{q_hard_out:':00 PM'},false,false,false,null,true,null,false,completed,'ready',null];
  const {SurveyModal}=load('components/surveys/SurveyModal.tsx',{
@@ -34,11 +34,30 @@ for(const completed of [[],['Finished the venue booking']]) for(const hiveCount 
  const questions=[{id:'note_hive_tech',type:'note',text:'Tech HIVE'},...(hiveCount===2?[{id:'note_hive_og',type:'note',text:'OG HIVE'}]:[]),{id:'q_hard_out',type:'short',text:'Hard out'}];
  const tree=SurveyModal({survey:{id:'test',title:'Before we meet',community_id:'tech',questions},onClose(){},onSubmit:async()=>{saves++;return{error:null};}});
  const all=walk(tree),serialized=JSON.stringify(tree);
- assert.equal(serialized.includes('Completed work & helper credit'),completed.length>0);
+ assert.equal(serialized.includes('You got this done ✓'),completed.length>0);
  assert.ok(!serialized.includes('roster below'));
  assert.equal(all.filter(n=>n.type==='Question'&&n.props.question.type==='note').length,hiveCount===1?0:2,'keep meaningful headings in a multi-HIVE form');
  await all.find(n=>n.type==='Pressable'&&JSON.stringify(n.props.children??'').includes('Submit answers')).props.onPress();
  assert.equal(saves,0,'incomplete time must not save');assert.match(states[4],/hour and minute/);
+}
+// A task-write failure must keep the draft and offer retry after the answers save.
+for (const failure of [false, true]) {
+ let index=0, saves=0, removed=0;
+ const task={id:'task',type:'action_item',label:'Book the venue',sourceLabel:'To-do'};
+ const states=[{q_carry_forward_items:[{...task,status:'done'}]},false,false,false,null,true,null,false,[],'ready',null];
+ const {SurveyModal}=load('components/surveys/SurveyModal.tsx',{
+  react:{Fragment:'Fragment',useState:v=>{const i=index++;return[i in states?states[i]:v,n=>states[i]=typeof n==='function'?n(states[i]):n];},useEffect(){},useCallback:f=>f,useMemo:f=>f()},
+  'react/jsx-runtime':{jsx,jsxs:jsx},'react-native':native,'../../lib/hiveBrand':brand,
+  '../../lib/hooks/useAuth':{useAuth:()=>({profile:{id:'member'}})},
+  '../../lib/actionItemDisplay':load('lib/actionItemDisplay.ts'),
+  '@react-native-async-storage/async-storage':{default:{removeItem:async()=>{removed++;},setItem:async()=>{}}},
+  '../../lib/checkIns':{getSeasonCheckInKind:()=>null,checkInDisplayName:x=>x,isPreMeetingCheckInSurvey:()=>true,isEndOfMonthCheckInSurvey:()=>false},
+  '../../lib/carryForward':{...carry,applyCarryForwardStatuses:async()=>({error:failure?'denied':null})},
+ });
+ const all=walk(SurveyModal({survey:{id:'test',title:'Before we meet',community_id:'tech',questions:[]},carryForwardItems:[task],onClose(){},onSubmit:async()=>{saves++;return{error:null};}}));
+ await all.find(n=>n.type==='Pressable'&&JSON.stringify(n.props.children??'').includes('Submit answers')).props.onPress();
+ assert.equal(saves,1);assert.equal(states[2],!failure);assert.equal(removed,failure?0:1);
+ if(failure)assert.match(states[4],/answers are saved.*to-do updates could not save/);
 }
 // Actual wish hook: an owner can grant their HIVE-Wide wish from another HIVE.
 for(const owner of [true,false]) for(const fail of [false,true]) {

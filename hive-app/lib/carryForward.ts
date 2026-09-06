@@ -99,7 +99,7 @@ export function normalizeCarryForwardResponse(value: unknown): CarryForwardRespo
  * Only `action_item` rows are touched. A wish is retired through its own
  * flow with its own confirmation, and an HD board or a thread is not a task.
  * Row-level security already lets exactly the assignee write these; a row this
- * person may not update simply does not change, and the check-in still saves.
+ * person may not update does not change. The caller retains the draft for retry.
  */
 export async function applyCarryForwardStatuses(
   client: {
@@ -107,7 +107,7 @@ export async function applyCarryForwardStatuses(
   },
   userId: string,
   items: CarryForwardResponseItem[],
-): Promise<void> {
+): Promise<{ error: string | null }> {
   const now = new Date().toISOString();
 
   const done = items.filter((item) => item.type === 'action_item' && item.status === 'done');
@@ -141,13 +141,25 @@ export async function applyCarryForwardStatuses(
     );
   }
 
-  if (writes.length === 0) return;
+  if (writes.length === 0) return { error: null };
 
-  const results = await Promise.all(writes);
-  results.forEach((result) => {
-    const error = (result as { error?: unknown } | null)?.error;
-    // Never blocks the check-in: the answers are saved either way, and a
-    // to-do that refused to move is worth knowing about without losing them.
-    if (error) console.warn('Could not apply a carry-forward status', error);
-  });
+  try {
+    const results = await Promise.all(writes);
+    if (results.some(result => (result as { error?: unknown } | null)?.error)) {
+      return { error: 'Task updates could not save.' };
+    }
+    // RLS can reject a row with no database error. Verify the resulting state;
+    // already-completed rows also pass, so retrying keeps their original date.
+    const requested = [...done, ...archived];
+    const { data, error } = await client.from('action_items')
+      .select('id, completed, archived_at')
+      .in('id', requested.map(item => item.id)).eq('assigned_to', userId);
+    if (error || requested.some(item => !data?.some((row: { id: string; completed: boolean; archived_at: string | null }) =>
+      row.id === item.id && (item.status === 'done' ? row.completed === true : !!row.archived_at)))) {
+      return { error: 'Some task updates could not be confirmed.' };
+    }
+    return { error: null };
+  } catch {
+    return { error: 'Task updates could not save.' };
+  }
 }
