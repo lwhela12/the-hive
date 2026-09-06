@@ -62,6 +62,9 @@ import {
   type ArrivalBoardMember,
 } from '../../lib/hooks/useArrivalBoard';
 
+import { SpendDecision } from '../../components/meetings/SpendDecision';
+import { DEFAULT_SPEND, type SpendState } from '../../lib/spendDecision';
+
 const hiveBee = require('../../assets/HIVE Bee.png');
 const hiveLogo = require('../../assets/HIVE Logo Transparent  BG.png');
 
@@ -137,6 +140,13 @@ type DeckSlideKey =
   | 'rollcall'
   | 'news'
   | 'treasurer'
+  /**
+   * Where the honey goes. The Treasurer slide says what is IN the pot; this one
+   * is the room deciding what comes OUT of it. Nat drives the dials and they
+   * move on every seat (migration 237), which is what lets Nic follow from home
+   * while the rest of the table watches the frame TV.
+   */
+  | 'spend'
   | 'meetups'
   | 'hummdinger'
   /**
@@ -387,13 +397,14 @@ const PRODUCTION_JOBS: { key: string; title: string; why: string; asks: string[]
 
 const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
   default: {
-    slides: ['room', 'outline', 'rollcall', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
+    slides: ['room', 'outline', 'rollcall', 'news', 'treasurer', 'spend', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
     agenda: [
       { key: 'room', label: 'Arrivals' },
       { key: 'outline', label: 'Outline' },
       { key: 'rollcall', label: 'Roll call' },
       { key: 'news', label: 'News from Nat' },
       { key: 'treasurer', label: 'Treasurer' },
+      { key: 'spend', label: 'Where the Honey Goes' },
       { key: 'meetups', label: 'Plan the Meet Ups' },
       { key: 'hummdinger', label: 'HummDinger Sesh' },
       { key: 'wrapup', label: 'Wrap-Up' },
@@ -4742,25 +4753,6 @@ export default function MeetingHelperScreen() {
   // The show, in the order this HIVE's deck declares it. Every renderer knows
   // how to wear any deck's content, so a new HIVE's deck is a new list in
   // DECKS — the renderers stay shared.
-  const SLIDE_RENDERERS: Record<DeckSlideKey, () => React.ReactNode> = {
-    room: renderRoom,
-    outline: renderOutline,
-    whatis: renderWhatIsHive,
-    rollcall: renderRollCall,
-    news: renderNews,
-    treasurer: renderTreasurer,
-    meetups: renderMeetups,
-    hummdinger: renderHummdinger,
-    assignments: renderAssignments,
-    wrapup: renderWrapup,
-    thanks: renderThanks,
-  };
-  const slides = deck.slides.map((key) => ({ key, render: SLIDE_RENDERERS[key] }));
-
-  const slideCount = slides.length;
-  const clampedIndex = Math.min(slideIndex, slideCount - 1);
-  const activeSlide = slides[clampedIndex];
-
   // One deck, many seats. Nat, 2026-08-15: *"when I click next, it goes next
   // for everyone ... if we're like at a restaurant or something, you can follow
   // along on your phone because it'll click along as I click along."*
@@ -4784,9 +4776,81 @@ export default function MeetingHelperScreen() {
     startPresenting,
     stopPresenting,
     publishSlide,
+    publishSlideState,
     lookAround,
     catchUp,
   } = useDeckSession(communityId, profile?.id ?? null, onRoomMoved);
+
+  /**
+   * Where the honey goes — the one slide with dials on it.
+   *
+   * The presenter's dials ride along in the session row, so the room sees the
+   * number Nat is pointing at rather than its own. A follower who reaches out
+   * and turns something keeps their own answer until the presenter moves
+   * again, which is the same soft leash the slide key already has.
+   */
+  const [spend, setSpend] = useState<SpendState>(DEFAULT_SPEND);
+  const changeSpend = useCallback(
+    (next: SpendState) => {
+      setSpend(next);
+      if (isPresenting) publishSlideState('spend', next as unknown as Record<string, unknown>);
+    },
+    [isPresenting, publishSlideState]
+  );
+  const roomSpend = deckSession?.slideState?.spend as SpendState | undefined;
+  useEffect(() => {
+    // Mirror the presenter, never your own echo.
+    if (!roomSpend || isPresenting) return;
+    setSpend((current) =>
+      JSON.stringify(current) === JSON.stringify(roomSpend) ? current : { ...DEFAULT_SPEND, ...roomSpend }
+    );
+  }, [roomSpend, isPresenting]);
+
+  /**
+   * Where the honey goes. The Treasurer slide says what is in the pot; this is
+   * the room deciding what comes out of it, with the answer big enough to read
+   * off the frame TV from the far end of the table.
+   */
+  const renderSpend = () => (
+    <View style={{ flex: 1 }}>
+      <Kicker>Cabinet Reports</Kicker>
+      <SlideTitle>Where the Honey Goes</SlideTitle>
+      <View style={{ flex: 1, marginTop: sz(10, 7) }}>
+        <SpendDecision
+          state={spend}
+          onChange={changeSpend}
+          sz={sz}
+          gold={GOLD}
+          goldDeep={GOLD_DEEP}
+          goldSoft={GOLD_SOFT}
+          charcoal={CHARCOAL}
+          muted={MUTED}
+          card={CARD}
+        />
+      </View>
+    </View>
+  );
+
+  const SLIDE_RENDERERS: Record<DeckSlideKey, () => React.ReactNode> = {
+    room: renderRoom,
+    outline: renderOutline,
+    whatis: renderWhatIsHive,
+    rollcall: renderRollCall,
+    news: renderNews,
+    treasurer: renderTreasurer,
+    spend: renderSpend,
+    meetups: renderMeetups,
+    hummdinger: renderHummdinger,
+    assignments: renderAssignments,
+    wrapup: renderWrapup,
+    thanks: renderThanks,
+  };
+  const slides = deck.slides.map((key) => ({ key, render: SLIDE_RENDERERS[key] }));
+
+  const slideCount = slides.length;
+  const clampedIndex = Math.min(slideIndex, slideCount - 1);
+  const activeSlide = slides[clampedIndex];
+
 
   /**
    * Every way this deck moves under your own hand — arrows, the agenda rail,

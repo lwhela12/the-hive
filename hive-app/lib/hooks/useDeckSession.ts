@@ -25,6 +25,12 @@ export type DeckSession = {
   presenterId: string;
   presenterName: string;
   slideKey: string;
+  /**
+   * The presenter's controls for the slide they are on, keyed by slide key
+   * (migration 237). A slide with dials on it reads its own key and mirrors
+   * them; every other slide ignores this entirely.
+   */
+  slideState: Record<string, unknown> | null;
   /** True when the presenter is you. */
   isMine: boolean;
 };
@@ -33,6 +39,7 @@ type Row = {
   community_id: string;
   presenter_id: string;
   slide_key: string;
+  slide_state: Record<string, unknown> | null;
   presenter?: { name: string | null } | null;
 };
 
@@ -54,6 +61,11 @@ export type UseDeckSession = {
   stopPresenting: () => Promise<void>;
   /** Presenter only — tell the room where you just moved to. */
   publishSlide: (slideKey: string) => void;
+  /**
+   * Presenter only — tell the room where your dials are now. Debounced, because
+   * a slider drag is a hundred events and the room only needs the last one.
+   */
+  publishSlideState: (slideKey: string, state: Record<string, unknown>) => void;
   /** Stop being pulled along; you are looking around on your own now. */
   lookAround: () => void;
   /** Snap back to the presenter's slide and start following again. */
@@ -91,6 +103,7 @@ export function useDeckSession(
       presenterId: row.presenter_id,
       presenterName: name ? getFirstName(name) : 'Whoever has the deck',
       slideKey: row.slide_key,
+      slideState: (row.slide_state as Record<string, unknown> | null) ?? null,
       isMine: !!viewerId && row.presenter_id === viewerId,
     };
   }, []);
@@ -99,7 +112,7 @@ export function useDeckSession(
     if (!communityId) return null;
     const { data } = await supabase
       .from('deck_sessions')
-      .select('community_id, presenter_id, slide_key, presenter:profiles!deck_sessions_presenter_id_fkey(name)')
+      .select('community_id, presenter_id, slide_key, slide_state, presenter:profiles!deck_sessions_presenter_id_fkey(name)')
       .eq('community_id', communityId)
       .maybeSingle();
     return (data as Row | null) ?? null;
@@ -195,6 +208,36 @@ export function useDeckSession(
   // handful of tiny writes — but they must not overtake each other, or a fast
   // double-tap can leave the room a slide behind. Latest write wins.
   const seqRef = useRef(0);
+  // A slider drag fires on every pixel. The room needs where your thumb landed,
+  // not the journey, so these coalesce into one write every 250ms.
+  const stateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingState = useRef<Record<string, unknown> | null>(null);
+  const publishSlideState = useCallback(
+    (slideKey: string, state: Record<string, unknown>) => {
+      if (!communityId || !myId) return;
+      pendingState.current = { [slideKey]: state };
+      setSession((current) =>
+        current && current.isMine ? { ...current, slideState: pendingState.current } : current
+      );
+      if (stateTimer.current) return;
+      stateTimer.current = setTimeout(() => {
+        const payload = pendingState.current;
+        stateTimer.current = null;
+        if (!payload) return;
+        void supabase
+          .from('deck_sessions')
+          .update({ slide_state: payload, updated_at: new Date().toISOString() })
+          .eq('community_id', communityId)
+          .eq('presenter_id', myId);
+      }, 250);
+    },
+    [communityId, myId]
+  );
+
+  useEffect(() => () => {
+    if (stateTimer.current) clearTimeout(stateTimer.current);
+  }, []);
+
   const publishSlide = useCallback(
     (slideKey: string) => {
       if (!communityId || !myId) return;
@@ -230,6 +273,7 @@ export function useDeckSession(
     startPresenting,
     stopPresenting,
     publishSlide,
+    publishSlideState,
     lookAround,
     catchUp,
     ready,
