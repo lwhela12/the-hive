@@ -93,8 +93,8 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
                   <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={tint.accent} />
                   <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: 14, lineHeight: 21, color: '#313130', textDecorationLine: done || archived ? 'line-through' : 'none' }}>{parsed.text}</Text>
                 </Pressable>
-                {!!(parsed.context || parsed.elaboration || item.detail) && <Text style={{ marginLeft: 34, fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#5c5648' }}>
-                  {[parsed.context, parsed.elaboration, item.detail].filter(Boolean).join(' · ')}
+                {!!(parsed.context || item.detail) && <Text style={{ marginLeft: 34, fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#5c5648' }}>
+                  {[parsed.context, item.detail].filter(Boolean).join(' · ')}
                 </Text>}
                 <Pressable accessibilityRole="button" disabled={readOnly || saving} onPress={() => setStatus(archived ? 'keep_active' : 'archive')}
                   style={({ pressed }) => ({ alignSelf: 'flex-start', marginLeft: 24, minHeight: 44, paddingHorizontal: 10, justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
