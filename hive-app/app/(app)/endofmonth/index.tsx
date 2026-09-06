@@ -79,9 +79,6 @@ export default function EndOfMonthScreen() {
    * whatever HIVE the reader happens to be standing in.
    */
   const { loading: authLoading, profile, communityId, memberships } = useAuth();
-  const originMembership = (from === 'meetings' || from === 'hive') && requestedHiveSlug
-    ? memberships.find(item => item.community.slug === requestedHiveSlug)
-    : null;
   const skin = usePageSkin();
   const { myResponses, submitCheckInOccurrence } =
     useSurveys(communityId ?? undefined, profile?.id);
@@ -239,6 +236,7 @@ export default function EndOfMonthScreen() {
   if (!isFocused) return null;
 
   if (state === 'ready' && survey && merged && selected) {
+    const selectedMembership = memberships.find(item => item.community_id === selected);
     const part = selected === 'month'
       ? { ...merged, sections: [] }
       : { ...merged, personal: [], sections: merged.sections.filter(s => s.communityId === selected) };
@@ -246,8 +244,8 @@ export default function EndOfMonthScreen() {
       <SurveyModal
         key={`${survey.id}:${month}:${selected}`}
         answerCommunityId={selected === 'month' ? null : selected}
-        survey={{ ...survey, community_id: originMembership?.community_id ?? survey.community_id,
-          description: selected === 'month' ? 'Your month, and anything for the Buzz.' : 'Just this HIVE. Review your commitments, then save.',
+        survey={{ ...survey, community_id: selected === 'month' ? survey.community_id : selected,
+          description: selected === 'month' ? 'Your month, and anything for the Buzz.' : `${hiveDisplayName(selectedMembership?.community?.name)}. Review your commitments, then save.`,
           questions: mergedPreMeetingQuestions(part).map(e => e.question) }}
         draftScope={`${profile?.id}:${survey.id}:${askedDate ?? month}:${selected}`}
         initialAnswers={saved[selected]}
@@ -255,8 +253,8 @@ export default function EndOfMonthScreen() {
         carryForwardItems={todos[selected] ?? []}
         onSubmit={onSubmit}
         closeLabel="Back to check-ins"
-        hiveSlug={originMembership?.community?.slug}
-        hiveAccent={hiveAccent(originMembership?.community)}
+        hiveSlug={selectedMembership?.community?.slug}
+        hiveAccent={hiveAccent(selectedMembership?.community)}
         onClose={() => setSelected(null)}
       />
     );
