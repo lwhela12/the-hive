@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { supabase } from '../../../lib/supabase';
@@ -11,6 +11,7 @@ import { SurveyModal } from '../../../components/surveys/SurveyModal';
 import { SharedPlate } from '../../../components/surveys/SharedPlate';
 import { CheckInNextMeetings } from '../../../components/surveys/CheckInNextMeetings';
 import { CheckInHiveCard } from '../../../components/surveys/CheckInHiveCard';
+import { CheckInAction } from '../../../components/surveys/CheckInAction';
 import { ProductionProjectOverview } from '../../../components/surveys/ProductionProjectOverview';
 import { checkInQuestions, groupCheckInHives, upcomingCheckIns, meetingLabel, pacificToday, type MeetingPreview } from '../../../lib/checkInPresentation';
 import {
@@ -396,7 +397,7 @@ export default function BeforeWeMeetScreen() {
   if (!isFocused) return null;
   if (meetingId && linkFailed) return <View style={{ flex: 1, padding: 24, justifyContent: 'center', gap: 16, backgroundColor: skin.page }}>
     <Text style={{ color: skin.ink }}>This meeting link is no longer available to you.</Text>
-    <Pressable accessibilityRole="button" onPress={() => router.replace('/beforewemeet' as never)}><Text style={{ color: skin.gold }}>Open your check-ins</Text></Pressable>
+    <CheckInAction title="Open your check-ins" onPress={() => router.replace('/beforewemeet' as never)} />
   </View>;
   const personalQuestion = <SharedPlate scope={`check-in-plate:${profile?.id}:${row?.id}:${today}`} onChange={setPlate} />;
 
@@ -450,7 +451,7 @@ export default function BeforeWeMeetScreen() {
     <View style={{ flex: 1, backgroundColor: skin.page }}>
       <AppHeader title="Before we meet" />
       <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }} style={{ backgroundColor: skin.page }}>
-        <Text style={{ color: skin.inkSoft }}>
+        <Text style={{ color: skin.inkSoft, fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21 }}>
           Check in any time. If you haven’t checked in, reminders only go out the day before or day of your meeting.
         </Text>
         {groups.prominent.length + groups.future.length > 0 && <Text style={{ color: skin.ink, fontFamily: 'Lato_700Bold', fontSize: 18 }}>Upcoming meetings</Text>}
@@ -458,11 +459,7 @@ export default function BeforeWeMeetScreen() {
         {groups.future.map(renderHive)}
         {groups.missing.length > 0 && <Text style={{ color: skin.inkSoft, fontFamily: 'Lato_700Bold', marginTop: 8 }}>No meeting date yet · still open</Text>}
         {groups.missing.map(renderHive)}
-        <Pressable accessibilityRole="button" onPress={done}
-          style={({ pressed }) => ({ alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 22, paddingVertical: 12, minHeight: 44,
-            backgroundColor: skin.gold, opacity: pressed ? 0.8 : 1 })}>
-          <Text style={{ color: '#172033', fontFamily: 'Lato_700Bold', fontSize: 14 }}>Done for now</Text>
-        </Pressable>
+        <CheckInAction title="Done for now" onPress={done} />
       </ScrollView>
     </View>
   );

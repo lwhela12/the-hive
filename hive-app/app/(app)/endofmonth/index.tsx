@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { supabase } from '../../../lib/supabase';
@@ -9,6 +9,7 @@ import { useSurveys, type SurveyAnswers } from '../../../lib/hooks/useSurveys';
 import { AppHeader } from '../../../components/navigation/AppHeader';
 import { SurveyModal } from '../../../components/surveys/SurveyModal';
 import { CheckInHiveCard } from '../../../components/surveys/CheckInHiveCard';
+import { CheckInAction } from '../../../components/surveys/CheckInAction';
 import { checkInQuestions, PLATE_QUESTION, type MeetingPreview } from '../../../lib/checkInPresentation';
 import {
   buildMergedEndOfMonth,
@@ -264,19 +265,17 @@ export default function EndOfMonthScreen() {
     <View style={{ flex: 1, backgroundColor: skin.page }}>
       <AppHeader title="End of the month" />
       <ScrollView style={{ backgroundColor: skin.page }} contentContainerStyle={{ padding: 24, gap: 16 }}>
-        <Text style={{ color: skin.inkSoft }}>{askedDate ? 'Read-only date preview.' : 'One sitting. Review each HIVE, then finish with your month and the Buzz.'}</Text>
+        <Text style={{ color: skin.inkSoft, fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21 }}>{askedDate ? 'Read-only date preview.' : 'One sitting. Review each HIVE, then finish with your month and the Buzz.'}</Text>
         {memberships.map(m => <CheckInHiveCard key={m.community_id} community={m.community}
           event={meetings.find(event => event.community_id === m.community_id)} onPress={() => setSelected(m.community_id)}
           status={saved[m.community_id] ? 'Saved — review' : 'Review commitments'} />)}
-        <Pressable accessibilityRole="link" onPress={() => router.push('/settings' as never)} style={{ padding: 12 }}>
-          <Text style={{ color: skin.gold }}>Email settings →</Text>
-          <Text style={{ color: skin.inkSoft }}>Switch off individual HIVE emails, including check-in reminders and the Buzz. This does not choose email versus text or stop personal messages.</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" disabled={!askedDate && memberships.some(m => !saved[m.community_id])}
-          onPress={() => setSelected('month')} style={{ padding: 20 }}>
-          <Text style={{ color: skin.gold }}>{saved.month ? 'Your month — saved' : 'Finish: your month + the Buzz'}</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" onPress={done}><Text style={{ color: skin.gold }}>Done for now</Text></Pressable>
+        <CheckInAction title="Email settings" role="link" variant="secondary" onPress={() => router.push('/settings' as never)} />
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+          <CheckInAction title={saved.month ? 'Your month — saved' : 'Finish: your month + the Buzz'}
+            disabled={!askedDate && memberships.some(m => !saved[m.community_id])}
+            onPress={() => setSelected('month')} />
+          <CheckInAction title="Done for now" variant="secondary" onPress={done} />
+        </View>
       </ScrollView>
     </View>
   );
