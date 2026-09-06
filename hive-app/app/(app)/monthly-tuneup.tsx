@@ -557,15 +557,7 @@ const composeHangsAnswer = (
   return [head, ...noteLines, leftover.trim()].filter(Boolean).join('\n');
 };
 
-/**
- * The hangs rater: tap the ones you made it to, rate them, and say something
- * about each one in its own box.
- *
- * It lives here rather than in `SurveyQuestionField` because the note belongs
- * to the hang now: "i think the 'anything else you want to add' should go under
- * or next to each one? so you could comment on each event separately"
- * (Nat 2026-08-05).
- */
+/** The hangs rater. Taps and ratings become the Meeting Helper aggregate. */
 function HangsRecapCard({
   question,
   value,
@@ -581,31 +573,13 @@ function HangsRecapCard({
   const titles = hangs.map((hang) => hang.title);
   const { byTitle, leftover } = splitHangNotes(note, titles);
 
-  // A note survives an accidental un-tap. The saved answer only carries notes
-  // for hangs you are marked down for, so what you wrote is remembered here in
-  // case you tap the same hang again.
-  const rememberedNotes = useRef<HangNoteMap>({});
-
-  // An answer written before the boxes moved carries one note belonging to no
-  // particular hang. Once we've seen one, it keeps a box of its own — nobody's
-  // words should vanish the first time they open this screen.
-  const [hasLooseNote, setHasLooseNote] = useState(false);
-  useEffect(() => {
-    if (leftover.trim()) setHasLooseNote(true);
-  }, [leftover]);
-
   if (hangs.length === 0) {
     return (
       <View>
         <BoxHeading>{question.text}</BoxHeading>
-        <ComposerBar
-          tone="light"
-          variant="form"
-          value={value}
-          onChangeText={(next) => onChange(typeof next === 'function' ? next(value) : next)}
-          placeholder="Any hangs, thoughts, or suggestions?"
-          minHeight={90}
-        />
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060' }}>
+          No HIVE Hangs to rate this month.
+        </Text>
       </View>
     );
   }
@@ -615,10 +589,7 @@ function HangsRecapCard({
     const next = wasThere
       ? attended.filter((entry) => entry.title !== title)
       : [...attended, { title, rating: null }];
-    const notes = wasThere
-      ? byTitle
-      : { ...byTitle, [title]: byTitle[title] ?? rememberedNotes.current[title] ?? '' };
-    onChange(composeHangsAnswer(next, notes, leftover));
+    onChange(composeHangsAnswer(next, byTitle, leftover));
   };
 
   const rate = (title: string, rating: number) => {
@@ -628,17 +599,12 @@ function HangsRecapCard({
     onChange(composeHangsAnswer(next, byTitle, leftover));
   };
 
-  const setNote = (title: string, text: string) => {
-    rememberedNotes.current[title] = text;
-    onChange(composeHangsAnswer(attended, { ...byTitle, [title]: text }, leftover));
-  };
-
   return (
     <View>
       <BoxHeading>{question.text}</BoxHeading>
       <View style={{ gap: 10 }}>
         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
-          Tap the ones you made it to, rate them, and say a word about each.
+          Tap the ones you made it to, then rate them.
         </Text>
         {hangs.map((hang) => {
           const entry = attended.find((candidate) => candidate.title === hang.title);
@@ -678,52 +644,23 @@ function HangsRecapCard({
                 </Text>
               </Pressable>
               {entry ? (
-                <>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 26 }}>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>loved it?</Text>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Pressable key={star} onPress={() => rate(hang.title, star)} hitSlop={6}>
-                        <Text style={{ fontSize: 17, opacity: entry.rating && star <= entry.rating ? 1 : 0.25 }}>
-                          🍯
-                        </Text>
-                      </Pressable>
-                    ))}
-                    {entry.rating ? (
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>{entry.rating}/5</Text>
-                    ) : null}
-                  </View>
-                  <View style={{ paddingLeft: 26 }}>
-                    <ComposerBar
-          tone="light"
-                      variant="form"
-                      value={byTitle[hang.title] ?? ''}
-                      onChangeText={(next) => setNote(
-                        hang.title,
-                        typeof next === 'function' ? next(byTitle[hang.title] ?? '') : next,
-                      )}
-                      placeholder="Anything to add about this one?"
-                      minHeight={64}
-                    />
-                  </View>
-                </>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 26 }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>loved it?</Text>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Pressable key={star} onPress={() => rate(hang.title, star)} hitSlop={6}>
+                      <Text style={{ fontSize: 17, opacity: entry.rating && star <= entry.rating ? 1 : 0.25 }}>
+                        🍯
+                      </Text>
+                    </Pressable>
+                  ))}
+                  {entry.rating ? (
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>{entry.rating}/5</Text>
+                  ) : null}
+                </View>
               ) : null}
             </View>
           );
         })}
-        {hasLooseNote ? (
-          <ComposerBar
-          tone="light"
-            variant="form"
-            value={leftover}
-            onChangeText={(next) => onChange(composeHangsAnswer(
-              attended,
-              byTitle,
-              typeof next === 'function' ? next(leftover) : next,
-            ))}
-            placeholder="Anything else about the month?"
-            minHeight={70}
-          />
-        ) : null}
       </View>
     </View>
   );
@@ -2675,21 +2612,11 @@ export default function MonthlyTuneupScreen() {
               onChange={(value) => setCheckInAnswer(hangsRecap.id, value)}
               hangs={hangRecapEvents}
             />
-            {/* Nat, filling in the August tune-up: "i just want to know where
-                this info ends up… in case it doesn't carry somewhere". It
-                carries: the meeting deck's "How did we do?" panel counts the
-                taps into a turnout bar per hang and averages the 🍯 into a
-                score. Only what is TRUE goes in this line — the written notes
-                were only COUNTED on the deck when this line was written, so it
-                promised the ratings and nothing else. The deck prints them in
-                full now (meeting-helper.tsx, "What people said about the
-                hangs"), so the line can honestly claim both. If that ever stops
-                being true, this sentence has to shrink again — a promise about
-                where words go is the one thing that must not drift. */}
+            {/* Every answer has a visible destination: the Meeting Helper
+                turns these taps into turnout and average-rating bars. */}
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
               Your taps and 🍯 ratings land on the meeting deck — how many of us
-              went, and how each hang landed — and what you write here gets read
-              out with them.
+              went, and how each hang landed.
             </Text>
           </View>
         ) : null;

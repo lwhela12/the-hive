@@ -34,7 +34,7 @@ for(const completed of [[],[{id:'done',text:'Finished the venue booking'}]]) for
  const questions=[{id:'note_hive_tech',type:'note',text:'Tech HIVE'},...(hiveCount===2?[{id:'note_hive_og',type:'note',text:'OG HIVE'}]:[]),{id:'q_hard_out',type:'short',text:'Hard out'}];
  const tree=SurveyModal({survey:{id:'test',title:'Before we meet',community_id:'tech',questions},onClose(){},onSubmit:async()=>{saves++;return{error:null};}});
  const all=walk(tree),serialized=JSON.stringify(tree);
- assert.equal(serialized.includes('You got this done ✓'),completed.length>0);
+ assert.equal(serialized.includes('You got this done'),completed.length>0);
  assert.ok(!serialized.includes('roster below'));
  assert.equal(all.filter(n=>n.type==='Question'&&n.props.question.type==='note').length,hiveCount===1?0:2,'keep meaningful headings in a multi-HIVE form');
  await all.find(n=>n.type==='Pressable'&&JSON.stringify(n.props.children??'').includes('Submit answers')).props.onPress();

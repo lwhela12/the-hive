@@ -161,6 +161,12 @@ function cleanWishText(title: string | null | undefined, description: string | n
   return `${cut.slice(0, lastSpace > 40 ? lastSpace : 80)}…`;
 }
 
+/** Turn "September HIVE Help — Pick up trash..." into the one useful line. */
+function hiveHelpFocus(title: string | null | undefined): string {
+  const clean = (title ?? '').trim();
+  return clean.replace(/^.*?HIVE Help(?:ers)?\s*[—–-]\s*/i, '').trim() || clean;
+}
+
 function formatSurveyDueDate(dueDate: string) {
   const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(dueDate);
   const parsed = new Date(dateOnly ? `${dueDate}T12:00:00Z` : dueDate);
@@ -643,7 +649,7 @@ export function SurveyModal({
                     accessibilityState={{ checked: carryForwardResponsesByKey.get(carryForwardItemKey(item))?.status === 'done' }}
                     onPress={() => updateCarryForwardItem(item, { status: carryForwardResponsesByKey.get(carryForwardItemKey(item))?.status === 'done' ? 'keep_active' : 'done' })}
                     style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
-                  ><Ionicons name={carryForwardResponsesByKey.get(carryForwardItemKey(item))?.status === 'done' ? 'checkbox' : 'square-outline'} size={24} color={tint.accent} /></Pressable> : <View style={{ backgroundColor: tint.wash, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, flexShrink: 0 }}>
+                  ><Ionicons name={carryForwardResponsesByKey.get(carryForwardItemKey(item))?.status === 'done' ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={tint.accent} /></Pressable> : <View style={{ backgroundColor: tint.wash, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, flexShrink: 0 }}>
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8a6b30' }}>
                       {item.sourceLabel}
                     </Text>
@@ -675,17 +681,21 @@ export function SurveyModal({
 
   const renderQuestion = (q: SurveyQuestion, index: number) => (
     <View key={q.id}>
-      {isStaple && ['q_hive_help_recap', 'q_hangs_recap'].includes(q.id) && (
-        <View style={{ padding: 12, gap: 6, backgroundColor: '#f1ecdf', borderRadius: 12 }}>
-          <Text style={{ color: '#5c5648' }}>{!currentActivity ? 'Loading this HIVE’s activity…' : currentActivity.state === 'error' ? 'Activity could not load. You can still write your own reflection.' : q.id === 'q_hive_help_recap' ? (currentActivity.data?.help?.title ?? 'No active HIVE Help focus recorded.') : currentActivity.data?.hangs.length ? 'This cycle’s scheduled Hangs. Attendance and ratings are yours to choose — nothing is assumed.' : 'No Hangs recorded for this cycle.'}</Text>
-          {q.id === 'q_hive_help_recap' && currentActivity?.data?.help?.content ? <Text style={{ color: '#5c5648' }}>{currentActivity.data.help.content}</Text> : null}
+      {isStaple && q.id === 'q_hive_help_recap' && (
+        <View style={{ padding: 12, gap: 4, backgroundColor: tint.wash, borderWidth: 1, borderColor: tint.line(0.35), borderRadius: 12 }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase', color: tint.ink }}>
+            This month’s HIVE Help
+          </Text>
+          <Text style={{ fontFamily: 'Lato_400Regular', color: '#5c5648' }}>
+            {!currentActivity ? 'Loading…' : currentActivity.state === 'error' ? 'Focus unavailable right now.' : hiveHelpFocus(currentActivity.data?.help?.title) || 'No focus recorded this month.'}
+          </Text>
         </View>
       )}
     <SurveyQuestionField
       wishReviewItems={q.id === 'q_hd_wish' ? wishReviewItems : undefined}
       renderWishReview={q.id === 'q_hd_wish' ? renderCarryForwardControls : undefined}
       hangEvents={currentActivity?.data?.hangs}
-      question={q.id === 'q_hard_out' ? { ...q, text: 'Do you have a hard out?' } : q.id === 'q_hd_wish' ? { ...q, text: 'Your HD wish for this meeting' } : isStaple && q.id === 'q_hangs_recap' ? { ...q, type: 'hangs' } : isStaple && q.id === 'q_hive_help_recap' ? { ...q, type: 'long', text: 'Any reflection on this HIVE’s Help activity?' } : q}
+      question={q.id === 'q_hard_out' ? { ...q, text: 'Do you have a hard out?' } : q.id === 'q_hd_wish' ? { ...q, text: 'Your HD wish for this meeting' } : isStaple && q.id === 'q_hangs_recap' ? { ...q, type: 'hangs' } : q}
       index={index}
       value={answers[q.id]}
       onChange={(value) => setAnswer(q.id, value)}
@@ -857,12 +867,12 @@ export function SurveyModal({
                 return <>
                   {contextState === 'error' && <Text style={{ color: '#92400e', marginBottom: 12 }}>Completed work couldn’t load. Your to-dos are below.</Text>}
                   {(own.length > 0 || newlyDone.length > 0) && <View style={{ backgroundColor: tint.wash, borderRadius: 16, padding: 16, marginBottom: 18, gap: 12 }}>
-                    <Text style={{ color: tint.ink, fontFamily: 'LibreBaskerville_700Bold', fontSize: 17 }}>You got this done ✓</Text>
-                    {own.map(item => <View key={item.id} style={{ flexDirection: 'row', gap: 10 }}>
-                      <Text style={{ color: tint.ink }}>✓</Text><Text style={{ color: '#5c5648', flex: 1, lineHeight: 21 }}>{item.text}</Text>
+                    <Text style={{ color: tint.ink, fontFamily: 'LibreBaskerville_700Bold', fontSize: 17 }}>You got this done</Text>
+                    {own.map(item => <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 32 }}>
+                      <Ionicons name="checkmark-circle" size={24} color={tint.accent} /><Text style={{ color: '#5c5648', flex: 1, lineHeight: 21 }}>{item.text}</Text>
                     </View>)}
                     {newlyDone.map(item => <Pressable key={item.id} accessibilityRole="checkbox" accessibilityState={{ checked: true }} accessibilityLabel={`Mark still to do: ${parseActionItemDescription(item.label).text}`} onPress={() => updateCarryForwardItem(item, { status: 'keep_active' })} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 }}>
-                      <Ionicons name="checkbox" size={24} color={tint.accent} /><Text style={{ color: '#5c5648', flex: 1, lineHeight: 21 }}>{parseActionItemDescription(item.label).text}</Text><Text style={{ color: tint.ink }}>Undo</Text>
+                      <Ionicons name="checkmark-circle" size={24} color={tint.accent} /><Text style={{ color: '#5c5648', flex: 1, lineHeight: 21 }}>{parseActionItemDescription(item.label).text}</Text>
                     </Pressable>)}
                   </View>}
                   {helpers.length > 0 && <View style={{ padding: 16, marginBottom: 18, gap: 10 }}>

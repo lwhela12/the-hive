@@ -35,7 +35,7 @@ const screen = fs.readFileSync('app/(app)/beforewemeet/index.tsx', 'utf8');
 assert.match(screen, /loadedScope === scope/, 'old membership/user data hidden synchronously during rapid switches');
 assert.match(screen, /if \(cancelled\) return;/, 'cancelled fetch cannot replace current scope');
 assert.match(screen, /setState\('looking'\)/);
-assert.match(screen, /setReview\(\{\}\)/);
+assert.match(screen, /setLoadedScope\(null\)/, 'scope reset hides the previous member/HIVE result while the next one loads');
 assert.match(screen, /groups\.future\.map\(renderHive\)/, 'future check-ins stay visible');
 assert.match(screen, /groups\.prominent\.length === 1/, 'a one-HIVE email opens the relevant form directly');
 assert.doesNotMatch(screen, /Looking ahead · Optional|No meetings today or tomorrow/, 'meeting timing does not gate the form');
@@ -90,7 +90,7 @@ assert.match(noMeetingMigration, /carried-to:/, 'the undated drawer is consumed 
 
 // Execute the screen with controlled hook state: no browser or backend involved.
 function renderScreen({ user = 'user', loading = false, loaded = 'user:far:missing:todayEarly:todayLate:tomorrow:2026-09-10', selected = null } = {}) {
-  const values = [null, false, undefined, selected, {}, meetings, {todayEarly:{answer:'saved'}}, {id:'survey'}, {sections:members.map(m=>({communityId:m.community_id,slug:m.community_id})),description:''}, {}, 'ready', '2026-09-10', loaded];
+  const values = [null, false, undefined, selected, meetings, {todayEarly:{answer:'saved'}}, {id:'survey'}, {sections:members.map(m=>({communityId:m.community_id,slug:m.community_id})),description:''}, {}, 'ready', '2026-09-10', loaded, {}];
   let index = 0;
   const react = { useState: () => [values[index++], () => {}], useMemo: fn => fn(), useCallback: fn => fn, useEffect: () => {}, useRef: value => ({current:value}) };
   const jsx = (type, props) => ({type: typeof type === 'function' ? type.name : type, ...props});
@@ -139,6 +139,6 @@ assert.equal(dateContext.formatSurveyDueDate('2026-11-01'), 'Nov 1');
 assert.equal(dateContext.formatSurveyDueDate('invalid'), 'invalid');
 process.env.TZ = savedTimezone;
 assert.equal(moduleObject.exports.meetingLabel({event_date:'2026-09-08',event_time:'18:00:00'}, '2026-09-05'), 'Tue, Sep 8 · 6:00 PM PT');
-assert.ok(modalSource.indexOf('{draftLoaded && introduction}') < modalSource.indexOf('You got this done ✓'), 'personal question precedes context');
+assert.ok(modalSource.indexOf('{draftLoaded && introduction}') < modalSource.indexOf('You got this done'), 'personal question precedes context');
 assert.match(screen, /linkedMeeting\?\.community_id === item.member.community_id \? linkedMeeting : item.event/, 'saved answers follow the exact linked meeting');
 console.log('PASS: meeting time, date-only display across DST, personal question placement and linked receipt scope.');

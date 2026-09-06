@@ -13,7 +13,6 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as Clipboard from 'expo-clipboard';
 import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from '../../components/ui/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,8 +34,6 @@ import {
   type HoneyPotLedgerEntry,
   type HoneyPotPaymentMethod,
 } from '../../lib/honeyPot';
-import { Avatar } from '../../components/ui/Avatar';
-import { MemberProfileLink } from '../../components/ui/MemberProfileLink';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import {
@@ -58,16 +55,9 @@ import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { ModalBackdrop } from '../../components/ui/ModalBackdrop';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
 import { useSurveys } from '../../lib/hooks/useSurveys';
-import {
-  CARRY_FORWARD_ANSWER_KEY,
-  getCarryForwardStatusLabel,
-  normalizeCarryForwardResponse,
-  type CarryForwardResponseItem,
-} from '../../lib/carryForward';
-import type { Survey, SurveyAnswers, SurveyQuestion, SurveyResponse } from '../../lib/hooks/useSurveys';
+import type { Survey, SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { parseAmericanDate } from '../../lib/dateUtils';
-import { getWishQuickTitle } from '../../lib/wishDisplay';
-import type { Profile, UserRole, Event, Wish } from '../../types';
+import type { Profile, UserRole, Event } from '../../types';
 
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -84,30 +74,10 @@ type MemberRow = {
   profiles: Profile;
 };
 
-type SurveyResponseWithUser = SurveyResponse & {
-  user?: Pick<Profile, 'id' | 'name' | 'email' | 'avatar_url'> | null;
-};
-
-type PopPreviewTextItem = {
-  memberName: string;
-  text: string;
-};
-
-type PopPreviewCarryForwardItem = {
-  memberName: string;
-  item: CarryForwardResponseItem;
-};
-
-type SurveyPopPreview = {
-  energyAverage: number | null;
-  energyCount: number;
-  modes: { label: string; count: number }[];
-  progress: PopPreviewTextItem[];
-  obstacles: PopPreviewTextItem[];
-  priorities: PopPreviewTextItem[];
-  meetingTopics: PopPreviewTextItem[];
-  carryForward: PopPreviewCarryForwardItem[];
-  hasContent: boolean;
+type SurveySubmissionReceipt = {
+  id: string;
+  user_id: string;
+  response_period?: string | null;
 };
 
 // The three roles and their labels moved out with the member editor above —
@@ -220,214 +190,6 @@ function formatSurveyResponsePeriod(period?: string | null) {
 
   const date = new Date(Number(match[1]), Number(match[2]) - 1, 1);
   return date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-}
-
-function formatSurveySubmittedAt(submittedAt?: string | null) {
-  if (!submittedAt) return '';
-  const parsed = new Date(submittedAt);
-  if (Number.isNaN(parsed.getTime())) return submittedAt;
-  return parsed.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-function hasSurveyAnswer(value: unknown) {
-  if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === 'string') return value.trim().length > 0;
-  return value !== null && value !== undefined;
-}
-
-function formatSurveyAnswer(value: unknown) {
-  if (!hasSurveyAnswer(value)) return 'No answer';
-  if (Array.isArray(value)) return value.map(String).join(', ');
-  if (typeof value === 'number') return String(value);
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  if (typeof value === 'string') return value.trim() || 'No answer';
-
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function getAnsweredQuestionCount(
-  answers: SurveyAnswers,
-  questions: SurveyQuestion[]
-) {
-  const questionIds = new Set(questions.map(question => question.id));
-  const answeredKnown = questions.filter(question => hasSurveyAnswer(answers[question.id])).length;
-  const answeredUnknown = Object.entries(answers)
-    .filter(([questionId, answer]) => !questionIds.has(questionId) && hasSurveyAnswer(answer))
-    .length;
-
-  return answeredKnown + answeredUnknown;
-}
-
-function getResponseMemberName(
-  response: SurveyResponseWithUser,
-  memberProfilesById: Map<string, Profile>
-) {
-  return response.user?.name ?? memberProfilesById.get(response.user_id)?.name ?? 'Unknown member';
-}
-
-function getTextAnswer(answers: SurveyAnswers, key: string) {
-  const value = answers[key];
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-function buildSurveyPopPreview(
-  responses: SurveyResponseWithUser[],
-  memberProfilesById: Map<string, Profile>
-): SurveyPopPreview {
-  const energyValues: number[] = [];
-  const modeCounts = new Map<string, number>();
-  const progress: PopPreviewTextItem[] = [];
-  const obstacles: PopPreviewTextItem[] = [];
-  const priorities: PopPreviewTextItem[] = [];
-  const meetingTopics: PopPreviewTextItem[] = [];
-  const carryForward: PopPreviewCarryForwardItem[] = [];
-
-  responses.forEach((response) => {
-    const memberName = getResponseMemberName(response, memberProfilesById);
-    const answers = response.answers ?? {};
-    const energy = answers.q_energy_level;
-    if (typeof energy === 'number' && Number.isFinite(energy)) {
-      energyValues.push(energy);
-    }
-
-    const mode = getTextAnswer(answers, 'q_energy_mode');
-    if (mode) modeCounts.set(mode, (modeCounts.get(mode) ?? 0) + 1);
-
-    const progressText = getTextAnswer(answers, 'q_pop_progress');
-    if (progressText) progress.push({ memberName, text: progressText });
-
-    const obstaclesText = getTextAnswer(answers, 'q_pop_obstacles');
-    if (obstaclesText) obstacles.push({ memberName, text: obstaclesText });
-
-    const prioritiesText = getTextAnswer(answers, 'q_pop_priorities');
-    if (prioritiesText) priorities.push({ memberName, text: prioritiesText });
-
-    const meetingTopicText = getTextAnswer(answers, 'q_meeting_topic');
-    if (meetingTopicText) meetingTopics.push({ memberName, text: meetingTopicText });
-
-    normalizeCarryForwardResponse(answers[CARRY_FORWARD_ANSWER_KEY]).forEach((item) => {
-      carryForward.push({ memberName, item });
-    });
-  });
-
-  const energyAverage = energyValues.length
-    ? energyValues.reduce((sum, value) => sum + value, 0) / energyValues.length
-    : null;
-  const modes = Array.from(modeCounts.entries())
-    .map(([label, count]) => ({ label, count }))
-    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-
-  return {
-    energyAverage,
-    energyCount: energyValues.length,
-    modes,
-    progress,
-    obstacles,
-    priorities,
-    meetingTopics,
-    carryForward,
-    hasContent: (
-      energyValues.length > 0
-      || modes.length > 0
-      || progress.length > 0
-      || obstacles.length > 0
-      || priorities.length > 0
-      || meetingTopics.length > 0
-      || carryForward.length > 0
-    ),
-  };
-}
-
-// Plain-text version of the POP preview for pasting into a Google Slides text box.
-// Mirrors buildSurveyPopPreview sections; arrival-board answers (q_name_today,
-// q_feeling_today, q_feeling_note) are never part of the preview, so they stay out.
-function buildPopPreviewClipboardText(preview: SurveyPopPreview): string {
-  const sections: string[] = [];
-
-  const energyLines: string[] = [];
-  if (preview.energyAverage !== null) {
-    energyLines.push(
-      `Average ${preview.energyAverage.toFixed(1)} from ${preview.energyCount} response${preview.energyCount === 1 ? '' : 's'}.`
-    );
-  }
-  if (preview.modes.length > 0) {
-    energyLines.push(preview.modes.map(mode => `${mode.label}: ${mode.count}`).join(' - '));
-  }
-  if (energyLines.length > 0) {
-    sections.push(['ENERGY', ...energyLines].join('\n'));
-  }
-
-  const pushTextSection = (title: string, items: PopPreviewTextItem[]) => {
-    if (items.length === 0) return;
-    sections.push([title, ...items.map(item => `${item.memberName}: ${item.text}`)].join('\n'));
-  };
-
-  pushTextSection('PROGRESS', preview.progress);
-  pushTextSection('OBSTACLES', preview.obstacles);
-  pushTextSection('PRIORITIES', preview.priorities);
-  pushTextSection('MEETING TOPICS', preview.meetingTopics);
-
-  if (preview.carryForward.length > 0) {
-    const carryForwardLines = preview.carryForward.flatMap(({ memberName, item }) => {
-      const line = `${memberName}: ${getCarryForwardStatusLabel(item.status)} - ${item.sourceLabel}: ${item.label}`;
-      return item.note ? [line, `  ${item.note}`] : [line];
-    });
-    sections.push(['CARRY-FORWARD', ...carryForwardLines].join('\n'));
-  }
-
-  return sections.join('\n\n');
-}
-
-function PopPreviewList({ title, items }: { title: string; items: PopPreviewTextItem[] }) {
-  if (items.length === 0) return null;
-
-  return (
-    <View style={{ gap: 6 }}>
-      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>
-        {title}
-      </Text>
-      {items.map((item, index) => (
-        <Text key={`${title}-${item.memberName}-${index}`} style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#2d2d2d', lineHeight: 18 }}>
-          <Text style={{ fontFamily: 'Lato_700Bold' }}>{item.memberName}: </Text>
-          {item.text}
-        </Text>
-      ))}
-    </View>
-  );
-}
-
-function CarryForwardPreviewList({ items }: { items: PopPreviewCarryForwardItem[] }) {
-  if (items.length === 0) return null;
-
-  return (
-    <View style={{ gap: 6 }}>
-      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>
-        Carry-forward decisions
-      </Text>
-      {items.map(({ memberName, item }, index) => (
-        <View key={`${memberName}-${item.type}-${item.id}-${index}`} style={{ gap: 2 }}>
-          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#2d2d2d', lineHeight: 18 }}>
-            <Text style={{ fontFamily: 'Lato_700Bold' }}>{memberName}: </Text>
-            {getCarryForwardStatusLabel(item.status)} - {item.sourceLabel}: {item.label}
-          </Text>
-          {item.note ? (
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#6b7280', lineHeight: 17, marginLeft: 10 }}>
-              {item.note}
-            </Text>
-          ) : null}
-        </View>
-      ))}
-    </View>
-  );
 }
 
 /**
@@ -982,7 +744,7 @@ export default function AdminScreen() {
   // labels and counts. Read-only since 2026-08-12 — the builder that edited
   // them is gone (see the removal note by MONTHLY_CHECK_IN_PATTERN above).
   const [surveyEditorQuestions, setSurveyEditorQuestions] = useState<SurveyQuestion[]>([]);
-  const [surveyResponses, setSurveyResponses] = useState<SurveyResponseWithUser[]>([]);
+  const [surveyResponses, setSurveyResponses] = useState<SurveySubmissionReceipt[]>([]);
   const [surveyResponsesLoading, setSurveyResponsesLoading] = useState(false);
   const [surveyResponsesError, setSurveyResponsesError] = useState<string | null>(null);
   const [selectedSurveyResponsePeriod, setSelectedSurveyResponsePeriod] = useState<string | null>(null);
@@ -1045,12 +807,6 @@ export default function AdminScreen() {
     fetchData();
   }, [fetchData]);
 
-  const memberProfilesById = useMemo(() => {
-    const next = new Map<string, Profile>();
-    members.forEach((member) => next.set(member.profiles.id, member.profiles));
-    return next;
-  }, [members]);
-
   const surveyResponsePeriods = useMemo(() => {
     if (!editingSurvey) return [];
 
@@ -1076,84 +832,6 @@ export default function AdminScreen() {
     ));
   }, [activeSurveyResponsePeriod, surveyResponses]);
 
-  const activeSurveyPopPreview = useMemo(() => (
-    buildSurveyPopPreview(activeSurveyResponses, memberProfilesById)
-  ), [activeSurveyResponses, memberProfilesById]);
-
-  const [deckCopyFeedback, setDeckCopyFeedback] = useState<'pop' | 'wishes' | null>(null);
-  const [hdWishesCopying, setHdWishesCopying] = useState(false);
-  const deckCopyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => {
-    if (deckCopyFeedbackTimeoutRef.current) clearTimeout(deckCopyFeedbackTimeoutRef.current);
-  }, []);
-
-  const flashDeckCopyFeedback = useCallback((section: 'pop' | 'wishes') => {
-    if (deckCopyFeedbackTimeoutRef.current) clearTimeout(deckCopyFeedbackTimeoutRef.current);
-    setDeckCopyFeedback(section);
-    deckCopyFeedbackTimeoutRef.current = setTimeout(() => setDeckCopyFeedback(null), 2000);
-  }, []);
-
-  const handleCopyPopPreview = useCallback(async () => {
-    const text = buildPopPreviewClipboardText(activeSurveyPopPreview);
-    if (!text) return;
-
-    try {
-      await Clipboard.setStringAsync(text);
-      flashDeckCopyFeedback('pop');
-    } catch {
-      showAlert('Copy failed', 'Could not copy the POP preview to the clipboard.');
-    }
-  }, [activeSurveyPopPreview, flashDeckCopyFeedback]);
-
-  const handleCopyHdWishes = useCallback(async () => {
-    if (!communityId || hdWishesCopying) return;
-
-    setHdWishesCopying(true);
-    try {
-      const { data, error } = await supabase
-        .from('wishes')
-        .select('*, user:profiles(*)')
-        .eq('status', 'public')
-        .or('is_active.is.true,is_active.is.null')
-        .eq('community_id', communityId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      const activeWishes = (data ?? []) as (Wish & { user: Profile | null })[];
-      if (activeWishes.length === 0) {
-        showAlert('No HD wishes', 'There are no active public wishes to copy yet.');
-        return;
-      }
-
-      const linesByMember = new Map<string, string[]>();
-      activeWishes.forEach((wish) => {
-        const memberName = wish.user?.name
-          ?? memberProfilesById.get(wish.user_id)?.name
-          ?? 'Unknown member';
-        const line = `${memberName} — ${getWishQuickTitle(wish, 120)}`;
-        const memberLines = linesByMember.get(memberName);
-        if (memberLines) memberLines.push(line);
-        else linesByMember.set(memberName, [line]);
-      });
-
-      const sortedMemberNames = Array.from(linesByMember.keys())
-        .sort((a, b) => a.localeCompare(b));
-      const text = [
-        'MEMBER HDs',
-        ...sortedMemberNames.flatMap(name => linesByMember.get(name) ?? []),
-      ].join('\n');
-
-      await Clipboard.setStringAsync(text);
-      flashDeckCopyFeedback('wishes');
-    } catch {
-      showAlert('Copy failed', 'Could not load HD wishes. Try again in a moment.');
-    } finally {
-      setHdWishesCopying(false);
-    }
-  }, [communityId, hdWishesCopying, memberProfilesById, flashDeckCopyFeedback]);
-
   const activeSurveySubmittedMemberIds = useMemo(() => new Set(
     activeSurveyResponses.map((response) => response.user_id)
   ), [activeSurveyResponses]);
@@ -1178,7 +856,9 @@ export default function AdminScreen() {
     try {
       let { data, error } = await (supabase as any)
         .from('survey_responses')
-        .select('*, user:profiles(id, name, email, avatar_url)')
+        // Admin only needs submission coverage. Answers stay out of this
+        // screen entirely; Meeting Helper owns the structured results.
+        .select('id, user_id, response_period')
         .eq('survey_id', survey.id)
         // A HIVE-Wide check-in files its answers with no community_id, so an
         // `eq` can never match them — Admin showed zero answers, silently, in
@@ -1189,7 +869,7 @@ export default function AdminScreen() {
       if (error) {
         const fallback = await (supabase as any)
           .from('survey_responses')
-          .select('*')
+          .select('id, user_id, response_period')
           .eq('survey_id', survey.id)
           // A HIVE-Wide check-in files its answers with no community_id, so an
         // `eq` can never match them — Admin showed zero answers, silently, in
@@ -1205,7 +885,7 @@ export default function AdminScreen() {
         return;
       }
 
-      setSurveyResponses((data ?? []) as SurveyResponseWithUser[]);
+      setSurveyResponses((data ?? []) as SurveySubmissionReceipt[]);
     } catch (error) {
       console.warn('Could not load survey responses', error);
       setSurveyResponsesError('Could not load responses for this survey.');
@@ -1834,171 +1514,20 @@ export default function AdminScreen() {
                       )}
                     </View>
 
-                    {activeSurveyPopPreview.hasContent ? (
-                      <View
-                        style={{
-                          backgroundColor: '#fffdf5',
-                          borderRadius: 12,
-                          borderWidth: 1,
-                          borderColor: 'rgba(222,193,129,0.35)',
-                          padding: 12,
-                          gap: 12,
-                        }}
+                    <View style={{ backgroundColor: '#fffdf5', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(222,193,129,0.35)', padding: 12, gap: 8 }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d' }}>
+                        Results go to Meeting Helper
+                      </Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#7f715f', lineHeight: 17 }}>
+                        Admin shows who submitted. Meeting Helper turns the useful choices into the meeting view, totals and percentages.
+                      </Text>
+                      <Pressable
+                        onPress={() => router.push('/meeting-helper' as never)}
+                        style={({ pressed }) => ({ alignSelf: 'flex-start', backgroundColor: pressed ? '#fbf0d7' : '#fdf3dc', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 })}
                       >
-                        <View>
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>
-                            Meeting POP Preview
-                          </Text>
-                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#7f715f', lineHeight: 17, marginTop: 2 }}>
-                            Deck-ready readout from this month's responses.
-                          </Text>
-                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                            <Pressable
-                              onPress={() => { void handleCopyPopPreview(); }}
-                              style={({ pressed }) => ({
-                                backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
-                                borderColor: 'rgba(222,193,129,0.55)',
-                                borderWidth: 1,
-                                borderRadius: 999,
-                                paddingHorizontal: 12,
-                                paddingVertical: 7,
-                              })}
-                            >
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: deckCopyFeedback === 'pop' ? '#3f7f4c' : '#8a6b30' }}>
-                                {deckCopyFeedback === 'pop' ? '✓ Copied' : '📋 Copy for deck'}
-                              </Text>
-                            </Pressable>
-                            <Pressable
-                              onPress={() => { void handleCopyHdWishes(); }}
-                              disabled={hdWishesCopying}
-                              style={({ pressed }) => ({
-                                backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
-                                borderColor: 'rgba(222,193,129,0.55)',
-                                borderWidth: 1,
-                                borderRadius: 999,
-                                paddingHorizontal: 12,
-                                paddingVertical: 7,
-                                opacity: hdWishesCopying ? 0.6 : 1,
-                              })}
-                            >
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: deckCopyFeedback === 'wishes' ? '#3f7f4c' : '#8a6b30' }}>
-                                {deckCopyFeedback === 'wishes' ? '✓ Copied' : hdWishesCopying ? 'Copying…' : '📋 Copy HD wishes'}
-                              </Text>
-                            </Pressable>
-                          </View>
-                        </View>
-
-                        {(activeSurveyPopPreview.energyAverage !== null || activeSurveyPopPreview.modes.length > 0) ? (
-                          <View style={{ gap: 6 }}>
-                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>
-                              Energy
-                            </Text>
-                            {activeSurveyPopPreview.energyAverage !== null ? (
-                              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#2d2d2d', lineHeight: 18 }}>
-                                Average {activeSurveyPopPreview.energyAverage.toFixed(1)} from {activeSurveyPopPreview.energyCount} response{activeSurveyPopPreview.energyCount === 1 ? '' : 's'}.
-                              </Text>
-                            ) : null}
-                            {activeSurveyPopPreview.modes.length > 0 ? (
-                              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#2d2d2d', lineHeight: 18 }}>
-                                {activeSurveyPopPreview.modes.map(mode => `${mode.label}: ${mode.count}`).join(' - ')}
-                              </Text>
-                            ) : null}
-                          </View>
-                        ) : null}
-
-                        <PopPreviewList title="Progress" items={activeSurveyPopPreview.progress} />
-                        <PopPreviewList title="Obstacles" items={activeSurveyPopPreview.obstacles} />
-                        <PopPreviewList title="Priorities" items={activeSurveyPopPreview.priorities} />
-                        <PopPreviewList title="Meeting topics" items={activeSurveyPopPreview.meetingTopics} />
-                        <CarryForwardPreviewList items={activeSurveyPopPreview.carryForward} />
-                      </View>
-                    ) : null}
-
-                    {activeSurveyResponses.length === 0 ? (
-                      <View style={{ paddingVertical: 16, alignItems: 'center' }}>
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center', lineHeight: 18 }}>
-                          No responses for this period yet.
-                        </Text>
-                      </View>
-                    ) : (
-                      activeSurveyResponses.map((response) => {
-                        const responseUser = response.user ?? memberProfilesById.get(response.user_id);
-                        const responseName = responseUser?.name ?? 'Unknown member';
-                        const questionIds = new Set(surveyEditorQuestions.map(question => question.id));
-                        const answeredQuestions = surveyEditorQuestions.filter(question => hasSurveyAnswer(response.answers?.[question.id]));
-                        const carryForwardAnswers = normalizeCarryForwardResponse(response.answers?.[CARRY_FORWARD_ANSWER_KEY]);
-                        const extraAnswers = Object.entries(response.answers ?? {})
-                          .filter(([questionId, answer]) => (
-                            questionId !== CARRY_FORWARD_ANSWER_KEY
-                            && !questionIds.has(questionId)
-                            && hasSurveyAnswer(answer)
-                          ));
-                        const answeredCount = getAnsweredQuestionCount(response.answers ?? {}, surveyEditorQuestions);
-
-                        return (
-                          <View
-                            key={response.id}
-                            style={{
-                              backgroundColor: 'white',
-                              borderRadius: 14,
-                              borderWidth: 1,
-                              borderColor: 'rgba(222,193,129,0.35)',
-                              padding: 12,
-                            }}
-                          >
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                              <MemberProfileLink
-                                memberId={responseUser?.id}
-                                memberName={responseName}
-                                hitSlop={8}
-                              >
-                                <Avatar name={responseName} url={responseUser?.avatar_url} size={34} />
-                              </MemberProfileLink>
-                              <View style={{ flex: 1 }}>
-                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>
-                                  {responseName}
-                                </Text>
-                                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 1 }}>
-                                  {answeredCount} answer{answeredCount === 1 ? '' : 's'} - Submitted {formatSurveySubmittedAt(response.submitted_at)}
-                                </Text>
-                              </View>
-                            </View>
-
-                            {answeredQuestions.length === 0 && extraAnswers.length === 0 && carryForwardAnswers.length === 0 ? (
-                              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', lineHeight: 18 }}>
-                                This response was submitted without written answers.
-                              </Text>
-                            ) : (
-                              <View style={{ gap: 10 }}>
-                                {answeredQuestions.map((question) => (
-                                  <View key={question.id}>
-                                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30', lineHeight: 17 }}>
-                                      {question.text}
-                                    </Text>
-                                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#2d2d2d', lineHeight: 19, marginTop: 2 }}>
-                                      {formatSurveyAnswer(response.answers?.[question.id])}
-                                    </Text>
-                                  </View>
-                                ))}
-                                <CarryForwardPreviewList
-                                  items={carryForwardAnswers.map(item => ({ memberName: responseName, item }))}
-                                />
-                                {extraAnswers.map(([questionId, answer]) => (
-                                  <View key={questionId}>
-                                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30', lineHeight: 17 }}>
-                                      Saved answer: {questionId}
-                                    </Text>
-                                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#2d2d2d', lineHeight: 19, marginTop: 2 }}>
-                                      {formatSurveyAnswer(answer)}
-                                    </Text>
-                                  </View>
-                                ))}
-                              </View>
-                            )}
-                          </View>
-                        );
-                      })
-                    )}
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>Open Meeting Helper</Text>
+                      </Pressable>
+                    </View>
                   </View>
                 )}
                 </View>

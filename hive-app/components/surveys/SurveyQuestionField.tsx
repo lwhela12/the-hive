@@ -292,12 +292,6 @@ export function FocusRecapInput({
           placeholder="What did you do? (this gets logged on the HIVE Helpers board)"
         />
       ) : null}
-      <VoiceTextInput
-        value={note}
-        onChangeText={(next) => onChange(composeFocusAnswer(choice, instead, next))}
-        placeholder="Anything else you'd like to share?"
-        multiline
-      />
     </View>
   );
 }
@@ -318,12 +312,9 @@ export function HangsRecapInput({
 
   if (hangs.length === 0) {
     return (
-      <VoiceTextInput
-        value={value}
-        onChangeText={onChange}
-        placeholder="Any hangs, thoughts, or suggestions?"
-        multiline
-      />
+      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', marginTop: 8 }}>
+        No HIVE Hangs to rate this month.
+      </Text>
     );
   }
 
@@ -406,12 +397,6 @@ export function HangsRecapInput({
           </View>
         );
       })}
-      <VoiceTextInput
-        value={note}
-        onChangeText={(nextNote) => onChange(composeHangsAnswer(attended, nextNote))}
-        placeholder="Anything to add? Stories, suggestions, 'let's do that one again'…"
-        multiline
-      />
     </View>
   );
 }
@@ -451,6 +436,13 @@ export function SurveyQuestionField({
 }) {
   const tint = accentPalette(accent);
   const textValue = typeof value === 'string' ? value : '';
+  // A saved absentee answer from before the recap wording changed should stay
+  // visibly selected when somebody reopens their check-in.
+  const choiceValue = question.id === 'q_attendance'
+    && typeof value === 'string'
+    && /missing this one/i.test(value)
+    ? question.options?.find(option => /missing this one/i.test(option)) ?? value
+    : value;
 
   // The 3MIQ question brings the member's own answers TO them — never
   // "peek at your profile". Nat, 2026-08-13: "if you tell someone 'leave
@@ -824,7 +816,7 @@ export function SurveyQuestionField({
         <ScaleInput value={value ?? null} onChange={onChange} accent={accent} />
       )}
       {question.type === 'choice' && question.options && (
-        <ChoiceInput options={question.options} value={value ?? ''} onChange={onChange} accent={accent} />
+        <ChoiceInput options={question.options} value={choiceValue ?? ''} onChange={onChange} accent={accent} />
       )}
       {question.type === 'hangs' && (
         <HangsRecapInput value={textValue} onChange={onChange} hangs={hangEvents ?? []} accent={accent} />

@@ -684,7 +684,7 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
       choice('q_attendance', 'Will we see you at this one?', [
         "🐝 I'll be there in person",
         '💻 Joining remotely',
-        "😢 Missing this one, I'm afraid",
+        '😢 Missing this one — please email me the recap',
       ]),
       { ...PERSONAL_HARD_OUT_QUESTION },
       q('q_show_progress', 'Your jobs from last meeting — what got done? Venues seen, calls made, numbers learned.'),
@@ -866,7 +866,7 @@ const PRE_MEETING_RECURRING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
       choice('q_attendance', 'Will we see you?', [
         "\u{1F41D} I'll be there in person",
         '\u{1F4BB} Joining remotely',
-        "\u{1F622} Missing this one, I'm afraid",
+        '\u{1F622} Missing this one — please email me the recap',
       ]),
       // Personal availability is shown on this member's arrival card. It is
       // deliberately only a survey answer; the Meeting Helper's countdown

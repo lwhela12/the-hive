@@ -7,12 +7,28 @@ export const PLATE_QUESTION: SurveyQuestion = {
 const capacityIds = new Set(['q_plate', 'q_energy_level', 'q_energy_mode', 'q_feeling_today']);
 /** Presentation only: stable IDs/old answers remain untouched; never convert energy to capacity. */
 export function checkInQuestions(questions: SurveyQuestion[], month = false): SurveyQuestion[] {
-  return questions.filter(q => !capacityIds.has(q.id) && q.id !== 'q_contact').map(q => {
+  return questions.filter(q => (
+    !capacityIds.has(q.id)
+    && q.id !== 'q_contact'
+    // The live roster above the questions already brings completed and open
+    // work to the member. A second blank "what moved" box turns that useful
+    // pre-seed into homework, so the old progress question is presentation-only
+    // retired. Keep stored answers and stable ids untouched.
+    && !['q_pop_progress', 'q_show_progress'].includes(q.id)
+    // One room-help question is enough. `q_pop_priorities` is the surviving
+    // answer because Meeting Helper already reads it onto the member's POP.
+    && q.id !== 'q_pop_obstacles'
+  )).map(q => {
     if (month && ['q_newsletter', 'q_eom_newsletter', 'q_shoutout'].includes(q.id)) return { ...q, text: 'Anything for the Buzz? Upcoming shows, events, a plug, or a shout-out for someone — include names, dates and links.' };
     if (month && /how (did|has|is).*(month|things)|how.*month.*(go|been)/i.test(q.text)) return { ...q, text: 'How are things going so far this month?' };
-    if (['q_pop_progress', 'q_show_progress'].includes(q.id)) return { ...q, text: 'What else moved forward? Use your completed work and current goals as a reminder; add findings, changes, or credit for someone who helped.' };
-    if (q.id === 'q_pop_priorities') return { ...q, text: 'What should the room be ready to help with? Your current goal, blocker and the outcome you want.' };
-    if (q.id === 'q_hive_help_recap') return { ...q, type: 'long' as const, text: 'Any reflection on this HIVE’s Help activity? Completion is already handled in your roster — no need to report it twice.' };
+    if (q.id === 'q_attendance' && q.options) return {
+      ...q,
+      options: q.options.map(option => /missing this one/i.test(option)
+        ? '😢 Missing this one — please email me the recap'
+        : option),
+    };
+    if (q.id === 'q_pop_priorities') return { ...q, text: 'What should the room help you move forward?' };
+    if (q.id === 'q_hive_help_recap') return { ...q, type: 'focus' as const, text: 'How did this month’s HIVE Help go?' };
     return q;
   });
 }

@@ -2968,12 +2968,6 @@ export default function MeetingHelperScreen() {
       new Date(today.getFullYear(), today.getMonth() + monthOffset + 1, 1),
     ];
 
-    // Check-in voices for the expandable Hang/Help cards — the hangs answer
-    // stores "Went to: …" on line one, thoughts after.
-    const recapNote = (raw: string) => {
-      const lines = raw.split('\n');
-      return (lines[0]?.startsWith('Went to: ') ? lines.slice(1).join('\n') : raw).trim();
-    };
     const voicesFor = (key: string, clean: (raw: string) => string = (raw) => raw.trim()) =>
       memberOrder
         .map((member) => ({
@@ -2982,12 +2976,6 @@ export default function MeetingHelperScreen() {
           text: clean(getTextAnswer(responsesByUser.get(member.id)?.answers ?? {}, key)),
         }))
         .filter((voice) => !!voice.text);
-    // The focus answer keeps its choice on line one, thoughts after — so the
-    // deck can report how many did it and how it landed, not just quote
-    // paragraphs (Nat 2026-07-25).
-    const focusNote = (raw: string) => parseFocusAnswer(raw).note.trim();
-    const helpVoices = voicesFor('q_hive_help_recap', focusNote);
-    const hangVoices = voicesFor('q_hangs_recap', recapNote);
     const underCards = deck.plan.voicesUnderCards;
     const underCardVoices = underCards ? voicesFor(underCards.answerKey) : [];
 
@@ -3414,27 +3402,6 @@ export default function MeetingHelperScreen() {
                   </View>
                 ))
               )}
-              {/* The words themselves, not a count of them.
-                  This said "3 written thoughts in the check-ins — worth a skim
-                  out loud" and stopped there, so what somebody actually wrote
-                  about a hang was saved, counted, and never once put on a
-                  screen. Nat, doing the August tune-up: "I just want to know
-                  where this info ends up... in case it doesnt carry somewhere."
-                  It did not. The HIVE Help voices two sections down have been
-                  printed in full all along; this is the same treatment. */}
-              {hangVoices.length > 0 ? (
-                <View style={{ gap: sz(4, 3), marginTop: sz(6, 4) }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginTop: sz(4, 3) }}>
-                    🗣️ What people said about the hangs
-                  </Text>
-                  {hangVoices.map((voice) => (
-                    <Text key={voice.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), lineHeight: sz(24, 16), color: CHARCOAL }}>
-                      <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>{voice.name}: </Text>
-                      {voice.text}
-                    </Text>
-                  ))}
-                </View>
-              ) : null}
             </View>
 
             {/* One question, one answer box: the ideas, then the plan you
@@ -3584,25 +3551,6 @@ export default function MeetingHelperScreen() {
                   />
                 </View>
               </View>
-            ) : null}
-            {deck.plan.helpExpansion.kind === 'voices' ? (
-              helpVoices.length > 0 ? (
-                <View style={{ gap: sz(4, 3) }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginTop: sz(4, 3) }}>
-                    🗣️ Voices from the check-ins
-                  </Text>
-                  {helpVoices.map((voice) => (
-                    <Text key={voice.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), lineHeight: sz(24, 16), color: CHARCOAL }}>
-                      <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>{voice.name}: </Text>
-                      {voice.text}
-                    </Text>
-                  ))}
-                </View>
-              ) : (
-                <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
-                  No HIVE Help thoughts in the check-ins yet — they'll gather here as people fill theirs out.
-                </Text>
-              )
             ) : null}
           </View>
         ) : null}
