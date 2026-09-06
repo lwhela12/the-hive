@@ -20,13 +20,9 @@ const text=t=>nodes(t).filter(n=>n.type==='Text').map(n=>JSON.stringify(n.props.
  const sw=nodes(row).find(n=>n.type==='Switch');assert.equal(sw.props.trackColor.true,'#bd9348');assert.equal(sw.props.thumbColor,'#F6F4E5');assert.match(sw.props.accessibilityLabel,/Approved/);
  nodes(row).find(n=>n.type==='Pressable').props.onPress();tree=email.render(props);assert.equal(nodes(tree).find(n=>n.props.html)?.props.html,template.html);
  panel.props.onTabChange('tech');email.render(props);await email.flush();assert.equal(calls.at(-1).path,'email-preview?hive=tech');assert.ok(calls.every(c=>c.opts.method==='GET'));
- for(const community of [null,'og']){
-  const queries=[]; const surveys=[{id:'current',is_active:true,community_id:community,title:'Current',questions:[{id:'q',text:'Actual question'}]},{id:'old',is_active:false,community_id:community,title:'Earlier',questions:[]}];
-  const db={from(table){const ops=[];queries.push({table,ops});const q={};for(const key of ['select','eq','or','order','in'])q[key]=(...args)=>{ops.push([key,...args]);return q;};q.then=fn=>Promise.resolve({data:table==='surveys'?surveys:table==='profiles'?[{id:'person',name:'Respondent Name'}]:[{id:'r',user_id:'person',answers:{q:'Preserved answer'},response_period:'2026-09'}]}).then(fn);return q;}};
-  const answer=harness('CheckInAnswersPanel',db);for(let j=0;j<4;j++){answer.render({hiveId:'og'});await answer.flush();}let a=answer.render({hiveId:'og'});assert.match(text(a),/Respondent Name/);assert.match(text(a),/Actual question/);assert.match(text(a),/Preserved answer/);assert.match(text(a),/Archived/);
-  assert.ok(queries.some(q=>q.table==='profiles'&&q.ops.some(op=>op[0]==='select'&&op[1]==='id, name'))); const responseQuery=queries.find(q=>q.table==='survey_responses');assert.ok(responseQuery.ops.some(op=>community?op[0]==='or'&&op[1]==='community_id.eq.og,community_id.is.null':op[0]==='eq'&&op[1]==='community_id'&&op[2]==='og'));
-  nodes(a).filter(n=>n.type==='Pressable')[1].props.onPress();answer.render({hiveId:'og'});await answer.flush();assert.ok(queries.some(q=>q.table==='survey_responses'&&q.ops.some(op=>op[0]==='eq'&&op[1]==='survey_id'&&op[2]==='old')));
- }
- const source=fs.readFileSync(`${__dirname}/../components/admin/GodModePanels.tsx`,'utf8');assert.ok(source.includes("{ key: 'answers', label: 'Answers' }"));assert.ok(source.includes('hiveId={m.community_id}'));assert.ok(!source.includes('<CheckInAnswersPanel hives='));
- console.log('PASS: actual mocked email component: sorted canonical folder tabs, same-row branded approval, exact preview HTML, GET-only scope changes; answers component: current/archive names and questions, shared/per-HIVE query isolation; folder placement static contract. No signed-in visual acceptance.');
+ const source=fs.readFileSync(`${__dirname}/../components/admin/GodModePanels.tsx`,'utf8');
+ assert.ok(!source.includes("{ key: 'answers', label: 'Answers' }"));
+ assert.ok(!source.includes('CheckInAnswersPanel'));
+ assert.equal(fs.existsSync(`${__dirname}/../components/admin/CheckInAnswersPanel.tsx`),false);
+ console.log('PASS: actual mocked email component: sorted canonical folder tabs, same-row branded approval, exact preview HTML, GET-only scope changes; Admin has no raw check-in answer archive. No signed-in visual acceptance.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

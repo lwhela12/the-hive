@@ -55,8 +55,7 @@ const db = row => ({ from: () => ({ select() { return this; }, eq() { return thi
   assert.match(migration, /enable row level security/i);
   const panels = fs.readFileSync('components/admin/GodModePanels.tsx','utf8');
   assert.doesNotMatch(panels, /key: 'checkins'|checkInSchedule\.map/);
-  assert.match(panels, /key: 'answers', label: 'Answers'/);
-  assert.match(panels, /CheckInAnswersPanel key=\{m.community_id\} hiveId=\{m.community_id\}/);
-  assert.doesNotMatch(panels, /CheckInAnswersPanel hives/);
-  console.log('PASS: 5 revision gates, 3 reviewed seeds only, scope branding/prose parity, stale/missing/revoked fail closed, altered prose refused, per-HIVE archive navigation without obsolete schedules. No network or mail.');
+  assert.doesNotMatch(panels, /key: 'answers', label: 'Answers'/);
+  assert.doesNotMatch(panels, /CheckInAnswersPanel/);
+  console.log('PASS: 5 revision gates, 3 reviewed seeds only, scope branding/prose parity, stale/missing/revoked fail closed, altered prose refused, and no Admin raw-answer archive. No network or mail.');
 })().catch(e => { console.error(e); process.exitCode = 1; });

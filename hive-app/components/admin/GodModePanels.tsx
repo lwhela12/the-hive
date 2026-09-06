@@ -1178,8 +1178,6 @@ type SeasonSurveyRow = {
   due_date: string | null;
 };
 
-import { CheckInAnswersPanel } from './CheckInAnswersPanel';
-
 export function HiveMemberPanels({
   cellStyle,
   panelStyle,
@@ -1720,7 +1718,6 @@ export function HiveMemberPanels({
                */
               tabs={[
                 { key: 'members', label: `Members (${rows.length})` },
-                ...(canManage ? [{ key: 'answers', label: 'Answers' }] : []),
                 ...(m.role === 'admin' && waitingCount > 0
                   ? [{ key: 'waiting', label: `Waiting (${waitingCount})` }]
                   : m.role === 'admin' ? [{ key: 'waiting', label: 'Waiting' }] : []),
@@ -1858,7 +1855,6 @@ export function HiveMemberPanels({
                   </View>
                 ) : null}
 
-                {tab === 'answers' && canManage ? <CheckInAnswersPanel key={m.community_id} hiveId={m.community_id} /> : null}
                 {tab === 'members' ? (
                 loading && rows.length === 0 ? (
                   <ActivityIndicator size="small" color="#fffdf5" />
