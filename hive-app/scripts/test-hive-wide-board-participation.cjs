@@ -9,6 +9,13 @@ const migration = fs.readFileSync(
   ),
   'utf8',
 );
+const lineBreakFix = fs.readFileSync(
+  path.resolve(
+    __dirname,
+    '../supabase/migrations/240_brag_board_line_breaks.sql',
+  ),
+  'utf8',
+);
 
 assert.match(migration, /name = 'Brag Board'/, 'The existing board is renamed in place');
 assert.match(migration, /reach = 'all_hives'/, 'The board reaches every HIVE');
@@ -37,5 +44,14 @@ assert.match(migration, /bp\.is_locked = false/, 'Locked threads stay locked');
 assert.match(migration, /\*\*Stage:\*\* 🧪 Ready for beta testers/, 'The beta call reads at a glance');
 assert.match(migration, /\*\*Stage:\*\* 🛠 Building/, 'Work in progress reads at a glance');
 assert.match(migration, /\*\*Stage:\*\* ✨ Live/, 'Finished work reads at a glance');
+assert.ok(
+  lineBreakFix.includes("replace(content, E'\\\\n', E'\\n')"),
+  'Seeded Markdown line breaks render instead of showing literal slash-n markers',
+);
+assert.doesNotMatch(
+  lineBreakFix,
+  /update public\.board_posts(?![\s\S]*category_id = brag_board_id)/,
+  'The line-break repair stays scoped to the Brag Board',
+);
 
 console.log('PASS: one Tech-owned Brag Board reaches every HIVE with visible stages and full member participation. Offline only.');
