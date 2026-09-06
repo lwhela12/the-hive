@@ -23,6 +23,7 @@ const {SurveyQuestionField}=load('components/surveys/SurveyQuestionField.tsx',{
   './CheckInWishGrant':{CheckInWishGrant:'Grant'},
   '../wishes/WishManageModal':{WishManageModal:'Manage'},
   '../ui/EditButton':{EditButton:'EditButton'},
+  '../ui/ConfirmDialog':{ConfirmDialog:'Confirm'},
 });
 function render(extra={}){index=0;const tree=SurveyQuestionField({question:{id:'q_hd_wish',type:'long',text:'Your wish'},index:3,value:answers.q_hd_wish,answers,communityId:'tech',onChange:value=>answers.q_hd_wish=value,onSetAnswer:(key,value)=>answers[key]=value,...extra}); const nodes=[];function walk(n){if(!n||typeof n!=='object')return;if(Array.isArray(n)){n.forEach(walk);return;}nodes.push(n);walk(n.props?.children);}walk(tree);return nodes;}
 const review={id:'wide',type:'wish',label:'My existing wish',sourceLabel:'OG HIVE · Wish'};
@@ -39,6 +40,18 @@ assert.ok(!nodes.some(n=>n.type==='Pressable'&&JSON.stringify(n.props.children).
 nodes.find(n=>n.props.accessibilityLabel==='Manage wish').props.onPress();
 nodes=render(reviewProps);
 assert.equal(nodes.find(n=>n.type==='Manage').props.canGrant,true);
+for (const action of ['onArchive','onDelete']) {
+  nodes.find(n=>n.type==='Manage').props[action](wish.record);
+  nodes=render(reviewProps);
+  const confirmation=nodes.find(n=>n.type==='Confirm');
+  assert.equal(confirmation.props.visible,true);
+  assert.equal(answers.q_hd_wish_id,'wide','opening confirmation preserves focus');
+  confirmation.props.onCancel();
+  nodes=render(reviewProps);
+  assert.equal(nodes.find(n=>n.type==='Confirm').props.visible,false);
+  assert.equal(answers.q_hd_wish_id,'wide','cancel preserves selected wish');
+  assert.ok(nodes.some(n=>n.props.accessibilityLabel?.startsWith('Selected wish')));
+}
 nodes.find(n=>n.type==='Manage').props.onGrant(wish.record);
 nodes=render(reviewProps);let grant=nodes.find(n=>n.type==='Grant');
 assert.equal(grant.props.wish.community_id,'og');

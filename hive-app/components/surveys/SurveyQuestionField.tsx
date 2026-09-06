@@ -3,7 +3,8 @@ import { AddWishModal } from '../wishes/AddWishModal';
 import { EditButton } from '../ui/EditButton';
 import { archiveOwnedWish, deleteWishById } from '../../lib/wishMutations';
 import { invalidateWishQueries } from '../../lib/queryClient';
-import { confirmAction, showAlert } from '../../lib/showAlert';
+import { showAlert } from '../../lib/showAlert';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { CheckInWishGrant } from './CheckInWishGrant';
 import type { Wish } from '../../types';
 import { HardOutInput } from './HardOutInput';
@@ -534,6 +535,7 @@ export function SurveyQuestionField({
   const [grantTarget, setGrantTarget] = useState<Wish | null>(null);
   const [manageTarget, setManageTarget] = useState<Wish | null>(null);
   const [editTarget, setEditTarget] = useState<Wish | null>(null);
+  const [pendingWishAction, setPendingWishAction] = useState<{ wish: Wish; action: 'archive' | 'delete' } | null>(null);
   const grantedIds: string[] = Array.isArray(answers?.q_hd_granted_wish_ids) ? answers.q_hd_granted_wish_ids : [];
   const selectedReview = selectedWish ? wishReviewItems.find(item => item.id === selectedWish.id) : undefined;
   const retireWishChoice = (id: string) => {
@@ -546,20 +548,18 @@ export function SurveyQuestionField({
   };
   const removeWish = (wish: Wish, action: 'archive' | 'delete') => {
     if (!profile?.id || wish.user_id !== profile.id) return;
-    confirmAction({
-      title: action === 'archive' ? 'Archive HD wish' : 'Delete wish',
-      message: `${action === 'archive' ? 'Archive' : 'Delete'} this wish?\n\n“${wish.description}”`,
-      confirmLabel: action === 'archive' ? 'Archive' : 'Delete',
-      destructive: action === 'delete',
-      onConfirm: async () => {
-        const result = action === 'archive'
-          ? await archiveOwnedWish(wish.id, wish.community_id, profile.id)
-          : await deleteWishById({ wishId: wish.id, communityId: wish.community_id, ownerId: profile.id });
-        if (result.error) { showAlert('Could not save', 'Your wish was not changed. Please try again.'); return; }
-        await invalidateWishQueries(wish.community_id, profile.id);
-        retireWishChoice(wish.id);
-      },
-    });
+    setPendingWishAction({ wish, action });
+  };
+  const confirmWishAction = async () => {
+    if (!pendingWishAction || !profile?.id || pendingWishAction.wish.user_id !== profile.id) return;
+    const { wish, action } = pendingWishAction;
+    setPendingWishAction(null);
+    const result = action === 'archive'
+      ? await archiveOwnedWish(wish.id, wish.community_id, profile.id)
+      : await deleteWishById({ wishId: wish.id, communityId: wish.community_id, ownerId: profile.id });
+    if (result.error) { showAlert('Could not save', 'Your wish was not changed. Please try again.'); return; }
+    await invalidateWishQueries(wish.community_id, profile.id);
+    retireWishChoice(wish.id);
   };
 
   const startNewWish = () => {
@@ -757,6 +757,12 @@ export function SurveyQuestionField({
             onGrant={setGrantTarget} onEdit={setEditTarget}
             onArchive={wish => removeWish(wish, 'archive')} onDelete={wish => removeWish(wish, 'delete')}
             onRefine={wish => router.push({ pathname: '/(app)', params: { refineWish: wish.description } })} />
+          <ConfirmDialog visible={!!pendingWishAction}
+            title={pendingWishAction?.action === 'delete' ? 'Delete wish?' : 'Archive HD wish?'}
+            body={pendingWishAction?.wish.description}
+            confirmLabel={pendingWishAction?.action === 'delete' ? 'Delete' : 'Archive'}
+            destructive={pendingWishAction?.action === 'delete'}
+            onConfirm={confirmWishAction} onCancel={() => setPendingWishAction(null)} />
           {editTarget && <AddWishModal visible existingWish={editTarget} communityId={editTarget.community_id} userId={profile?.id}
             wishOwnerUserId={editTarget.user_id} onClose={() => setEditTarget(null)} onSave={async () => {
               const { data, error } = await supabase.from('wishes').select('*').eq('id', editTarget.id).eq('user_id', profile!.id).single();
