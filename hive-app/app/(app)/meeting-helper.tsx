@@ -40,6 +40,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
 import { surveyUsesLegacyEnergy } from '../../lib/arrivalSurveySelection';
 import { DeckVideo } from '../../components/meetings/DeckVideo';
+import { DeckSplit } from '../../components/meetings/DeckSplit';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
@@ -1008,6 +1009,10 @@ export default function MeetingHelperScreen() {
   // Is there actually a call on? DeckVideo tells us, and the layout gives the
   // panel real room only once there is somebody in it.
   const [videoLive, setVideoLive] = useState(false);
+  // null until this device says otherwise, so the deck's own sizing stays the
+  // default and a stored value is the only thing that overrides it.
+  const [videoWidth, setVideoWidth] = useState<number | null>(null);
+  const [railWidth, setRailWidth] = useState<number | null>(null);
   /** How many faces are actually on the call — see `sideVideoHeight` below. */
   const [videoPeople, setVideoPeople] = useState(0);
 
@@ -5037,7 +5042,14 @@ export default function MeetingHelperScreen() {
    * column this narrow, plus Daily's own header and tray, capped by the deck.
    * A floor so a single face is not a letterbox.
    */
-  const sideVideoWidth = sz(360, 280);
+  /**
+   * How wide the side panes are is the looker's call, not ours (Nat,
+   * 2026-09-06: *"i'd prob want to drag the outline view smaller ... and have
+   * more room for the vercel interactive thing"*). These are the starting
+   * points; `DeckSplit` restores whatever this device chose last time and
+   * writes every change back.
+   */
+  const sideVideoWidth = videoWidth ?? sz(360, 280);
   const sideVideoHeight = Math.round(
     Math.min(
       stageH,
@@ -5106,7 +5118,7 @@ export default function MeetingHelperScreen() {
     return (
       <View
         style={{
-          width: sz(300, 224),
+          width: railWidth ?? sz(300, 224),
           borderLeftWidth: 1,
           borderColor: GOLD_SOFT,
           backgroundColor: 'rgba(255,253,245,0.75)',
@@ -5395,6 +5407,18 @@ export default function MeetingHelperScreen() {
           compact={stackVideo}
         />
       </View>
+      {!stackVideo ? (
+        <DeckSplit
+          width={sideVideoWidth}
+          onResize={setVideoWidth}
+          min={sz(150, 120)}
+          max={sz(680, 460)}
+          storageKey="hive.deck.videoWidth"
+          label="Drag to give the call more room, or the slide more room"
+          accent={GOLD}
+          softBorder={GOLD_SOFT}
+        />
+      ) : null}
       <View
         style={{ flex: 1 }}
         onLayout={(event) => {
@@ -5976,6 +6000,19 @@ export default function MeetingHelperScreen() {
       </View>
 
       {/* Frozen agenda rail — clock, outline, and the HummDinger roster */}
+      {showRail && !stackVideo ? (
+        <DeckSplit
+          width={railWidth ?? sz(300, 224)}
+          onResize={setRailWidth}
+          fromEnd
+          min={sz(150, 120)}
+          max={sz(560, 380)}
+          storageKey="hive.deck.railWidth"
+          label="Drag to give the outline more room, or the slide more room"
+          accent={GOLD}
+          softBorder={GOLD_SOFT}
+        />
+      ) : null}
       {showRail ? renderRail() : null}
       </View>
     </SafeAreaView>
