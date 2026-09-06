@@ -291,9 +291,9 @@ function RootLayoutInner() {
   // deps on purpose — rebuilding them on every navigation would churn the whole
   // auth context. A ref gives them today's path without that cost.
   const pathnameRef = useRef(pathname);
-  useEffect(() => {
-    pathnameRef.current = pathname;
-  }, [pathname]);
+  // Child layout effects can reconcile the place before this provider's
+  // effects run. Give those callbacks the destination, not the page we left.
+  pathnameRef.current = pathname;
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [community, setCommunity] = useState<Community | null>(null);

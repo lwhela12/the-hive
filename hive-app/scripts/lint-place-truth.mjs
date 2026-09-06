@@ -87,6 +87,15 @@ for (const route of [
   );
 }
 
+// Month-end is always the same all-HIVE survey, including Meetings links.
+for (const route of ['/endofmonth', '/endofmonth?from=meetings&hive=default', '/endofmonth?from=meetings&hive=tech', '/endofmonth/']) {
+  check(placeForRoute(route) === 'wide', `${route}: all survey chrome must say HIVE-Wide.`);
+  check(routeAfterHiveSwitch(route, 'wide') === null, `${route}: reconciling HIVE-Wide must keep the survey open.`);
+  check(routeAfterHiveSwitch(route, 'hive') === '/hive', `${route}: choosing an individual HIVE must leave the all-HIVE page.`);
+}
+check(placeForRoute('/meetings') === 'hive', 'Returning to Meetings must restore the selected HIVE.');
+check(placeForRoute('/beforewemeet') === 'either', 'Individual pre-meeting check-ins keep their existing context.');
+
 // An unwritten route is HIVE-only. The allow-list is the safe way round: a page
 // added next month shows one HIVE's answer rather than wearing HIVE-Wide's name.
 check(

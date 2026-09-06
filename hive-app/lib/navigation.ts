@@ -332,11 +332,11 @@ export function placeForRoute(pathname: string | null | undefined): RoutePlace {
     return 'either';
   }
 
-  // The two check-ins belong to no HIVE — End of the month since migration
-  // 225, and Before we meet since 2026-09-04, which covers every HIVE the
-  // reader is in at once. Standing above the HIVEs, or inside one, is equally
-  // honest for both.
-  if (path.startsWith('/endofmonth') || path.startsWith('/beforewemeet')) return 'either';
+  // The continuous month-end survey covers every membership and the Buzz.
+  // Its entry HIVE is a return address, never the scope of the page itself.
+  if (path === '/endofmonth' || path.startsWith('/endofmonth/')) return 'wide';
+  // Before we meet still opens individual HIVE check-ins from a shared door.
+  if (path.startsWith('/beforewemeet')) return 'either';
 
   return 'hive';
 }

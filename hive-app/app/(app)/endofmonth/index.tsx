@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { supabase } from '../../../lib/supabase';
+import { useDeepTrail } from '../../../lib/hooks/usePathTrail';
 import { useAuth } from '../../../lib/hooks/useAuth';
 import { SPACE_SKIN } from '../../../lib/pageSkin';
 import { useSurveys, type SurveyAnswers } from '../../../lib/hooks/useSurveys';
@@ -24,6 +25,7 @@ type Loaded = { scope: string; survey: Survey; todos: Record<string, CarryForwar
 export default function EndOfMonthScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
+  useDeepTrail([{ label: 'End of the month' }]);
   const { on, from } = useLocalSearchParams<{ on?: string | string[]; from?: string }>();
   const askedDate = Array.isArray(on) ? on[0] : on;
   const returnTo = from === 'meetings' ? '/meetings' : from === 'hive' ? '/hive' : '/hive-wide';
@@ -97,7 +99,7 @@ export default function EndOfMonthScreen() {
   if (!isFocused) return null;
 
   return <View style={{ flex: 1, backgroundColor: skin.page }}>
-    <AppHeader title="End of the month" tone="wide" onBackPress={() => router.replace(returnTo as never)} />
+    <AppHeader title="End of the month" onBackPress={() => router.replace(returnTo as never)} />
     {current ? <EndOfMonthForm key={`${scope}:${current.survey.id}`} sections={memberships.map(m => ({
       community: m.community, todos: current.todos[m.community_id] ?? [],
       questions: seasonal.filter(section => section.communityId === m.community_id).flatMap(section => section.questions),

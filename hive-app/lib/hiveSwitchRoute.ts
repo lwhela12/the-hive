@@ -43,7 +43,6 @@ import { NAV_DESTINATIONS, HIVE_WIDE_ROUTE, placeForRoute } from './navigation';
  */
 const HIVE_SCREENS_OFF_THE_RAIL = new Set([
   '/beforewemeet',
-  '/endofmonth',
   '/monthly-tuneup',
   '/arrival-board',
   '/newsletter',
