@@ -111,7 +111,7 @@ export default function EndOfMonthScreen() {
         });
         if (!result.error) void queryClient.invalidateQueries({ queryKey: ['carryForwardContext'] });
         return result;
-      }} onDone={() => router.replace(returnTo as never)} onEmailSettings={() => router.push('/settings' as never)} />
+      }} onDone={() => router.replace(returnTo as never)} doneLabel={from === 'meetings' ? 'Back to Meetings' : 'Back to Home'} onEmailSettings={() => router.push('/settings' as never)} />
       : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 }}>
           {failure ? <><Text style={{ fontFamily: 'Lato_400Regular', color: skin.ink, lineHeight: 21 }}>{failure}</Text>
             <Pressable accessibilityRole="button" onPress={() => setAttempt(value => value + 1)} style={{ backgroundColor: skin.gold, padding: 14, borderRadius: 999 }}>

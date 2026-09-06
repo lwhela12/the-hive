@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SurveyCompletion } from './SurveyCompletion';
 import { SurveyQuestionField } from './SurveyQuestionField';
 import { BuzzContributionInput } from './BuzzContributionInput';
 import { BuzzCalendarPreview } from './BuzzCalendarPreview';
@@ -14,7 +15,7 @@ import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import type { Community, SurveyQuestion } from '../../types';
 import type { SurveyAnswerValue } from '../../lib/hooks/useSurveys';
 
-export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraftKeys, readOnly, onSave, onDone, onEmailSettings }: {
+export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraftKeys, readOnly, onSave, onDone, doneLabel, onEmailSettings }: {
   sections: { community: Community; todos: CarryForwardItem[]; questions: SurveyQuestion[] }[];
   initialAnswers: EndOfMonthAnswers;
   draftKey: string;
@@ -22,6 +23,7 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
   readOnly: boolean;
   onSave: (answers: EndOfMonthAnswers) => Promise<{ error: string | null }>;
   onDone: () => void;
+  doneLabel: string;
   onEmailSettings: () => void;
 }) {
   const [answers, setAnswers] = useState(initialAnswers);
@@ -62,6 +64,14 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
   };
   const skin = SPACE_SKIN;
   const buttonText = { fontFamily: 'Lato_700Bold', fontSize: 14, lineHeight: 20 } as const;
+
+  if (saved) return <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48 }}>
+    <View style={{ backgroundColor: '#fffdf5', borderRadius: 16, borderWidth: 2, borderColor: skin.gold, width: '100%', maxWidth: 880, alignSelf: 'center' }}>
+      <SurveyCompletion message="Your end of the month check-in is saved. Thank you!"
+        logo={hiveSeal(null)} accent={hiveAccent(null)} onDone={onDone} closeLabel={doneLabel}
+        onReview={() => setSaved(false)} />
+    </View>
+  </ScrollView>;
 
   return <View style={{ flex: 1 }}>
     <ScrollView ref={scroll} onScroll={event => setShowTop(event.nativeEvent.contentOffset.y > 300)} scrollEventThrottle={100}
@@ -129,7 +139,6 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
         {draftState !== 'idle' && !saved && <Text accessibilityLiveRegion="polite" style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: skin.inkSoft }}>
           {draftState === 'saving' ? 'Saving on this device…' : draftState === 'saved' ? 'Saved on this device' : 'Could not keep a draft on this device. Keep this page open until you save.'}
         </Text>}
-        {saved && <Text accessibilityLiveRegion="polite" style={{ ...buttonText, color: skin.ink }}>Your check-in is saved. Thank you!</Text>}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
           {!readOnly && !saved && <Pressable accessibilityRole="button" disabled={saving} onPress={save}
             style={({ pressed }) => ({ flexDirection: 'row', gap: 8, alignItems: 'center', maxWidth: '100%', minHeight: 44, paddingHorizontal: 22, paddingVertical: 12, borderRadius: 999, backgroundColor: skin.gold, opacity: pressed || saving ? 0.7 : 1 })}>
