@@ -588,34 +588,15 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
       helpExpansion: { kind: 'conversation', lead: '', points: [] },
       hasHelpFocusHeader: false,
     },
-    // Read back from the RECURRING pre-meeting check-in ('Before we meet',
-    // lib/checkIns.ts). The first meeting's one-time blocks — cadence, HIVE
-    // Help, Honey Pot, who-can-know — came out with the questions themselves
-    // (2026-08-19): the room decided those, and a slide reading back an
-    // answered question is a rerun.
+    // The recurring Production check-in works from live to-do rows rather than
+    // asking members to write a second account of the same project. Completed
+    // jobs are read directly onto News below. Capacity is the one survey answer
+    // the assignment slide still needs before handing out more work.
     checkInSays: [
-      // The pre-meeting POP, read back on the slides that use it. What people
-      // got done opens the night; what is stuck and how full they are decide
-      // who takes what. Nat, 2026-08-15: *"that way at the Pro HIVE meeting,
-      // okay, Charlee called Circus Center and that is loaded here."*
-      {
-        slide: 'news',
-        heading: 'What everyone got done since we last met',
-        keys: [
-          { key: 'q_show_progress', label: 'What they got done' },
-          { key: 'q_on_board', label: 'On the board yet' },
-          // Asked in the check-in so the presentation can answer them out
-          // loud instead of the room guessing what people are wondering.
-          { key: 'q_biggest_question', label: 'Their biggest question' },
-        ],
-      },
       {
         slide: 'assignments',
         heading: 'Before anyone takes anything on',
         keys: [
-          { key: 'q_show_obstacles', label: "What's stuck" },
-          // How much room they have. This is the slide where jobs get handed
-          // out, so it is the one place knowing somebody is full matters.
           { key: 'q_plate', label: "What's on their plate" },
         ],
       },
@@ -2506,9 +2487,26 @@ export default function MeetingHelperScreen() {
         </View>
         )}
       </View>
-      {/* Configured recurring Production answers belong on News itself — not
-          on a removed Treasurer slide or a cached, unreachable renderer. Keep
-          the grid outside the narrow news-card column so it uses the stage. */}
+      {deckSlug === 'show' && completedAssists.length > 0 && (
+        <View style={{ marginTop: sz(18, 12), gap: sz(10, 7) }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
+            What got done since we last met
+          </Text>
+          <View style={{ backgroundColor: CARD, borderWidth: 1, borderColor: GOLD_SOFT, borderRadius: sz(18, 13), padding: sz(18, 12), gap: sz(10, 7) }}>
+            {completedAssists.map((item) => (
+              <View key={item.id} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sz(10, 7) }}>
+                <Ionicons name="checkmark-circle" size={sz(22, 16)} color={GOLD} />
+                <Text style={{ flex: 1, fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(24, 17), color: CHARCOAL }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold' }}>{getFirstName(item.assigneeName)} · </Text>
+                  {parseActionItemDescription(item.description).text}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+      {/* The remaining structured Production answer belongs on the slide that
+          uses it. Other HIVEs have no configured block here. */}
       {renderCheckInSays('news')}
     </View>
   );

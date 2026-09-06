@@ -221,7 +221,7 @@ export default function BeforeWeMeetScreen() {
       const hasMet = new Set(
         ((pastMeetings ?? []) as { community_id: string }[]).map((row) => row.community_id),
       );
-      const questionsFor = (id: string): SurveyQuestion[] => {
+      const questionsFor = (id: string, slug?: string | null): SurveyQuestion[] => {
         const mine = (hiveSurveys ?? [])
           .filter((s: any) => s.community_id === id)
           .sort((a: any, b: any) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')));
@@ -234,7 +234,7 @@ export default function BeforeWeMeetScreen() {
           : (pre.find((s: any) => isFirstNight.test(String(s.title ?? ''))) ?? pre[0]);
         const chosen = wanted
           ?? mine.find((s: any) => !notPreMeeting.test(String(s.title ?? '')));
-        return checkInQuestions((chosen?.questions ?? []) as SurveyQuestion[]);
+        return checkInQuestions((chosen?.questions ?? []) as SurveyQuestion[], false, slug);
       };
 
       const built = buildMergedPreMeeting(
@@ -242,7 +242,7 @@ export default function BeforeWeMeetScreen() {
           id: m.community_id,
           slug: m.community?.slug ?? null,
           name: m.community?.name ?? null,
-          questions: questionsFor(m.community_id),
+          questions: questionsFor(m.community_id, m.community?.slug),
         })),
       );
 
@@ -361,7 +361,9 @@ export default function BeforeWeMeetScreen() {
       // Each HIVE's form carries the same identity as its own meeting.
       community_id: selectedMembership?.community_id ?? null,
       due_date: currentMeetings.find(m => m.community_id === selected)?.event_date ?? row.due_date,
-      description: selectedMembership ? `Your ${hiveDisplayName(selectedMembership.community?.name)} check-in.` : merged.description,
+      description: selectedMembership?.community?.slug === 'show'
+        ? 'Review your Production HIVE jobs, tick off what is done, then tell the room whether you are coming and how much room you have.'
+        : selectedMembership ? `Your ${hiveDisplayName(selectedMembership.community?.name)} check-in.` : merged.description,
       questions: mergedPreMeetingQuestions({ ...merged, sections: merged.sections.filter(s => s.communityId === selected) }).map(({ question, key }) => ({
         ...question,
         id: question.id,

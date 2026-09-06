@@ -33,6 +33,17 @@ assert.deepEqual(Array.from(missingBoth,q=>q.id),['q_attendance','q_hard_out','q
 const alreadyHasBoth=checkInQuestions([...questions,{id:'q_hd_wish',type:'long',text:'Old HD copy'}]);
 assert.equal(alreadyHasBoth.filter(q=>q.id==='q_hd_wish').length,1,'never show two HD focus pickers');
 assert.equal(alreadyHasBoth.some(q=>q.id==='q_pop_priorities'),false,'HD focus wins over the old priorities essay');
+const production=checkInQuestions([
+  {id:'q_attendance',type:'choice',text:'Coming?'},
+  {id:'q_hard_out',type:'short',text:'Hard out?'},
+  {id:'q_show_progress',type:'long',text:'Retype completed jobs'},
+  {id:'q_on_board',type:'long',text:'Retype board notes'},
+  {id:'q_pictures',type:'long',text:'Describe files'},
+  {id:'q_show_obstacles',type:'long',text:'Retype blockers'},
+  {id:'q_biggest_question',type:'long',text:'Retype questions'},
+],false,'show');
+assert.deepEqual(Array.from(production,q=>q.id),['q_attendance','q_hard_out'],'Production uses its live jobs instead of parallel survey homework');
+assert.equal(production.some(q=>q.id==='q_hd_wish'),false,'Production has one shared show instead of personal HD focus');
 assert.equal(adapted.find(q=>q.id==='q_hive_help_recap').type,'focus','HIVE Help stays a structured rating');
 assert.match(adapted.find(q=>q.id==='q_attendance').options[1],/email me the recap/);
 assert.match(adapted.find(q=>q.id==='q_newsletter').text,/Buzz.*shows.*shout-out/);
@@ -53,4 +64,7 @@ for(const page of ['beforewemeet','endofmonth']) assert.ok(fs.readFileSync(`app/
 const field=fs.readFileSync('components/surveys/SurveyQuestionField.tsx','utf8');
 assert.ok(!field.includes("Anything to add? Stories, suggestions"),'hang ratings do not collect unread free text');
 assert.ok(!field.includes("Anything else you'd like to share?"),'HIVE Help ratings do not collect unread free text');
+const meetingHelper=fs.readFileSync('app/(app)/meeting-helper.tsx','utf8');
+assert.ok(meetingHelper.includes('What got done since we last met'),'Production Meeting Helper reads completed jobs from live task data');
+assert.ok(!meetingHelper.includes("{ key: 'q_show_obstacles', label: \"What's stuck\" }"),'Production Meeting Helper does not depend on retired survey homework');
 console.log('PASS: runtime copy/IDs/input immutability, preseeded roster, one help ask, recap choice, structured ratings, circular tasks, meeting date/time and scoped context.');

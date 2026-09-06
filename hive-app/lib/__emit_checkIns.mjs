@@ -437,13 +437,13 @@ const PRE_MEETING_BY_SLUG = {
     // check-in — the first meeting's one-time questions (cadence, Honey Pot,
     // who-can-know, walk-away lines) were asked and answered on 2026-08-18; the
     // full set and its reasoning live in the brain folder's receipts and on the
-    // answered survey row. From here on, Nat's shape (2026-08-19): "did you get
-    // it done, is it on the board, any pictures to upload." The question ids
-    // are load-bearing — the meeting deck reads q_show_progress,
-    // q_biggest_question, q_show_obstacles and q_plate back onto its slides.
+    // answered survey row. Recurring Production check-ins work from the live
+    // project: completed jobs and open assignments are pre-seeded from the
+    // to-do rows, while attendance, hard-out and capacity are the only questions.
+    // Updates belong on their board threads, not in a parallel survey account.
     show: {
         title: 'Before we meet',
-        description: 'Production HIVE meets soon. A few minutes here means the meeting starts loaded with what everyone found. Short answers are perfect.',
+        description: 'Review your Production HIVE jobs, tick off what is done, then tell the room whether you are coming and how much room you have.',
         questions: [
             choice('q_attendance', 'Will we see you at this one?', [
                 "🐝 I'll be there in person",
@@ -451,17 +451,12 @@ const PRE_MEETING_BY_SLUG = {
                 '😢 Missing this one — please email me the recap',
             ]),
             { ...PERSONAL_HARD_OUT_QUESTION },
-            q('q_show_progress', 'Your jobs from last meeting — what got done? Venues seen, calls made, numbers learned.'),
-            q('q_on_board', "Is what you found on the board yet? If it's still in your notes, paste the one thing worth posting."),
-            q('q_pictures', 'Any pictures, quotes or files to bring? Put them on the Pre-Production board, or say here what you have.'),
-            q('q_show_obstacles', 'What is stuck, or waiting on somebody?'),
             choice('q_plate', 'How much is on your plate right now?', [
                 '🍽️ Plenty of room — hand me something',
                 "🥄 A bit on there, and I've got room for this",
                 "🍲 Pretty full — I'll take one small thing",
                 '🫙 Full to the brim — I want to listen this time',
             ]),
-            q('q_biggest_question', "Your biggest question right now — ask it here and we'll answer it in the room."),
         ],
     },
     /**
