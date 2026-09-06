@@ -115,7 +115,8 @@ export function taggableHiveFromCommunity(
  * can this client reach", never a reason to widen the query.
  */
 export async function fetchMentionableMembersForHives(
-  communityIds: string[]
+  communityIds: string[],
+  options: { throwOnError?: boolean } = {},
 ): Promise<MentionableMember[]> {
   const ids = Array.from(new Set(communityIds.filter(Boolean)));
   if (ids.length === 0) return [];
@@ -130,6 +131,7 @@ export async function fetchMentionableMembersForHives(
 
   if (error) {
     console.warn('[Mentions] multi-HIVE members load failed', error);
+    if (options.throwOnError) throw error;
     return [];
   }
 

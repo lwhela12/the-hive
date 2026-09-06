@@ -166,6 +166,8 @@ export type MentionReach = {
    * (migration 137).
    */
   otherHives?: TaggableHive[];
+  /** A HIVE-Wide form may offer all its named HIVEs as clickable choices. */
+  offerOtherHives?: boolean;
   /**
    * A fixed handful of people: a DM or a group chat. When this is set it is the
    * whole answer — "everyone" is the people in the room and nothing wider is
@@ -334,7 +336,10 @@ function settleReach(reach?: MentionReach | null): SettledReach {
   const named: TaggableHive[] = [...hives];
   if (wide) {
     for (const hive of reach?.otherHives ?? []) {
-      if (hive?.id && hive.id !== home?.id) named.push(hive);
+      if (hive?.id && !named.some(candidate => candidate.id === hive.id)) {
+        named.push(hive);
+        if (reach?.offerOtherHives) hives.push(hive);
+      }
     }
   }
 
@@ -394,17 +399,19 @@ export function getGroupMentionSuggestions(
     });
   }
 
-  if (homeHive && matchesHandles(query, getHiveMentionHandles(homeHive.name))) {
-    const handle = getHiveMentionHandle(homeHive.name);
+  for (const hive of settled.hives) {
+    if (!matchesHandles(query, getHiveMentionHandles(hive.name))) continue;
+    const handle = getHiveMentionHandle(hive.name);
+    const name = hiveDisplayName(hive.name);
     rows.push({
-      id: `${GROUP_ID_HIVE_PREFIX}${homeHive.id}`,
-      name: `Everyone in ${homeHiveName}`,
+      id: `${GROUP_ID_HIVE_PREFIX}${hive.id}`,
+      name: `Everyone in ${name}`,
       handle,
       isBroadcast: true,
       group: 'hive',
-      communityId: homeHive.id,
-      accent: homeHive.accent || HIVE_GOLD,
-      description: `Just ${homeHiveName} — @${handle}`,
+      communityId: hive.id,
+      accent: hive.accent || HIVE_GOLD,
+      description: `Just ${name} — @${handle}`,
     });
   }
 

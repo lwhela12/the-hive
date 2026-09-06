@@ -16,6 +16,8 @@ import { AttachmentPicker } from './AttachmentPicker';
 import { MentionSuggestions } from './MentionSuggestions';
 import { SelectedFilePreview } from './SelectedFilePreview';
 import { VoiceMicButton } from './VoiceMicButton';
+import { MentionBubbles } from './MentionBubbles';
+import { getMentionSuggestions } from '../../lib/mentions';
 
 /**
  * The one message bar. Every box you write into is this.
@@ -152,6 +154,7 @@ export interface ComposerBarProps {
    * sure passes nothing rather than a guess.
    */
   mentionReach?: MentionReach | null;
+  mentionPicker?: 'list' | 'bubbles';
 
   containerClassName?: string;
   fieldClassName?: string;
@@ -198,6 +201,7 @@ export function ComposerBar({
   mentionMembers = NO_MEMBERS,
   mentionsLoading = false,
   mentionReach = null,
+  mentionPicker = 'list',
   currentUserId,
   containerClassName = '',
   fieldClassName = '',
@@ -222,7 +226,7 @@ export function ComposerBar({
     currentUserId,
     reach: mentionReach,
   });
-  const mentionsOn = mentionMembers.length > 0 || mentionsLoading;
+  const mentionsOn = mentionMembers.length > 0 || mentionsLoading || !!mentionReach;
 
   const { dragDropProps, isDragActive } = useWebAttachmentDropZone({
     selectedImages,
@@ -418,7 +422,14 @@ export function ComposerBar({
     </View>
   ) : null;
 
-  const suggestionsNode = mentionsOn ? (
+  const suggestionsNode = mentionsOn && mentionPicker === 'bubbles' ? (
+    <MentionBubbles suggestions={getMentionSuggestions(mention.mentionQuery ?? '', mentionMembers, currentUserId, mentionMembers.length + 10, mentionReach)}
+      members={mentionMembers} query={mention.mentionQuery} loading={mentionsLoading} disabled={submitting || !editable}
+      selectedIds={getMentionSuggestions('', mentionMembers, currentUserId, mentionMembers.length + 10, mentionReach)
+        .filter(target => target.isBroadcast ? mention.mentionedGroups.some(group => group.kind === target.group &&
+          (group.kind !== 'hive' || group.id === target.communityId)) : mention.mentionedMembers.some(member => member.id === target.id)).map(target => target.id)}
+      onSelect={target => { mention.selectMention(target); inputRef.current?.focus(); }} />
+  ) : mentionsOn ? (
     <MentionSuggestions
       active={mention.mentionQuery !== null}
       query={mention.mentionQuery}

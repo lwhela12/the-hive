@@ -3,7 +3,9 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SurveyQuestionField, VoiceTextInput } from './SurveyQuestionField';
+import { SurveyQuestionField } from './SurveyQuestionField';
+import { BuzzContributionInput } from './BuzzContributionInput';
+import { BuzzCalendarPreview } from './BuzzCalendarPreview';
 import { hiveAccent, hiveDisplayName, hiveSeal, accentPalette } from '../../lib/hiveBrand';
 import { SPACE_SKIN } from '../../lib/pageSkin';
 import { CARRY_FORWARD_ANSWER_KEY, type CarryForwardItem, type CarryForwardStatus } from '../../lib/carryForward';
@@ -115,10 +117,11 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
             <Image source={hiveSeal(null)} accessibilityLabel="HIVE-Wide logo" contentFit="contain" style={{ width: 48, height: 48 }} />
             <Text accessibilityRole="header" style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#313130' }}>For the Buzz</Text>
           </View>
+          <BuzzCalendarPreview />
           {([{ id: 'q_shoutout', label: 'A shout-out for someone', placeholder: 'Who deserves a shout-out, and why?' },
             { id: 'q_newsletter', label: 'A plug or an event', placeholder: 'Include names, dates and links.' }] as const).map(field => <View key={field.id}>
               <Text style={{ ...buttonText, color: '#313130' }}>{field.label} <Text style={{ fontFamily: 'Lato_400Regular', color: '#5c5648' }}>(optional)</Text></Text>
-              {!readOnly && <VoiceTextInput multiline value={String(answers.month[field.id] ?? '')} placeholder={field.placeholder}
+              {!readOnly && <BuzzContributionInput disabled={saving} value={String(answers.month[field.id] ?? '')} placeholder={field.placeholder}
                 onChangeText={value => update({ ...answerRef.current, month: { ...answerRef.current.month, [field.id]: value } })} />}
             </View>)}
         </View>
