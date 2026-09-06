@@ -692,7 +692,9 @@ export function SurveyQuestionField({
           <View accessibilityRole="radiogroup" accessibilityLabel="Meeting focus" style={{ gap: 8 }}>
             {pickableWishes.filter(wish => !grantedIds.includes(wish.id)).map(wish => {
               const chosen = selectedWish?.id === wish.id;
-              return <Pressable key={wish.id} accessibilityRole="radio"
+              return <View key={wish.id} style={{ flexDirection: 'row', gap: 10, alignItems: 'center', paddingHorizontal: 14,
+                borderWidth: 1, borderColor: tint.line(0.5), borderRadius: 12, backgroundColor: chosen ? tint.wash : '#fffdf5' }}>
+                <Pressable accessibilityRole="radio"
                 accessibilityState={{ checked: chosen }}
                 accessibilityLabel={`${chosen ? 'Selected' : 'Choose'} wish: ${wish.title || wish.description}`}
                 onPress={() => {
@@ -702,11 +704,16 @@ export function SurveyQuestionField({
                   onSetAnswer?.('q_hd_wish_id', wish.id);
                   onSetAnswer?.('q_hd_wish_reach', wish.reach);
                 }}
-                style={{ flexDirection: 'row', gap: 10, alignItems: 'center', padding: 14,
-                  borderWidth: 1, borderColor: tint.line(0.5), borderRadius: 12, backgroundColor: chosen ? tint.wash : '#fffdf5' }}>
+                style={{ flex: 1, flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 14 }}>
                 <Text style={{ color: tint.ink, fontSize: 19 }}>{chosen ? '●' : '○'}</Text>
-                <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: 14, color: tint.ink, lineHeight: 20 }}>{wish.title || wish.description}</Text>
-              </Pressable>;
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: tint.ink, lineHeight: 20 }}>{wish.title || wish.description}</Text>
+                  {chosen && wish.title && wish.title !== wish.description && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: '#5c5648' }}>{wish.description}</Text>}
+                  {chosen && <ReachPill reach={wish.reach} communityId={wish.communityId} />}
+                </View>
+                </Pressable>
+                {chosen && <EditButton accessibilityLabel="Manage wish" onPress={() => setManageTarget(wish.record)} />}
+              </View>;
             })}
             <Pressable accessibilityRole="radio" accessibilityState={{ checked: showNewWish }} accessibilityLabel="Write a new wish" onPress={startNewWish}
               style={{ flexDirection: 'row', gap: 10, alignItems: 'center', padding: 14, borderWidth: 1, borderColor: tint.line(0.5), borderRadius: 12, backgroundColor: showNewWish ? tint.wash : '#fffdf5' }}>
@@ -715,12 +722,7 @@ export function SurveyQuestionField({
             </Pressable>
           </View>
           {!wishesLoaded && <Text style={{ color: '#5c5648' }}>Loading your wishes…</Text>}
-          {selectedWish && <View style={{ gap: 10, paddingHorizontal: 14 }}>
-            {selectedWish.title && selectedWish.title !== selectedWish.description && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: '#5c5648' }}>{selectedWish.description}</Text>}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <ReachPill reach={selectedWish.reach} communityId={selectedWish.communityId} />
-              <EditButton accessibilityLabel="Manage wish" onPress={() => setManageTarget(selectedWish.record)} />
-            </View>
+          {selectedWish && selectedReview && <View style={{ paddingHorizontal: 14 }}>
             {selectedReview && renderWishReview?.(selectedReview)}
 
           </View>}
