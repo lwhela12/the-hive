@@ -12,6 +12,65 @@ import {
 } from '../../lib/hooks/useArrivalBoard';
 import type { SurveyResponse } from '../../lib/hooks/useSurveys';
 
+function plateAtAGlance(answer: string) {
+  if (/plenty of room/i.test(answer)) return '🍽️ Plenty of room';
+  if (/a bit on there/i.test(answer)) return '🥄 Room for this';
+  if (/pretty full/i.test(answer)) return '🍲 One small thing';
+  if (/full to the brim/i.test(answer)) return '🫙 Listening today';
+  return answer;
+}
+
+function attendanceAtAGlance(attendance: ReturnType<typeof getAttendance>) {
+  if (attendance === 'in_person') return '🐝 In person';
+  if (attendance === 'remote') return '💻 Remote';
+  if (attendance === 'missing') return '😢 Missing';
+  return '';
+}
+
+function ArrivalFact({
+  label,
+  value,
+  isTV,
+  scale,
+  danger = false,
+}: {
+  label: string;
+  value: string;
+  isTV: boolean;
+  scale: number;
+  danger?: boolean;
+}) {
+  return (
+    <View style={{ width: '100%', flexDirection: 'row', alignItems: 'flex-start', gap: (isTV ? 10 : 7) * scale }}>
+      <Text
+        style={{
+          width: (isTV ? 78 : 58) * scale,
+          fontFamily: 'Lato_700Bold',
+          fontSize: Math.max(9, (isTV ? 10 : 9) * scale),
+          lineHeight: Math.max(14, (isTV ? 18 : 15) * scale),
+          letterSpacing: (isTV ? 1.2 : 0.9) * scale,
+          color: danger ? '#b3261e' : '#9a8060',
+          textAlign: 'right',
+        }}
+      >
+        {label.toUpperCase()}
+      </Text>
+      <Text
+        style={{
+          flex: 1,
+          fontFamily: 'Lato_700Bold',
+          fontSize: Math.max(11, (isTV ? 15 : 12) * scale),
+          lineHeight: Math.max(15, (isTV ? 20 : 17) * scale),
+          color: danger ? '#b3261e' : '#5f4b27',
+          textAlign: 'left',
+        }}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 /**
  * One member's arrival card — name for today, feeling, note, and energy.
  * Rendered by both the Arrival Board screen and the Meeting Helper deck.
@@ -40,6 +99,7 @@ export function ArrivalMemberCard({
   const plate = getTextAnswer(answers, 'q_plate');
   const hardOut = personalHardOut(answers.q_hard_out).label;
   const attendance = getAttendance(response);
+  const attendanceLabel = attendanceAtAGlance(attendance);
   const energyDots = energyLevel !== null ? getEnergyDots(energyLevel) : null;
   const scale = compact ? 0.78 : 1;
 
@@ -96,73 +156,48 @@ export function ArrivalMemberCard({
       {checkedIn ? (
         <>
           {feeling ? (
-            <Text
-              style={{
-                fontFamily: 'Lato_700Bold',
-                fontSize: (isTV ? 20 : 15) * scale,
-                lineHeight: (isTV ? 27 : 21) * scale,
-                color: '#8a6b30',
-                textAlign: 'center',
-                marginTop: (isTV ? 12 : 8) * scale,
-              }}
-            >
-              {feeling}
-            </Text>
+            <View style={{ alignItems: 'center', marginTop: (isTV ? 12 : 8) * scale }}>
+              <Text
+                style={{
+                  fontFamily: 'Lato_700Bold',
+                  fontSize: Math.max(9, (isTV ? 10 : 9) * scale),
+                  lineHeight: Math.max(14, (isTV ? 16 : 14) * scale),
+                  letterSpacing: (isTV ? 1.4 : 1) * scale,
+                  color: '#9a8060',
+                }}
+              >
+                FEELING
+              </Text>
+              <Text
+                style={{
+                  fontFamily: 'Lato_700Bold',
+                  fontSize: (isTV ? 20 : 15) * scale,
+                  lineHeight: (isTV ? 27 : 21) * scale,
+                  color: '#8a6b30',
+                  textAlign: 'center',
+                  marginTop: 2 * scale,
+                }}
+              >
+                {feeling}
+              </Text>
+            </View>
           ) : null}
-          {attendance === 'remote' || attendance === 'missing' ? (
-            <Text
+          {feelingNote || attendanceLabel || hardOut || plate ? (
+            <View
               style={{
-                fontFamily: 'Lato_700Bold',
-                fontSize: (isTV ? 15 : 11) * scale,
-                color: attendance === 'remote' ? '#8a6b30' : '#9a8060',
-                textAlign: 'center',
-                marginTop: (isTV ? 8 : 6) * scale,
+                width: '100%',
+                gap: (isTV ? 5 : 4) * scale,
+                marginTop: (isTV ? 12 : 9) * scale,
+                paddingTop: (isTV ? 10 : 8) * scale,
+                borderTopWidth: 1,
+                borderTopColor: 'rgba(222,193,129,0.45)',
               }}
             >
-              {attendance === 'remote' ? '💻 joining remotely' : '😢 missing this one'}
-            </Text>
-          ) : null}
-          {hardOut ? (
-            <Text
-              style={{
-                fontFamily: 'Lato_700Bold',
-                fontSize: (isTV ? 15 : 11) * scale,
-                color: '#b3261e',
-                textAlign: 'center',
-                marginTop: (isTV ? 8 : 6) * scale,
-              }}
-            >
-              ⏰ leaving by: {hardOut}
-            </Text>
-          ) : null}
-          {feelingNote ? (
-            <Text
-              style={{
-                fontFamily: 'Lato_400Regular',
-                fontStyle: 'italic',
-                fontSize: (isTV ? 16 : 12) * scale,
-                lineHeight: (isTV ? 22 : 17) * scale,
-                color: '#9a8060',
-                textAlign: 'center',
-                marginTop: (isTV ? 8 : 6) * scale,
-              }}
-            >
-              "{feelingNote}"
-            </Text>
-          ) : null}
-          {plate ? (
-            <Text
-              style={{
-                fontFamily: 'Lato_700Bold',
-                fontSize: (isTV ? 17 : 12) * scale,
-                lineHeight: (isTV ? 23 : 17) * scale,
-                color: '#8a6b30',
-                textAlign: 'center',
-                marginTop: (isTV ? 10 : 7) * scale,
-              }}
-            >
-              {plate}
-            </Text>
+              {feelingNote ? <ArrivalFact label="Note" value={`“${feelingNote}”`} isTV={isTV} scale={scale} /> : null}
+              {attendanceLabel ? <ArrivalFact label="Attending" value={attendanceLabel} isTV={isTV} scale={scale} /> : null}
+              {hardOut ? <ArrivalFact label="Leaving" value={`⏰ ${hardOut}`} isTV={isTV} scale={scale} danger /> : null}
+              {plate ? <ArrivalFact label="Capacity" value={plateAtAGlance(plate)} isTV={isTV} scale={scale} /> : null}
+            </View>
           ) : null}
           {energyDots !== null || energyMode ? (
             <View style={{ alignItems: 'center', marginTop: 'auto', paddingTop: (isTV ? 14 : 10) * scale }}>
