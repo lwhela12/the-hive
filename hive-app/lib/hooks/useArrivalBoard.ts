@@ -217,7 +217,7 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
       const pick = (list: Survey[]) =>
         list.find(isMonthlyCheckInSurvey) ?? list.find((survey) => isPreMeetingCheckInSurvey(survey));
       const activeCheckIn = pick(own) ?? pick(shared) ?? null;
-      const period = activeCheckIn ? getSurveyResponsePeriod(activeCheckIn) : null;
+      const period = activeCheckIn ? (meetingRes.data?.[0]?.event_date?.slice(0, 7) ?? getSurveyResponsePeriod(activeCheckIn)) : null;
 
       const memberRows = ((membersRes.data ?? []) as unknown as { profiles: ArrivalBoardMember | ArrivalBoardMember[] | null }[])
         .map((row) => (Array.isArray(row.profiles) ? row.profiles[0] : row.profiles))
@@ -298,6 +298,7 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
   // Simple + reliable live updates: poll every ~20 seconds while enabled.
   useEffect(() => {
     if (!pollingEnabled) return;
+    void refresh();
     const interval = setInterval(() => {
       void refresh();
     }, POLL_INTERVAL_MS);

@@ -1,3 +1,4 @@
+import { meetingVoteResults } from '../../lib/meetingVoteResults';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Linking,
@@ -1006,8 +1007,7 @@ export default function MeetingHelperScreen() {
   // *"I wouldn't know which one to do, or if I hadn't done it a while, I might
   // get confused."*
 
-  // Slide 1 (Welcome) and slide 2 (Who's in the room) act as the pre-meeting
-  // screen, so the arrival data keeps polling while either is showing.
+  // Refresh arrivals and the decision slides while the room is viewing them.
   const {
     loading: arrivalLoading,
     survey,
@@ -1017,7 +1017,7 @@ export default function MeetingHelperScreen() {
     nextMeeting,
     lastUpdatedAt,
     refresh: refreshArrivals,
-  } = useArrivalBoard({ pollingEnabled: slideIndex <= 1 });
+  } = useArrivalBoard({ pollingEnabled: slideIndex <= 1 || ['meetups', 'treasurer'].includes(deck.slides[slideIndex]) });
 
   // A meeting is one HIVE in one room, and a to-do jotted here lands on that
   // HIVE's lists — so "@all" is this HIVE, and the picker says its name.
@@ -2718,21 +2718,9 @@ export default function MeetingHelperScreen() {
    * that said no — which is the opposite of "nobody has answered yet".
    */
   const renderVoteTally = (vote: VoteTally, compact = false) => {
-    const counts = new Map<string, number>(vote.options.map((option) => [option, 0]));
-    let voted = 0;
-    memberOrder.forEach((member) => {
-      const answer = getTextAnswer(responsesByUser.get(member.id)?.answers ?? {}, vote.answerKey);
-      if (!answer) return;
-      voted += 1;
-      counts.set(answer, (counts.get(answer) ?? 0) + 1);
-    });
-    if (voted === 0) return null;
-
-    // Ballot order first (a zero still holds its place), then anything typed
-    // that the ballot did not offer — those only exist here because somebody
-    // said them, so they are never empty.
-    const rows = [...counts.entries()];
-    const leader = Math.max(...rows.map(([, count]) => count));
+    const { voted, total, rows } = meetingVoteResults(members.map(member => member.id), responsesByUser, vote.answerKey, vote.options);
+    if (voted === 0) return <Text style={{ color: MUTED, fontSize: compact ? sz(15, 11) : sz(20, 13), marginTop: 10 }}>{vote.heading} · No votes yet</Text>;
+    const leader = Math.max(...rows.map(row => row.count));
 
     // Compact is the version that lives inside a Plan card, beside two others:
     // the same bars, sized to sit under a blurb instead of holding a slide.
@@ -2742,10 +2730,9 @@ export default function MeetingHelperScreen() {
     return (
       <View style={{ alignSelf: 'stretch', gap: compact ? sz(6, 4) : sz(10, 7), marginTop: compact ? sz(10, 7) : 0 }}>
         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: compact ? sz(12, 9) : sz(15, 11), letterSpacing: compact ? 1.2 : 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
-          {vote.heading} · {voted} of {members.length} answered
+          {vote.heading} · {voted} of {total} answered
         </Text>
-        {rows.map(([option, count]) => {
-          const share = Math.round((count / voted) * 100);
+        {rows.map(({ option, count, percent: share }) => {
           return (
             <View key={option} style={{ gap: sz(4, 3) }}>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: sz(10, 6) }}>

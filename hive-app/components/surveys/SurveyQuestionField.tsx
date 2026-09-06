@@ -1,3 +1,9 @@
+import { WishManageModal } from '../wishes/WishManageModal';
+import { AddWishModal } from '../wishes/AddWishModal';
+import { EditButton } from '../ui/EditButton';
+import { archiveOwnedWish, deleteWishById } from '../../lib/wishMutations';
+import { invalidateWishQueries } from '../../lib/queryClient';
+import { confirmAction, showAlert } from '../../lib/showAlert';
 import { CheckInWishGrant } from './CheckInWishGrant';
 import type { Wish } from '../../types';
 import { HardOutInput } from './HardOutInput';
@@ -526,8 +532,36 @@ export function SurveyQuestionField({
   const showNewWish = !selectedWish && (writingNewWish || answers?.q_hd_wish_mode === 'new' || (wishesLoaded && !answers?.q_hd_wish_id && !!textValue.trim()));
   const [writeOwnWish, setWriteOwnWish] = useState(false);
   const [grantTarget, setGrantTarget] = useState<Wish | null>(null);
+  const [manageTarget, setManageTarget] = useState<Wish | null>(null);
+  const [editTarget, setEditTarget] = useState<Wish | null>(null);
   const grantedIds: string[] = Array.isArray(answers?.q_hd_granted_wish_ids) ? answers.q_hd_granted_wish_ids : [];
   const selectedReview = selectedWish ? wishReviewItems.find(item => item.id === selectedWish.id) : undefined;
+  const retireWishChoice = (id: string) => {
+    setPickableWishes(previous => previous.filter(wish => wish.id !== id));
+    if (selectedWish?.id === id) {
+      onChange('');
+      onSetAnswer?.('q_hd_wish_id', '');
+      onSetAnswer?.('q_hd_wish_mode', '');
+    }
+  };
+  const removeWish = (wish: Wish, action: 'archive' | 'delete') => {
+    if (!profile?.id || wish.user_id !== profile.id) return;
+    confirmAction({
+      title: action === 'archive' ? 'Archive HD wish' : 'Delete wish',
+      message: `${action === 'archive' ? 'Archive' : 'Delete'} this wish?\n\n“${wish.description}”`,
+      confirmLabel: action === 'archive' ? 'Archive' : 'Delete',
+      destructive: action === 'delete',
+      onConfirm: async () => {
+        const result = action === 'archive'
+          ? await archiveOwnedWish(wish.id, wish.community_id, profile.id)
+          : await deleteWishById({ wishId: wish.id, communityId: wish.community_id, ownerId: profile.id });
+        if (result.error) { showAlert('Could not save', 'Your wish was not changed. Please try again.'); return; }
+        await invalidateWishQueries(wish.community_id, profile.id);
+        retireWishChoice(wish.id);
+      },
+    });
+  };
+
   const startNewWish = () => {
     if (showNewWish) return;
     setWritingNewWish(true);
@@ -683,11 +717,12 @@ export function SurveyQuestionField({
           {!wishesLoaded && <Text style={{ color: '#5c5648' }}>Loading your wishes…</Text>}
           {selectedWish && <View style={{ gap: 10, paddingHorizontal: 14 }}>
             {selectedWish.title && selectedWish.title !== selectedWish.description && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: '#5c5648' }}>{selectedWish.description}</Text>}
-            <ReachPill reach={selectedWish.reach} communityId={selectedWish.communityId} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <ReachPill reach={selectedWish.reach} communityId={selectedWish.communityId} />
+              <EditButton accessibilityLabel="Manage wish" onPress={() => setManageTarget(selectedWish.record)} />
+            </View>
             {selectedReview && renderWishReview?.(selectedReview)}
-            <Pressable accessibilityRole="button" accessibilityLabel="Mark this wish granted" onPress={() => setGrantTarget(selectedWish.record)} style={{ alignSelf: 'flex-start', paddingVertical: 9 }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: tint.ink }}>Mark granted ✓</Text>
-            </Pressable>
+
           </View>}
           {showNewWish && <View style={{ gap: 12, paddingHorizontal: 14 }}>
             <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
@@ -713,17 +748,29 @@ export function SurveyQuestionField({
               </View>}
             </>}
           </View>}
+          <WishManageModal visible={!!manageTarget} wish={manageTarget} onClose={() => setManageTarget(null)}
+            canGrant={!!manageTarget && manageTarget.user_id === profile?.id && manageTarget.status === 'public'}
+            canEdit={!!manageTarget && manageTarget.user_id === profile?.id}
+            canArchive={!!manageTarget && manageTarget.user_id === profile?.id}
+            canDelete={!!manageTarget && manageTarget.user_id === profile?.id}
+            canRefine={!!manageTarget && manageTarget.user_id === profile?.id}
+            onGrant={setGrantTarget} onEdit={setEditTarget}
+            onArchive={wish => removeWish(wish, 'archive')} onDelete={wish => removeWish(wish, 'delete')}
+            onRefine={wish => router.push({ pathname: '/(app)', params: { refineWish: wish.description } })} />
+          {editTarget && <AddWishModal visible existingWish={editTarget} communityId={editTarget.community_id} userId={profile?.id}
+            wishOwnerUserId={editTarget.user_id} onClose={() => setEditTarget(null)} onSave={async () => {
+              const { data, error } = await supabase.from('wishes').select('*').eq('id', editTarget.id).eq('user_id', profile!.id).single();
+              if (error || !data) { showAlert('Wish saved', 'Reopen this check-in to see your updated wish.'); setEditTarget(null); return; }
+              setPickableWishes(previous => previous.map(item => item.id === data.id ? { ...item, title: data.title, description: data.description, reach: data.share_scope === 'all_hives' ? 'all_hives' : 'hive', record: data } : item));
+              if (selectedWish?.id === data.id) onChange(data.description);
+              setEditTarget(null);
+            }} />}
           {grantTarget && <CheckInWishGrant wish={grantTarget} onClose={() => setGrantTarget(null)} onGranted={() => {
-            const id = grantTarget.id;
-            setPickableWishes(previous => previous.filter(wish => wish.id !== id));
-            onSetAnswer?.('q_hd_granted_wish_ids', [...grantedIds, id]);
-            if (selectedWish?.id === id) {
-              onChange('');
-              onSetAnswer?.('q_hd_wish_id', '');
-              onSetAnswer?.('q_hd_wish_mode', '');
-            }
+            onSetAnswer?.('q_hd_granted_wish_ids', [...grantedIds, grantTarget.id]);
+            retireWishChoice(grantTarget.id);
             setGrantTarget(null);
           }} />}
+
         </View>
       )}
 

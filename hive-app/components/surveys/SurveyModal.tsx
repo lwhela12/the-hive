@@ -11,7 +11,6 @@ import {
   applyCarryForwardStatuses,
   CARRY_FORWARD_ANSWER_KEY,
   CARRY_FORWARD_STATUS_OPTIONS,
-  getCarryForwardStatusLabel,
   normalizeCarryForwardResponse,
   type CarryForwardItem,
   type CarryForwardResponseItem,
@@ -109,11 +108,7 @@ const CARRY_FORWARD_STATUS_STYLE: Record<CarryForwardStatus, {
     borderColor: '#dec181',
     color: '#8a6b30',
   },
-  needs_attention: {
-    backgroundColor: '#fef3c7',
-    borderColor: '#f59e0b',
-    color: '#92400e',
-  },
+
   done: {
     backgroundColor: '#ecfdf3',
     borderColor: '#86efac',
@@ -542,7 +537,7 @@ export function SurveyModal({
     const activeStatus = response?.status ?? 'keep_active';
     return <View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 10 }}>
-        {CARRY_FORWARD_STATUS_OPTIONS.filter(option => item.type === 'action_item' ? ['needs_attention', 'archive'].includes(option.value) : item.type !== 'wish' || ['keep_active', 'needs_attention'].includes(option.value)).map((option) => {
+        {CARRY_FORWARD_STATUS_OPTIONS.filter(option => item.type === 'action_item' ? option.value === 'archive' : item.type !== 'wish').map((option) => {
           const active = option.value === activeStatus;
           const activeStyle = CARRY_FORWARD_STATUS_STYLE[option.value];
           return (
@@ -566,19 +561,19 @@ export function SurveyModal({
         })}
       </View>
 
-      {activeStatus === 'needs_attention' && <Text style={{ color: '#92400e', fontSize: 12, marginBottom: 8 }}>Keep this open and flag it in your saved check-in for Admin review. Add what needs attention below. This does not notify anyone.</Text>}
+
 
       {/* The shared message bar, so a note on your roster looks and
           behaves like every other box you write in — mic inside the
           box's own border rather than on a strip welded underneath. */}
-      {(!['wish', 'action_item'].includes(item.type) || activeStatus === 'needs_attention' || !!response?.note) && <ComposerBar
+      {(!['wish', 'action_item'].includes(item.type) || !!response?.note) && <ComposerBar
         tone="light"
         variant="form"
         value={response?.note ?? ''}
         onChangeText={(next) => updateCarryForwardItem(item, {
           note: typeof next === 'function' ? next(response?.note ?? '') : next,
         })}
-        placeholder={`Optional note for ${activeStatus ? getCarryForwardStatusLabel(activeStatus).toLowerCase() : 'this item'}...`}
+        placeholder="Your note…"
         minHeight={44}
       />}
     </View>;

@@ -66,3 +66,14 @@ Check-ins celebrate actual unarchived completed work in “You got this done ✓
 Task queries page through the full scoped list instead of silently stopping at eight open or twenty completed items. Mention-only accidental jots are excluded; archived records stay excluded. Task-load failures remain visible for the affected HIVE. Submission verifies actual completion/archive state, including silent permission failures, and retains the draft with a retry message if updates fail after answers save.
 
 Validation: typecheck, web export, task-write/error/pagination fixtures and check-in regression suites. The approved completion screen and email approval/scheduling behavior are unchanged. User-requested personal record corrections are documented privately in the Brain receipt, not in this repository.
+
+
+## Shared wish actions and meeting votes (2026-09-05)
+
+Nat rejected Needs attention everywhere and explicitly does not want Admin to read survey answers to discover work. The retired option and its Admin-review explanation are removed from all check-in controls. Legacy flags normalize to open while retaining written notes; historical data is not erased.
+
+An existing wish uses the same Manage Wish pencil/menu as elsewhere: Grant, Edit, Archive, Refine with Clive, and Delete. It reuses WishManageModal, AddWishModal, the grant flow and recoverable deletion. Archive verifies the owned wish in its source HIVE; failures preserve the selection. Successful grant/archive/delete clears it from the meeting choices; editing updates its text and audience display. Generic survey status chips no longer manage wishes.
+
+Meeting Helper’s existing Plan → HIVE Meeting chart automatically shows day percentages among members who answered that question, plus the response count. Plan and Honey Pot slides now refresh responses while visible. Empty results say No votes yet; missing/invalid/outside-member votes are excluded. Arrival response month follows this HIVE’s upcoming meeting, rather than a shared survey’s earliest due date. Existing response access permissions and legacy response-period handling are retained.
+
+Validation: typecheck and web export; check-in suites and new wish-action/vote fixtures cover retired-note preservation, owner/source scope, archive failure, vote denominators and updates. No real wish lifecycle changes, survey submission, emails or approval changes are part of testing.

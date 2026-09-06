@@ -108,3 +108,12 @@ export async function listDeletedWishes(communityId: string): Promise<{
 
   return { wishes: (data ?? []) as DeletedWish[], error: null };
 }
+
+/** Archive an owned wish in its source HIVE, including a HIVE-Wide wish. */
+export async function archiveOwnedWish(wishId: string, communityId: string, ownerId: string) {
+  const { data, error } = await supabase.from('wishes')
+    .update({ status: 'replaced', is_active: false, is_spotlight: false, replaced_at: new Date().toISOString() } as any)
+    .eq('id', wishId).eq('community_id', communityId).eq('user_id', ownerId)
+    .select('id').maybeSingle();
+  return { error: error ?? (!data ? new Error('That wish could not be archived.') : null) };
+}

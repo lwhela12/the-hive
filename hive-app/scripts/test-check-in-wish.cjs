@@ -9,7 +9,7 @@ function load(file, mocks = {}) {
     {module,exports:module.exports,require:name=>mocks[name]??{},console,Date,Map,Set});
   return module.exports;
 }
-const wish = {id:'wide',title:'My wish',description:'My existing wish',communityId:'og',fromHive:'OG HIVE',reach:'all_hives',record:{id:'wide',community_id:'og',user_id:'owner',description:'My existing wish'}};
+const wish = {id:'wide',title:'My wish',description:'My existing wish',communityId:'og',fromHive:'OG HIVE',reach:'all_hives',record:{id:'wide',status:'public',community_id:'og',user_id:'owner',description:'My existing wish'}};
 const nextWish={...wish,id:'next',title:'Next wish',description:'My next focus',record:{...wish.record,id:'next',description:'My next focus'}};
 let states=[false,false,true,[wish,nextWish]], index=0, answers={};
 const jsx=(type,props)=>({type,props});
@@ -21,6 +21,8 @@ const {SurveyQuestionField}=load('components/surveys/SurveyQuestionField.tsx',{
   '../../lib/hiveBrand':{HIVE_GOLD:'gold',accentPalette:()=>({line:()=>'',ink:'navy'})},
   '../ui/ReachPill':{ReachPill:'ReachPill'},
   './CheckInWishGrant':{CheckInWishGrant:'Grant'},
+  '../wishes/WishManageModal':{WishManageModal:'Manage'},
+  '../ui/EditButton':{EditButton:'EditButton'},
 });
 function render(extra={}){index=0;const tree=SurveyQuestionField({question:{id:'q_hd_wish',type:'long',text:'Your wish'},index:3,value:answers.q_hd_wish,answers,communityId:'tech',onChange:value=>answers.q_hd_wish=value,onSetAnswer:(key,value)=>answers[key]=value,...extra}); const nodes=[];function walk(n){if(!n||typeof n!=='object')return;if(Array.isArray(n)){n.forEach(walk);return;}nodes.push(n);walk(n.props?.children);}walk(tree);return nodes;}
 const review={id:'wide',type:'wish',label:'My existing wish',sourceLabel:'OG HIVE · Wish'};
@@ -34,11 +36,17 @@ assert.equal(nodes.find(n=>n.type==='ReachPill').props.reach,'all_hives');
 assert.equal(nodes.filter(n=>n.type==='WishStatus').length,1);
 assert.ok(!nodes.some(n=>n.type==='ReachPill'&&n.props.onToggle));
 assert.ok(!nodes.some(n=>n.type==='Pressable'&&JSON.stringify(n.props.children).includes('WishStatus')));
-nodes.find(n=>n.props.accessibilityLabel==='Mark this wish granted').props.onPress();
+nodes.find(n=>n.props.accessibilityLabel==='Manage wish').props.onPress();
+nodes=render(reviewProps);
+assert.equal(nodes.find(n=>n.type==='Manage').props.canGrant,true);
+nodes.find(n=>n.type==='Manage').props.onGrant(wish.record);
 nodes=render(reviewProps);let grant=nodes.find(n=>n.type==='Grant');
 assert.equal(grant.props.wish.community_id,'og');
 grant.props.onClose();assert.equal(answers.q_hd_wish_id,'wide','cancel preserves focus');
-nodes=render(reviewProps);nodes.find(n=>n.props.accessibilityLabel==='Mark this wish granted').props.onPress();
+nodes=render(reviewProps);nodes.find(n=>n.props.accessibilityLabel==='Manage wish').props.onPress();
+nodes=render(reviewProps);
+assert.equal(nodes.find(n=>n.type==='Manage').props.canGrant,true);
+nodes.find(n=>n.type==='Manage').props.onGrant(wish.record);
 nodes=render(reviewProps);nodes.find(n=>n.type==='Grant').props.onGranted();
 nodes=render(reviewProps);
 assert.equal(answers.q_hd_wish_id,'');assert.equal(answers.q_hd_wish,'');
@@ -90,8 +98,8 @@ for(const grouped of [false,true]) for(const hasWish of [false,true]) {
   assert.equal(field.props.wishReviewItems.length,1);
   let controls=walk(field.props.renderWishReview(review));
   assert.equal(controls.find(n=>n.type==='ComposerBar').props.value,'Please help','prior draft note survives relocation');
-  controls.find(n=>n.type==='Pressable'&&JSON.stringify(n.props.children).includes('Keep active')).props.onPress();
-  assert.equal(state[0].q_carry_forward_items[0].status,'keep_active');
+  assert.ok(!controls.some(n=>n.type==='Pressable'),'wish actions live in the shared menu, not survey status flags');
+  assert.equal(carry.normalizeCarryForwardResponse(state[0].q_carry_forward_items)[0].status,'keep_active');
   assert.equal(state[0].q_carry_forward_items[0].note,'Please help');
  }
 }

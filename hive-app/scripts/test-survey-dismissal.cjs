@@ -64,7 +64,8 @@ for(const page of ['beforewemeet','endofmonth']) {
  let writes=0;
  const item={id:'task',type:'action_item',label:'A real task',status:'needs_attention',note:'Need a hand'};
  assert.equal(normalizeCarryForwardResponse([item])[0].note,'Need a hand');
+ assert.equal(normalizeCarryForwardResponse([item])[0].status,'keep_active');
  await applyCarryForwardStatuses({from(){writes++;throw Error('Unexpected write');}},'member',[item]);
  assert.equal(writes,0);
- console.log('PASS: actual SurveyModal render/handlers hide portal for backdrop/X/system and completion, even with retained caller; both staples focus-gated; Needs attention keeps note and performs zero task writes. Isolated mocked dependencies, not signed-in browser acceptance.');
+ console.log('PASS: actual SurveyModal render/handlers hide portal for backdrop/X/system and completion, even with retained caller; both staples focus-gated; retired attention flag becomes open, keeps its note and performs zero task writes. Isolated mocked dependencies, not signed-in browser acceptance.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

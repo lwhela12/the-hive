@@ -9,7 +9,6 @@ export type CarryForwardItemType =
 
 export type CarryForwardStatus =
   | 'keep_active'
-  | 'needs_attention'
   | 'done'
   | 'archive';
 
@@ -32,14 +31,12 @@ export const CARRY_FORWARD_STATUS_OPTIONS: {
   label: string;
 }[] = [
   { value: 'keep_active', label: 'Keep active' },
-  { value: 'needs_attention', label: 'Needs attention' },
   { value: 'done', label: 'Done' },
   { value: 'archive', label: 'Archive' },
 ];
 
 export const CARRY_FORWARD_STATUS_LABELS: Record<CarryForwardStatus, string> = {
   keep_active: 'Keep active',
-  needs_attention: 'Needs attention',
   done: 'Done',
   archive: 'Archive',
 };
@@ -62,7 +59,8 @@ export function normalizeCarryForwardResponse(value: unknown): CarryForwardRespo
       const id = typeof record.id === 'string' ? record.id : '';
       const type = typeof record.type === 'string' ? record.type as CarryForwardItemType : null;
       const label = typeof record.label === 'string' ? record.label : '';
-      const status = isCarryForwardStatus(record.status) ? record.status : null;
+      // Retired flag: retain the member’s note without creating an Admin task.
+      const status = record.status === 'needs_attention' ? 'keep_active' : isCarryForwardStatus(record.status) ? record.status : null;
       if (!id || !type || !label || !status) return null;
 
       return {
@@ -93,8 +91,7 @@ export function normalizeCarryForwardResponse(value: unknown): CarryForwardRespo
  * one question the check-in asks most often.
  *
  * So: Done completes the task, Archive retires it, and the two soft answers
- * (Keep active, Needs attention) deliberately change nothing — they are the
- * member saying "leave it where it is".
+ * Keep active deliberately changes nothing — the task stays open.
  *
  * Only `action_item` rows are touched. A wish is retired through its own
  * flow with its own confirmation, and an HD board or a thread is not a task.
