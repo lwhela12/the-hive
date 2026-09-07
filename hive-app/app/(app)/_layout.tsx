@@ -24,6 +24,8 @@ import { ArrivalScreen, markAppArrived } from '../../components/ui/ThinkingBee';
 import { HiveTourBar } from '../../components/onboarding/HiveTourBar';
 import { useSignedAvatar } from '../../components/ui/Avatar';
 import { usePageSkin } from '../../lib/pageSkin';
+import { useSafeAreaInsets } from '../../components/ui/SafeArea';
+import { HIVE_WIDE_HEADER, hiveAccent } from '../../lib/hiveBrand';
 function TabIcon({
   icon,
   imageSource,
@@ -98,10 +100,16 @@ function TabIcon({
 }
 
 export default function AppLayout() {
-  const { session, communityId, communityRole, profile, loading, hivePickerOpen, wholeHive, wholeHiveChoice, switchCommunity, openHivePicker, enterWholeHive } = useAuth();
+  const { session, community, communityId, communityRole, profile, loading, hivePickerOpen, wholeHive, wholeHiveChoice, switchCommunity, openHivePicker, enterWholeHive } = useAuth();
   // The colour of wherever this reader is standing. The layout needs it as much
   // as the pages do — see the note on `sceneStyle` further down.
   const skin = usePageSkin();
+  const insets = useSafeAreaInsets();
+  // The phone's top inset is hardware space, but it is still part of the
+  // current place. Paint it with the same colour as AppHeader so a Tech-blue,
+  // Production-purple, OG-gold or HIVE-Wide-black header reaches the top of
+  // the glass instead of starting below a pasted-on cream strip.
+  const topChrome = wholeHive ? HIVE_WIDE_HEADER : hiveAccent(community);
   // Signed here in the body rather than inside `tabBarIcon`, which is a plain
   // render callback and not a component — a hook cannot live in one. This and
   // Home's daily-question strip were the last two faces drawn from the stored
@@ -314,6 +322,19 @@ export default function AppLayout() {
         />
       ) : null}
       <View style={{ flex: 1 }}>
+      <View
+        pointerEvents="none"
+        testID="app-safe-area-top"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: insets.top,
+          backgroundColor: topChrome,
+          zIndex: 60,
+        }}
+      />
       {/* The welcome tour for a just-joined member, worn as a HEADER — Nat
           tried it as a bottom bar on her laptop first and asked for it up
           top (2026-08-11). Mounted once in the shell, above the tabs, so it

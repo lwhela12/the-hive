@@ -3,6 +3,9 @@ import type { Community } from '../types';
 /** The HIVE default — honey gold. Every hive falls back to this. */
 export const HIVE_GOLD = '#bd9348';
 
+/** The shared HIVE-Wide header and status-area environment. */
+export const HIVE_WIDE_HEADER = '#0B0B12';
+
 /**
  * What to call a hive on screen.
  *

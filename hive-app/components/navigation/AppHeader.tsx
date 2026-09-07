@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { View, Text } from 'react-native';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { HIVE_WIDE_HEADER, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { BackButton } from '../ui/BackButton';
 
 interface AppHeaderProps {
@@ -30,8 +30,6 @@ interface AppHeaderProps {
  * green" (Nat 2026-08-03). Admin uses this same treatment because it says its
  * location is HIVE-Wide; a different colour would contradict its own WHERE.
  */
-const WIDE_HEADER = '#0B0B12';
-
 // The one page-title treatment for the whole app: WHERE above WHAT, and stop.
 //
 // Nat's HIVE-wide decree, 2026-08-24: page headers keep the place (HIVE-Wide,
@@ -66,7 +64,7 @@ export const AppHeader = memo(function AppHeader({
   // HIVE-Wide. There is no visual sub-world above HIVE-Wide: if the WHERE says
   // HIVE-Wide, it wears HIVE-Wide's one header.
   const resolvedTone = tone === 'hive' && wholeHive ? 'wide' : tone;
-  const accent = resolvedTone === 'hive' ? hiveAccent(community) : WIDE_HEADER;
+  const accent = resolvedTone === 'hive' ? hiveAccent(community) : HIVE_WIDE_HEADER;
   const hiveName = hiveDisplayName(community?.name);
   // The line above the title says WHERE. It never disappears: Home is still a
   // page inside OG HIVE / Tech HIVE / Production HIVE, and Admin is a page at

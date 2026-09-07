@@ -28,7 +28,7 @@ import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { watchForStaleBundle } from '../lib/staleBundle';
 import { routeAfterHiveSwitch } from '../lib/hiveSwitchRoute';
 import { HIVE_CLOSED, isHiveKeeper, hasBypassTicket } from '../lib/maintenance';
-import { HIVE_GOLD } from '../lib/hiveBrand';
+import { HIVE_GOLD, HIVE_WIDE_HEADER, hiveAccent, luminance } from '../lib/hiveBrand';
 import { HIVE_SKIN, SPACE_SKIN } from '../lib/pageSkin';
 
 // ---------------------------------------------------------------------------
@@ -351,6 +351,8 @@ function RootLayoutInner() {
   const routePlace = placeForRoute(pathname);
   const wholeHive =
     routePlace === 'wide' ? true : routePlace === 'hive' ? false : wholeHiveChoice;
+  const topChrome = wholeHive ? HIVE_WIDE_HEADER : hiveAccent(community);
+  const statusBarStyle = luminance(topChrome) < 0.45 ? 'light' : 'dark';
 
   const [communityRole, setCommunityRole] = useState<UserRole | null>(null);
   const [memberships, setMemberships] = useState<MembershipWithCommunity[]>([]);
@@ -925,10 +927,10 @@ function RootLayoutInner() {
       />
       <AuthContext.Provider value={authContextValue}>
         <ThemeProvider value={wholeHive ? SPACE_NAV_THEME : HIVE_NAV_THEME}>
-          {/* Dark lettering on a cream HIVE, light lettering on HIVE-Wide's
-              near-black. It was fixed at dark, which put a black clock and
-              black battery on top of space. */}
-          <StatusBar style={wholeHive ? 'light' : 'dark'} />
+          {/* The transparent iPhone status bar sits on the same colour as the
+              page header. Tech and Production need light system lettering;
+              OG's brighter honey needs dark; HIVE-Wide stays light on black. */}
+          <StatusBar style={statusBarStyle} />
           <Stack
             screenOptions={{
               headerShown: false,
