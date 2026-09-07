@@ -3,7 +3,7 @@ import { Alert, Platform } from 'react-native';
 import type { SelectedFile } from '../filePicker';
 import type { SelectedImage } from '../imagePicker';
 import { getShortVideoLimitLabel, partitionAllowedShortVideos } from '../mediaAttachments';
-import { fileToSelectedFile, fileToSelectedImage, partitionWebAttachments } from '../webFileAttachments';
+import { fileToSelectedFile, fileToSelectedImage, isImageFile, partitionWebAttachments } from '../webFileAttachments';
 
 const DEFAULT_MAX_IMAGES = 5;
 const DEFAULT_MAX_FILES = 5;
@@ -29,6 +29,28 @@ function dataTransferHasFiles(event: any) {
   }
 
   return Array.from(types).includes('Files');
+}
+
+/**
+ * A macOS screenshot copied with Command-Shift-4/5 is an image `File` in the
+ * browser clipboard, rather than text. Browsers do not all put that file in
+ * the same place: Chromium exposes `clipboardData.files`, while some expose
+ * it only through the clipboard items. Read both, without treating a normal
+ * text paste as an attachment.
+ */
+function pastedImageFiles(event: any): File[] {
+  const clipboardData = event?.clipboardData;
+  if (!clipboardData) return [];
+
+  const files = Array.from(clipboardData.files ?? []) as File[];
+  const itemFiles = Array.from(clipboardData.items ?? [])
+    .filter((item: any) => item.kind === 'file' && item.type?.startsWith('image/'))
+    .map((item: any) => item.getAsFile?.())
+    .filter((file: File | null): file is File => !!file);
+
+  // The same clipboard image may appear in both lists. A File object's identity
+  // is stable through this one paste event, so this keeps one preview per image.
+  return Array.from(new Set([...files, ...itemFiles])).filter(isImageFile);
 }
 
 export function useWebAttachmentDropZone({
@@ -102,6 +124,20 @@ export function useWebAttachmentDropZone({
     await attachDroppedFiles(Array.from(event.dataTransfer?.files ?? []));
   }, [attachDroppedFiles, claimFileDropEvent, disabled]);
 
+  const handlePasteEvent = useCallback((event: any) => {
+    if (disabled || event.__hiveAttachmentPasteHandled) return;
+    const images = pastedImageFiles(event);
+    if (images.length === 0) return;
+
+    // Do not let the browser try to insert a clipboard screenshot into the
+    // textarea. Text-only pastes deliberately fall through to their normal
+    // native behavior.
+    event.__hiveAttachmentPasteHandled = true;
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    void attachDroppedFiles(images);
+  }, [attachDroppedFiles, disabled]);
+
   useEffect(() => {
     if (Platform.OS !== 'web' || !captureDocumentDrops || typeof document === 'undefined') return;
 
@@ -172,5 +208,6 @@ export function useWebAttachmentDropZone({
     attachDroppedFiles,
     dragDropProps,
     isDragActive,
+    pasteProps: Platform.OS === 'web' ? ({ onPaste: handlePasteEvent } as any) : {},
   };
 }
