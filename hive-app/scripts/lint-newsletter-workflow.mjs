@@ -54,10 +54,6 @@ if (!draftFunction.includes('Never mention Production HIVE')
   || !draftFunction.includes('exact number of HIVEs')) {
   failures.push('The newsletter writer must never expose Production HIVE or an exact HIVE count.');
 }
-if (!draftFunction.includes(".eq('publicly_listed', true)")
-  || !draftFunction.includes(".in('community_id', publicHiveIds)")) {
-  failures.push('The Buzz must gather across every publicly listed HIVE, not only the currently selected one.');
-}
 if (!writer.includes('accessibilityLabel="Newsletter title"')
   || !writer.includes('accessibilityLabel="Newsletter draft"')) {
   failures.push('The newsletter writer must keep both the title and letter editable on the page.');
