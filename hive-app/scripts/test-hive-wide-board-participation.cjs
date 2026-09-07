@@ -19,7 +19,7 @@ const lineBreakFix = fs.readFileSync(
 const perHiveBoards = fs.readFileSync(
   path.resolve(
     __dirname,
-    '../supabase/migrations/242_each_hive_gets_to_brag.sql',
+    '../supabase/migrations/243_each_hive_gets_to_brag.sql',
   ),
   'utf8',
 );
