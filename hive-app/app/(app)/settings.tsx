@@ -142,19 +142,17 @@ export default function SettingsScreen() {
     saveProfileScope,
   } = usePrivacyChoices();
 
-  // Emails are a separate kind of preference from the two above — same switch
-  // component, same busy/pending state so a save can't take another tap
-  // mid-flight, but their own state so an email save can never be mistaken
-  // for a privacy one. (No "Saved" receipt here — there never was one; the
-  // pill's own movement is the only feedback, same as before this split.)
-  const [emailBusyKey, setEmailBusyKey] = useState<string | null>(null);
-  const [emailPending, setEmailPending] = useState<Record<string, boolean>>({});
+  // These ordinary boolean preferences share one pending state and the same
+  // switch. That keeps the keyboard choice and each email choice visibly in
+  // the position the member just picked while the profile refresh catches up.
+  const [preferenceBusyKey, setPreferenceBusyKey] = useState<string | null>(null);
+  const [preferencePending, setPreferencePending] = useState<Record<string, boolean>>({});
 
-  const saveEmailPatch = useCallback(
+  const saveBooleanPreference = useCallback(
     async (key: string, next: boolean, patch: Record<string, unknown>, failureMessage: string) => {
       if (!profile) return;
-      setEmailBusyKey(key);
-      setEmailPending((held) => ({ ...held, [key]: next }));
+      setPreferenceBusyKey(key);
+      setPreferencePending((held) => ({ ...held, [key]: next }));
       try {
         const { error } = await (supabase as any)
           .from('profiles')
@@ -168,8 +166,8 @@ export default function SettingsScreen() {
         }
         await refreshProfile();
       } finally {
-        setEmailBusyKey(null);
-        setEmailPending((held) => {
+        setPreferenceBusyKey(null);
+        setPreferencePending((held) => {
           const rest = { ...held };
           delete rest[key];
           return rest;
@@ -205,14 +203,29 @@ export default function SettingsScreen() {
 
   // Emails count a missing column as on.
   const emailIsOn = (setting: EmailSetting) =>
-    emailPending[setting.column] ?? (profile as any)[setting.column] !== false;
+    preferencePending[setting.column] ?? (profile as any)[setting.column] !== false;
+
+  // The database default is document-style writing for everyone. A member who
+  // wants the old fast-send behaviour opts into it once and carries it with
+  // their profile to any computer.
+  const enterSendsOnWeb =
+    preferencePending.enter_sends_on_web ?? profile.enter_sends_on_web === true;
 
   const setEmail = (setting: EmailSetting, next: boolean) => {
-    void saveEmailPatch(
+    void saveBooleanPreference(
       setting.column,
       next,
       { [setting.column]: next },
       'That email setting did not save. Please try again.'
+    );
+  };
+
+  const setEnterSendsOnWeb = (next: boolean) => {
+    void saveBooleanPreference(
+      'enter_sends_on_web',
+      next,
+      { enter_sends_on_web: next },
+      'That writing setting did not save. Please try again.'
     );
   };
 
@@ -307,6 +320,24 @@ export default function SettingsScreen() {
           )}
         </Section>
 
+        {Platform.OS === 'web' ? (
+          <Section title="Writing on computer">
+            <Panel>
+              <Switch
+                on={enterSendsOnWeb}
+                busy={preferenceBusyKey === 'enter_sends_on_web'}
+                label="Enter posts immediately"
+                hint={
+                  enterSendsOnWeb
+                    ? 'Enter posts. Shift + Enter makes a new line.'
+                    : 'Enter makes a new line. ⌘/Ctrl + Enter posts.'
+                }
+                onToggle={setEnterSendsOnWeb}
+              />
+            </Panel>
+          </Section>
+        ) : null}
+
         <Section title="Emails">
           <Panel>
             {EMAIL_SETTINGS.map((setting, index) => {
@@ -316,7 +347,7 @@ export default function SettingsScreen() {
                   {index > 0 ? <RowDivider /> : null}
                   <Switch
                     on={on}
-                    busy={emailBusyKey === setting.column}
+                    busy={preferenceBusyKey === setting.column}
                     label={setting.label}
                     onToggle={(next) => setEmail(setting, next)}
                   />

@@ -4328,10 +4328,11 @@ export default function MeetingHelperScreen() {
                 {/* The jot box. Mentions, the "@" suggestions list and the
                     microphone all come from the shared composer now, so the
                     suggestion list this screen used to draw by hand is gone.
-                    Enter files the jot; Shift+Enter is the newline. Mid-meeting
-                    you're typing fast — reaching for the button broke the flow.
-                    The mic matters most right here: the room is talking, and
-                    saying the to-do out loud is faster than typing it. */}
+                    Its desktop Enter behaviour follows the member's setting;
+                    Command/Ctrl + Enter always files the jot without reaching
+                    for the button. The mic matters most right here: the room is
+                    talking, and saying the to-do out loud is faster than typing
+                    it. */}
                 <ComposerBar
                   variant="form"
                   value={liveNoteDraft}

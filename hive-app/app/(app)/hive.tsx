@@ -4916,7 +4916,11 @@ export default function HiveScreen() {
                 submitting={isSubmittingAnswer}
               />
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#a09274', marginBottom: 14, marginTop: -6 }}>
-                Press Enter to send · Shift+Enter for a new line
+                {Platform.OS !== 'web'
+                  ? 'Return to send'
+                  : profile?.enter_sends_on_web
+                    ? 'Enter to send · Shift + Enter for a new line'
+                    : 'Enter for a new line · ⌘/Ctrl + Enter to send'}
               </Text>
               {answerError ? (
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#ef4444', marginBottom: 14 }}>

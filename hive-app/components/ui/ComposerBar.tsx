@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import type { SelectedImage } from '../../lib/imagePicker';
 import type { SelectedFile } from '../../lib/filePicker';
 import type { Profile } from '../../types';
-import { submitOnEnter } from '../../lib/submitOnEnter';
+import { getWebSubmitKeyMode, submitOnEnter } from '../../lib/submitOnEnter';
+import { useAuth } from '../../lib/hooks/useAuth';
 import { useDictation } from '../../lib/hooks/useDictation';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { useWebAttachmentDropZone } from '../../lib/hooks/useWebAttachmentDropZone';
@@ -35,7 +36,7 @@ import { getMentionSuggestions } from '../../lib/mentions';
  * The three shapes the app actually needs:
  *
  *   variant="chat"        the pill. attach · text · send · mic, all one line.
- *                         Enter sends, Shift+Enter starts a new line.
+ *                         Enter follows the member's computer-writing setting.
  *   variant="form"        a labelled prose box. text · mic on one line.
  *   variant="inlineEdit"  edit-in-place. Same box, plus Cancel and Save.
  *
@@ -118,7 +119,7 @@ export interface ComposerBarProps {
   autoFocus?: boolean;
 
   onSubmit?: () => void;
-  /** Enter sends, Shift+Enter makes a new line. On by default. */
+  /** Whether this field can submit from the keyboard. Multiline web fields follow the member's preference. */
   submitOnEnterKey?: boolean;
   submitting?: boolean;
   /** Override "is there anything to send" — e.g. a form that also needs a title. */
@@ -206,6 +207,7 @@ export function ComposerBar({
   containerClassName = '',
   fieldClassName = '',
 }: ComposerBarProps) {
+  const { profile } = useAuth();
   // The page decides how a field is drawn unless the caller knows better.
   const pageSkin = usePageSkin();
   const look = fieldLookFor(tone ?? (pageSkin.dark ? 'dark' : 'light'));
@@ -259,11 +261,21 @@ export function ComposerBar({
     mention.resetMentionSelection();
   };
 
-  // Two belts for one pair of trousers, on purpose. `onKeyPress` is what React
-  // Native gives us; the capture handler on the wrapper is what actually beats
-  // the browser's own newline on web.
-  const enterCaptureProps = submitOnEnterKey && onSubmit && Platform.OS === 'web'
-    ? ({ onKeyDownCapture: submitOnEnter(handleSubmit) } as any)
+  const webSubmitKeyMode = getWebSubmitKeyMode({
+    enabled: submitOnEnterKey && !!onSubmit,
+    multiline,
+    enterSendsOnWeb: profile?.enter_sends_on_web === true,
+  });
+
+  // The capture handler is what beats the browser's own newline when a submit
+  // shortcut wins. In document-style mode ordinary Enter is left untouched;
+  // Command/Ctrl + Enter takes the same path as the gold arrow.
+  const enterCaptureProps = webSubmitKeyMode !== 'disabled' && Platform.OS === 'web'
+    ? ({
+        onKeyDownCapture: submitOnEnter(handleSubmit, {
+          requireModifier: webSubmitKeyMode === 'modified',
+        }),
+      } as any)
     : {};
 
   const counterMode = counter ?? (isChat ? 'auto' : maxLength ? 'count' : 'none');
@@ -323,17 +335,26 @@ export function ComposerBar({
       // and you are typing into nothing. Two agents hit this independently
       // while converting and neither owned this file; both were right.
       //
-      // It is false rather than "only when Enter sends", because the fields
-      // where Enter DOES send are the ones you use repeatedly — add a to-do,
-      // log a HIVE Help, send a message — and losing the cursor after each one
-      // means clicking back in to write the next. Native keeps its own default,
+      // It is always false on web because the fields you use repeatedly — add
+      // a to-do, log a HIVE Help, send a message — should keep the cursor after
+      // either a newline or a keyboard submit. Native keeps its own default,
       // where Return closing the keyboard on a single-line field is expected.
       blurOnSubmit={Platform.OS === 'web' ? false : undefined}
-      submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}
-      returnKeyType="send"
-      enterKeyHint="send"
-      onSubmitEditing={submitOnEnterKey ? handleSubmit : undefined}
-      onKeyPress={submitOnEnterKey && onSubmit ? submitOnEnter(handleSubmit) : undefined}
+      submitBehavior={Platform.OS === 'web' && webSubmitKeyMode === 'plain' ? 'submit' : 'newline'}
+      returnKeyType={Platform.OS === 'web' && webSubmitKeyMode !== 'plain' ? 'default' : 'send'}
+      enterKeyHint={Platform.OS === 'web' && webSubmitKeyMode !== 'plain' ? 'enter' : 'send'}
+      onSubmitEditing={
+        Platform.OS === 'web'
+          ? webSubmitKeyMode === 'plain' ? handleSubmit : undefined
+          : submitOnEnterKey ? handleSubmit : undefined
+      }
+      // Native keeps its existing Return behaviour. Web submission is owned by
+      // the capture handler above so one physical keypress has one meaning.
+      onKeyPress={
+        Platform.OS !== 'web' && submitOnEnterKey && onSubmit
+          ? submitOnEnter(handleSubmit)
+          : undefined
+      }
       maxLength={maxLength}
       editable={editable && !submitting}
       autoFocus={autoFocus}

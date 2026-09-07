@@ -304,10 +304,10 @@ export function GrantWishModal({
                 </Text>
                 {/* The warmest thing anybody writes in this app, so it gets the
                     shared box: mic and counter on the strip inside the border,
-                    and Enter still marks the wish granted the way it always did
-                    (Shift+Enter for a new line). `canSubmit` stays true with an
-                    empty box because the thank-you is optional — you can grant a
-                    wish without writing one. */}
+                    and desktop Enter follows the member's writing preference.
+                    `canSubmit` stays true with an empty box because the
+                    thank-you is optional — you can grant a wish without writing
+                    one. */}
                 <ComposerBar
                   variant="form"
                   tone="light"

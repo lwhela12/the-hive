@@ -294,6 +294,8 @@ export interface Profile extends Record<string, unknown> {
   love_languages?: string[] | null;
   home_section_order?: string[] | null;
   home_shortcuts?: string[] | null;
+  /** On web, whether plain Enter submits multiline composers instead of making a new line. */
+  enter_sends_on_web?: boolean | null;
   /** Read state that follows the person rather than the browser (migration 127). */
   app_news_seen_id?: string | null;
   /** Which version of the HIVE-Wide welcome this person has dismissed. */
