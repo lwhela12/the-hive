@@ -362,7 +362,6 @@ export default function NewsletterScreen() {
   const [draftPostId, setDraftPostId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'not_saved' | 'unsaved' | 'saving' | 'saved' | 'error'>('idle');
   const editRevision = useRef(0);
-  const [editorHeight, setEditorHeight] = useState(520);
   // Write is the default because this is an editor. Preview and Facts are
   // checks beside the work, not a read-only page the writer has to escape.
   const [view, setView] = useState<'write' | 'preview' | 'facts'>('write');
@@ -942,17 +941,13 @@ export default function NewsletterScreen() {
                 <TextInput
                   value={prose}
                   onChangeText={(next) => { setProse(next); markEdited(); }}
-                  onContentSizeChange={(event) => {
-                    setEditorHeight(Math.max(520, Math.ceil(event.nativeEvent.contentSize.height) + 32));
-                  }}
                   accessibilityLabel="Newsletter draft"
                   multiline
-                  scrollEnabled={false}
                   textAlignVertical="top"
                   placeholder="Write this month’s Buzz…"
                   placeholderTextColor="#a09585"
                   style={{
-                    minHeight: 520, height: editorHeight, paddingHorizontal: 16, paddingVertical: 16,
+                    minHeight: 620, paddingHorizontal: 16, paddingVertical: 16,
                     fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 24,
                     color: '#3f3a33', backgroundColor: '#fffdf7',
                     borderWidth: 1, borderColor: 'rgba(189,147,72,0.35)', borderRadius: 12,
