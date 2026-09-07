@@ -475,10 +475,49 @@ export default function NewsletterScreen() {
       if ((written.sections ?? []).length > 0) setSections(written.sections as SummarySection[]);
       const generated = typeof written.prose === 'string' && written.prose.trim() ? written.prose : null;
       setProse(generated);
-      if (generated) setSaveState('not_saved');
+      if (generated && profile) {
+        // A fresh draft is working material, not a thing Nat should have to
+        // remember to protect. Give it its private home immediately so a page
+        // refresh returns to this version instead of asking the writer for a
+        // brand-new interpretation of the same month.
+        const { data: boards } = await supabase
+          .from('board_categories')
+          .select('id, name, community_id')
+          .eq('topic_kind', 'newsletter')
+          .order('created_at', { ascending: true })
+          .limit(1);
+        const board = ((boards ?? []) as { id: string; name: string; community_id: string }[])[0];
+        const title = String(written.recap_title ?? data.recap_title ?? '').trim();
+        if (!board || !title) {
+          setSaveState('not_saved');
+        } else {
+          const { data: inserted, error: insertError } = await (supabase as any)
+            .from('board_posts')
+            .insert({
+              community_id: board.community_id,
+              category_id: board.id,
+              author_id: profile.id,
+              title,
+              content: generated,
+              is_pinned: true,
+            })
+            .select('id')
+            .single();
+          if (insertError || !inserted?.id) {
+            setSaveState('not_saved');
+            setPostError(userFacingError(insertError, 'Your draft is here, but it needs saving. Try Save draft to The Buzz.'));
+          } else {
+            setDraftPostId(inserted.id);
+            setSaveState('saved');
+            setPostedTo(`${board.name} → ${title}`);
+          }
+        }
+      } else if (generated) {
+        setSaveState('not_saved');
+      }
     }
     setWriting(false);
-  }, [mergedAppNews]);
+  }, [mergedAppNews, profile]);
 
   useEffect(() => {
     void loadDraft();
