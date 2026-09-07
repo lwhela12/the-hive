@@ -3,6 +3,8 @@ import { supabase } from '../supabase';
 import { useAuth } from './useAuth';
 import { hiveDisplayName } from '../hiveBrand';
 import { checkInDisplayName, isEndOfMonthCheckInSurvey, isPreMeetingCheckInSurvey } from '../checkIns';
+import { formatTimeRange } from '../dateUtils';
+import { isInvitedToEvent } from '../eventDisplay';
 
 /**
  * What is coming, across every HIVE, in date order.
@@ -66,7 +68,7 @@ export function useWhatsNext() {
       found.push({ ...item, overdue: item.date < today });
 
     try {
-      const [meetingsResult, surveysResult, completionsResult] = await Promise.all([
+      const [meetingsResult, eventsResult, surveysResult, completionsResult] = await Promise.all([
         supabase
           .from('events')
           .select('id, community_id, title, event_date, event_time, end_time, location, meet_link')
@@ -75,6 +77,21 @@ export function useWhatsNext() {
           .eq('status', 'scheduled')
           .gte('event_date', today)
           .order('event_date', { ascending: true }),
+        // Ordinary calendar events belong in the shared diary too. HIVE-Wide
+        // previously fetched them and then rendered none of them, so an event
+        // could say "Seen by HIVE-Wide" while never appearing in HIVE-Wide's
+        // replacement for Upcoming Events. No community filter here: event RLS
+        // already returns this person's own-HIVE rows plus anything deliberately
+        // opened to all HIVEs. Invitation scope decides whether joining details
+        // such as a location may travel with the date.
+        supabase
+          .from('events')
+          .select('id, community_id, title, event_date, end_date, event_time, end_time, location, visibility, invited_scope, event_type, community:communities(name)')
+          .eq('event_type', 'custom')
+          .or(`event_date.gte.${today},end_date.gte.${today}`)
+          .or('status.is.null,status.eq.scheduled')
+          .order('event_date', { ascending: true })
+          .order('event_time', { ascending: true }),
         supabase
           .from('surveys')
           .select('id, community_id, title, due_date')
@@ -97,8 +114,8 @@ export function useWhatsNext() {
           .eq('user_id', profile.id),
       ]);
 
-      if (meetingsResult.error || surveysResult.error || completionsResult.error) {
-        throw meetingsResult.error ?? surveysResult.error ?? completionsResult.error;
+      if (meetingsResult.error || eventsResult.error || surveysResult.error || completionsResult.error) {
+        throw meetingsResult.error ?? eventsResult.error ?? surveysResult.error ?? completionsResult.error;
       }
 
       const nameOf = (id: string) =>
@@ -117,6 +134,25 @@ export function useWhatsNext() {
           what: `${name} meets`,
           detail: [meeting.event_time?.slice(0, 5), meeting.location].filter(Boolean).join(' · '),
           communityId: meeting.community_id,
+        });
+      }
+
+      // ---- Calendar events a member can see, across all HIVEs.
+      for (const event of (eventsResult.data ?? []) as any[]) {
+        const invited = isInvitedToEvent(event, hiveIds);
+        const sourceName = hiveDisplayName(event.community?.name);
+        const timing = event.event_time
+          ? formatTimeRange(event.event_time, event.end_time)
+          : 'All day';
+        const through = event.end_date && event.end_date > event.event_date
+          ? `through ${event.end_date}`
+          : null;
+        push({
+          key: `event_${event.id}`,
+          date: event.event_date,
+          what: event.title,
+          detail: [sourceName, timing, through, invited ? event.location : null].filter(Boolean).join(' · '),
+          communityId: event.community_id,
         });
       }
 

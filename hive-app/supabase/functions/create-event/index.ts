@@ -19,6 +19,16 @@ interface CreateEventPayload {
   location?: string | null;
   /** Signed-in reach, or an owner-reviewed public invitation. */
   visibility?: string | null;
+  /** Who may attend and receive joining details; never wider than visibility. */
+  invited_scope?: string | null;
+}
+
+type EventScope = 'members' | 'all_hives' | 'public';
+const SCOPE_RANK: Record<EventScope, number> = { members: 0, all_hives: 1, public: 2 };
+
+function eventScope(value: string | null | undefined): EventScope {
+  if (value === 'public' || value === 'all_hives') return value;
+  return 'members';
 }
 
 /** 'HH:MM' or 'HH:MM:SS' to minutes past midnight, or null if it isn't a time. */
@@ -101,8 +111,14 @@ serve(async (req) => {
     .eq('id', userId)
     .maybeSingle();
 
-  if (payload.visibility === 'public' && !creator?.is_owner) {
+  const visibility = eventScope(payload.visibility);
+  const invitedScope = eventScope(payload.invited_scope);
+
+  if (visibility === 'public' && !creator?.is_owner) {
     return errorResponse('Public invitations are reviewed by the HIVE owner', 403);
+  }
+  if (SCOPE_RANK[invitedScope] > SCOPE_RANK[visibility]) {
+    return errorResponse('Invitation scope cannot be wider than visibility', 400);
   }
 
   const newEvent: Record<string, string | null> = {
@@ -111,9 +127,12 @@ serve(async (req) => {
     event_type: 'custom',
     // Member-created events have two signed-in reaches. Public is exceptional
     // and passed only after the owner check above.
-    visibility: payload.visibility === 'public'
-      ? 'public'
-      : payload.visibility === 'all_hives' ? 'all_hives' : 'members',
+    visibility,
+    // This was previously dropped by the Edge Function, so every newly-created
+    // event defaulted back to "This HIVE only" even when the form explicitly
+    // said HIVE-Wide. Editing worked because that path writes the row directly;
+    // creation now preserves the same two answers.
+    invited_scope: invitedScope,
     created_by: userId,
     community_id: communityId,
   };
