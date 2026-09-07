@@ -247,6 +247,27 @@ serve(async (req) => {
       });
     }
 
+    // The Buzz belongs to the whole public-facing network, not whichever HIVE
+    // Nat happened to be standing in when she opened the writer. Resolve the
+    // allowed rooms once, then use that same boundary for every fact below.
+    // A secret HIVE never even enters these queries.
+    const { data: publicHiveRows } = await supabaseAdmin
+      .from('communities')
+      .select('id')
+      .eq('publicly_listed', true)
+      .eq('max_share_scope', 'public');
+    const publicHiveIds = ((publicHiveRows ?? []) as { id: string }[]).map((row) => row.id);
+    if (publicHiveIds.length === 0) {
+      return jsonResponse({
+        success: true,
+        blocked: true,
+        month: null,
+        prose: null,
+        sections: [],
+        reason: 'There are no public HIVE facts to gather yet.',
+      });
+    }
+
     // The newsletter is a CALENDAR thing, not a meeting thing: a month's recap
     // goes out in the month after it. Meetings wander (usually 2nd Wednesday,
     // but availability moves them), so anchoring to the last meeting would leave
@@ -288,21 +309,21 @@ serve(async (req) => {
       // names one. Kept as a query only so the shape below stays readable.
       supabaseAdmin.from('events')
         .select('title, event_date, event_time')
-        .eq('community_id', communityId).eq('event_type', 'meeting')
+        .in('community_id', publicHiveIds).eq('event_type', 'meeting')
         .eq('visibility', 'public')
         .gte('event_date', date).order('event_date', { ascending: true }).limit(1),
       // "Everyone's invited" only. Anything left HIVErs Only never leaves the
       // members' side — a privacy default has to fail closed.
       supabaseAdmin.from('events')
         .select('title, event_date, end_date, event_type')
-        .eq('community_id', communityId)
+        .in('community_id', publicHiveIds)
         .eq('visibility', 'public')
         .gte('event_date', date).order('event_date', { ascending: true }).limit(30),
       // Only already-editorial public posts. No author, reply, attachment or
       // member-created private thread is fetched into this public workflow.
       supabaseAdmin.from('board_posts')
         .select('id, title, content, created_at, visibility, category:board_categories!category_id(name, topic_kind)')
-        .eq('community_id', communityId)
+        .in('community_id', publicHiveIds)
         .eq('visibility', 'public')
         .is('archived_at', null)
         .order('created_at', { ascending: false }).limit(60),
@@ -310,14 +331,14 @@ serve(async (req) => {
       // HIVE, not about anybody in it.
       supabaseAdmin.from('wishes')
         .select('id', { count: 'exact', head: true })
-        .eq('community_id', communityId)
+        .in('community_id', publicHiveIds)
         .eq('status', 'fulfilled')
         .gte('fulfilled_at', startIso)
         .is('deleted_at', null),
       // Aggregate growth is safe public evidence; no roster or identity crosses.
       supabaseAdmin.from('community_memberships')
         .select('id', { count: 'exact', head: true })
-        .eq('community_id', communityId)
+        .in('community_id', publicHiveIds)
         .gte('created_at', startIso)
         .lt('created_at', endIso),
       // Hangs that already HAPPENED. Nat's newsletter reports on the month as
@@ -325,7 +346,7 @@ serve(async (req) => {
       // over!"), and a draft with only upcoming events can't write that.
       supabaseAdmin.from('events')
         .select('title, event_date, event_type, description, location')
-        .eq('community_id', communityId)
+        .in('community_id', publicHiveIds)
         .eq('visibility', 'public')
         .gte('event_date', cycleStart).lt('event_date', cycleEnd)
         .order('event_date', { ascending: true }).limit(30),
