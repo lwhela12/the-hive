@@ -13,7 +13,7 @@
     "lint:meeting-arrivals": "node scripts/lint-meeting-arrivals.mjs",
     "lint:tech-check-in": "node scripts/lint-tech-check-in.mjs",
     "lint:reach-mail": "node scripts/lint-reach-mail.mjs",
-    "typecheck": "npm run lint:page-headers && npm run lint:feedback-door && npm run lint:newsletter-workflow && npm run lint:meeting-arrivals && npm run lint:tech-check-in && npm run lint:reach-mail && npm run lint:survey-colour && npm run lint:place-truth && npm run lint:check-in-kinds && npm run lint:navigation-branding && tsc --noEmit",
+    "typecheck": "npm run lint:page-headers && npm run lint:feedback-door && npm run lint:newsletter-workflow && npm run lint:meeting-arrivals && npm run lint:tech-check-in && npm run lint:reach-mail && npm run lint:survey-colour && npm run lint:place-truth && npm run lint:check-in-kinds && npm run lint:navigation-branding && npm run lint:board-sorting && tsc --noEmit",
     "doctor": "npx expo-doctor",
     "export:ios": "expo export --platform ios --output-dir .expo-export/ios",
     "verify:web-export": "node scripts/verify-web-export.mjs dist",
@@ -23,7 +23,8 @@
     "gtoken": "node scripts/get-google-token.js --hermes --expect natwalstead@gmail.com",
     "lint:place-truth": "node scripts/lint-place-truth.mjs",
     "lint:check-in-kinds": "node scripts/lint-check-in-kinds.mjs",
-    "lint:navigation-branding": "node scripts/test-navigation-branding.cjs"
+    "lint:navigation-branding": "node scripts/test-navigation-branding.cjs",
+    "lint:board-sorting": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-board-sorting.mjs"
   },
   "dependencies": {
     "@daily-co/daily-js": "^0.92.0",

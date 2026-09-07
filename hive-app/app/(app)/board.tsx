@@ -25,6 +25,12 @@ import { useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { markBoardThreadGranted } from '../../lib/boardThreadCompletion';
 import { setBoardThreadArchiveState } from '../../lib/boardThreadArchive';
 import { BOARD_HOME_EVENT } from '../../lib/boardNavigation';
+import {
+  BOARD_SORT_OPTIONS,
+  normalizeBoardSort,
+  sortBoardCategories,
+  type BoardSortKey,
+} from '../../lib/boardSort';
 // Which board and which thread were open is remembered for this sitting only
 // (session-scoped), not forever — the same lifetime `lib/hiveSelection.ts`
 // uses for which HIVE you're in, and for the same reason (Nat 2026-08-08).
@@ -47,7 +53,6 @@ import { EditButton } from '../../components/ui/EditButton';
 // an archive view only as a landing spot when search finds archived matches.
 
 type BoardThreadListView = 'active' | 'archive';
-type BoardCategoryStats = { count: number; latestActivity: string | null };
 type GrantThreadContext = {
   post: BoardPost;
   wish: LinkedWish;
@@ -60,25 +65,6 @@ function isArchivedCategory(category: BoardCategory) {
 
 function isCompletableHdAsk(category: BoardCategory) {
   return category.topic_kind === 'hd_board' && !!category.goal_title;
-}
-
-// Boards sort A-Z, full stop (Nat 2026-07-25). The old ranking put system
-// boards first and everything else by display_order, which meant the grid
-// reshuffled as boards were added and nobody could predict where anything was.
-// Alphabetical is boring, and boring is findable.
-// Punctuation sorts before letters, so "{Potential} HIVE Hang Ideas!" landed
-// ahead of Announcements and looked like the sort was broken. Sort on the first
-// real letter — the eye reads P, so it files under P (Nat 2026-07-25).
-function getBoardSortName(name: string) {
-  return name.replace(/^[^\p{L}\p{N}]+/u, '') || name;
-}
-
-function sortCategoriesByBoardOrder(a: BoardCategory, b: BoardCategory) {
-  return getBoardSortName(a.name).localeCompare(
-    getBoardSortName(b.name),
-    'en',
-    { sensitivity: 'base' }
-  );
 }
 
 function getCategorySearchText(category: BoardCategory) {
@@ -278,6 +264,24 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const boardPostStorageKey = storageScope ? `the-hive:last-board-post:${storageScope}` : null;
   const boardDirectOpenStorageKey = storageScope ? `the-hive:board-direct-open:${storageScope}` : null;
   const boardDraftStorageKey = selectedCategoryId ? `the-hive:board-draft:${selectedCategoryId}` : null;
+  const boardSortStorageKey = storageScope && profile?.id
+    ? `the-hive:boards-sort:${storageScope}:${profile.id}`
+    : null;
+  const [boardSort, setBoardSort] = useState<BoardSortKey>(() =>
+    normalizeBoardSort(boardSortStorageKey ? getStoredItem(boardSortStorageKey) : null),
+  );
+  const [boardSortMenuOpen, setBoardSortMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setBoardSort(normalizeBoardSort(boardSortStorageKey ? getStoredItem(boardSortStorageKey) : null));
+    setBoardSortMenuOpen(false);
+  }, [boardSortStorageKey]);
+
+  const selectBoardSort = (key: BoardSortKey) => {
+    setBoardSort(key);
+    setBoardSortMenuOpen(false);
+    if (boardSortStorageKey) setStoredItem(boardSortStorageKey, key);
+  };
 
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const isHiveOwner = profile?.is_owner === true;
@@ -436,8 +440,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const { data: postCounts, refetch: refetchPostCounts } = useBoardPostCountsQuery(communityId ?? undefined);
   const { data: boardSearchIndex = {}, refetch: refetchBoardSearchIndex } = useBoardSearchIndexQuery(communityId ?? undefined);
   const activeCategories = categories
-    .filter((category) => !isArchivedCategory(category))
-    .sort(sortCategoriesByBoardOrder);
+    .filter((category) => !isArchivedCategory(category));
   const boardSearchQuery = boardSearch.trim().toLowerCase();
   const boardSearchMatchesByCategory = useMemo(() => {
     if (!boardSearchQuery) return {};
@@ -467,14 +470,16 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const listSourceCategories = activeCategories.filter(
     (category) => (category as { topic_kind?: string | null }).topic_kind !== 'newsletter',
   );
-  const visibleCategories = boardSearchQuery
-    ? listSourceCategories
-        .filter((category) => (
+  const visibleCategories = sortBoardCategories(
+    boardSearchQuery
+      ? listSourceCategories.filter((category) => (
           matchesMemberSearchText([getCategorySearchText(category)], boardSearchQuery)
           || !!boardSearchMatchesByCategory[category.id]
         ))
-        .sort(sortCategoriesByBoardOrder)
-    : listSourceCategories;
+      : listSourceCategories,
+    boardSort,
+    postCounts,
+  );
 
   const {
     posts,
@@ -2167,6 +2172,71 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
               </Pressable>
             )}
           </View>
+        </View>
+        <View style={{ alignItems: 'center', paddingHorizontal: 16, paddingBottom: 10 }}>
+          <Pressable
+            onPress={() => setBoardSortMenuOpen((open) => !open)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: boardSortMenuOpen }}
+            accessibilityLabel={`Sort boards, currently by ${BOARD_SORT_OPTIONS.find((option) => option.key === boardSort)?.label ?? 'A–Z'}`}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 5,
+              minHeight: 44,
+              maxWidth: '100%',
+              backgroundColor: skin.field,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: skin.borderStrong,
+              paddingHorizontal: 14,
+              paddingVertical: 7,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Ionicons name="swap-vertical" size={14} color={skin.gold} />
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: skin.inkSoft }}>
+              Sort: {BOARD_SORT_OPTIONS.find((option) => option.key === boardSort)?.label ?? 'A–Z'}
+            </Text>
+            <Ionicons name={boardSortMenuOpen ? 'chevron-up' : 'chevron-down'} size={12} color={skin.inkSoft} />
+          </Pressable>
+          {boardSortMenuOpen && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginTop: 8 }}>
+              {BOARD_SORT_OPTIONS.map((option) => {
+                const active = boardSort === option.key;
+                return (
+                  <Pressable
+                    key={option.key}
+                    onPress={() => selectBoardSort(option.key)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`Sort boards by ${option.label}`}
+                    style={({ pressed }) => ({
+                      minHeight: 44,
+                      justifyContent: 'center',
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: active ? skin.gold : skin.borderStrong,
+                      backgroundColor: active ? skin.gold : skin.field,
+                      paddingHorizontal: 13,
+                      paddingVertical: 7,
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: 'Lato_700Bold',
+                        fontSize: 11,
+                        color: active ? '#313130' : skin.inkSoft,
+                      }}
+                    >
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
         </View>
         <View className="flex-row items-center justify-between px-4 pb-2">
           <Text style={{ fontFamily: 'Lato_700Bold', color: skin.inkSoft }} className="text-xs uppercase tracking-wide">
