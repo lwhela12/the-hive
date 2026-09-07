@@ -74,6 +74,7 @@ type NewsletterThought = {
   id: number;
   content: string;
   created_at: string;
+  featured_in_next_issue: boolean;
 };
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -510,7 +511,7 @@ export function NewsletterPanel({
     if (profile?.is_owner) {
       const { data: thoughts, error: thoughtsError } = await supabase
         .from('newsletter_thoughts')
-        .select('id, content, created_at')
+        .select('id, content, created_at, featured_in_next_issue')
         .is('archived_at', null)
         .order('created_at', { ascending: false });
       if (thoughtsError) console.error('newsletter_thoughts load failed', thoughtsError);
@@ -765,6 +766,21 @@ export function NewsletterPanel({
     setThoughtToArchive(null);
     if (error) {
       showAlert('Could not remove that', 'Try again in a moment.');
+      return;
+    }
+    await load();
+  };
+
+  const toggleFeaturedThought = async (thought: NewsletterThought) => {
+    if (savingThought) return;
+    setSavingThought(true);
+    const { error } = await supabase
+      .from('newsletter_thoughts')
+      .update({ featured_in_next_issue: !thought.featured_in_next_issue })
+      .eq('id', thought.id);
+    setSavingThought(false);
+    if (error) {
+      showAlert('Could not update that', 'Try again in a moment.');
       return;
     }
     await load();
@@ -1026,8 +1042,16 @@ export function NewsletterPanel({
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.gold }}>
-                      Your newsletter thought · private
+                      {thought.featured_in_next_issue ? 'Featured in next Buzz · private' : 'Your newsletter thought · private'}
                     </Text>
+                    <Pressable
+                      onPress={() => void toggleFeaturedThought(thought)}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={thought.featured_in_next_issue ? 'Remove from next newsletter' : 'Feature in next newsletter'}
+                    >
+                      <Ionicons name={thought.featured_in_next_issue ? 'star' : 'star-outline'} size={18} color={SPACE_SKIN.gold} />
+                    </Pressable>
                     <Pressable
                       onPress={() => { setEditingThought(thought); setEditedThoughtText(thought.content); }}
                       hitSlop={8}

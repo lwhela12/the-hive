@@ -150,6 +150,8 @@ export interface NewsletterThought extends Record<string, unknown> {
   created_at: string;
   /** Used thoughts stay as receipts; archiving is the only removal path. */
   archived_at: string | null;
+  /** An owner-selected editorial beat for the next newsletter issue. */
+  featured_in_next_issue: boolean;
 }
 
 export interface Waitlist extends Record<string, unknown> {
@@ -1165,7 +1167,7 @@ export interface Database {
       newsletter_thoughts: {
         Row: NewsletterThought;
         Insert: Pick<NewsletterThought, 'content' | 'created_by'>;
-        Update: Partial<Pick<NewsletterThought, 'content' | 'archived_at'>>;
+        Update: Partial<Pick<NewsletterThought, 'content' | 'archived_at' | 'featured_in_next_issue'>>;
         Relationships: [];
       };
       // Insert is deliberately `never`: only the send-newsletter function

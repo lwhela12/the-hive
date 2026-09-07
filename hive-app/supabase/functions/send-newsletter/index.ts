@@ -73,6 +73,93 @@ const BATCH_SIZE = 100;
 
 type Recipient = { email: string; name: string | null; token: string | null; isMember?: boolean };
 
+const BROADCAST_HANDLES = new Set(['hive', 'all', 'everyone', 'every', 'everybody', 'group', 'community', 'members', 'wide', 'hivewide', 'allhives']);
+const MEMBER_ALIASES: Record<string, string> = { brit: 'brittany', ollie: 'oliver', izzy: 'isabelle', fin: 'infiniti', infinite: 'infiniti', ems: 'emmeline' };
+
+function mentionHandle(value: string) {
+  return value.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '');
+}
+
+function memberMatchesMention(name: string, rawHandle: string) {
+  const handle = mentionHandle(rawHandle);
+  const first = mentionHandle(name.split(/\s+/)[0] ?? '');
+  const full = mentionHandle(name);
+  const resolved = MEMBER_ALIASES[handle] ?? handle;
+  return handle === first || handle === full || resolved === first || resolved === full;
+}
+
+/**
+ * A "For the Buzz" mention is intentional member participation: newsletter
+ * email renders the ordinary words, while the in-app issue records the real
+ * tag. This runs only after an owner sends the finished letter. Production is
+ * absent at the membership query, never filtered after it has been read.
+ */
+async function notifyNewsletterMentions(
+  supabase: ReturnType<typeof createClient>,
+  input: { postId: string; senderId: string; senderName: string; communityId: string; content: string },
+) {
+  const handles = Array.from(input.content.matchAll(/@([a-z0-9._-]+)/gi))
+    .map((match) => mentionHandle(match[1]))
+    .filter(Boolean);
+  if (handles.length === 0) return 0;
+
+  const { data: membershipRows, error: membershipError } = await supabase
+    .from('community_memberships')
+    .select('user_id, community:communities!inner(slug)')
+    .neq('community.slug', 'show');
+  if (membershipError) {
+    console.error('[send-newsletter] could not resolve newsletter mentions', membershipError);
+    return 0;
+  }
+
+  const visibleMemberIds = Array.from(new Set(
+    ((membershipRows ?? []) as { user_id: string }[]).map((row) => row.user_id).filter(Boolean),
+  ));
+  if (visibleMemberIds.length === 0) return 0;
+
+  const { data: people, error: peopleError } = await supabase
+    .from('profiles')
+    .select('id, name')
+    .in('id', visibleMemberIds);
+  if (peopleError) {
+    console.error('[send-newsletter] could not load mention recipients', peopleError);
+    return 0;
+  }
+
+  const broadcast = handles.some((handle) => BROADCAST_HANDLES.has(handle));
+  const recipientIds = new Set<string>();
+  if (broadcast) visibleMemberIds.forEach((id) => recipientIds.add(id));
+  for (const person of (people ?? []) as { id: string; name: string | null }[]) {
+    if (person.name && handles.some((handle) => memberMatchesMention(person.name, handle))) recipientIds.add(person.id);
+  }
+  recipientIds.delete(input.senderId);
+  if (recipientIds.size === 0) return 0;
+
+  const recipients = [...recipientIds];
+  const { data: alreadyNotified } = await supabase
+    .from('notifications')
+    .select('user_id')
+    .eq('notification_type', 'board_mention')
+    .contains('metadata', { post_id: input.postId, newsletter_mention: true })
+    .in('user_id', recipients);
+  const already = new Set(((alreadyNotified ?? []) as { user_id: string }[]).map((row) => row.user_id));
+  const rows = recipients.filter((id) => !already.has(id)).map((userId) => ({
+    user_id: userId,
+    community_id: input.communityId,
+    notification_type: 'board_mention',
+    title: `${input.senderName} mentioned you in The Buzz`,
+    content: 'You have a shout-out or mention in this month’s Buzz.',
+    metadata: { post_id: input.postId, sender_id: input.senderId, newsletter_mention: true },
+  }));
+  if (rows.length === 0) return 0;
+  const { error: insertError } = await supabase.from('notifications').insert(rows);
+  if (insertError) {
+    console.error('[send-newsletter] could not save newsletter mention notifications', insertError);
+    return 0;
+  }
+  return rows.length;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -284,7 +371,7 @@ serve(async (req) => {
   // The issue, read from the same row the app and the public site read.
   const { data: post } = await supabase
     .from('board_posts')
-    .select('id, title, content, visibility, status, category:board_categories!category_id(topic_kind), community:communities!community_id(max_share_scope)')
+    .select('id, community_id, title, content, visibility, status, category:board_categories!category_id(topic_kind), community:communities!community_id(max_share_scope)')
     .eq('id', postId)
     .maybeSingle();
 
@@ -308,39 +395,9 @@ serve(async (req) => {
       return errorResponse('This HIVE does not publish to unauthenticated visitors', 403);
     }
 
-    // A public newsletter is an editorial artifact, not a member reach. Check
-    // the actual saved issue before a single outside address receives it. The
-    // refusal is generic on purpose: the response never reveals who matched.
-    const { data: memberRows, error: memberReadError } = await supabase
-      .from('profiles')
-      .select('name');
-    if (memberReadError) {
-      return errorResponse('The privacy check could not run, so nothing was sent', 503);
-    }
-
-    const issueWords = new Set(
-      `${String(post.title ?? '')} ${String(post.content ?? '')}`
-        .normalize('NFKD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .split(/[^a-z0-9]+/)
-        .filter(Boolean)
-    );
-    const namesMember = ((memberRows ?? []) as { name?: string | null }[]).some((row) => {
-      const first = String(row.name ?? '')
-        .normalize('NFKD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .trim()
-        .toLowerCase()
-        .split(/\s+/)[0];
-      return first.length >= 3 && issueWords.has(first);
-    });
-    if (namesMember) {
-      return errorResponse(
-        'This public issue names a HIVE member. Remove member names and identity-to-HIVE links, then test again.',
-        400
-      );
-    }
+    // The owner is the editorial approval boundary for The Buzz. In particular,
+    // names submitted through End of the month are voluntary shout-outs: they
+    // read normally in email and become in-app mentions once the issue goes live.
   }
 
   /**
@@ -489,6 +546,16 @@ serve(async (req) => {
       .eq('id', postId);
   }
 
+  const mentionsNotified = mode === 'live' && sent > 0
+    ? await notifyNewsletterMentions(supabase, {
+        postId,
+        senderId: caller.id,
+        senderName: String(caller.name ?? 'Nat'),
+        communityId: String(post.community_id),
+        content,
+      })
+    : 0;
+
   // Logged even for a test, so "did my test actually send?" has an answer
   // that does not live in somebody's inbox.
   await supabase.from('newsletter_sends').insert({
@@ -505,5 +572,6 @@ serve(async (req) => {
     failed: failures.length,
     failedAddresses: failures.slice(0, 20),
     total: recipients.length,
+    mentionsNotified,
   });
 });

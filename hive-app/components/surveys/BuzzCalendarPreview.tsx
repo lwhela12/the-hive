@@ -15,28 +15,29 @@ export function BuzzCalendarPreview() {
     queryKey: ['buzzCalendarPreview', profile?.id, ids, month], enabled: !!profile && ids.length > 0, staleTime: 60_000,
     queryFn: async () => {
       const end = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
-      const [events, birthdays] = await Promise.all([
-        // Ordinary member client and calendar RLS; no private notes, survey
-        // answers, addresses, or meeting links enter this member preview.
-        supabase.from('events').select('id,title,event_date,event_time,end_time,event_type,end_date,community_id,visibility')
-          .gte('event_date', `${month}-01`).lte('event_date', `${month}-${end}`)
-          .or('status.is.null,status.eq.scheduled,status.eq.completed').order('event_date').limit(200),
-        supabase.from('community_memberships').select('profiles!user_id(id,name,birthday)').in('community_id', ids),
-      ]);
-      if (events.error) throw events.error;
-      if (birthdays.error) throw birthdays.error;
-      const people = (birthdays.data ?? []).flatMap(row => {
-        const person = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
-        return person?.birthday ? [person as { id: string; name: string; birthday: string }] : [];
-      });
-      return buzzCalendarItems((events.data ?? []) as BuzzCalendarItem[], people, month);
+      const { data: events, error: eventsError } = await supabase
+        // This is the editorial/public newsletter runway. It is not a member's
+        // calendar, so a visible event is still not eligible unless it was
+        // explicitly marked public. Production is an absolute sealed HIVE and
+        // is excluded at the query boundary even if an old row were mis-scoped.
+        .from('events')
+        .select('id,title,event_date,event_time,end_time,event_type,end_date,community_id,visibility,invited_scope,community:communities!inner(slug)')
+        .gte('event_date', `${month}-01`).lte('event_date', `${month}-${end}`)
+        .eq('visibility', 'public').eq('invited_scope', 'public')
+        .neq('community.slug', 'show')
+        .or('status.is.null,status.eq.scheduled,status.eq.completed')
+        .order('event_date').limit(200);
+      if (eventsError) throw eventsError;
+      // Birthdays identify members and do not belong in a public editorial
+      // queue. The newsletter has no reason to pre-fill private calendar facts.
+      return buzzCalendarItems((events ?? []) as BuzzCalendarItem[], [], month);
     },
   });
   const rows = query.data ?? [];
   const shown = expanded ? rows : rows.slice(0, 5);
   return <View style={{ borderTopWidth: 1, borderColor: '#e7d5ad', paddingTop: 14, gap: 8 }}>
     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#514635' }}>Already on the calendar</Text>
-    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#706553', lineHeight: 18 }}>This month’s events and birthdays — ideas for the Buzz, before the final lineup is chosen.</Text>
+    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#706553', lineHeight: 18 }}>Public events already on the calendar — ideas for the Buzz, before the final lineup is chosen.</Text>
     {query.isLoading ? <Text style={{ color: '#706553' }}>Loading the calendar…</Text>
       : query.isError ? <Pressable accessibilityRole="button" onPress={() => query.refetch()} style={{ minHeight: 44, justifyContent: 'center' }}>
           <Text style={{ color: '#815e25', fontFamily: 'Lato_700Bold' }}>Couldn’t load the calendar. Try again</Text>

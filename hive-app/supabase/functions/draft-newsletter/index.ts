@@ -42,7 +42,7 @@ interface DraftRequest {
 }
 
 type EditorialLead = {
-  source: "Nat's newsletter note" | 'End-of-month contribution';
+  source: "Nat's featured newsletter note" | "Nat's newsletter note" | 'End-of-month contribution';
   content: string;
 };
 
@@ -90,7 +90,7 @@ function hiveHelpCycle(date: string) {
  * editorial brief. Keep a mix of Nat's newest notes and submitted shout-outs
  * or event plugs, then show that exact shortlist in the facts.
  */
-function selectEditorialLeads(ownerNotes: string[], endOfMonthNotes: string[]): EditorialLead[] {
+function selectEditorialLeads(ownerNotes: string[], endOfMonthNotes: string[], featuredOwnerNotes: string[]): EditorialLead[] {
   const unique = (values: string[]) => {
     const seen = new Set<string>();
     return values.filter((value) => {
@@ -102,12 +102,19 @@ function selectEditorialLeads(ownerNotes: string[], endOfMonthNotes: string[]): 
   };
   const owner = unique(ownerNotes);
   const endOfMonth = unique(endOfMonthNotes);
+  const featured = unique(featuredOwnerNotes);
+  const featuredKeys = new Set(featured.map((value) => value.replace(/\s+/g, ' ').trim().toLocaleLowerCase()));
   return [
-    ...owner.slice(0, 3).map((content) => ({ source: "Nat's newsletter note" as const, content })),
+    // A featured note is Nat's direct editorial instruction. It is never
+    // displaced by recent-but-unselected worktop notes or survey answers.
+    ...featured.slice(0, 5).map((content) => ({ source: "Nat's featured newsletter note" as const, content })),
+    ...owner.filter((content) => !featuredKeys.has(content.replace(/\s+/g, ' ').trim().toLocaleLowerCase()))
+      .slice(0, 3).map((content) => ({ source: "Nat's newsletter note" as const, content })),
     ...endOfMonth.slice(0, 2).map((content) => ({ source: 'End-of-month contribution' as const, content })),
-    ...owner.slice(3).map((content) => ({ source: "Nat's newsletter note" as const, content })),
+    ...owner.filter((content) => !featuredKeys.has(content.replace(/\s+/g, ' ').trim().toLocaleLowerCase()))
+      .slice(3).map((content) => ({ source: "Nat's newsletter note" as const, content })),
     ...endOfMonth.slice(2).map((content) => ({ source: 'End-of-month contribution' as const, content })),
-  ].slice(0, 5);
+  ].slice(0, Math.max(5, featured.length));
 }
 
 /** The editor's one inline formatting marker is safe in plain text and email. */
@@ -387,7 +394,7 @@ serve(async (req) => {
       // Owner notes are editorial leads. They are never exposed outside this
       // owner-only drafting call.
       supabaseAdmin.from('newsletter_thoughts')
-        .select('content, created_at')
+        .select('content, created_at, featured_in_next_issue')
         .is('archived_at', null)
         .order('created_at', { ascending: false }).limit(20),
       // These answers expressly ask for newsletter consideration. Keep their
@@ -426,12 +433,15 @@ serve(async (req) => {
     const previousHelp = helperPosts.find((row) => row.created_at >= `${previousHelpStart}T00:00:00Z` && row.created_at < `${helpStart}T00:00:00Z`);
     const ownerNotes = ((thoughtRows.data ?? []) as any[])
       .map((row) => String(row.content ?? '').trim()).filter(Boolean).slice(0, 8);
+    const featuredOwnerNotes = ((thoughtRows.data ?? []) as any[])
+      .filter((row) => row.featured_in_next_issue === true)
+      .map((row) => String(row.content ?? '').trim()).filter(Boolean);
     const newsletterAnswerIds = ['q_eom_newsletter', 'q_newsletter', 'q_shoutout'];
     const endOfMonthNotes = ((responseRows.data ?? []) as any[])
       .filter((row) => String(row.submitted_at ?? row.created_at ?? '') >= startIso)
       .flatMap((row) => newsletterAnswerIds.map((id) => String(row.answers?.[id] ?? '').trim()))
       .filter(Boolean).slice(0, 12);
-    const editorialLeads = selectEditorialLeads(ownerNotes, endOfMonthNotes);
+    const editorialLeads = selectEditorialLeads(ownerNotes, endOfMonthNotes, featuredOwnerNotes);
 
     const sections: { title: string; lines: string[] }[] = [];
 
