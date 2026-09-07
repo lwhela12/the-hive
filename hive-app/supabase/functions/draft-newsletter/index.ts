@@ -229,7 +229,6 @@ async function writeNewsletter(
       // worse than a slow one.
       model: 'claude-sonnet-5',
       max_tokens: 12000,
-      temperature: 0,
       output_config: { effort: 'medium' as const },
       system,
       messages: [{
@@ -548,6 +547,12 @@ serve(async (req) => {
       .map((section) => `${section.title}\n${section.lines.map((line) => `- ${line.trim()}`).join('\n')}`)
       .join('\n\n');
     const prose = body.includeProse === false ? null : await writeNewsletter(monthLabel, factsText, publicHiveIds[0]);
+    // Facts are useful even if the writing provider is temporarily unavailable,
+    // but the caller needs to know the difference. Previously a null prose
+    // response looked like a completed draft and stranded Nat on this page.
+    const writingError = body.includeProse === false || prose
+      ? null
+      : 'The letter writer did not return a draft. Your facts are still here — try rebuilding the draft.';
 
     return jsonResponse({
       success: true,
@@ -556,6 +561,7 @@ serve(async (req) => {
       year: startYear,
       recap_title: recapTitle,
       prose,
+      writing_error: writingError,
       cycle_start: cycleStart,
       cycle_end: cycleEnd,
       sections,

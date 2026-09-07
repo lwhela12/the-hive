@@ -355,6 +355,7 @@ export default function NewsletterScreen() {
   // checks beside the work, not a read-only page the writer has to escape.
   const [view, setView] = useState<'write' | 'preview' | 'facts'>('write');
   const [writing, setWriting] = useState(false);
+  const [writingError, setWritingError] = useState<string | null>(null);
   const [pictureBusy, setPictureBusy] = useState(false);
   const [pictureNote, setPictureNote] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
@@ -380,6 +381,7 @@ export default function NewsletterScreen() {
     setLoading(true);
     setError(null);
     setProse(null);
+    setWritingError(null);
     setDraftPostId(null);
     setSaveState('idle');
     editRevision.current += 1;
@@ -468,13 +470,22 @@ export default function NewsletterScreen() {
     if ((data.sections ?? []).length === 0) return;
 
     setWriting(true);
-    const { data: written } = await supabase.functions.invoke('draft-newsletter', {
+    const { data: written, error: writingInvokeError } = await supabase.functions.invoke('draft-newsletter', {
       body: { ...draftBody, includeProse: true },
     });
-    if (written?.success) {
+    if (writingInvokeError || !written?.success) {
+      setWritingError('The letter could not be written just now. Your facts are still here — tap Rebuild the draft to try again.');
+    } else {
       if ((written.sections ?? []).length > 0) setSections(written.sections as SummarySection[]);
       const generated = typeof written.prose === 'string' && written.prose.trim() ? written.prose : null;
       setProse(generated);
+      if (!generated) {
+        setWritingError(
+          typeof written.writing_error === 'string'
+            ? written.writing_error
+            : 'The letter could not be written just now. Your facts are still here — tap Rebuild the draft to try again.',
+        );
+      }
       if (generated && profile) {
         // A fresh draft is working material, not a thing Nat should have to
         // remember to protect. Give it its private home immediately so a page
@@ -874,6 +885,19 @@ export default function NewsletterScreen() {
                 <ThinkingBee />
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#8a6b30' }}>
                   Writing the letter — here are the facts meanwhile
+                </Text>
+              </View>
+            ) : null}
+
+            {writingError ? (
+              <View
+                style={{
+                  alignSelf: 'center', marginBottom: 14, paddingHorizontal: 14, paddingVertical: 9,
+                  borderRadius: 10, backgroundColor: '#fff1e8', borderWidth: 1, borderColor: 'rgba(182,95,95,0.25)',
+                }}
+              >
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 18, color: '#8a4d4d', textAlign: 'center' }}>
+                  {writingError}
                 </Text>
               </View>
             ) : null}
