@@ -1,5 +1,5 @@
 /**
- * The shared boards — HIVE Approved, Announcements, HIVE Helpers, the
+ * The shared boards — HIVE Approved, Announcements, HIVE Help, the
  * Favourites, Compliment Corner, HIVE-Wide General Discussion.
  *
  * It is the same screen as /board, asked a different question. Boards behave

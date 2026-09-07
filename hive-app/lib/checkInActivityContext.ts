@@ -12,7 +12,7 @@ export async function fetchCheckInActivityContext(communityId: string): Promise<
   const since = await getCycleStart(communityId, today);
   const [boards, nextMeeting] = await Promise.all([
     supabase.from('board_categories').select('id, name, status, topic_kind')
-      .eq('community_id', communityId).or('topic_kind.eq.helper_log,name.ilike.%HIVE Helpers%'),
+      .eq('community_id', communityId).or('topic_kind.eq.helper_log,name.ilike.%HIVE Help%'),
     supabase.from('events').select('event_date').eq('community_id', communityId)
       .eq('event_type', 'meeting').gte('event_date', today).order('event_date', { ascending: true }).limit(1),
   ]);

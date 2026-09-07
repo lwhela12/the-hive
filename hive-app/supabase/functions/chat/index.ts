@@ -536,7 +536,7 @@ const tools: Anthropic.Tool[] = [
         },
         category: {
           type: "string",
-          description: "Filter by category name (e.g., 'Announcements', 'HIVE Approved', '15min HIVE Helpers')"
+          description: "Filter by category name (e.g., 'Announcements', 'HIVE Approved', 'HIVE Help')"
         },
         author_name: {
           type: "string",

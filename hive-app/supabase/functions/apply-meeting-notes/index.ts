@@ -627,7 +627,7 @@ async function findBoardCategory(
       .from('board_categories')
       .select('id')
       .eq('community_id', communityId)
-      .or('topic_kind.eq.helper_log,name.ilike.%HIVE Helpers%')
+      .or('topic_kind.eq.helper_log,name.ilike.%HIVE Help%')
       .limit(1)
       .maybeSingle();
 
@@ -742,7 +742,7 @@ ${boardTopicList || '- None yet'}
 
 Turn these meeting notes into app-ready structured data. Use only information supported by the notes. Do not invent dates, assignees, or commitments. Prefer exact member names when assigning work.
 
-HD boards are member-owned containers for each person's HummDinger/High Definition wishes. Each member should have one active HD board, with individual asks, offers, blockers, and updates living as board_suggestions/posts inside that member board. Use hd_boards only when the notes clearly reveal a member needs an HD board and no matching existing member HD board appears in Existing board topics. For HummDinger or High Definition session resources, asks, offers, and blockers tied to a specific member, create board_suggestions with that member as person_name and the member's exact HD board name as category_hint when it exists. Use shared boards only for explicitly group-wide topics: "15min HIVE Helpers" for quick acts of help people completed or offered, "HIVE Approved" for trusted recommendations, favorite providers, brands, places, and community-approved resources, and "HIVE Hangs" for group social planning. If a resource or recommendation is for one member's HD ask, put it in that member's HD board rather than HIVE Approved.
+HD boards are member-owned containers for each person's HummDinger/High Definition wishes. Each member should have one active HD board, with individual asks, offers, blockers, and updates living as board_suggestions/posts inside that member board. Use hd_boards only when the notes clearly reveal a member needs an HD board and no matching existing member HD board appears in Existing board topics. For HummDinger or High Definition session resources, asks, offers, and blockers tied to a specific member, create board_suggestions with that member as person_name and the member's exact HD board name as category_hint when it exists. Use shared boards only for explicitly group-wide topics: "HIVE Help" for monthly kindness-focus threads and completed acts of help, "HIVE Approved" for trusted recommendations, favorite providers, brands, places, and community-approved resources, and "HIVE Hangs" for group social planning. If a resource or recommendation is for one member's HD ask, put it in that member's HD board rather than HIVE Approved.
 
 Insights caught are the worth-keeping lines — something somebody said that another member would be glad to have known yesterday: a lesson learned, a sharp observation, a technique, a number worth remembering. Capture each in insights_caught in the speaker's own words, specific enough to stand alone, and do not post anything — the summary offers each one back to the person who said it, and only they decide whether it goes on a board. A wish is a need; an insight is a lesson — never file the same line as both.
 
@@ -759,7 +759,7 @@ Return strict JSON only:
   "wishes_surfaced": [{"person_name": "member name", "description": "specific wish or need"}],
   "insights_caught": [{"person_name": "member name", "insight": "the worth-keeping line, in their own words"}],
   "hd_boards": [{"person_name": "member name", "goal_title": "member HD board or short goal label", "description": "why this member needs an HD board"}],
-  "board_suggestions": [{"person_name": "member name or null", "title": "suggested board post title", "content": "draft board update/resource note", "category_hint": "existing board name such as Brit's HD Board, 15min HIVE Helpers, HIVE Approved, Announcements, or member/project area"}]
+  "board_suggestions": [{"person_name": "member name or null", "title": "suggested board post title", "content": "draft board update/resource note", "category_hint": "existing board name such as Brit's HD Board, HIVE Help, HIVE Approved, Announcements, or member/project area"}]
 }`,
     },
   ];

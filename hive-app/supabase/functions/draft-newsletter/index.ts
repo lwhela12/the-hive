@@ -125,7 +125,7 @@ async function writeNewsletter(
     '  Yellow!            (greeting — a sentence or two of hello)',
     `  Here's the buzz from ${month}`,
     '  HIVE Hangs         (what happened, then what is coming up)',
-    '  HIVE Help          (the focus, and a nudge to log it on 15min HIVE Helpers)',
+    '  HIVE Help          (the focus, and a nudge to log it in its HIVE Help thread)',
     '  Around the HIVE    (app and community updates)',
     '  Wishes granted     (only if there are any)',
     '  Shout-outs         (only if there are any)',

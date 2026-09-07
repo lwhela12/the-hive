@@ -1238,9 +1238,9 @@ export default function MeetingHelperScreen() {
     return () => clearInterval(tick);
   }, []);
 
-  // Each month's HIVE Help focus lives in that month's calendar header —
-  // type it there and the "{Month} HIVE Helpers — {focus}" board thread is
-  // created automatically.
+  // HIVE Help is the parent board. Each month's chosen focus is its own
+  // "{Month} HIVE Help — {focus}" thread; typing it in the calendar header
+  // creates that thread automatically.
   const [monthFocusDrafts, setMonthFocusDrafts] = useState<Record<string, string>>({});
   const [monthFocusSaving, setMonthFocusSaving] = useState<string | null>(null);
 
@@ -1560,7 +1560,9 @@ export default function MeetingHelperScreen() {
           .from('board_categories')
           .select('id, name, status')
           .eq('community_id', communityId)
-          .or('topic_kind.eq.helper_log,name.ilike.%HIVE Helpers%');
+          // `helper_log` is canonical; the name fallback keeps older data
+          // readable after the parent board was named simply "HIVE Help".
+          .or('topic_kind.eq.helper_log,name.ilike.%HIVE Help%');
         const helperBoard = ((categories ?? []) as { id: string; status?: string | null }[])
           .find((row) => !row.status || row.status === 'active');
         if (!helperBoard) {
@@ -1736,7 +1738,9 @@ export default function MeetingHelperScreen() {
         .from('board_categories')
         .select('id, name, status')
         .eq('community_id', communityId)
-        .or('topic_kind.eq.helper_log,name.ilike.%HIVE Helpers%');
+        // The board is "HIVE Help"; this creates a month-specific thread
+        // inside it, never another board.
+        .or('topic_kind.eq.helper_log,name.ilike.%HIVE Help%');
       const helperBoard = ((categories ?? []) as { id: string; status?: string | null }[])
         .find((row) => !row.status || row.status === 'active');
       if (!helperBoard) throw new Error('No HIVE Help board found');
@@ -3216,9 +3220,9 @@ export default function MeetingHelperScreen() {
       }
 
       const monthLabel = monthStart.toLocaleDateString('en-US', { month: 'long' });
-      // This month's HIVE Help focus lives right in the calendar header —
-      // read from the "{Month} HIVE Helpers — {focus}" board thread, or type
-      // it here and the thread is created automatically.
+      // This month's HIVE Help focus lives in a thread inside the HIVE Help
+      // board — "{Month} HIVE Help — {focus}" — or type it here to create
+      // that thread automatically.
       // Canonical: "{Month} HIVE Help — {Focus}"; legacy "HIVE Helpers" still parses.
       const focusPattern = new RegExp(`^${monthLabel}\\s+HIVE Help(?:ers)?\\s*[—–-]+\\s*(.+)$`, 'i');
       const existingFocus = helperPosts

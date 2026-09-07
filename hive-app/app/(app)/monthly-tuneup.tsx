@@ -269,8 +269,9 @@ type NewsletterEvent = {
   location?: string | null;
 };
 
-// The HIVE Helpers board holds one thread per month (e.g. "June Pay It Forward
-// Success"); members log helps as replies on the current thread.
+// The HIVE Help board holds a month-specific focus thread (e.g. "September
+// HIVE Help — Pick up trash whenever you go on a walk"); members log helps as
+// replies on that current thread.
 type HelperThread = {
   boardId: string;
   boardName: string;
@@ -1394,7 +1395,9 @@ export default function MonthlyTuneupScreen() {
           // here because Tech has no compliments board (checked live,
           // 2026-08-11: its four boards are all plain discussion).
           ? query.ilike('name', '%general%')
-        : query.or('topic_kind.eq.helper_log,name.ilike.%HIVE Helpers%');
+        // HIVE Help is the parent board; its prefix also matches older
+        // "HIVE Helpers" board names when reading historic data.
+        : query.or('topic_kind.eq.helper_log,name.ilike.%HIVE Help%');
 
     const { data, error } = await query;
     if (error) {
@@ -1413,8 +1416,8 @@ export default function MonthlyTuneupScreen() {
         );
         return rank(a) - rank(b);
       });
-    // Prefer a month-specific board when one exists (e.g. "HIVE Helpers July"),
-    // so monthly helper boards route automatically as they're created.
+    // Prefer a month-specific parent board when one exists (e.g. a legacy
+    // "HIVE Help July" board), so old data still routes where it belongs.
     const monthName = new Date().toLocaleDateString('en-US', { month: 'long' }).toLowerCase();
     const active = rows.find((row) => row.name.toLowerCase().includes(monthName)) ?? rows[0];
     return active ? { id: active.id, name: active.name } : null;
@@ -1650,8 +1653,9 @@ export default function MonthlyTuneupScreen() {
     }
   };
 
-  // Helpers step posts as a REPLY on the current monthly thread of the HIVE
-  // Helpers board (one thread per month, e.g. "June Pay It Forward Success").
+  // Helpers step posts as a REPLY on the current monthly focus thread inside
+  // the HIVE Help board (one thread per focus, e.g.
+  // "September HIVE Help — Pick up trash whenever you go on a walk").
   const findHelperThread = useCallback(async (): Promise<HelperThread | null> => {
     if (!communityId) return null;
 
@@ -1671,7 +1675,7 @@ export default function MonthlyTuneupScreen() {
       .limit(10);
 
     if (error) {
-      console.warn('Could not load the current HIVE Helpers thread', error);
+      console.warn('Could not load the current HIVE Help focus thread', error);
       return { boardId: board.id, boardName: board.name, postId: null, postTitle: null, postContent: null };
     }
 
@@ -1889,7 +1893,7 @@ export default function MonthlyTuneupScreen() {
     setHangContent('');
   };
 
-  // Posting a kindness to the HIVE Helpers thread. Called from the check-in's
+  // Posting a kindness to the current HIVE Help focus thread. Called from the check-in's
   // "I did something else" answer — the separate "Log a kindness" box is gone,
   // since telling us what you did instead IS the log (Nat 2026-07-25).
   const postHelperLog = async (content: string) => {
@@ -1905,7 +1909,7 @@ export default function MonthlyTuneupScreen() {
     let thread = helperThread ?? await findHelperThread();
     if (!thread) {
       setHelperPosting(false);
-      setHelperError('Could not find the HIVE Helpers board. You can log it from the Boards tab instead.');
+      setHelperError('Could not find the HIVE Help board. You can log it from the Boards tab instead.');
       return;
     }
 
@@ -1938,30 +1942,12 @@ export default function MonthlyTuneupScreen() {
         },
       }).catch((err) => console.log('Board reply notification error (non-blocking):', err));
     } else {
-      // No monthly thread yet — start one so this and later logs have a home.
-      const { data, error } = await (supabase as any)
-        .from('board_posts')
-        .insert({
-          community_id: communityId,
-          category_id: thread.boardId,
-          author_id: profile.id,
-          title: `${monthName} HIVE Help`,
-          content,
-        })
-        .select('id, title')
-        .single();
-
-      if (error) {
-        setHelperPosting(false);
-        setHelperError(userFacingError(error, 'That did not post. Your words are still here — try again.'));
-        return;
-      }
-
-      thread = {
-        ...thread,
-        postId: data?.id ?? null,
-        postTitle: data?.title ?? `${monthName} HIVE Help`,
-      };
+      // Do not invent a generic monthly thread: the title carries the actual
+      // focus and is the durable link between Meeting Helper, the check-in,
+      // and the newsletter. Choose the focus first, then members can log it.
+      setHelperPosting(false);
+      setHelperError('No HIVE Help focus thread is live yet. Choose this month\'s focus at the meeting, then log your kindness there.');
+      return;
     }
 
     setHelperThread(thread);
@@ -1982,7 +1968,7 @@ export default function MonthlyTuneupScreen() {
         const board = helperThread?.boardId
           ? { id: helperThread.boardId }
           : await findBoardTarget('helpers');
-        if (!board) throw new Error('HIVE Helpers board not found');
+        if (!board) throw new Error('HIVE Help board not found');
         const { data, error } = await (supabase as any)
           .from('board_posts')
           .insert({
@@ -2324,7 +2310,7 @@ export default function MonthlyTuneupScreen() {
   };
 
   // "I did something else" + what you did = the kindness log. It posts to the
-  // HIVE Helpers thread when you finish, and only if that exact line isn't
+  // current HIVE Help focus thread when you finish, and only if that exact line isn't
   // already there — so editing your answer or re-entering the tune-up doesn't
   // spam the board with copies.
   const logInsteadOnFinish = async () => {
