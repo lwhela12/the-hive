@@ -41,6 +41,11 @@ interface DraftRequest {
   includeProse?: boolean;
 }
 
+type EditorialLead = {
+  source: "Nat's newsletter note" | 'End-of-month contribution';
+  content: string;
+};
+
 function pacificToday() {
   return new Date(Date.now() - 7 * 3600_000).toISOString().slice(0, 10);
 }
@@ -78,6 +83,36 @@ function hiveHelpCycle(date: string) {
   const previous = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - 1, 15));
   const iso = (value: Date) => value.toISOString().slice(0, 10);
   return { start: iso(start), end: iso(end), previousStart: iso(previous) };
+}
+
+/**
+ * The worktop is a place to collect freely; a letter needs a compact, visible
+ * editorial brief. Keep a mix of Nat's newest notes and submitted shout-outs
+ * or event plugs, then show that exact shortlist in the facts.
+ */
+function selectEditorialLeads(ownerNotes: string[], endOfMonthNotes: string[]): EditorialLead[] {
+  const unique = (values: string[]) => {
+    const seen = new Set<string>();
+    return values.filter((value) => {
+      const key = value.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+  const owner = unique(ownerNotes);
+  const endOfMonth = unique(endOfMonthNotes);
+  return [
+    ...owner.slice(0, 3).map((content) => ({ source: "Nat's newsletter note" as const, content })),
+    ...endOfMonth.slice(0, 2).map((content) => ({ source: 'End-of-month contribution' as const, content })),
+    ...owner.slice(3).map((content) => ({ source: "Nat's newsletter note" as const, content })),
+    ...endOfMonth.slice(2).map((content) => ({ source: 'End-of-month contribution' as const, content })),
+  ].slice(0, 5);
+}
+
+/** The editor's one inline formatting marker is safe in plain text and email. */
+function boldRequiredHeadings(prose: string): string {
+  return prose.replace(/^\s*(?:\*\*)?(HIVE Hangs|HIVE Help)(?:\*\*)?\s*$/gim, '**$1**');
 }
 
 /**
@@ -122,7 +157,9 @@ async function writeNewsletter(
     '',
     'THIS IS PUBLIC. Anyone can read it. Never name a member, connect a person to',
     'a HIVE, reveal a profile, role, ownership, wish, post, check-in, project or',
-    'internal decision. Do not hint at an unnamed person either. If the facts are',
+    'internal decision. One exception: a name supplied in an End-of-month',
+    'contribution can appear in that contribution\'s voluntary shout-out or public',
+    'event plug. Add no extra identifying context around it. If the facts are',
     'thin, write a shorter, warmer letter. Short and generous beats padded and cagey.',
     'Never mention Production HIVE or any work connected to it. Never state an',
     'exact number of HIVEs; say "multiple HIVEs" when the network itself matters.',
@@ -130,11 +167,11 @@ async function writeNewsletter(
     'HER VOICE: warm, chatty, a little goofy. Short paragraphs. Exclamation',
     'points and em-dashes. Emoji sprinkled, never wall-to-wall. She says',
     '"Hivers", "the buzz", "keep the HIVE humming". She addresses everyone',
-    'directly as "you". She celebrates collective momentum, never people by name.',
+    'directly as "you". She celebrates collective momentum and submitted shout-outs.',
     '',
     'HER STRUCTURE — use only the headings that earn their place. This is a',
     'short letter, not a changelog:',
-    '  Yellow!            (greeting — a sentence or two of hello)',
+    '  Yellow!            (greeting — a sentence or two of hello; no boilerplate definition of HIVE)',
     `  Here's the buzz from ${month}`,
     '  HIVE Hangs         (what happened, then what is coming up)',
     '  HIVE Help          (the focus, and a nudge to log it on the HIVE Help board)',
@@ -145,12 +182,15 @@ async function writeNewsletter(
     '- Use ONLY the facts given. Never invent an event, a name, a date, or a',
     '  detail. If a section has no facts, leave it out entirely.',
     '- Never output a member name, profile detail, role, specific-HIVE membership,',
-    '  ownership clue, private wish/post/check-in or internal project detail.',
+    '  ownership clue, private wish/post/check-in or internal project detail, except',
+    '  for a voluntary name supplied inside an End-of-month contribution itself.',
     '- Never mention Production HIVE and never say there are three (or any exact',
     '  number of) HIVEs. The public wording is always "multiple HIVEs".',
-    '- Owner notes and end-of-month contributions are editorial leads, not quotes.',
-    '  Use their substance only when it can be said without naming or identifying',
-    '  anyone. Never claim a private workflow is new, fixed, broken, or exclusive.',
+    '- Every numbered Newsletter beat is selected editorial material. Carry each',
+    '  beat\'s substance into the letter once, in the section where it belongs.',
+    '  Do not silently skip a beat or turn it into a vague generic update. Nat\'s',
+    '  notes are not quotes or attribution. End-of-month contributions are express',
+    '  invitations for a shout-out or plug when their submitted words make that safe.',
     '- Never ask readers to RSVP, coordinate with Nat, or join a group plan for',
     '  a public hang. Say HIVE members will be there and readers are welcome to join.',
     '- Never say check-ins were broken, lost, fixed, or only now reach Nat. If a',
@@ -160,10 +200,20 @@ async function writeNewsletter(
     '  mechanics unless an explicit newsletter-ready fact makes them necessary.',
     '- Where you need something only Nat knows, write it as a bracket, e.g.',
     '  [add anything I missed] — do not guess.',
-    '- Choose no more than five named highlights across the whole letter. Prefer',
-    '  the current HIVE Help, owner editorial notes, public invitations, and',
-    '  explicitly newsletter-ready app news. Leave the rest out.',
-    '- Plain text, no markdown asterisks or hashes. Headings on their own line.',
+    '- Write the HIVE Help section as one story: celebrate the previous cycle\'s',
+    '  result first, then name the current focus and its dates. The current focus',
+    '  gets one optional invitation in the whole letter; do not repeat it under',
+    '  Keep the HIVE humming or as a second to-do.',
+    '- Write affirmatively. Lead with what readers can enjoy, do, or celebrate.',
+    '  Do not use negative framing such as "no pressure" or "no wrong time to',
+    '  start", and do not use cushioning qualifiers such as "small", "tiny",',
+    '  "calm", "low effort", or "no shame" unless a supplied fact makes one',
+    '  indispensable.',
+    '- Choose no more than five named highlights across the whole letter. The',
+    '  selected Newsletter beats are that limit; public HIVE Help and Hangs may',
+    '  sit beside them without creating a second pile of highlights.',
+    '- Use **bold markdown markers** around every heading, including HIVE Hangs',
+    '  and HIVE Help, and nowhere else. Headings sit on their own line.',
     '- Sign off: "Love in the biggest way," then "Nat" on the next line.',
     '- Keep it skimmable. Someone reads this over coffee.',
   ].join('\n');
@@ -179,6 +229,7 @@ async function writeNewsletter(
       // worse than a slow one.
       model: 'claude-sonnet-5',
       max_tokens: 12000,
+      temperature: 0,
       output_config: { effort: 'medium' as const },
       system,
       messages: [{
@@ -190,11 +241,12 @@ async function writeNewsletter(
     recordAssistantUsage({ functionName: 'draft-newsletter', model: 'claude-sonnet-5', usage: response.usage, communityId });
 
     if ((response as { stop_reason?: string }).stop_reason === 'refusal') return null;
-    return response.content
+    const drafted = response.content
       .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
       .map((block) => block.text)
       .join('')
-      .trim() || null;
+      .trim();
+    return drafted ? boldRequiredHeadings(drafted) : null;
   } catch (error) {
     console.warn('Newsletter writing failed; the outline still stands:', error);
     return null;
@@ -380,6 +432,7 @@ serve(async (req) => {
       .filter((row) => String(row.submitted_at ?? row.created_at ?? '') >= startIso)
       .flatMap((row) => newsletterAnswerIds.map((id) => String(row.answers?.[id] ?? '').trim()))
       .filter(Boolean).slice(0, 12);
+    const editorialLeads = selectEditorialLeads(ownerNotes, endOfMonthNotes);
 
     const sections: { title: string; lines: string[] }[] = [];
 
@@ -406,11 +459,11 @@ serve(async (req) => {
       sections.push({ title: 'HIVE Help cycle', lines });
     }
 
-    if (ownerNotes.length > 0) {
-      sections.push({ title: 'Owner editorial notes — review, do not quote or attribute', lines: ownerNotes });
-    }
-    if (endOfMonthNotes.length > 0) {
-      sections.push({ title: 'End-of-month editorial leads — review, do not quote or attribute', lines: endOfMonthNotes });
+    if (editorialLeads.length > 0) {
+      sections.push({
+        title: 'Newsletter beats — include each one once',
+        lines: editorialLeads.map((lead, index) => `${index + 1}. ${lead.source}: ${lead.content}`),
+      });
     }
 
     const pastHangs = ((pastEventRows.data ?? []) as any[]).filter((event) => (
