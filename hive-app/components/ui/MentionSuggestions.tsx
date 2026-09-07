@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -68,13 +68,25 @@ export function MentionSuggestions({
   // 240px right above the input, and on a phone that's most of the visible
   // room.
   //
-  // It starts **shut**, and stays shut until someone opens it (Nat 2026-08-21:
-  // "I already know how to tag people and I have to collapse it every time and
-  // it's annoying"). It used to start open and force itself back open on every
-  // fresh "@", which meant the arrow could not win — one tap closed it and the
-  // next keystroke reopened it. Opening is now the deliberate act, and the
-  // choice lasts for as long as the composer is on screen.
+  // It starts **shut** for a bare "@" (Nat 2026-08-21: "I already know how to
+  // tag people and I have to collapse it every time and it's annoying"). But a
+  // collapsed list cannot show someone that its search succeeded. Typing the
+  // first character of a name therefore opens the matches. It does not force
+  // itself open on every following keystroke, so deliberately closing it while
+  // searching still wins.
   const [open, setOpen] = useState(false);
+  const previousQueryRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const previousQuery = previousQueryRef.current?.trim() ?? '';
+    const nextQuery = query?.trim() ?? '';
+
+    if (!previousQuery && nextQuery) {
+      setOpen(true);
+    }
+
+    previousQueryRef.current = query;
+  }, [query]);
 
   // The group rows are derived here when a composer has told us its reach, so
   // the labels are right even for screens that hand their suggestions in from a
