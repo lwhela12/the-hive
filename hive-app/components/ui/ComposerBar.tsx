@@ -230,7 +230,7 @@ export function ComposerBar({
   });
   const mentionsOn = mentionMembers.length > 0 || mentionsLoading || !!mentionReach;
 
-  const { dragDropProps, isDragActive, pasteProps } = useWebAttachmentDropZone({
+  const { dragDropProps, isDragActive, inputFocusProps, pasteProps } = useWebAttachmentDropZone({
     selectedImages,
     selectedFiles,
     onImagesChange: onImagesChange ?? (() => {}),
@@ -355,6 +355,7 @@ export function ComposerBar({
           ? submitOnEnter(handleSubmit)
           : undefined
       }
+      {...inputFocusProps}
       {...pasteProps}
       maxLength={maxLength}
       editable={editable && !submitting}

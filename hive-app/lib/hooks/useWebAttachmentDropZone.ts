@@ -66,6 +66,7 @@ export function useWebAttachmentDropZone({
 }: UseWebAttachmentDropZoneOptions) {
   const [isDragActive, setIsDragActive] = useState(false);
   const dragDepthRef = useRef(0);
+  const inputFocusedRef = useRef(false);
 
   const attachDroppedFiles = useCallback(async (files: File[]) => {
     if (disabled || files.length === 0) return;
@@ -178,6 +179,22 @@ export function useWebAttachmentDropZone({
     };
   }, [attachDroppedFiles, captureDocumentDrops, claimFileDropEvent, disabled, handleDropEvent]);
 
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !captureDocumentDrops || typeof document === 'undefined') return;
+
+    // `TextInput` is a React Native abstraction. On some web builds it keeps a
+    // DOM `paste` handler from reaching the underlying textarea, so listen at
+    // the document capture phase instead. The focus guard makes this belong to
+    // the composer being typed in, not every attachment-enabled field on page.
+    const handleDocumentPaste = (event: ClipboardEvent) => {
+      if (!inputFocusedRef.current) return;
+      handlePasteEvent(event);
+    };
+
+    document.addEventListener('paste', handleDocumentPaste, true);
+    return () => document.removeEventListener('paste', handleDocumentPaste, true);
+  }, [captureDocumentDrops, handlePasteEvent]);
+
   const dragDropProps = Platform.OS === 'web'
     ? ({
         onDragEnter: (event: any) => {
@@ -208,6 +225,12 @@ export function useWebAttachmentDropZone({
     attachDroppedFiles,
     dragDropProps,
     isDragActive,
+    inputFocusProps: Platform.OS === 'web'
+      ? ({
+          onFocus: () => { inputFocusedRef.current = true; },
+          onBlur: () => { inputFocusedRef.current = false; },
+        } as any)
+      : {},
     pasteProps: Platform.OS === 'web' ? ({ onPaste: handlePasteEvent } as any) : {},
   };
 }
