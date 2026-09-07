@@ -63,9 +63,18 @@ function prettyDate(value: string) {
 function prettyTime(value: string) {
   const [rawHour, minute] = value.split(':');
   const hour = Number(rawHour);
-  const suffix = hour >= 12 ? 'PM' : 'AM';
+  const suffix = hour >= 12 ? 'pm' : 'am';
   const twelve = hour % 12 === 0 ? 12 : hour % 12;
-  return `${twelve}:${minute} ${suffix}`;
+  return minute === '00' ? `${twelve}${suffix}` : `${twelve}:${minute}${suffix}`;
+}
+
+function prettyTimeRange(start: string, end?: string | null) {
+  const startText = prettyTime(start);
+  if (!end) return startText;
+  const endText = prettyTime(end);
+  return startText.slice(-2) === endText.slice(-2)
+    ? `${startText.slice(0, -2)}-${endText}`
+    : `${startText}-${endText}`;
 }
 
 /**
@@ -287,7 +296,7 @@ serve(async (req) => {
       // Meetings are members-only by nature, so the public newsletter never
       // names one. Kept as a query only so the shape below stays readable.
       supabaseAdmin.from('events')
-        .select('title, event_date, event_time')
+        .select('title, event_date, event_time, end_time')
         .eq('community_id', communityId).eq('event_type', 'meeting')
         .eq('visibility', 'public')
         .gte('event_date', date).order('event_date', { ascending: true }).limit(1),
@@ -354,7 +363,7 @@ serve(async (req) => {
     if (nextMeeting) {
       comingUp.push(
         `Next HIVE meeting: ${prettyDate(nextMeeting.event_date)}`
-        + (nextMeeting.event_time ? ` · ${prettyTime(nextMeeting.event_time)}` : '')
+        + (nextMeeting.event_time ? ` · ${prettyTimeRange(nextMeeting.event_time, nextMeeting.end_time)}` : '')
       );
     }
     if (helpFocus) comingUp.push(`HIVE Help focus: ${helpFocus}`);

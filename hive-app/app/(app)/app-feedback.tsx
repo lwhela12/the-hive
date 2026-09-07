@@ -32,6 +32,7 @@ import {
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { SignedImage } from '../../components/ui/SignedImage';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
+import { formatDateShort } from '../../lib/dateUtils';
 /**
  * App Feedback — its own place, at last.
  *
@@ -107,7 +108,7 @@ function timeAgo(iso: string): string {
   if (days === 1) return 'yesterday';
   if (days < 7) return `${days}d ago`;
   if (days < 60) return `${Math.floor(days / 7)}w ago`;
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return formatDateShort(iso);
 }
 
 /**

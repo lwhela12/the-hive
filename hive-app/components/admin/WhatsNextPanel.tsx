@@ -2,13 +2,12 @@ import { useState } from 'react';
 
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useWhatsNext } from '../../lib/hooks/useWhatsNext';
 import { WhatsNextList } from '../hive/WhatsNextList';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { hiveDisplayName } from '../../lib/hiveBrand';
 import { useHiveGrid, type GridHive } from '../../lib/hooks/useHiveGrid';
 import { HIVE_RULES } from '../../lib/hiveRules';
-import { humanTimeInput } from '../../lib/timeInput';
+import { formatDateShort, formatTimeRange } from '../../lib/dateUtils';
 
 /**
  * What's next — every HIVE, in date order, at the top of HIVE-Wide Admin.
@@ -46,7 +45,6 @@ export function WhatsNextPanel({
   order?: number;
 }) {
   const { memberships } = useAuth();
-  const { items, state, today } = useWhatsNext();
   const grid = useHiveGrid();
   // The title is the first tab, the way every other folder in Admin works.
   const [tab, setTab] = useState('next');
@@ -124,7 +122,10 @@ function GridTab({ grid }: { grid: ReturnType<typeof useHiveGrid> }) {
           <>
             <Plain bold>{pretty(h.nextMeeting.date)}</Plain>
             <Quiet>
-              {[humanTimeInput(h.nextMeeting.time), h.nextMeeting.location].filter(Boolean).join(' · ')}
+              {[
+                h.nextMeeting.time ? formatTimeRange(h.nextMeeting.time, h.nextMeeting.endTime) : null,
+                h.nextMeeting.location,
+              ].filter(Boolean).join(' · ')}
               {h.nextMeeting.onMeet ? ' + Meet' : ''}
             </Quiet>
           </>
@@ -289,8 +290,6 @@ function Quiet({ children }: { children: React.ReactNode }) {
   );
 }
 
-const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function pretty(dateOnly: string): string {
-  const [, m, d] = dateOnly.split('-').map(Number);
-  return `${M[m - 1]} ${d}`;
+  return formatDateShort(dateOnly);
 }

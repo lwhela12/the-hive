@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react
 import { View, Text, ScrollView, Pressable, TextInput } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { confirmAction, showAlert } from '../../lib/showAlert';
-import { formatDateLong, formatDateShort } from '../../lib/dateUtils';
+import { formatDateLong, formatDateShort, formatTimeRange } from '../../lib/dateUtils';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { invalidateWishQueries } from '../../lib/queryClient';
 import { desireKey, insightKey, type CaughtInsight } from '../../lib/desires';
@@ -64,6 +64,7 @@ interface ProposedEvent {
   description?: string | null;
   event_date?: string | null;
   event_time?: string | null;
+  end_time?: string | null;
   location?: string | null;
 }
 
@@ -1502,7 +1503,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
               renderTitle={(item) => item.title}
               renderMeta={(item) => joinMeta([
                 item.event_date ? formatDateShort(item.event_date) : null,
-                item.event_time,
+                item.event_time ? formatTimeRange(item.event_time, item.end_time) : null,
                 item.location,
               ])}
               renderBody={(item) => item.description

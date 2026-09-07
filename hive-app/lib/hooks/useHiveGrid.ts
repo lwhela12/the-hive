@@ -31,7 +31,7 @@ export type GridHive = {
   communityId: string;
   name: string;
   members: number;
-  nextMeeting: { date: string; time: string | null; location: string | null; onMeet: boolean } | null;
+  nextMeeting: { date: string; time: string | null; endTime: string | null; location: string | null; onMeet: boolean } | null;
   beforeWeMeet: { answered: number; of: number; due: string } | null;
   /**
    * The End of the month, which since 2026-09-02 belongs to NO HIVE — one row,
@@ -80,7 +80,7 @@ export function useHiveGrid(): Grid & { refresh: () => Promise<void> } {
           .or(`community_id.in.(${ids.join(',')}),community_id.is.null`)
           .eq('is_active', true),
         supabase.from('events')
-          .select('community_id, event_date, event_time, location, meet_link')
+          .select('community_id, event_date, event_time, end_time, location, meet_link')
           .in('community_id', ids).eq('event_type', 'meeting')
           .gte('event_date', today).order('event_date', { ascending: true }),
       ]);
@@ -130,7 +130,8 @@ export function useHiveGrid(): Grid & { refresh: () => Promise<void> } {
           nextMeeting: meeting
             ? {
                 date: meeting.event_date,
-                time: meeting.event_time?.slice(0, 5) ?? null,
+                time: meeting.event_time ?? null,
+                endTime: meeting.end_time ?? null,
                 location: meeting.location ?? null,
                 onMeet: !!meeting.meet_link && !!community.meets_on_google_meet,
               }

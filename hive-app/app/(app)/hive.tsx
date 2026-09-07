@@ -28,7 +28,7 @@ import { pacificToday } from '../../lib/checkInPresentation';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
-import { invalidateWishQueries } from '../../lib/queryClient';
+import { invalidateEventQueries, invalidateWishQueries } from '../../lib/queryClient';
 import { deleteWishById, restoreWishById } from '../../lib/wishMutations';
 import { UndoBar, useUndoOffer } from '../../components/ui/UndoBar';
 import {
@@ -69,7 +69,7 @@ import { SignedAvatarImage } from '../../components/ui/Avatar';
 import { DAILY_QUESTIONS, deckForCommunity, getQuestionForDate, getTodayQuestion } from '../../lib/dailyQuestions';
 import type { DailyQuestion } from '../../lib/dailyQuestions';
 import { EventDatePicker } from '../../components/ui/DatePicker';
-import { formatDateRangeShort, formatDateShort, formatTime, parseAmericanDate, formatTimeRange } from '../../lib/dateUtils';
+import { formatDateRangeShort, formatDateShort, formatDateTimeShort, parseAmericanDate, formatTimeRange } from '../../lib/dateUtils';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { getStoredItem, getStoredItemAsync, removeStoredItem, setStoredItem, setStoredItemAsync } from '../../lib/webStorage';
 import { getAppNewsSeenKey, getNewestAppNews, getUnseenAppNews, type AppNewsEntry } from '../../lib/appNews';
@@ -144,13 +144,7 @@ const getRecentDailyQuestions = (deck: DailyQuestion[], days = CATCH_UP_BATCH_SI
 const formatSurveyDueDate = (dueDate: string) => {
   const parsed = new Date(dueDate);
   if (Number.isNaN(parsed.getTime())) return dueDate;
-
-  return parsed.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return formatDateTimeShort(parsed);
 };
 
 const normalizeEventTimeInput = (value: string) => {
@@ -2439,6 +2433,7 @@ export default function HiveScreen() {
       }
 
       closeEventModal();
+      await invalidateEventQueries(communityId);
       await refetch();
     } catch (error: any) {
       console.error('Error saving event:', error);
@@ -2467,6 +2462,7 @@ export default function HiveScreen() {
         if (error) throw error;
 
         closeEventModal();
+        await invalidateEventQueries(communityId);
         await refetch();
       } catch (error) {
         console.error('Error deleting event:', error);
@@ -3782,7 +3778,7 @@ export default function HiveScreen() {
                                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#5b5b5b' }}>{event.title}</Text>
                                           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060', marginTop: 1 }}>
                                             {formatDateRangeShort(event.event_date, event.end_date)}
-                                            {event.event_time ? ` at ${formatTime(event.event_time)}` : ''}
+                                            {event.event_time ? ` at ${formatTimeRange(event.event_time, event.end_time)}` : ''}
                                             {event.location ? ` · ${event.location}` : ''}
                                           </Text>
                                         </View>
@@ -4806,7 +4802,7 @@ export default function HiveScreen() {
                     ? 'Today'
                     : index === 1
                       ? 'Yesterday'
-                      : date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                      : `${date.toLocaleDateString('en-US', { weekday: 'short' })} ${formatDateShort(item.dateKey)}`;
 
                   return (
                     <Pressable

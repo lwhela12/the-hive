@@ -1,6 +1,6 @@
-/**
- * Date formatting utilities for consistent American date format (MM-DD-YYYY)
- */
+/** Date and time display rules shared by every member-facing surface. */
+
+const SHORT_MONTHS = ['Jan', 'Feb', 'March', 'April', 'May', 'June', 'July', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
 
 /**
  * Parse a date string without timezone conversion
@@ -38,12 +38,12 @@ export function formatDateLong(date: string | Date): string {
  */
 export function formatDateShort(date: string | Date): string {
   const d = parseDateString(date);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${SHORT_MONTHS[d.getMonth()]} ${d.getDate()}`;
 }
 
 /**
- * Format an inclusive date range for short display (e.g., "Jul 21 – 25" or
- * "Jul 30 – Aug 2"). Falls back to the single-date format when there is no
+ * Format an inclusive date range the way HIVE says it (e.g., "Sept 4-12" or
+ * "Sept 30-Oct 2"). Falls back to the single-date format when there is no
  * end date or the range is degenerate.
  */
 export function formatDateRangeShort(start: string | Date, end?: string | Date | null): string {
@@ -55,8 +55,8 @@ export function formatDateRangeShort(start: string | Date, end?: string | Date |
   const sameMonth = startDate.getMonth() === endDate.getMonth()
     && startDate.getFullYear() === endDate.getFullYear();
   return sameMonth
-    ? `${formatDateShort(startDate)} – ${endDate.getDate()}`
-    : `${formatDateShort(startDate)} – ${formatDateShort(endDate)}`;
+    ? `${formatDateShort(startDate)}-${endDate.getDate()}`
+    : `${formatDateShort(startDate)}-${formatDateShort(endDate)}`;
 }
 
 /**
@@ -64,7 +64,15 @@ export function formatDateRangeShort(start: string | Date, end?: string | Date |
  */
 export function formatDateMedium(date: string | Date): string {
   const d = parseDateString(date);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return `${formatDateShort(d)}, ${d.getFullYear()}`;
+}
+
+/** A short date with a human clock for timestamps: "Sept 7, 2:30pm". */
+export function formatDateTimeShort(date: string | Date): string {
+  const d = parseDateString(date);
+  if (Number.isNaN(d.getTime())) return String(date);
+  const clock = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return `${formatDateShort(d)}, ${formatTime(clock)}`;
 }
 
 /**
@@ -100,25 +108,27 @@ export function isoToAmerican(isoDate: string): string {
 }
 
 /**
- * Format a time string (HH:MM:SS or HH:MM) to 12-hour format (e.g., "7:00 PM")
+ * Format a time string (HH:MM:SS or HH:MM) as compact 12-hour time ("7pm").
+ * Editable clock fields deliberately keep `humanTimeInput`'s fuller "7:00 PM"
+ * shape; this helper is for reading, never typing.
  */
 export function formatTime(time: string): string {
   const [hoursStr, minutesStr] = time.split(':');
   const hours = parseInt(hoursStr, 10);
   const minutes = minutesStr || '00';
-  const period = hours >= 12 ? 'PM' : 'AM';
+  const period = hours >= 12 ? 'pm' : 'am';
   const displayHours = hours % 12 || 12;
-  return `${displayHours}:${minutes} ${period}`;
+  return minutes === '00' ? `${displayHours}${period}` : `${displayHours}:${minutes}${period}`;
 }
 
 /**
- * When it starts and when it finishes — "5:00 – 7:00 PM".
+ * When it starts and when it finishes — "5-7pm".
  *
  * Nat, 2026-08-21: *"i couldnt add window, like 5-7, i could only put in
  * 5pm."* Meetings had a start and nothing else, so members were told when to
  * arrive and left to guess how long to hold (migration 202).
  *
- * The AM/PM is said once when both ends share it, because "5:00 PM – 7:00 PM"
+ * The am/pm is said once when both ends share it, because "5pm-7pm"
  * is the same fact written twice. With no end time this is exactly
  * `formatTime`, so a meeting nobody has given an end to reads as it always did.
  */
@@ -131,7 +141,7 @@ export function formatTimeRange(start: string, end?: string | null): string {
   const endPeriod = endText.slice(-2);
 
   if (startPeriod === endPeriod) {
-    return `${startText.slice(0, -3)} – ${endText}`;
+    return `${startText.slice(0, -2)}-${endText}`;
   }
-  return `${startText} – ${endText}`;
+  return `${startText}-${endText}`;
 }

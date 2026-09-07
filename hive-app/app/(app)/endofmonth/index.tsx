@@ -16,6 +16,7 @@ import { hasMeaningfulActionItemText } from '../../../lib/actionItemDisplay';
 import { applyCarryForwardStatuses, type CarryForwardItem } from '../../../lib/carryForward';
 import { restoreEndOfMonthAnswers, saveEndOfMonth, type EndOfMonthAnswers } from '../../../lib/endOfMonth';
 import { queryClient } from '../../../lib/queryClient';
+import { formatDateShort } from '../../../lib/dateUtils';
 import type { Survey } from '../../../types';
 
 type TaskRow = { id: string; description: string; due_date: string | null; related_board_post_id: string | null };
@@ -64,7 +65,7 @@ export default function EndOfMonthScreen() {
           if (result.error) throw new Error('Your to-dos could not load. Please try again.');
           return [id, result.data.filter(item => hasMeaningfulActionItemText(item.description)).map(item => ({
             id: item.id, type: 'action_item' as const, label: item.description, sourceLabel: 'To-do',
-            detail: item.due_date ? `Due ${item.due_date}` : null, relatedBoardPostId: item.related_board_post_id,
+            detail: item.due_date ? `Due ${formatDateShort(item.due_date)}` : null, relatedBoardPostId: item.related_board_post_id,
           }))] as const;
         })),
         askedDate ? Promise.resolve([]) : AsyncStorage.multiGet(legacyDraftKeys),

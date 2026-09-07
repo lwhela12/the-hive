@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useWhatsNext, type WhatsNextItem } from '../../lib/hooks/useWhatsNext';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { hiveTagMark } from '../../lib/hiveBrand';
+import { whatsNextDateLabel } from '../../lib/whatsNextFormat';
 
 
 /**
@@ -126,7 +127,7 @@ export function WhatsNextRow({
           color: item.overdue ? '#ffb4a8' : item.date === today ? '#e8c583' : 'rgba(246,244,229,0.55)',
         }}
       >
-        {said(item.date, today)}
+        {whatsNextDateLabel(item.date, today, item.endDate)}
       </Text>
       <View style={{ width: 8, height: 8, borderRadius: 4, marginTop: 5, backgroundColor: accent }} />
       <View style={{ flex: 1 }}>
@@ -154,20 +155,4 @@ export function WhatsNextRow({
       {body}
     </Pressable>
   );
-}
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-/** How far away, the way a person says it. "3 days late" beats a date nobody counts from. */
-export function said(dateOnly: string, today: string): string {
-  const days = Math.round(
-    (Date.parse(`${dateOnly}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000
-  );
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Tomorrow';
-  if (days === -1) return '1 day late';
-  if (days < 0) return `${-days} days late`;
-  const [y, m, d] = dateOnly.split('-').map(Number);
-  return `${DAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${MONTHS[m - 1]} ${d}`;
 }

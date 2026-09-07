@@ -3,10 +3,11 @@ import { useEffect, useRef } from 'react';
 import { InteractionManager } from 'react-native';
 import { supabase } from '../supabase';
 import { queryKeys } from '../queryClient';
+import { communityEventsQueryOptions } from '../eventQueries';
 import { fetchHoneyPotBalance } from '../honeyPot';
 import { memberRosterQueryOptions } from './useMembersQuery';
 import { fetchCategories } from './useBoardQuery';
-import type { Event, Wish, Profile, BoardCategory } from '../../types';
+import type { Wish, Profile, BoardCategory } from '../../types';
 
 /**
  * Prefetches critical app data after authentication.
@@ -80,21 +81,7 @@ export function usePrefetchAppData(
     });
 
     // 2. Upcoming events for HIVE page
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.events(communityId),
-      queryFn: async () => {
-        const { data } = await supabase
-          .from('events')
-          .select('*')
-          .gte('event_date', today)
-          .eq('community_id', communityId)
-          .or('status.is.null,status.eq.scheduled')
-          .order('event_date', { ascending: true })
-          .limit(5);
-        return (data as Event[]) || [];
-      },
-      staleTime: 10 * 60 * 1000,
-    });
+    queryClient.prefetchQuery(communityEventsQueryOptions(communityId, today));
 
     // 3. Chat rooms for Messages page
     queryClient.prefetchQuery({

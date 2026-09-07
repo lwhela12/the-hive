@@ -39,7 +39,7 @@ import { FIELD_LOOK } from '../../components/ui/Input';
 const memberHoneycombCell = require('../../assets/generated/member-honeycomb-cell.png');
 const memberHoneycombCellMe = require('../../assets/generated/member-honeycomb-cell-me.png');
 import { useChatRooms } from '../../lib/hooks/useChatRooms';
-import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
+import { formatDateShort, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import { SKILL_CATEGORIES } from '../../lib/skillsList';
 import { DAILY_QUESTIONS, deckForCommunity } from '../../lib/dailyQuestions';
 import { buildSwarmMatches, describeMatch, type SwarmAnswer } from '../../lib/swarmMatch';
@@ -411,7 +411,7 @@ function formatDailyAnswerDate(value: string) {
   if (!value) return '';
   const parsed = new Date(`${value}T12:00:00`);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return formatDateShort(value);
 }
 
 function buildHoneycombPlacements(
@@ -3845,7 +3845,7 @@ export default function MembersScreen() {
                               )}
                               {member.birthday && !isCompactHoneycomb && (
                                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#8a8173', marginTop: 2, textAlign: 'center' }} numberOfLines={1}>
-                                  Birthday: {new Date(`${member.birthday}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                  Birthday: {formatDateShort(member.birthday)}
                                 </Text>
                               )}
                             </View>

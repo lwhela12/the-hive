@@ -70,7 +70,7 @@ import { WishManageModal } from '../../components/wishes/WishManageModal';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { EventDatePicker } from '../../components/ui/DatePicker';
-import { parseAmericanDate } from '../../lib/dateUtils';
+import { formatDateRangeShort, parseAmericanDate } from '../../lib/dateUtils';
 import { createCalendarEvent } from '../../lib/eventMutations';
 import type { Profile, Wish } from '../../types';
 import {
@@ -3195,10 +3195,7 @@ export default function MonthlyTuneupScreen() {
     };
 
     const eventLabel = (event: NewsletterEvent) => {
-      const date = new Date(`${event.event_date}T12:00:00`).toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-      });
+      const date = formatDateRangeShort(event.event_date, event.end_date);
       return `${event.title} — ${date}${event.location ? ` · ${event.location}` : ''}`;
     };
 
@@ -3343,7 +3340,7 @@ export default function MonthlyTuneupScreen() {
                         {event.title}
                       </Text>
                       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#8a6b30', marginTop: 2 }}>
-                        {new Date(`${event.event_date}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        {formatDateRangeShort(event.event_date, event.end_date)}
                         {event.location ? ` · ${event.location}` : ''}
                       </Text>
                     </Pressable>

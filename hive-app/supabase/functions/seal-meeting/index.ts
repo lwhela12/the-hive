@@ -580,7 +580,7 @@ serve(async (req) => {
         // The address comes along. "Next HIVE meeting: Thursday, September 10"
         // does not tell somebody catching up where to go, and Production moved
         // to Charlee's house at the meeting that line is summarising.
-        .select('title, event_date, event_time, location')
+        .select('title, event_date, event_time, end_time, location')
         .eq('community_id', communityId).eq('event_type', 'meeting')
         .gt('event_date', date).order('event_date', { ascending: true }).limit(1),
       supabaseAdmin.from('events')
@@ -903,9 +903,17 @@ serve(async (req) => {
     const prettyTime = (value: string) => {
       const [rawHour, minute] = value.split(':');
       const hour = Number(rawHour);
-      const suffix = hour >= 12 ? 'PM' : 'AM';
+      const suffix = hour >= 12 ? 'pm' : 'am';
       const twelve = hour % 12 === 0 ? 12 : hour % 12;
-      return `${twelve}:${minute} ${suffix}`;
+      return minute === '00' ? `${twelve}${suffix}` : `${twelve}:${minute}${suffix}`;
+    };
+    const prettyTimeRange = (start: string, end?: string | null) => {
+      const startText = prettyTime(start);
+      if (!end) return startText;
+      const endText = prettyTime(end);
+      return startText.slice(-2) === endText.slice(-2)
+        ? `${startText.slice(0, -2)}-${endText}`
+        : `${startText}-${endText}`;
     };
     const treasurerDecisions = (transcriptResult?.decisions ?? []).filter((item) => item.section === 'treasurer').map((item) => item.text);
     if ((notesRow.data as any)?.honey_pot_enabled) {
@@ -926,7 +934,7 @@ serve(async (req) => {
       const where = snapshotNextMeeting.location?.trim();
       meetupLines.push(
         `Next HIVE meeting: ${prettyDate(snapshotNextMeeting.event_date)}`
-        + `${snapshotNextMeeting.event_time ? ` · ${prettyTime(snapshotNextMeeting.event_time)}` : ''}`
+        + `${snapshotNextMeeting.event_time ? ` · ${prettyTimeRange(snapshotNextMeeting.event_time, snapshotNextMeeting.end_time)}` : ''}`
         + `${where ? ` · ${where}` : ''}`
       );
     }

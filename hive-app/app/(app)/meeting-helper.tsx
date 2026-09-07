@@ -38,6 +38,7 @@ import { getWishQuickTitle, pickSpotlightWish } from '../../lib/wishDisplay';
 import { getAppNews, getAppNewsSince } from '../../lib/appNews';
 import { useAppNews } from '../../lib/hooks/useAppNews';
 import { createCalendarEvent } from '../../lib/eventMutations';
+import { invalidateEventQueries } from '../../lib/queryClient';
 import {
   hasMeaningfulActionItemText,
   parseActionItemDescription,
@@ -437,7 +438,7 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
     },
     wrapupReminders: [
       'Next meeting — second Wednesday of the month',
-      'Newsletter lands on the 1st',
+      'Newsletter lands in the 1st week',
       'Dues: $25 / quarter · CashApp $HiveLV',
     ],
   },
@@ -1724,6 +1725,7 @@ export default function MeetingHelperScreen() {
       }
       throw new Error(errorMsg);
     }
+    await invalidateEventQueries(communityId);
     await loadDeckData();
   };
 

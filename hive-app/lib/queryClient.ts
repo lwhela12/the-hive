@@ -36,6 +36,8 @@ export const queryKeys = {
   honeyPot: (communityId: string) => ['honeyPot', communityId] as const,
   honeyPotLedger: (communityId: string) => ['honeyPotLedger', communityId] as const,
   meetings: (communityId: string) => ['meetings', communityId] as const,
+  whatsNext: (userId: string, hiveIds: string, isOwner: boolean) =>
+    ['whatsNext', userId, hiveIds, isOwner] as const,
   fallbackAdmin: (communityId: string) => ['fallbackAdmin', communityId] as const,
 
   // Who the "@" picker can offer, per HIVE. One list, shared by every composer
@@ -56,6 +58,28 @@ export const queryKeys = {
   boardLinkedWishes: (communityId: string, categoryId: string) =>
     ['boardLinkedWishes', communityId, categoryId] as const,
 };
+
+/**
+ * Every calendar write clears every calendar-shaped read. Some screens read
+ * one HIVE, some read the narrow HIVE-Wide meeting view, and What's Next reads
+ * across them all; invalidating only the screen that saved created the stale
+ * cross-screen copies Nat found in Admin.
+ */
+export async function invalidateEventQueries(communityId?: string | null) {
+  const invalidations = [
+    queryClient.invalidateQueries({ queryKey: ['whatsNext'] }),
+    queryClient.invalidateQueries({ queryKey: ['hiveWideMeetingDays'] }),
+  ];
+
+  if (communityId) {
+    invalidations.push(
+      queryClient.invalidateQueries({ queryKey: queryKeys.events(communityId) }),
+      queryClient.invalidateQueries({ queryKey: ['activityFeed', communityId] }),
+    );
+  }
+
+  await Promise.all(invalidations);
+}
 
 export async function invalidateWishQueries(
   communityId?: string | null,

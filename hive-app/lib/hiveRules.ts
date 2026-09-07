@@ -43,7 +43,7 @@ export const HIVE_RULES: RuleGroup[] = [
         source: 'meetingArtifact.ts',
       },
       {
-        text: 'The Buzz goes out on the 1st, to everybody, one letter covering all three HIVEs in general terms. Each issue recaps the month before — September’s covers August.',
+        text: 'The Buzz goes out in the 1st week, to everybody, one letter covering all three HIVEs in general terms. Each issue recaps the month before — September’s covers August.',
         source: 'newsletter board + send log',
       },
       {
@@ -129,6 +129,10 @@ export const HIVE_RULES: RuleGroup[] = [
   {
     heading: 'When each HIVE meets',
     rules: [
+      {
+        text: 'Dates read like Sept 4-12. Times use am/pm, and a meeting window reads like 5-7pm. Database dates and military time stay behind the scenes.',
+        source: 'dateUtils.ts + lint:event-continuity',
+      },
       {
         text: 'The meeting target is the second week: Tech Tuesday, OG Wednesday, Production Thursday, all 6–8pm Pacific. This is a planning target, not a calendar booking; agreed exceptions win.',
         source: 'set 2026-09-03; the shape, not a booking',

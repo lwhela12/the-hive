@@ -10,7 +10,7 @@ const compile = (source, imports) => {
   new Function('require', 'exports', ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText)(imports, exports);
   return exports;
 };
-const time = compile(fs.readFileSync('lib/timeInput.ts', 'utf8'), require);
+const dates = compile(fs.readFileSync('lib/dateUtils.ts', 'utf8'), require);
 const grid = { state: 'ready', peopleAcrossAllHives: 0, hives: ['17:00', '18:00'].map((time, i) => ({ communityId: String(i), name: `Fixture ${i}`, members: 0, nextMeeting: { date: '2026-09-08', time, location: null, onMeet: false }, beforeWeMeet: null, endOfMonth: null, endOfMonthCounted: false, ceiling: 'hive', honeyPot: false })) };
 const source = fs.readFileSync('components/admin/WhatsNextPanel.tsx', 'utf8');
 const imports = id => {
@@ -24,13 +24,13 @@ const imports = id => {
   if (id.includes('hiveBrand')) return { hiveDisplayName: name => name };
   if (id.includes('useHiveGrid')) return { useHiveGrid: () => grid };
   if (id.includes('hiveRules')) return { HIVE_RULES: [] };
-  if (id.includes('timeInput')) return time;
+  if (id.includes('dateUtils')) return dates;
   return require(id);
 };
 const panel = compile(source, imports);
 const html = renderToStaticMarkup(React.createElement(panel.WhatsNextPanel, { Panel: ({ children }) => React.createElement(RN.View, null, children) }));
-assert.match(html, /5:00 PM/);
-assert.match(html, /6:00 PM/);
+assert.match(html, /5pm/);
+assert.match(html, /6pm/);
 assert.doesNotMatch(html, /17:00|18:00/);
 assert.match(html, /Next meeting/);
-console.log('PASS: existing Admin grid renders actual RN Web with 5:00 PM / 6:00 PM, not raw 24-hour times. Offline fixtures, no live-count claim.');
+console.log('PASS: existing Admin grid renders actual RN Web with 5pm / 6pm, not raw 24-hour times. Offline fixtures, no live-count claim.');

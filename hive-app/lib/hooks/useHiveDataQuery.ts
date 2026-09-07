@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import { queryKeys } from '../queryClient';
 import { fetchHoneyPotBalance } from '../honeyPot';
 import { getQuarterlyDuesReminderEvent } from '../dues';
+import { communityEventsQueryOptions } from '../eventQueries';
 import type {
   Wish,
   WishGranter,
@@ -166,23 +167,7 @@ export function useHiveDataQuery(
       },
       // Upcoming events — fetch all so the UI can show 3 initially with "Show all" toggle
       // Excludes completed events
-      {
-        queryKey: queryKeys.events(communityId || ''),
-        queryFn: async () => {
-          const { data } = await supabase
-            .from('events')
-            .select('*')
-            // Starts today or later, OR is a multi-day stretch still in progress.
-            .or(`event_date.gte.${today},end_date.gte.${today}`)
-            .eq('community_id', communityId!)
-            .or('status.is.null,status.eq.scheduled')
-            .order('event_date', { ascending: true })
-            .limit(50);
-          return (data as Event[]) || [];
-        },
-        enabled: !!communityId,
-        staleTime: 10 * 60 * 1000, // Events change less frequently
-      },
+      communityEventsQueryOptions(communityId || '', today),
       // Annual birthday reminders generated from member profiles.
       {
         queryKey: ['memberBirthdays', communityId],

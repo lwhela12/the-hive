@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from '../../components/ui/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 // No AppHeader here on purpose — the title floats in the sky, and a gold bar
 // across the top would put you back inside a HIVE (Nat 2026-08-03). The import
 // hung around after the header came out.
@@ -28,7 +28,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth, type HiveMembership } from '../../lib/hooks/useAuth';
 import { useAppNews } from '../../lib/hooks/useAppNews';
 import { accentOnDark, accentWash, hiveAccent, hiveDisplayName, hiveTagMark, normalizeHiveBrandText } from '../../lib/hiveBrand';
-import { formatDateLong } from '../../lib/dateUtils';
+import { formatDateLong, formatDateShort, formatTimeRange } from '../../lib/dateUtils';
 import { getLocalIsoDate } from '../../lib/hooks/useArrivalBoard';
 import { useOpenFeedback } from '../../lib/openFeedback';
 import type { Community } from '../../types';
@@ -423,18 +423,13 @@ const TITLE_EMS = (6.27 + 9 * TITLE_TRACKING) * 1.06;
  * all. See the note above `PANEL_COLOURS` for the two attempts at making it
  * stand out and why both were undone.
  */
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** "Thu Sep 3 · 5pm" — the whole answer to "when do we meet", in one line. */
-function whenItMeets(meeting: { date: string; time: string | null }): string {
+/** "Sept 3 · 5-7pm" — the whole answer to "when do we meet", in one line. */
+function whenItMeets(meeting: { date: string; time: string | null; endTime: string | null }): string {
   const [y, m, d] = meeting.date.split('-').map(Number);
-  const day = `${WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${MONTHS[m - 1]} ${d}`;
+  const weekday = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short' });
+  const day = `${weekday} ${formatDateShort(meeting.date)}`;
   if (!meeting.time) return day;
-  const [hh, mm] = meeting.time.split(':').map(Number);
-  const suffix = hh >= 12 ? 'pm' : 'am';
-  const hour = hh % 12 === 0 ? 12 : hh % 12;
-  return `${day} · ${mm ? `${hour}:${String(mm).padStart(2, '0')}` : hour}${suffix}`;
+  return `${day} · ${formatTimeRange(meeting.time, meeting.endTime)}`;
 }
 
 function WayIntoYourHive({
@@ -458,7 +453,7 @@ function WayIntoYourHive({
    * per HIVE — which ones am I in, and when do we meet — so the answer now
    * arrives on the same row as the door into it.
    */
-  nextMeetingByHive: Record<string, { date: string; time: string | null } | undefined>;
+  nextMeetingByHive: Record<string, { date: string; time: string | null; endTime: string | null } | undefined>;
 }) {
   const { open: doorOpen, setOpen: setDoorOpen } = useRememberedPanel('the-hive:wide-panel:Your HIVEs');
   if (memberships.length === 0) return null;
@@ -758,7 +753,7 @@ export default function HiveWideScreen() {
           .from('events')
           .select('id, title, event_date, event_time, end_time, event_type, community_id, end_date, visibility')
           .in('community_id', hiveList.map((hive) => hive.id))
-          .gte('event_date', today)
+          .or(`event_date.gte.${today},end_date.gte.${today}`)
           .or('status.is.null,status.eq.scheduled')
           .order('event_date', { ascending: true })
           .order('event_time', { ascending: true });
@@ -789,7 +784,7 @@ export default function HiveWideScreen() {
     }
   }, [communityId]);
 
-  useEffect(() => { void load(); }, [load]);
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -837,12 +832,13 @@ export default function HiveWideScreen() {
    * box beside it (2026-09-02).
    */
   const nextMeetingByHive = useMemo(() => {
-    const soonest: Record<string, { date: string; time: string | null } | undefined> = {};
+    const soonest: Record<string, { date: string; time: string | null; endTime: string | null } | undefined> = {};
     for (const event of myMeetings) {
       if (soonest[event.community_id]) continue;
       soonest[event.community_id] = {
         date: event.event_date,
-        time: (event as any).event_time?.slice(0, 5) ?? null,
+        time: (event as any).event_time ?? null,
+        endTime: (event as any).end_time ?? null,
       };
     }
     return soonest;

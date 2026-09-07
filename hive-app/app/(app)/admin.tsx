@@ -68,6 +68,7 @@ import { ThinkingBee } from '../../components/ui/ThinkingBee';
 // for the web.
 import { showAlert } from '../../lib/showAlert';
 import { userFacingError } from '../../lib/userFacingError';
+import { createCalendarEvent } from '../../lib/eventMutations';
 type MemberRow = {
   id: string;
   role: UserRole;
@@ -996,20 +997,22 @@ export default function AdminScreen() {
       return;
     }
 
-    const { error } = await supabase.from('events').insert({
-      title: eventTitle,
-      event_date: eventDateIso,
-      description: eventDescription,
-      event_type: 'custom',
-      created_by: profile?.id,
-      community_id: communityId,
-      visibility: eventVisibility,
-      invited_scope: eventAudience,
-    });
-
-    if (error) {
+    try {
+      await createCalendarEvent({
+        title: eventTitle,
+        event_date: eventDateIso,
+        description: eventDescription,
+        event_type: 'custom',
+        created_by: profile?.id,
+        community_id: communityId,
+        visibility: eventVisibility,
+        invited_scope: eventAudience,
+      });
+    } catch (error) {
       showAlert('Error', 'Failed to create event');
-    } else {
+      return;
+    }
+
       setShowEventModal(false);
       setEventTitle('');
       setEventDate('');
@@ -1017,7 +1020,6 @@ export default function AdminScreen() {
       setEventVisibility('members');
       setEventAudience('members');
       await fetchData();
-    }
   };
 
   const updateHoneyPot = async () => {

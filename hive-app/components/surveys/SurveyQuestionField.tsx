@@ -19,6 +19,7 @@ import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { supabase } from '../../lib/supabase';
 import { ReachPill } from '../ui/ReachPill';
 import { accentPalette, HIVE_GOLD } from '../../lib/hiveBrand';
+import { formatDateShort } from '../../lib/dateUtils';
 
 export function ScaleInput({ value, onChange, accent = HIVE_GOLD }: { value: number | null; onChange: (v: number) => void; accent?: string }) {
   const tint = accentPalette(accent);
@@ -150,13 +151,12 @@ export interface HangRecapEvent {
 }
 
 const HANG_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const HANG_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** "Tue Sep 23" — enough to remember the evening by, and no more. */
 function hangDate(dateOnly: string): string {
   const [y, m, d] = dateOnly.split('-').map(Number);
   if (!y || !m || !d) return '';
-  return `${HANG_DAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${HANG_MONTHS[m - 1]} ${d}`;
+  return `${HANG_DAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${formatDateShort(dateOnly)}`;
 }
 
 // The hangs-recap answer is one plain string so every existing display keeps

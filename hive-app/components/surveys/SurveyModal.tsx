@@ -6,6 +6,7 @@ import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { formatDateShort, formatDateTimeShort } from '../../lib/dateUtils';
 
 import { SurveyCompletion } from './SurveyCompletion';
 import {
@@ -172,16 +173,11 @@ function formatSurveyDueDate(dueDate: string) {
   const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(dueDate);
   const parsed = new Date(dateOnly ? `${dueDate}T12:00:00Z` : dueDate);
   if (dateOnly && !Number.isNaN(parsed.getTime())) {
-    return parsed.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
+    return formatDateShort(dueDate);
   }
   if (Number.isNaN(parsed.getTime())) return dueDate;
 
-  return parsed.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return formatDateTimeShort(parsed);
 }
 
 export function SurveyModal({

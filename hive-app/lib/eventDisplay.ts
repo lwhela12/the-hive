@@ -68,3 +68,18 @@ export function isInvitedToEvent(
   if (!event.community_id) return true;
   return myCommunityIds.includes(event.community_id);
 }
+
+/**
+ * Say who the invitation is actually for, not which HIVE happens to own the
+ * database row. Quarter markers need an owning HIVE because community_id is
+ * required, but they are HIVE-Wide; public hangs are Public; OG dues stay OG.
+ */
+export function eventAudienceLabel(
+  event: { visibility?: string | null; invited_scope?: string | null },
+  sourceHiveName: string,
+): string {
+  const audience = event.invited_scope ?? event.visibility ?? 'members';
+  if (audience === 'public') return 'Public';
+  if (audience === 'all_hives') return 'HIVE-Wide';
+  return sourceHiveName;
+}

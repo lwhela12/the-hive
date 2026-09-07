@@ -67,6 +67,12 @@ tasks that still need doing; how-to-work lives with the repo.
 - Keep the repo clean. Do not leave untracked files or uncommitted changes without deciding whether to commit, remove, or intentionally ignore them.
 - Do not commit `.env`, credentials, tokens, local build artifacts, or generated caches.
 - Prefer shared components for repeated interaction patterns.
+- **Dates and times sound like people, not database fields.** Member-facing
+  dates use the shared helpers in `hive-app/lib/dateUtils.ts`: `Sept 4-12`,
+  never a raw ISO date. Times use a 12-hour clock and meeting windows use the
+  compact `5-7pm` shape, never `17:00`. Keep storage and editable input formats
+  separate from display copy, and enforce the rule with
+  `npm run lint:event-continuity`.
 - **Page headers are WHERE + WHAT only.** `AppHeader` says where the member is
   (HIVE-Wide / OG HIVE / Tech HIVE / Production HIVE) and what page this is
   (Members / Boards / Clive / etc.), then stops. Never add explanatory copy

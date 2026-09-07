@@ -18,6 +18,7 @@ import { userFacingError } from '../../lib/userFacingError';
 import type { Profile } from '../../types';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { hiveDisplayName, normalizeHiveBrandText } from '../../lib/hiveBrand';
+import { formatDateShort } from '../../lib/dateUtils';
 
 // Was 150 (2.5 hours) — Nat's standard meeting is 2 hours (5-7 PM), and the
 // 2.5-hour default meant every new meeting needed a manual duration change or
@@ -67,14 +68,13 @@ interface ScheduleMeetingModalProps {
 // HIVE that meets weekly gets the date rather than the month, because four
 // "Tech HIVE — Aug"s in a row tell you nothing about which one you are looking
 // at. Still editable; this is only what the field starts as.
-const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const defaultMeetingTitle = (
   hiveName: string,
   when: Date = new Date(),
   cadence: 'monthly' | 'weekly' = 'monthly'
 ) => cadence === 'weekly'
-  ? `${hiveName} — ${MONTH_SHORT[when.getMonth()]} ${when.getDate()}`
-  : `${hiveName} — ${MONTH_SHORT[when.getMonth()]}`;
+  ? `${hiveName} — ${formatDateShort(when)}`
+  : `${hiveName} — ${formatDateShort(when).replace(/ \d+$/, '')}`;
 
 export function ScheduleMeetingModal({
   visible,
@@ -261,12 +261,8 @@ export function ScheduleMeetingModal({
   };
 
   const formatDate = (d: Date) => {
-    return d.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
+    const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
+    return `${weekday}, ${formatDateShort(d)}, ${d.getFullYear()}`;
   };
 
   // Format for HTML input values

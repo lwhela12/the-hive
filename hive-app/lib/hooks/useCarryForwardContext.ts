@@ -5,6 +5,7 @@ import { CARRY_FORWARD_ANSWER_KEY, type CarryForwardItem } from '../carryForward
 import { supabase } from '../supabase';
 import { isEndOfMonthCheckInSurvey } from '../checkIns';
 import { getSurveyResponsePeriod, isMonthlyCheckInSurvey, type Survey } from './useSurveys';
+import { formatDateShort } from '../dateUtils';
 
 type CarryForwardHookArgs = {
   communityId?: string | null;
@@ -213,7 +214,7 @@ export async function fetchCarryForwardItems(
         id: item.id,
         type: 'action_item',
         label: item.description,
-        detail: item.due_date ? `Due ${item.due_date}` : null,
+        detail: item.due_date ? `Due ${formatDateShort(item.due_date)}` : null,
         sourceLabel: 'To-do',
         createdAt: item.created_at ?? null,
         relatedBoardPostId: item.related_board_post_id ?? null,

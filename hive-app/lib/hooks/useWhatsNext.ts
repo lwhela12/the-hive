@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../supabase';
 import { useAuth } from './useAuth';
 import { hiveDisplayName } from '../hiveBrand';
 import { checkInDisplayName, isEndOfMonthCheckInSurvey, isPreMeetingCheckInSurvey } from '../checkIns';
-import { formatTimeRange } from '../dateUtils';
-import { isInvitedToEvent } from '../eventDisplay';
+import { formatDateRangeShort, formatTimeRange } from '../dateUtils';
+import { eventAudienceLabel, isInvitedToEvent } from '../eventDisplay';
+import { queryKeys } from '../queryClient';
+import { whatsNextIsOverdue } from '../whatsNextFormat';
 
 /**
  * What is coming, across every HIVE, in date order.
@@ -29,6 +33,8 @@ export type WhatsNextItem = {
   key: string;
   /** The date it is FOR, `YYYY-MM-DD`. */
   date: string;
+  /** The inclusive final day of a multi-day window. */
+  endDate?: string | null;
   what: string;
   detail?: string;
   communityId: string | null;
@@ -53,21 +59,23 @@ const lastDayOfMonth = (dateOnly: string) => {
 export function useWhatsNext() {
   const { memberships, profile } = useAuth();
   const isOwner = profile?.is_owner === true;
-  const [items, setItems] = useState<WhatsNextItem[]>([]);
-  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const profileId = profile?.id ?? '';
+  const hiveIds = useMemo(
+    () => memberships.map((membership) => membership.community_id).sort(),
+    [memberships],
+  );
+  const today = pacificToday();
+  const enabled = !!profileId && hiveIds.length > 0;
 
-  const load = useCallback(async () => {
-    const hiveIds = memberships.map((m) => m.community_id);
-    // An empty string against a uuid column is a hard 400, and the one on the
-    // responses query would have made every answered check-in look outstanding.
-    if (!profile?.id || hiveIds.length === 0) { setItems([]); setState('ready'); return; }
-
-    const today = pacificToday();
+  const query = useQuery({
+    queryKey: queryKeys.whatsNext(profileId, hiveIds.join(','), isOwner),
+    enabled,
+    staleTime: 0,
+    queryFn: async () => {
     const found: WhatsNextItem[] = [];
     const push = (item: Omit<WhatsNextItem, 'overdue'>) =>
-      found.push({ ...item, overdue: item.date < today });
+      found.push({ ...item, overdue: whatsNextIsOverdue(item.date, today, item.endDate) });
 
-    try {
       const [meetingsResult, eventsResult, surveysResult, completionsResult] = await Promise.all([
         supabase
           .from('events')
@@ -111,7 +119,7 @@ export function useWhatsNext() {
         supabase
           .from('check_in_completions')
           .select('survey_id, community_id, occurrence')
-          .eq('user_id', profile.id),
+          .eq('user_id', profileId),
       ]);
 
       if (meetingsResult.error || eventsResult.error || surveysResult.error || completionsResult.error) {
@@ -132,7 +140,10 @@ export function useWhatsNext() {
           key: `meeting_${meeting.id}`,
           date: meeting.event_date,
           what: `${name} meets`,
-          detail: [meeting.event_time?.slice(0, 5), meeting.location].filter(Boolean).join(' · '),
+          detail: [
+            meeting.event_time ? formatTimeRange(meeting.event_time, meeting.end_time) : null,
+            meeting.location,
+          ].filter(Boolean).join(' · '),
           communityId: meeting.community_id,
         });
       }
@@ -144,14 +155,20 @@ export function useWhatsNext() {
         const timing = event.event_time
           ? formatTimeRange(event.event_time, event.end_time)
           : 'All day';
-        const through = event.end_date && event.end_date > event.event_date
-          ? `through ${event.end_date}`
+        const range = event.end_date && event.end_date > event.event_date
+          ? formatDateRangeShort(event.event_date, event.end_date)
           : null;
         push({
           key: `event_${event.id}`,
           date: event.event_date,
+          endDate: event.end_date,
           what: event.title,
-          detail: [sourceName, timing, through, invited ? event.location : null].filter(Boolean).join(' · '),
+          detail: [
+            eventAudienceLabel(event, sourceName),
+            range,
+            timing,
+            invited ? event.location : null,
+          ].filter(Boolean).join(' · '),
           communityId: event.community_id,
         });
       }
@@ -162,7 +179,7 @@ export function useWhatsNext() {
         const { data: mine } = await supabase
           .from('survey_responses')
           .select('survey_id')
-          .eq('user_id', profile.id)
+          .eq('user_id', profileId)
           .in('survey_id', surveys.map((s) => s.id));
         const answered = new Set((mine ?? []).map((r: any) => r.survey_id));
 
@@ -236,8 +253,8 @@ export function useWhatsNext() {
         date: shift(endOfMonth, 1),
         what: 'The Buzz goes out',
         detail: isOwner
-          ? 'The 1st, every month, one letter for everybody. It recaps the month just gone.'
-          : 'The 1st, every month. It recaps the month just gone.',
+          ? 'The 1st week of every month, one letter for everybody. It recaps the month just gone.'
+          : 'The 1st week of every month. It recaps the month just gone.',
         communityId: null,
       });
 
@@ -246,16 +263,21 @@ export function useWhatsNext() {
         if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
         return a.date.localeCompare(b.date);
       });
-      setItems(found);
-      setState('ready');
-    } catch (error) {
-      console.warn('[useWhatsNext] could not build the list:', error);
-      // Loud, never an empty list that looks like a clear diary.
-      setState('error');
-    }
-  }, [memberships, profile?.id, isOwner]);
+      return found;
+    },
+  });
 
-  useEffect(() => { void load(); }, [load]);
+  // Expo keeps routes mounted. Re-entering HIVE-Wide/Admin must therefore ask
+  // the canonical rows again; a one-time effect is how edited events looked
+  // stale even though the database was already right.
+  useFocusEffect(useCallback(() => {
+    if (enabled) void query.refetch();
+  }, [enabled, query.refetch]));
 
-  return { items, state, today: pacificToday(), refresh: load };
+  return {
+    items: query.data ?? [],
+    state: !enabled ? 'ready' as const : query.isLoading ? 'loading' as const : query.isError ? 'error' as const : 'ready' as const,
+    today,
+    refresh: query.refetch,
+  };
 }

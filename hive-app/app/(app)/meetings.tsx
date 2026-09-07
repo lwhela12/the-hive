@@ -31,6 +31,7 @@ import { useSurveys, isMonthlyCheckInSurvey } from '../../lib/hooks/useSurveys';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { hiveDeepLinkAction } from '../../lib/hiveDeepLink';
+import { invalidateEventQueries } from '../../lib/queryClient';
 import type { Meeting, Event } from '../../types';
 
 /**
@@ -611,6 +612,7 @@ export default function MeetingsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    await invalidateEventQueries(communityId);
     await fetchMeetings();
     setRefreshing(false);
   };
@@ -668,6 +670,7 @@ export default function MeetingsScreen() {
       'Everyone in this HIVE can see it, and the calendar invite points at the Meeting Helper.'
     );
 
+    await invalidateEventQueries(communityId);
     await fetchMeetings();
   };
 
@@ -683,6 +686,7 @@ export default function MeetingsScreen() {
         showAlert('Error', userFacingError(error, 'The meeting is still here. Try deleting it again in a moment.'));
         console.error('Delete error:', error);
       } else {
+        await invalidateEventQueries(communityId);
         await fetchMeetings();
       }
     };
@@ -779,6 +783,7 @@ export default function MeetingsScreen() {
       if (eventEditDraftKey) removeStoredItem(eventEditDraftKey);
       if (activeMeetingEditKey) removeStoredItem(activeMeetingEditKey);
       setEditingEvent(null);
+      await invalidateEventQueries(communityId);
       await fetchMeetings();
       showAlert('Success', 'Meeting updated');
     } catch (error) {
@@ -1294,6 +1299,7 @@ export default function MeetingsScreen() {
         },
       });
       if (error) throw error;
+      await invalidateEventQueries(communityId);
       await fetchMeetings();
       showAlert('Done', 'The Google Meet link is on the meeting and the calendar invite now.');
     } catch {

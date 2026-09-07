@@ -1,4 +1,5 @@
 import type { SurveyQuestion } from '../types';
+import { formatDateShort, formatTimeRange } from './dateUtils';
 
 export const PLATE_QUESTION: SurveyQuestion = {
   id: 'q_plate', text: 'How much is on your plate right now?', type: 'choice', required: false,
@@ -112,7 +113,7 @@ export function checkInQuestions(questions: SurveyQuestion[], month = false, hiv
   }
   return presented;
 }
-export type MeetingPreview = { id: string; community_id: string; event_date: string; event_time?: string | null };
+export type MeetingPreview = { id: string; community_id: string; event_date: string; event_time?: string | null; end_time?: string | null };
 export const pacificToday = (now = new Date()): string => now.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
 
 export function meetingPriority(event: MeetingPreview | undefined, today = pacificToday()): 'today' | 'tomorrow' | 'future' | 'missing' {
@@ -141,10 +142,11 @@ export function meetingLabel(event?: MeetingPreview, today = pacificToday()): st
   if (!event?.event_date) return 'No meeting scheduled yet';
   const date = new Date(`${event.event_date.slice(0, 10)}T12:00:00Z`);
   const priority = meetingPriority(event, today);
-  const calendarDay = Number.isNaN(date.getTime()) ? event.event_date : date.toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
+  const calendarDay = Number.isNaN(date.getTime())
+    ? event.event_date
+    : `${date.toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short' })}, ${formatDateShort(event.event_date.slice(0, 10))}`;
   const day = priority === 'today' ? `Today · ${calendarDay}` : priority === 'tomorrow' ? `Tomorrow · ${calendarDay}` : calendarDay;
-  const match = /^(\d{2}):(\d{2})/.exec(event.event_time ?? '');
-  const time = match ? `${Number(match[1]) % 12 || 12}:${match[2]} ${Number(match[1]) >= 12 ? 'PM' : 'AM'} PT` : 'Time to be confirmed';
+  const time = event.event_time ? `${formatTimeRange(event.event_time, event.end_time)} PT` : 'Time to be confirmed';
   return `${day} · ${time}`;
 }
 

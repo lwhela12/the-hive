@@ -17,6 +17,7 @@ import {
   selectActiveArrivalCheckIn,
   type ArrivalAttendance,
 } from '../arrivalSurveySelection';
+import { formatTime, formatTimeRange } from '../dateUtils';
 
 const POLL_INTERVAL_MS = 20 * 1000;
 
@@ -66,31 +67,14 @@ export function formatMeetingDate(meeting: ArrivalBoardMeeting | null) {
     day: 'numeric',
   });
   return meeting.event_time
-    ? `${dateLabel} · ${formatEventTimeRange(meeting.event_time, meeting.end_time)}`
+    ? `${dateLabel} · ${formatTimeRange(meeting.event_time, meeting.end_time)}`
     : dateLabel;
 }
 
-// "17:30:00" reads like a stopwatch — render times as "5:30 PM".
-export function formatEventTime(raw: string) {
-  const [hour, minute] = raw.split(':').map(Number);
-  if (!Number.isFinite(hour)) return raw;
-  return new Date(2000, 0, 1, hour, minute || 0).toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-// And when it finishes, if anybody said. The AM/PM is said once when both ends
-// share it (Nat 2026-08-21: "i couldnt add window, like 5-7").
-export function formatEventTimeRange(start: string, end?: string | null) {
-  const startText = formatEventTime(start);
-  if (!end) return startText;
-  const endText = formatEventTime(end);
-  const startPeriod = startText.slice(-2);
-  return startPeriod === endText.slice(-2)
-    ? `${startText.slice(0, -3)}\u2013${endText}`
-    : `${startText}\u2013${endText}`;
-}
+// Backwards-compatible names for callers that imported these helpers before
+// every event surface shared dateUtils.
+export const formatEventTime = formatTime;
+export const formatEventTimeRange = formatTimeRange;
 
 // "Will we see you at the meeting?" — parsed loosely so copy tweaks to the
 // options don't break the logic.

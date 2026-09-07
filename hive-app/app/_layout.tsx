@@ -7,7 +7,7 @@ import { View, Text, Pressable, Platform } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import { queryClient } from '../lib/queryClient';
+import { invalidateEventQueries, queryClient } from '../lib/queryClient';
 import { AuthContext } from '../lib/hooks/useAuth';
 import { usePrefetchAppData } from '../lib/hooks/usePrefetchAppData';
 import { clearLastAppPath } from '../lib/navigationState';
@@ -220,6 +220,21 @@ function AppPrefetcher({
   isAuthenticated: boolean;
 }) {
   usePrefetchAppData(communityId, userId, isAuthenticated);
+  useEffect(() => {
+    if (!isAuthenticated || !userId) return;
+
+    // One listener for the whole signed-in app. A calendar edit made in a
+    // second tab or on another device invalidates every event-shaped cache,
+    // instead of leaving each screen to discover the change independently.
+    const channel = supabase
+      .channel(`event-continuity:${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => {
+        void invalidateEventQueries();
+      })
+      .subscribe();
+
+    return () => { void supabase.removeChannel(channel); };
+  }, [isAuthenticated, userId]);
   return null;
 }
 

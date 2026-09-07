@@ -35,19 +35,16 @@ async function sendExpoPushNotification(
 }
 
 /**
- * 'HH:MM:SS' -> '5:30 PM'. Only reached when a meeting has an end time (see
- * below) — a meeting with none keeps the raw `event_time` string it always
- * sent, so this stays byte-identical for every meeting that hasn't been
- * given a window yet.
+ * 'HH:MM:SS' -> '5:30pm'. Notifications use the same human clock as the app.
  */
 function formatClock(value: string | null | undefined): string | null {
   if (!value) return null;
   const [rawH, rawM] = value.split(':');
   const h = Number(rawH);
   if (Number.isNaN(h)) return null;
-  const suffix = h >= 12 ? 'PM' : 'AM';
+  const suffix = h >= 12 ? 'pm' : 'am';
   const hour = h % 12 === 0 ? 12 : h % 12;
-  return `${hour}:${rawM ?? '00'} ${suffix}`;
+  return rawM === '00' ? `${hour}${suffix}` : `${hour}:${rawM ?? '00'}${suffix}`;
 }
 
 serve(async (req) => {
@@ -148,25 +145,14 @@ serve(async (req) => {
         continue;
       }
 
-      // Format the meeting time for the notification. A meeting with an end
-      // time gets a proper window — "5:00 – 7:00 PM", the AM/PM said once —
-      // instead of the raw start time alone. Nat: "i couldnt add window,
-      // like 5-7, i could only put in 5pm" (migration 202). A meeting with
-      // no end time still reads the raw `event.event_time` exactly as it
-      // always has.
-      let meetingTime = event.event_time ? ` at ${event.event_time}` : '';
-      if (event.event_time && event.end_time) {
-        const startText = formatClock(event.event_time);
-        const endText = formatClock(event.end_time);
-        if (startText && endText) {
-          const startPeriod = startText.slice(-2);
-          const endPeriod = endText.slice(-2);
-          const windowText = startPeriod === endPeriod
-            ? `${startText.slice(0, -3)} – ${endText}`
-            : `${startText} – ${endText}`;
-          meetingTime = ` at ${windowText}`;
-        }
-      }
+      const startText = formatClock(event.event_time);
+      const endText = formatClock(event.end_time);
+      const windowText = startText && endText
+        ? startText.slice(-2) === endText.slice(-2)
+          ? `${startText.slice(0, -2)}-${endText}`
+          : `${startText}-${endText}`
+        : startText;
+      const meetingTime = windowText ? ` at ${windowText}` : '';
       const notificationTitle = 'Meeting Tomorrow';
       const notificationBody = `${event.title}${meetingTime} is scheduled for tomorrow.`;
 

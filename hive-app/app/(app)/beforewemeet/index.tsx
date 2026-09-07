@@ -107,7 +107,7 @@ export default function BeforeWeMeetScreen() {
     if (authLoading || !profile) return;
     let active = true;
     setLinkedMeeting(null); setLinkFailed(false);
-    void supabase.from('events').select('id, community_id, event_date, event_time')
+    void supabase.from('events').select('id, community_id, event_date, event_time, end_time')
       .eq('id', meetingId).eq('event_type', 'meeting').eq('status', 'scheduled')
       .gte('event_date', today).maybeSingle().then(({ data, error }) => {
         if (!active) return;
@@ -203,7 +203,7 @@ export default function BeforeWeMeetScreen() {
             .eq('status', 'scheduled')
             .lt('event_date', today)
             .in('community_id', hiveIds.length ? hiveIds : ['00000000-0000-0000-0000-000000000000']),
-          supabase.from('events').select('id, community_id, event_date, event_time')
+          supabase.from('events').select('id, community_id, event_date, event_time, end_time')
             .eq('event_type', 'meeting').eq('status', 'scheduled')
             .gte('event_date', today)
             .in('community_id', hiveIds.length ? hiveIds : ['00000000-0000-0000-0000-000000000000'])

@@ -134,7 +134,7 @@ const HALFWAY_BY_SLUG: Record<string, HalfwayShape> = {
   default: {
     window: 'month',
     emoji: '🗞️',
-    detail: 'The newsletter goes out on the 1st — want a shout-out, a plug, or a reminder in it?',
+    detail: 'The newsletter goes out in the 1st week — want a shout-out, a plug, or a reminder in it?',
     flow: 'tuneup',
   },
   tech: {
@@ -169,7 +169,7 @@ const HALFWAY_BY_SLUG: Record<string, HalfwayShape> = {
   show: {
     window: 'month',
     emoji: '🗞️',
-    detail: 'The newsletter goes out on the 1st — want a shout-out, a plug, or a reminder in it?',
+    detail: 'The newsletter goes out in the 1st week — want a shout-out, a plug, or a reminder in it?',
     flow: 'tuneup',
   },
 };
@@ -1113,7 +1113,7 @@ export const NEWSLETTER_ANSWER_IDS = ['q_eom_newsletter', 'q_newsletter', 'q_sho
  */
 const NEWSLETTER_QUESTION: SurveyQuestion = {
   id: 'q_newsletter',
-  text: 'Anything for the newsletter? A shout-out, a plug, an event to come to, a reminder, or a compliment for someone — name names, they get read out. The newsletter goes out on the 1st.',
+  text: 'Anything for the newsletter? A shout-out, a plug, an event to come to, a reminder, or a compliment for someone — name names, they get read out. The newsletter goes out in the 1st week.',
   type: 'long',
   required: false,
 };
@@ -1204,7 +1204,7 @@ const END_OF_MONTH_BY_SLUG: Record<string, EndOfMonthCheckIn> = {
   show: {
     title: 'End of the month',
     description:
-      'The newsletter goes out on the 1st. Two minutes: anything for the letter, tick off what you have done, and say if you want a hand.',
+      'The newsletter goes out in the 1st week. Two minutes: anything for the letter, tick off what you have done, and say if you want a hand.',
     questions: [
       { ...NEWSLETTER_QUESTION },
     ],

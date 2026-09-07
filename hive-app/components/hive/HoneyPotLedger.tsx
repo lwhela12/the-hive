@@ -17,6 +17,7 @@ import {
 } from '../../lib/honeyPot';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
+import { formatDateMedium } from '../../lib/dateUtils';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -42,12 +43,7 @@ type HoneyPotLedgerProps = {
 };
 
 const formatLedgerDate = (isoString: string) => {
-  const date = new Date(isoString);
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  return formatDateMedium(isoString);
 };
 
 function DetailLine({ label, value }: { label: string; value?: string | null }) {

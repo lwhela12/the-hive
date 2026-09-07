@@ -436,7 +436,7 @@ function checkInEmailHtml(
       ${logoBlock(mark)}
       ${halfwayKicker}
       <h1 style="color: ${mark.accent}; font-size: 22px; text-align: center; margin: 8px 0 4px;">End of the month</h1>
-      <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The newsletter goes out on the 1st</p>
+      <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The newsletter goes out in the 1st week</p>
       <p style="font-size: 15px;">Hi ${name},</p>
       <p style="font-size: 15px;">No meeting tonight — but the newsletter goes out soon, and this is the easy way in:</p>
       <ul style="font-size: 15px; padding-left: 20px;">
@@ -596,14 +596,14 @@ function seasonEmailHtml(
      */
     const heading = touch === 'day_of' ? 'Last call' : 'End of the month';
     const body = touch === 'day_of'
-      ? `Last call for the newsletter — it goes out on the 1st. Nothing owed: just a quick one if you want a hand with anything, or you have something to put in.`
+      ? `Last call for the newsletter — it goes out in the 1st week. Nothing owed: just a quick one if you want a hand with anything, or you have something to put in.`
       : `We're halfway through the month. How is it going? Is there anything you want a hand with? And have you got anything for the newsletter — a shout-out, a plug, an event to come to, a reminder, or a compliment for someone? Blanks are completely fine, and whatever is still on your list is on your to-do list in the app.`;
     return `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
         <div style="text-align: center; padding: 8px 0 4px;">${hiveSealImg(mark)}</div>
         ${kicker}
         <h1 style="color: ${mark.accent}; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
-        <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The newsletter goes out on the 1st</p>
+        <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The newsletter goes out in the 1st week</p>
         <p style="font-size: 15px;">Hi ${name},</p>
         <p style="font-size: 15px;">${body}</p>
         <div style="text-align: center; margin: 28px 0;">
