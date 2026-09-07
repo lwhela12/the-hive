@@ -443,6 +443,7 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
                 onVisibilityChange={setDraftBirthdaySeen}
                 invited={draftBirthdayInvited}
                 onInvitedChange={setDraftBirthdayInvited}
+                allowPublic
               />
               <View className="flex-row gap-2">
                 <Pressable
@@ -4320,6 +4321,7 @@ export default function HiveScreen() {
                           onVisibilityChange={setEventVisibility}
                           invited={eventAudience}
                           onInvitedChange={setEventAudience}
+                          allowPublic={profile?.is_owner === true}
                         />
                       </View>
 

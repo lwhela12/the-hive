@@ -2874,6 +2874,7 @@ export default function ProfileScreen() {
                         onVisibilityChange={setEditBirthdayVisibility}
                         invited={editBirthdayInvitedScope}
                         onInvitedChange={setEditBirthdayInvitedScope}
+                        allowPublic
                       />
                     </View>
                   ) : null}

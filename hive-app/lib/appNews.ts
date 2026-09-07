@@ -1399,6 +1399,18 @@ export function getAppNewsForMonth(
   return getAppNews(entries.length, entries).filter((entry) => entry.date.slice(0, 7) === month);
 }
 
+/**
+ * Internal release notes know more than the public newsletter should.
+ * Production HIVE is intentionally private, and an exact HIVE count turns
+ * stale the instant another one starts. Keep those facts out before the draft
+ * request is assembled; the edge function repeats the check as a backstop.
+ */
+export function isPublicNewsletterSafeAppNews(entry: AppNewsEntry): boolean {
+  const copy = `${entry.title} ${entry.detail ?? ''}`;
+  return !/\bproduction(?:\s+hive)?\b/i.test(copy)
+    && !/\b(?:three|3)\s+hives?\b/i.test(copy);
+}
+
 /** Per-member key for the newest entry they've acknowledged. */
 export function getAppNewsSeenKey(profileId: string) {
   return `the-hive:app-news-seen:${profileId}`;

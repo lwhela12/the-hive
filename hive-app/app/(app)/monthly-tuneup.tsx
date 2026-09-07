@@ -33,7 +33,7 @@ import { sendMentionNotifications } from '../../lib/mentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { Avatar } from '../../components/ui/Avatar';
-import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
+import { EventScopeFields, type EventAudience } from '../../components/events/EventAudienceToggle';
 import {
   getGroupMentionSuggestions,
   getMentionTargetHandle,
@@ -1186,6 +1186,7 @@ export default function MonthlyTuneupScreen() {
 
   // Step 3 — calendar
   const [eventTitle, setEventTitle] = useState('');
+  const [eventVisibility, setEventVisibility] = useState<EventAudience>('members');
   const [eventAudience, setEventAudience] = useState<EventAudience>('members');
   const [eventDate, setEventDate] = useState('');
   const [eventEndDate, setEventEndDate] = useState('');
@@ -2069,7 +2070,8 @@ export default function MonthlyTuneupScreen() {
       if (normalizedTime.note) newEvent.description = `Time note: ${normalizedTime.note}`;
       if (eventLocation.trim()) newEvent.location = eventLocation.trim();
 
-      newEvent.visibility = eventAudience;
+      newEvent.visibility = eventVisibility;
+      newEvent.invited_scope = eventAudience;
       await createCalendarEvent(newEvent);
 
       const createdEventLabel = `${eventTitle.trim()} — ${eventDate}${eventEndDateIso ? ` → ${eventEndDate}` : ''}`;
@@ -2080,6 +2082,7 @@ export default function MonthlyTuneupScreen() {
       }
       setEventTitle('');
       setEventDate('');
+      setEventVisibility('members');
       setEventAudience('members');
       setEventEndDate('');
       setEventAllDay(false);
@@ -2810,7 +2813,13 @@ export default function MonthlyTuneupScreen() {
           onChangeText={setEventLocation}
           placeholder="Location (optional)"
         />
-        <EventAudienceToggle value={eventAudience} onChange={setEventAudience} />
+        <EventScopeFields
+          visibility={eventVisibility}
+          onVisibilityChange={setEventVisibility}
+          invited={eventAudience}
+          onInvitedChange={setEventAudience}
+          allowPublic={profile?.is_owner === true}
+        />
         {eventError ? (
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626' }}>{eventError}</Text>
         ) : null}
@@ -3418,7 +3427,13 @@ export default function MonthlyTuneupScreen() {
                     onChangeText={setEventLocation}
                     placeholder="Location (optional)"
                   />
-                  <EventAudienceToggle value={eventAudience} onChange={setEventAudience} />
+                  <EventScopeFields
+                    visibility={eventVisibility}
+                    onVisibilityChange={setEventVisibility}
+                    invited={eventAudience}
+                    onInvitedChange={setEventAudience}
+                    allowPublic={profile?.is_owner === true}
+                  />
                   {eventError ? (
                     <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626' }}>{eventError}</Text>
                   ) : null}

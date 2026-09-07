@@ -75,6 +75,8 @@ export interface Community extends Record<string, unknown> {
   accent_color?: string | null;
   /** How far anything in this HIVE may travel (migration 125). Defaults to 'hive'. */
   max_share_scope?: 'hive' | 'all_hives' | 'public';
+  /** Whether unauthenticated surfaces may acknowledge that this HIVE exists. */
+  publicly_listed?: boolean;
   /** How often this HIVE meets — weekly HIVEs date their meetings rather than month them. */
   meeting_cadence?: 'monthly' | 'weekly';
   /**

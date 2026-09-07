@@ -2070,6 +2070,7 @@ function MemberDetailPage({
                           onVisibilityChange={setDraftBirthdayVisibility}
                           invited={draftBirthdayInvitedScope}
                           onInvitedChange={setDraftBirthdayInvitedScope}
+                          allowPublic
                         />
                       </View>
                     ) : null}
