@@ -488,6 +488,10 @@ export function NewsletterPanel({
   >([]);
   const [newsletterThoughts, setNewsletterThoughts] = useState<NewsletterThought[]>([]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [editingThought, setEditingThought] = useState<NewsletterThought | null>(null);
+  const [editedThoughtText, setEditedThoughtText] = useState('');
+  const [thoughtToArchive, setThoughtToArchive] = useState<NewsletterThought | null>(null);
+  const [savingThought, setSavingThought] = useState(false);
   const [issues, setIssues] = useState<NewsletterIssue[]>([]);
   const [memberEmails, setMemberEmails] = useState<string[]>([]);
   const [sending, setSending] = useState<string | null>(null);
@@ -721,6 +725,44 @@ export function NewsletterPanel({
       .eq('id', confirmRemoveSub.id);
     setRemovingSub(false);
     setConfirmRemoveSub(null);
+    if (error) {
+      showAlert('Could not remove that', 'Try again in a moment.');
+      return;
+    }
+    await load();
+  };
+
+  const saveThought = async () => {
+    if (!editingThought || savingThought) return;
+    const content = editedThoughtText.trim();
+    if (!content) {
+      showAlert('Add a thought first', 'A newsletter thought cannot be blank.');
+      return;
+    }
+    setSavingThought(true);
+    const { error } = await supabase
+      .from('newsletter_thoughts')
+      .update({ content })
+      .eq('id', editingThought.id);
+    setSavingThought(false);
+    if (error) {
+      showAlert('Could not save that', 'Try again in a moment.');
+      return;
+    }
+    setEditingThought(null);
+    setEditedThoughtText('');
+    await load();
+  };
+
+  const archiveThought = async () => {
+    if (!thoughtToArchive || savingThought) return;
+    setSavingThought(true);
+    const { error } = await supabase
+      .from('newsletter_thoughts')
+      .update({ archived_at: new Date().toISOString() })
+      .eq('id', thoughtToArchive.id);
+    setSavingThought(false);
+    setThoughtToArchive(null);
     if (error) {
       showAlert('Could not remove that', 'Try again in a moment.');
       return;
@@ -982,12 +1024,57 @@ export function NewsletterPanel({
                     gap: 3,
                   }}
                 >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.gold }}>
-                    Your newsletter thought · private
-                  </Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13.5, color: SPACE_SKIN.inkBody, lineHeight: 20 }}>
-                    {thought.content}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.gold }}>
+                      Your newsletter thought · private
+                    </Text>
+                    <Pressable
+                      onPress={() => { setEditingThought(thought); setEditedThoughtText(thought.content); }}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit newsletter thought"
+                    >
+                      <Ionicons name="pencil-outline" size={17} color={SPACE_SKIN.inkSoft} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setThoughtToArchive(thought)}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Remove newsletter thought"
+                    >
+                      <Ionicons name="trash-outline" size={17} color={SPACE_SKIN.inkSoft} />
+                    </Pressable>
+                  </View>
+                  {editingThought?.id === thought.id ? (
+                    <>
+                      <TextInput
+                        value={editedThoughtText}
+                        onChangeText={setEditedThoughtText}
+                        accessibilityLabel="Edit newsletter thought text"
+                        multiline
+                        autoFocus
+                        style={{
+                          minHeight: 86, fontFamily: 'Lato_400Regular', fontSize: 13.5, color: FIELD.ink,
+                          backgroundColor: FIELD.fill, borderWidth: 1, borderColor: FIELD.border,
+                          borderRadius: 10, paddingHorizontal: 10, paddingVertical: 9, textAlignVertical: 'top',
+                        }}
+                      />
+                      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+                        <Pressable onPress={() => { setEditingThought(null); setEditedThoughtText(''); }} disabled={savingThought}>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.inkSoft }}>Cancel</Text>
+                        </Pressable>
+                        <Pressable onPress={() => void saveThought()} disabled={savingThought}>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.gold }}>
+                            {savingThought ? 'Saving…' : 'Save'}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </>
+                  ) : (
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13.5, color: SPACE_SKIN.inkBody, lineHeight: 20 }}>
+                      {thought.content}
+                    </Text>
+                  )}
                 </View>
               ))}
 
@@ -1095,6 +1182,15 @@ export function NewsletterPanel({
         confirmLabel={sending ? 'Sending…' : 'Send it'}
         onConfirm={() => { if (confirmSend) void sendIssue(confirmSend, 'live'); }}
         onCancel={() => { if (!sending) setConfirmSend(null); }}
+      />
+      <ConfirmDialog
+        visible={!!thoughtToArchive}
+        title="Remove this newsletter thought?"
+        body="It will leave this worktop. It is archived, not permanently deleted."
+        confirmLabel={savingThought ? 'Removing…' : 'Remove'}
+        destructive
+        onConfirm={() => { void archiveThought(); }}
+        onCancel={() => { if (!savingThought) setThoughtToArchive(null); }}
       />
       <ConfirmDialog
         visible={!!confirmRemoveSub}

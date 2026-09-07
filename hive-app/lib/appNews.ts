@@ -24,6 +24,11 @@ export type AppNewsEntry = {
   action?: string;
   /** Database rows use this to make same-day ordering deterministic. */
   createdAt?: string;
+  /**
+   * A deliberate, public-facing newsletter pick. App news is a build log by
+   * default; it enters The Buzz only when Nat has made this choice.
+   */
+  newsletterEligible?: boolean;
 };
 
 /** Frozen legacy baseline. Preserve every id: profiles remember the last one seen. */
@@ -62,9 +67,10 @@ export const APP_NEWS: AppNewsEntry[] = [
     id: '2026-08-21-the-creed-reads-like-a-creed',
     date: '2026-08-21',
     title: 'The Creed has three new lines, and reads like a list again',
-    detail: 'Always be curious, lead with love, and don\u2019t take it personally have joined the promises. New members now read the real creed at the door instead of a one-line summary.',
+    detail: 'New members agree to the HIVE Creed before joining. You can read it on the public site or on the HIVE-Wide board from any HIVE.',
     href: { pathname: '/board' },
     action: 'Read the creed',
+    newsletterEligible: true,
   },
   {
     id: '2026-08-21-nics-mini-workouts',
@@ -1407,7 +1413,8 @@ export function getAppNewsForMonth(
  */
 export function isPublicNewsletterSafeAppNews(entry: AppNewsEntry): boolean {
   const copy = `${entry.title} ${entry.detail ?? ''}`;
-  return !/\bproduction(?:\s+hive)?\b/i.test(copy)
+  return entry.newsletterEligible === true
+    && !/\bproduction(?:\s+hive)?\b/i.test(copy)
     && !/\b(?:three|3)\s+hives?\b/i.test(copy);
 }
 

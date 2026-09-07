@@ -246,10 +246,10 @@ export function BoardTopicComposer({
   };
 
   const handleSubmit = async () => {
-    const finalGoalTitle = topicKind === 'helper_log' ? 'HIVE Helpers' : null;
+    const finalGoalTitle = topicKind === 'helper_log' ? 'HIVE Help' : null;
     const finalOwnerUserId = topicKind === 'hd_board' ? ownerUserId || null : null;
     const finalName = topicKind === 'helper_log'
-      ? 'HIVE Helpers'
+      ? 'HIVE Help'
       : topicKind === 'hd_board'
         ? (name.trim() || getMemberHdBoardName(selectedOwnerName))
         : name.trim();
@@ -593,7 +593,7 @@ export function BoardTopicComposer({
               placeholder={topicKind === 'hd_board'
                 ? suggestedHdName || "e.g., Brit's HD Board"
                 : topicKind === 'helper_log'
-                  ? 'HIVE Helpers'
+                  ? 'HIVE Help'
                   : 'e.g., Book Club, Recipes, Travel Plans...'}
               multiline={false}
               maxLength={NAME_MAX_LENGTH}

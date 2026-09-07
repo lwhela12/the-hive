@@ -1905,7 +1905,7 @@ export default function MonthlyTuneupScreen() {
     let thread = helperThread ?? await findHelperThread();
     if (!thread) {
       setHelperPosting(false);
-      setHelperError('Could not find the HIVE Helpers board. You can log it from the Boards tab instead.');
+      setHelperError('Could not find the HIVE Help board. You can log it from the Boards tab instead.');
       return;
     }
 
@@ -1982,7 +1982,7 @@ export default function MonthlyTuneupScreen() {
         const board = helperThread?.boardId
           ? { id: helperThread.boardId }
           : await findBoardTarget('helpers');
-        if (!board) throw new Error('HIVE Helpers board not found');
+        if (!board) throw new Error('HIVE Help board not found');
         const { data, error } = await (supabase as any)
           .from('board_posts')
           .insert({

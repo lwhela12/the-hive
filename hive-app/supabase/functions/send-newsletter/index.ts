@@ -82,6 +82,15 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
+/** Render the editor's small `**bold**` marker without ever accepting HTML. */
+function inlineHtml(value: string): string {
+  return value.split(/(\*\*[^*\n]+\*\*)/g).filter(Boolean).map((part) => (
+    part.startsWith('**') && part.endsWith('**')
+      ? `<strong>${escapeHtml(part.slice(2, -2))}</strong>`
+      : escapeHtml(part)
+  )).join('');
+}
+
 /**
  * A letter block, as email HTML.
  *
@@ -151,21 +160,21 @@ function buttonHtml(key: string, recipient: Recipient): string {
 function blockHtml(block: LetterBlock): string {
   switch (block.kind) {
     case 'heading':
-      return `<h2 style="font-family:Georgia,'Times New Roman',serif;font-size:20px;line-height:28px;color:#2c2418;margin:28px 0 8px;">${escapeHtml(block.text)}</h2>`;
+      return `<h2 style="font-family:Georgia,'Times New Roman',serif;font-size:20px;line-height:28px;color:#2c2418;margin:28px 0 8px;">${inlineHtml(block.text)}</h2>`;
     case 'attribution':
-      return `<p style="font-family:Helvetica,Arial,sans-serif;font-size:14px;color:#8a6a2f;margin:-8px 0 16px 19px;">— ${escapeHtml(block.text)}</p>`;
+      return `<p style="font-family:Helvetica,Arial,sans-serif;font-size:14px;color:#8a6a2f;margin:-8px 0 16px 19px;">— ${inlineHtml(block.text)}</p>`;
     case 'label':
-      return `<p style="font-family:Helvetica,Arial,sans-serif;font-size:13px;letter-spacing:1.2px;text-transform:uppercase;color:#8a6a2f;margin:22px 0 6px;font-weight:bold;">${escapeHtml(block.text)}</p>`;
+      return `<p style="font-family:Helvetica,Arial,sans-serif;font-size:13px;letter-spacing:1.2px;text-transform:uppercase;color:#8a6a2f;margin:22px 0 6px;font-weight:bold;">${inlineHtml(block.text)}</p>`;
     case 'bullet':
-      return `<p style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#3a3327;margin:4px 0 4px 18px;">• ${escapeHtml(block.text)}</p>`;
+      return `<p style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#3a3327;margin:4px 0 4px 18px;">• ${inlineHtml(block.text)}</p>`;
     case 'numbered':
-      return `<p style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#3a3327;margin:4px 0 4px 18px;"><strong style="color:#8a6a2f;">${escapeHtml(block.marker)}.</strong> ${escapeHtml(block.text)}</p>`;
+      return `<p style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#3a3327;margin:4px 0 4px 18px;"><strong style="color:#8a6a2f;">${escapeHtml(block.marker)}.</strong> ${inlineHtml(block.text)}</p>`;
     case 'dated':
-      return `<p style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#3a3327;margin:6px 0;"><strong style="color:#8a6a2f;">${escapeHtml(block.when)}:</strong> ${escapeHtml(block.text)}</p>`;
+      return `<p style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#3a3327;margin:6px 0;"><strong style="color:#8a6a2f;">${inlineHtml(block.when)}:</strong> ${inlineHtml(block.text)}</p>`;
     case 'quote':
-      return `<blockquote style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:16px;line-height:26px;color:#5a4f3c;border-left:3px solid #e3d4ac;margin:16px 0;padding:2px 0 2px 16px;">${escapeHtml(block.text)}</blockquote>`;
+      return `<blockquote style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:16px;line-height:26px;color:#5a4f3c;border-left:3px solid #e3d4ac;margin:16px 0;padding:2px 0 2px 16px;">${inlineHtml(block.text)}</blockquote>`;
     default:
-      return `<p style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#3a3327;margin:12px 0;">${escapeHtml(block.text)}</p>`;
+      return `<p style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#3a3327;margin:12px 0;">${inlineHtml(block.text)}</p>`;
   }
 }
 

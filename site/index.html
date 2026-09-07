@@ -1216,7 +1216,19 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
             wrap.appendChild(a);
             body.appendChild(wrap);
           } else if (piece) {
-            body.appendChild(document.createTextNode(piece));
+            // `**words**` is the newsletter editor's one inline formatting
+            // marker. Build nodes rather than using innerHTML so the public
+            // archive stays a text-only surface.
+            piece.split(/(\*\*[^*\n]+\*\*)/g).forEach(function (part) {
+              if (!part) return;
+              if (part.slice(0, 2) === '**' && part.slice(-2) === '**') {
+                var strong = document.createElement('strong');
+                strong.textContent = part.slice(2, -2);
+                body.appendChild(strong);
+              } else {
+                body.appendChild(document.createTextNode(part));
+              }
+            });
           }
         });
 

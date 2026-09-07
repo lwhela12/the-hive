@@ -9,7 +9,10 @@ interface LinkifiedTextProps {
   selectable?: boolean;
 }
 
-const URL_OR_MENTION_REGEX = /(https?:\/\/[^\s]+|www\.[^\s]+|@[a-z0-9._-]+)/gi;
+// `**words**` is the newsletter's one inline formatting marker. It stays
+// deliberately small and plain-text-safe; the email renderer recognizes the
+// same token before escaping the rest of the line.
+const INLINE_TOKEN_REGEX = /(\*\*[^*\n]+\*\*|https?:\/\/[^\s]+|www\.[^\s]+|@[a-z0-9._-]+)/gi;
 
 /**
  * Renders text with clickable links.
@@ -25,20 +28,20 @@ export const LinkifiedText = memo(function LinkifiedText({
   const parts = useMemo(() => {
     if (!children) return [];
 
-    const matches = children.match(URL_OR_MENTION_REGEX);
+    const matches = children.match(INLINE_TOKEN_REGEX);
     if (!matches) return [{ text: children, type: 'text' as const }];
 
-    const result: { text: string; type: 'text' | 'link' | 'mention' }[] = [];
+    const result: { text: string; type: 'text' | 'link' | 'mention' | 'bold' }[] = [];
     let lastIndex = 0;
 
-    children.replace(URL_OR_MENTION_REGEX, (match, _, offset) => {
+    children.replace(INLINE_TOKEN_REGEX, (match, _, offset) => {
       // Add text before the match
       if (offset > lastIndex) {
         result.push({ text: children.slice(lastIndex, offset), type: 'text' });
       }
       result.push({
-        text: match,
-        type: match.startsWith('@') ? 'mention' : 'link',
+        text: match.startsWith('**') ? match.slice(2, -2) : match,
+        type: match.startsWith('**') ? 'bold' : match.startsWith('@') ? 'mention' : 'link',
       });
       lastIndex = offset + match.length;
       return match;
@@ -85,6 +88,8 @@ export const LinkifiedText = memo(function LinkifiedText({
           >
             {part.text}
           </Text>
+        ) : part.type === 'bold' ? (
+          <Text key={index} style={{ fontFamily: 'Lato_700Bold' }}>{part.text}</Text>
         ) : (
           part.text
         )

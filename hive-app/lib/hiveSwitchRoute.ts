@@ -45,7 +45,6 @@ const HIVE_SCREENS_OFF_THE_RAIL = new Set([
   '/beforewemeet',
   '/monthly-tuneup',
   '/arrival-board',
-  '/newsletter',
 ]);
 
 /** Returns a path to navigate to, or null to stay exactly where you are. */

@@ -15,7 +15,6 @@ import { recordAssistantUsage } from '../_shared/metering.ts';
 // Read-only by design. It drafts; Nat writes.
 
 interface DraftRequest {
-  communityId: string;
   /** Local date the draft is "as of". Defaults to today in Pacific time. */
   date?: string;
   /**
@@ -33,12 +32,6 @@ interface DraftRequest {
    * owner can reach this and the list is public-facing by design.
    */
   appNews?: string[];
-  /**
-   * "Pardon our dust, we're expanding — here's what that means for you." The
-   * same paragraphs the app shows on the HIVE-Wide page and at sign-in, sent
-   * from lib/hiveWide.ts so one edit changes all three.
-   */
-  expansionNote?: string[];
   /**
    * Writing the letter takes the better part of a minute; gathering takes about
    * a second. The screen asks for the facts first so there's something to read,
@@ -75,6 +68,16 @@ function prettyTimeRange(start: string, end?: string | null) {
   return startText.slice(-2) === endText.slice(-2)
     ? `${startText.slice(0, -2)}-${endText}`
     : `${startText}-${endText}`;
+}
+
+/** HIVE Help changes on the 15th, not at a calendar-month boundary. */
+function hiveHelpCycle(date: string) {
+  const [year, month, day] = date.split('-').map(Number);
+  const start = new Date(Date.UTC(year, month - 1, day >= 15 ? 15 : -16));
+  const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 15));
+  const previous = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - 1, 15));
+  const iso = (value: Date) => value.toISOString().slice(0, 10);
+  return { start: iso(start), end: iso(end), previousStart: iso(previous) };
 }
 
 /**
@@ -129,18 +132,14 @@ async function writeNewsletter(
     '"Hivers", "the buzz", "keep the HIVE humming". She addresses everyone',
     'directly as "you". She celebrates collective momentum, never people by name.',
     '',
-    'HER STRUCTURE — use these headings, in this order, skipping any with',
-    'nothing to say:',
+    'HER STRUCTURE — use only the headings that earn their place. This is a',
+    'short letter, not a changelog:',
     '  Yellow!            (greeting — a sentence or two of hello)',
     `  Here's the buzz from ${month}`,
     '  HIVE Hangs         (what happened, then what is coming up)',
-    '  HIVE Help          (the focus, and a nudge to log it on 15min HIVE Helpers)',
-    '  Around the HIVE    (app and community updates)',
-    '  Wishes granted     (only if there are any)',
-    '  Shout-outs         (only if there are any)',
-    '  Compliment Corner  (only if there are any)',
-    '  Keep the HIVE humming  (a short numbered list of 4-6 easy asks)',
-    '  A Note from Nat',
+    '  HIVE Help          (the focus, and a nudge to log it on the HIVE Help board)',
+    '  Around the HIVE    (only explicitly newsletter-ready public updates)',
+    '  Keep the HIVE humming  (at most three useful invitations or nudges)',
     '',
     'HARD RULES:',
     '- Use ONLY the facts given. Never invent an event, a name, a date, or a',
@@ -149,10 +148,14 @@ async function writeNewsletter(
     '  ownership clue, private wish/post/check-in or internal project detail.',
     '- Never mention Production HIVE and never say there are three (or any exact',
     '  number of) HIVEs. The public wording is always "multiple HIVEs".',
-    '- Never write "A Note from Nat" yourself. Output exactly this under that',
-    '  heading: [Your note here, Nat 💛]',
+    '- Owner notes and end-of-month contributions are editorial leads, not quotes.',
+    '  Use their substance only when it can be said without naming or identifying',
+    '  anyone. Never claim a private workflow is new, fixed, broken, or exclusive.',
     '- Where you need something only Nat knows, write it as a bracket, e.g.',
     '  [add anything I missed] — do not guess.',
+    '- Choose no more than five named highlights across the whole letter. Prefer',
+    '  the current HIVE Help, owner editorial notes, public invitations, and',
+    '  explicitly newsletter-ready app news. Leave the rest out.',
     '- Plain text, no markdown asterisks or hashes. Headings on their own line.',
     '- Sign off: "Love in the biggest way," then "Nat" on the next line.',
     '- Keep it skimmable. Someone reads this over coffee.',
@@ -201,8 +204,6 @@ serve(async (req) => {
 
   try {
     const body = (await req.json()) as DraftRequest;
-    const communityId = body.communityId;
-    if (!communityId) return errorResponse('Missing communityId', 400);
     const date = /^\d{4}-\d{2}-\d{2}$/.test(body.date ?? '') ? body.date! : pacificToday();
 
     // Being signed in used to be the whole test, and the id of the HIVE to read
@@ -232,27 +233,23 @@ serve(async (req) => {
       }
     }
 
-    // A HIVE that cannot publish outward has no public newsletter, whatever any
-    // single item inside it says. The ceiling is the backstop for a mis-tapped
-    // setting (migration 125), and it has to hold here too — this function is
-    // the one place that assembles a HIVE's contents into something that leaves.
-    const { data: hive } = await supabaseAdmin
+    // The Buzz is a HIVE-Wide artifact. It takes facts only from HIVEs that
+    // explicitly permit public sharing; it never inherits the last selected
+    // HIVE from the writer's browser.
+    const { data: publicHives } = await supabaseAdmin
       .from('communities')
-      .select('name, max_share_scope, publicly_listed')
-      .eq('id', communityId)
-      .maybeSingle();
-
-    if (!hive) return errorResponse('The newsletter is drafted by the HIVE owner.', 403);
-
-    if (hive.max_share_scope !== 'public' || hive.publicly_listed !== true) {
+      .select('id')
+      .eq('max_share_scope', 'public')
+      .eq('publicly_listed', true);
+    const publicHiveIds = ((publicHives ?? []) as { id: string }[]).map((hive) => hive.id);
+    if (publicHiveIds.length === 0) {
       return jsonResponse({
         success: true,
         blocked: true,
         month: null,
         prose: null,
         sections: [],
-        reason: `${hive.name} keeps its contents inside the HIVE, so there's nothing to publish outward yet. `
-          + `Raise what it's allowed to share and this will fill in.`,
+        reason: 'There are no HIVE spaces set up to share public newsletter material yet.',
       });
     }
 
@@ -281,52 +278,43 @@ serve(async (req) => {
     // A whole month, always — a recap of a finished month has a end as well as
     // a beginning, and half of one was never what anybody wanted.
     const endIso = `${cycleEnd}T00:00:00Z`;
-    const withinWindow = (timestamp?: string | null) => (
-      !!timestamp && timestamp >= startIso && (!endIso || timestamp < endIso)
-    );
 
     const [
       nextMeetingRows,
       upcomingRows,
-      publicThreadRows,
       grantedCountRows,
       newMemberCountRows,
       pastEventRows,
+      thoughtRows,
+      responseRows,
+      helperFocusRows,
     ] = await Promise.all([
       // Meetings are members-only by nature, so the public newsletter never
       // names one. Kept as a query only so the shape below stays readable.
       supabaseAdmin.from('events')
         .select('title, event_date, event_time, end_time')
-        .eq('community_id', communityId).eq('event_type', 'meeting')
-        .eq('visibility', 'public')
+        .in('community_id', publicHiveIds).eq('event_type', 'meeting')
+        .eq('visibility', 'public').eq('invited_scope', 'public')
         .gte('event_date', date).order('event_date', { ascending: true }).limit(1),
       // "Everyone's invited" only. Anything left HIVErs Only never leaves the
       // members' side — a privacy default has to fail closed.
       supabaseAdmin.from('events')
         .select('title, event_date, end_date, event_type')
-        .eq('community_id', communityId)
-        .eq('visibility', 'public')
+        .in('community_id', publicHiveIds)
+        .eq('visibility', 'public').eq('invited_scope', 'public')
         .gte('event_date', date).order('event_date', { ascending: true }).limit(30),
-      // Only already-editorial public posts. No author, reply, attachment or
-      // member-created private thread is fetched into this public workflow.
-      supabaseAdmin.from('board_posts')
-        .select('id, title, content, created_at, visibility, category:board_categories!category_id(name, topic_kind)')
-        .eq('community_id', communityId)
-        .eq('visibility', 'public')
-        .is('archived_at', null)
-        .order('created_at', { ascending: false }).limit(60),
       // Counted, never named — how many wishes came true is a fact about the
       // HIVE, not about anybody in it.
       supabaseAdmin.from('wishes')
         .select('id', { count: 'exact', head: true })
-        .eq('community_id', communityId)
+        .in('community_id', publicHiveIds)
         .eq('status', 'fulfilled')
         .gte('fulfilled_at', startIso)
         .is('deleted_at', null),
       // Aggregate growth is safe public evidence; no roster or identity crosses.
       supabaseAdmin.from('community_memberships')
         .select('id', { count: 'exact', head: true })
-        .eq('community_id', communityId)
+        .in('community_id', publicHiveIds)
         .gte('created_at', startIso)
         .lt('created_at', endIso),
       // Hangs that already HAPPENED. Nat's newsletter reports on the month as
@@ -334,10 +322,29 @@ serve(async (req) => {
       // over!"), and a draft with only upcoming events can't write that.
       supabaseAdmin.from('events')
         .select('title, event_date, event_type, description, location')
-        .eq('community_id', communityId)
-        .eq('visibility', 'public')
+        .in('community_id', publicHiveIds)
+        .eq('visibility', 'public').eq('invited_scope', 'public')
         .gte('event_date', cycleStart).lt('event_date', cycleEnd)
         .order('event_date', { ascending: true }).limit(30),
+      // Owner notes are editorial leads. They are never exposed outside this
+      // owner-only drafting call.
+      supabaseAdmin.from('newsletter_thoughts')
+        .select('content, created_at')
+        .is('archived_at', null)
+        .order('created_at', { ascending: false }).limit(20),
+      // These answers expressly ask for newsletter consideration. Keep their
+      // authors out of the data so the writer cannot accidentally identify one.
+      supabaseAdmin.from('survey_responses')
+        .select('answers, submitted_at, created_at')
+        .order('created_at', { ascending: false }).limit(160),
+      // A HIVE Help title is the shared focus, not somebody's contribution.
+      // Read only that title and its date; never pull the private board body.
+      supabaseAdmin.from('board_posts')
+        .select('title, created_at, category:board_categories!inner(topic_kind)')
+        .in('community_id', publicHiveIds)
+        .eq('category.topic_kind', 'helper_log')
+        .is('archived_at', null)
+        .order('created_at', { ascending: false }).limit(24),
     ]);
 
     const nextMeeting = ((nextMeetingRows.data ?? []) as any[])[0] ?? null;
@@ -350,10 +357,22 @@ serve(async (req) => {
       && !event.end_date
       && !/\b(out of town|away|trip|travel|galavant)/i.test(event.title ?? '')
     )).slice(0, 8);
-    const posts = (publicThreadRows.data ?? []) as any[];
-    const helpFocus = posts
-      .filter((row) => /helper/i.test(row.category?.name ?? '') && !/ideas/i.test(row.title ?? ''))
-      .map((row) => (row.title as string).replace(/^.*HIVE Help(?:ers)?\s*[—–-]+\s*/i, ''))[0] ?? null;
+    const { start: helpStart, end: helpEnd, previousStart: previousHelpStart } = hiveHelpCycle(date);
+    const helperPosts = ((helperFocusRows.data ?? []) as any[]).filter((row) => (
+      row.category?.topic_kind === 'helper_log'
+      && !/ideas/i.test(row.title ?? '')
+      && /HIVE Help(?:ers)?\s*[—–-]+/i.test(row.title ?? '')
+    ));
+    const focusText = (row: any) => String(row.title).replace(/^.*HIVE Help(?:ers)?\s*[—–-]+\s*/i, '').trim();
+    const currentHelp = helperPosts.find((row) => row.created_at >= `${helpStart}T00:00:00Z` && row.created_at < `${helpEnd}T00:00:00Z`);
+    const previousHelp = helperPosts.find((row) => row.created_at >= `${previousHelpStart}T00:00:00Z` && row.created_at < `${helpStart}T00:00:00Z`);
+    const ownerNotes = ((thoughtRows.data ?? []) as any[])
+      .map((row) => String(row.content ?? '').trim()).filter(Boolean).slice(0, 8);
+    const newsletterAnswerIds = ['q_eom_newsletter', 'q_newsletter', 'q_shoutout'];
+    const endOfMonthNotes = ((responseRows.data ?? []) as any[])
+      .filter((row) => String(row.submitted_at ?? row.created_at ?? '') >= startIso)
+      .flatMap((row) => newsletterAnswerIds.map((id) => String(row.answers?.[id] ?? '').trim()))
+      .filter(Boolean).slice(0, 12);
 
     const sections: { title: string; lines: string[] }[] = [];
 
@@ -366,12 +385,26 @@ serve(async (req) => {
         + (nextMeeting.event_time ? ` · ${prettyTimeRange(nextMeeting.event_time, nextMeeting.end_time)}` : '')
       );
     }
-    if (helpFocus) comingUp.push(`HIVE Help focus: ${helpFocus}`);
+    if (currentHelp) comingUp.push(`Current HIVE Help (${helpStart} through ${helpEnd}): ${focusText(currentHelp)}`);
     if (upcomingHangs.length > 0) {
       comingUp.push('Upcoming HIVE hangs:');
-      upcomingHangs.forEach((hang) => comingUp.push(`    ${hang.title} — ${prettyDate(hang.event_date)}`));
+      upcomingHangs.slice(0, 2).forEach((hang) => comingUp.push(`    ${hang.title} — ${prettyDate(hang.event_date)}`));
     }
     if (comingUp.length > 0) sections.push({ title: "What's coming up", lines: comingUp });
+
+    if (previousHelp || currentHelp) {
+      const lines: string[] = [];
+      if (previousHelp) lines.push(`Previous HIVE Help (${previousHelpStart} through ${helpStart}): ${focusText(previousHelp)}`);
+      if (currentHelp) lines.push(`Current HIVE Help (${helpStart} through ${helpEnd}): ${focusText(currentHelp)}`);
+      sections.push({ title: 'HIVE Help cycle', lines });
+    }
+
+    if (ownerNotes.length > 0) {
+      sections.push({ title: 'Owner editorial notes — review, do not quote or attribute', lines: ownerNotes });
+    }
+    if (endOfMonthNotes.length > 0) {
+      sections.push({ title: 'End-of-month editorial leads — review, do not quote or attribute', lines: endOfMonthNotes });
+    }
 
     const pastHangs = ((pastEventRows.data ?? []) as any[]).filter((event) => (
       event.event_type !== 'meeting' && event.event_type !== 'birthday'
@@ -406,22 +439,10 @@ serve(async (req) => {
         .filter(Boolean)
         .filter((line) => !/\bproduction(?:\s+hive)?\b/i.test(line))
         .filter((line) => !/\b(?:three|3)\s+hives?\b/i.test(line))
-        .slice(0, 12)
+        .slice(0, 5)
       : [];
     if (appNews.length > 0) {
       sections.push({ title: 'Around the HIVE (app updates)', lines: appNews });
-    }
-
-    // The expansion note — the same words the app shows on HIVE-Wide and at
-    // sign-in, sent from lib/hiveWide.ts so the three can never drift apart.
-    const expansionNote = Array.isArray(body.expansionNote)
-      ? body.expansionNote.map((line) => String(line).trim()).filter(Boolean).slice(0, 8)
-      : [];
-    if (expansionNote.length > 0) {
-      sections.push({
-        title: 'Pardon our dust — we are expanding',
-        lines: expansionNote,
-      });
     }
 
     // Aggregate growth is deliberately safe: it says the collective grew and
@@ -448,19 +469,8 @@ serve(async (req) => {
       });
     }
 
-    // New threads worth telling people about — the boards move faster than
-    // anyone checks them.
-    const newThreads = posts
-      .filter((row) => withinWindow(row.created_at))
-      .filter((row) => row.visibility === 'public')
-      .filter((row) => !/newsletter|compliment/i.test(row.title ?? ''))
-      .slice(0, 8)
-      .map((row) => (row.category?.name ? `${row.category.name} → ${row.title}` : String(row.title)));
-    if (newThreads.length > 0) sections.push({ title: 'New on the boards', lines: newThreads });
-
-    // No HDs, no POP, no "here's what Sara needs" — the newsletter is public
-    // and those live on the members' side (Nat 2026-07-25). The meeting summary
-    // is where that belongs; this is the face we show the world.
+    // No general board-feed scrape. A public row is not automatically a
+    // newsletter pitch; selected app news and owner-reviewed notes are.
 
     // The letter is written FROM the outline, so the facts are identical — one
     // is for reading, the other for checking.
@@ -477,7 +487,7 @@ serve(async (req) => {
     const factsText = sections
       .map((section) => `${section.title}\n${section.lines.map((line) => `- ${line.trim()}`).join('\n')}`)
       .join('\n\n');
-    const prose = body.includeProse === false ? null : await writeNewsletter(monthLabel, factsText, communityId);
+    const prose = body.includeProse === false ? null : await writeNewsletter(monthLabel, factsText, publicHiveIds[0]);
 
     return jsonResponse({
       success: true,

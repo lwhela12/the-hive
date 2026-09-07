@@ -335,6 +335,10 @@ export function placeForRoute(pathname: string | null | undefined): RoutePlace {
   // The continuous month-end survey covers every membership and the Buzz.
   // Its entry HIVE is a return address, never the scope of the page itself.
   if (path === '/endofmonth' || path.startsWith('/endofmonth/')) return 'wide';
+  // The newsletter is run from HIVE-Wide Admin. Its one archive happens to
+  // live on a legacy board row, but it never belongs to whichever HIVE was
+  // selected most recently.
+  if (path === '/newsletter') return 'wide';
   // Before we meet still opens individual HIVE check-ins from a shared door.
   if (path.startsWith('/beforewemeet')) return 'either';
 

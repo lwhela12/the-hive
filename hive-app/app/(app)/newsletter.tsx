@@ -10,7 +10,6 @@ import { currentNewsletterDraft } from '../../lib/newsletterIssues';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { getAppNewsForMonth, isPublicNewsletterSafeAppNews } from '../../lib/appNews';
 import { useAppNews } from '../../lib/hooks/useAppNews';
-import { PARDON_OUR_DUST } from '../../lib/hiveWide';
 import { SummarySections, type SummarySection } from '../../components/meetings/SummarySections';
 import { readLetter } from '../../lib/newsletterHeaders';
 import { pickSingleImage } from '../../lib/imagePicker';
@@ -206,7 +205,7 @@ export function LetterProse({
         switch (block.kind) {
           case 'heading':
             return (
-              <Text
+              <LinkifiedText
                 key={i}
                 selectable
                 style={{
@@ -217,14 +216,12 @@ export function LetterProse({
                   marginTop: first ? 0 : 24,
                   marginBottom: 8,
                 }}
-              >
-                {block.text}
-              </Text>
+              >{block.text}</LinkifiedText>
             );
 
           case 'label':
             return (
-              <Text
+              <LinkifiedText
                 key={i}
                 selectable
                 style={{
@@ -235,15 +232,13 @@ export function LetterProse({
                   marginTop: first ? 0 : 16,
                   marginBottom: 6,
                 }}
-              >
-                {block.text}
-              </Text>
+              >{block.text}</LinkifiedText>
             );
 
           case 'dated':
             return (
               <View key={i} style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
-                <Text
+                <LinkifiedText
                   selectable
                   style={{
                     fontFamily: 'Lato_700Bold',
@@ -254,7 +249,7 @@ export function LetterProse({
                   }}
                 >
                   {block.when}
-                </Text>
+                </LinkifiedText>
                 <LinkifiedText selectable style={[body, { flex: 1 }]} linkStyle={linkStyle}>
                   {block.text}
                 </LinkifiedText>
@@ -274,7 +269,7 @@ export function LetterProse({
           case 'numbered':
             return (
               <View key={i} style={{ flexDirection: 'row', gap: 8, marginBottom: 7, paddingLeft: 4 }}>
-                <Text
+                <LinkifiedText
                   style={{
                     fontFamily: 'Lato_700Bold',
                     fontSize: 15,
@@ -282,9 +277,7 @@ export function LetterProse({
                     color: palette.label,
                     minWidth: 18,
                   }}
-                >
-                  {block.marker}.
-                </Text>
+                >{`${block.marker}.`}</LinkifiedText>
                 <LinkifiedText selectable style={[body, { flex: 1 }]} linkStyle={linkStyle}>
                   {block.text}
                 </LinkifiedText>
@@ -303,7 +296,7 @@ export function LetterProse({
                   marginBottom: 4,
                 }}
               >
-                <Text
+                <LinkifiedText
                   selectable
                   style={{
                     fontFamily: 'LibreBaskerville_400Regular',
@@ -311,15 +304,13 @@ export function LetterProse({
                     lineHeight: 26,
                     color: palette.quiet,
                   }}
-                >
-                  {block.text}
-                </Text>
+                >{block.text}</LinkifiedText>
               </View>
             );
 
           case 'attribution':
             return (
-              <Text
+              <LinkifiedText
                 key={i}
                 selectable
                 style={{
@@ -329,9 +320,7 @@ export function LetterProse({
                   paddingLeft: 17,
                   marginBottom: 12,
                 }}
-              >
-                — {block.text}
-              </Text>
+              >{`— ${block.text}`}</LinkifiedText>
             );
 
           default:
@@ -349,7 +338,7 @@ export function LetterProse({
 export default function NewsletterScreen() {
   const router = useRouter();
   const { from } = useLocalSearchParams<{ from?: string }>();
-  const { communityId, profile } = useAuth();
+  const { profile } = useAuth();
   const { appNews: mergedAppNews } = useAppNews();
 
   const [loading, setLoading] = useState(true);
@@ -371,6 +360,8 @@ export default function NewsletterScreen() {
   const [posting, setPosting] = useState(false);
   const [postedTo, setPostedTo] = useState<string | null>(null);
   const [postError, setPostError] = useState<string | null>(null);
+  const draftInputRef = useRef<TextInput>(null);
+  const [draftSelection, setDraftSelection] = useState({ start: 0, end: 0 });
 
   const close = () => {
     // Never `router.back()` — see the note in `settings.tsx`. The browser's
@@ -386,7 +377,6 @@ export default function NewsletterScreen() {
   // then swap in the letter when it lands. Staring at a spinner for a minute is
   // the same wait, just worse (Nat 2026-07-25).
   const loadDraft = useCallback(async () => {
-    if (!communityId) return;
     setLoading(true);
     setError(null);
     setProse(null);
@@ -400,17 +390,10 @@ export default function NewsletterScreen() {
     const month = lastMonth();
     const appNews = getAppNewsForMonth(month, mergedAppNews)
       .filter(isPublicNewsletterSafeAppNews)
+      .slice(0, 5)
       .map((entry) => (entry.detail ? `${entry.title} — ${entry.detail}` : entry.title));
 
-    // "Pardon our dust, we're in the process of expanding — what does that mean
-    // for you?" Nat wanted the same explanation on the landing page, in the
-    // newsletter and on the sign-in banner, so all three read from lib/hiveWide.ts
-    // and can never drift into describing three different apps.
-    //
-    // It goes in as facts rather than finished prose, so the letter writer puts
-    // it in her voice along with everything else instead of it landing as a
-    // notice bolted onto the bottom.
-    const draftBody = { communityId, month, appNews, expansionNote: PARDON_OUR_DUST };
+    const draftBody = { month, appNews };
 
     const { data, error: invokeError } = await supabase.functions.invoke('draft-newsletter', {
       body: { ...draftBody, includeProse: false },
@@ -456,8 +439,9 @@ export default function NewsletterScreen() {
     const { data: boardRows } = await supabase
       .from('board_categories')
       .select('id')
-      .eq('community_id', communityId)
-      .eq('topic_kind', 'newsletter');
+      .eq('topic_kind', 'newsletter')
+      .order('created_at', { ascending: true })
+      .limit(1);
     const newsletterBoardIds = ((boardRows ?? []) as { id: string }[]).map((b) => b.id);
 
     if (newsletterBoardIds.length > 0) {
@@ -494,7 +478,7 @@ export default function NewsletterScreen() {
       if (generated) setSaveState('not_saved');
     }
     setWriting(false);
-  }, [communityId, mergedAppNews]);
+  }, [mergedAppNews]);
 
   useEffect(() => {
     void loadDraft();
@@ -507,6 +491,26 @@ export default function NewsletterScreen() {
       ...(section.lines ?? []).map((line) => (line.startsWith('    ') ? `    - ${line.trim()}` : `- ${line}`)),
     ].join('\n'))
     .join('\n\n');
+
+  /**
+   * Letters stay plain text, with one intentionally tiny bit of inline
+   * formatting. The marker is rendered by the app, archive and email alike;
+   * we never store HTML from the editor.
+   */
+  const boldSelection = () => {
+    const text = prose ?? '';
+    const { start, end } = draftSelection;
+    const before = text.slice(0, start);
+    const selected = text.slice(start, end);
+    const after = text.slice(end);
+    const next = selected ? `${before}**${selected}**${after}` : `${before}****${after}`;
+    editRevision.current += 1;
+    setProse(next);
+    setSaveState(draftPostId ? 'unsaved' : 'not_saved');
+    const cursor = selected ? end + 4 : start + 2;
+    setDraftSelection({ start: cursor, end: cursor });
+    requestAnimationFrame(() => draftInputRef.current?.focus());
+  };
 
   /**
    * Put a photograph in the letter.
@@ -589,18 +593,17 @@ export default function NewsletterScreen() {
   // site, and here. This is the in-app writing door — the first save gives the
   // issue a private home in The Buzz, then edits keep saving on this page.
   const postToBoard = async () => {
-    if (!communityId || !profile || posting || sections.length === 0) return;
+    if (!profile || posting || sections.length === 0) return;
     setPosting(true);
     setPostError(null);
     try {
       const { data: boards } = await supabase
         .from('board_categories')
-        .select('id, name, topic_kind')
-        .eq('community_id', communityId)
-        .or('topic_kind.eq.newsletter,name.ilike.%newsletter%')
-        .order('topic_kind', { ascending: false })
+        .select('id, name, community_id')
+        .eq('topic_kind', 'newsletter')
+        .order('created_at', { ascending: true })
         .limit(1);
-      const board = ((boards ?? []) as { id: string; name: string }[])[0];
+      const board = ((boards ?? []) as { id: string; name: string; community_id: string }[])[0];
       if (!board) {
         setPostError('Could not find the HIVE Newsletter board.');
         return;
@@ -686,7 +689,7 @@ export default function NewsletterScreen() {
         const { data: inserted, error: insertError } = await (supabase as any)
           .from('board_posts')
           .insert({
-            community_id: communityId,
+            community_id: board.community_id,
             category_id: board.id,
             author_id: profile.id,
             title,
@@ -902,7 +905,7 @@ export default function NewsletterScreen() {
                   }}
                 />
               ) : (
-                <Text
+                <LinkifiedText
                   style={{
                     fontFamily: 'Lato_700Bold', fontSize: 12, letterSpacing: 3,
                     textTransform: 'uppercase', color: '#8a6a2f', textAlign: 'center',
@@ -910,16 +913,30 @@ export default function NewsletterScreen() {
                   }}
                 >
                   {recapTitle ?? 'The Buzz'}
-                </Text>
+                </LinkifiedText>
               )}
             </View>
 
             {view === 'write' && prose ? (
               <View className="mb-4 bg-paper rounded-2xl border border-gold/20 px-5 py-5">
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                  <Text style={{ flex: 1, fontFamily: 'Lato_400Regular', fontSize: 12.5, color: '#8a7a5e' }}>
-                    Click anywhere in the letter and type.
-                  </Text>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, color: '#8a7a5e' }}>
+                      Select words, then
+                    </Text>
+                    <Pressable
+                      onPress={boldSelection}
+                      accessibilityRole="button"
+                      accessibilityLabel="Bold selected newsletter text"
+                      style={({ pressed }) => ({
+                        minWidth: 28, alignItems: 'center', paddingVertical: 3, paddingHorizontal: 7,
+                        borderRadius: 6, borderWidth: 1, borderColor: 'rgba(189,147,72,0.45)',
+                        backgroundColor: pressed ? '#fdf3dc' : '#fffdf7',
+                      })}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#6f5425' }}>B</Text>
+                    </Pressable>
+                  </View>
                   <Text
                     accessibilityLiveRegion="polite"
                     style={{
@@ -939,8 +956,11 @@ export default function NewsletterScreen() {
                   </Text>
                 </View>
                 <TextInput
+                  ref={draftInputRef}
                   value={prose}
                   onChangeText={(next) => { setProse(next); markEdited(); }}
+                  onSelectionChange={(event) => setDraftSelection(event.nativeEvent.selection)}
+                  selection={draftSelection}
                   accessibilityLabel="Newsletter draft"
                   multiline
                   textAlignVertical="top"
