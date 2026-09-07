@@ -58,6 +58,19 @@ if (!draftFunction.includes(".eq('publicly_listed', true)")
   || !draftFunction.includes(".in('community_id', publicHiveIds)")) {
   failures.push('The Buzz must gather across every publicly listed HIVE, not only the currently selected one.');
 }
+if (!writer.includes('accessibilityLabel="Newsletter title"')
+  || !writer.includes('accessibilityLabel="Newsletter draft"')) {
+  failures.push('The newsletter writer must keep both the title and letter editable on the page.');
+}
+if (!writer.includes('saveExistingDraft') || !writer.includes("draftPostId ? 'unsaved' : 'not_saved'")) {
+  failures.push('Edits to a saved newsletter draft must autosave from the writing page.');
+}
+if (!writer.includes('Nothing sends from this page')) {
+  failures.push('The writer must say plainly that saving and sending are separate actions.');
+}
+if (writer.includes('then edit it there')) {
+  failures.push('The writer must not send Nat elsewhere to edit the newsletter.');
+}
 
 /**
  * The newsletter question ids are declared once, in the file that writes the
@@ -104,4 +117,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('Newsletter workflow: combined ideas, two-way tabs, shared draft policy, immediate history, pictures on all three surfaces.');
+console.log('Newsletter workflow: combined ideas, write/preview/facts tabs, inline autosave, shared draft policy, immediate history, pictures on all three surfaces.');
