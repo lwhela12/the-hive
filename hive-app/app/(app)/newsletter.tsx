@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Linking, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Linking, Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from '../../components/ui/SafeArea';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../../lib/supabase';
 import { userFacingError } from '../../lib/userFacingError';
 import { currentNewsletterDraft } from '../../lib/newsletterIssues';
@@ -35,11 +34,12 @@ const hiveBee = require('../../assets/BEE ONLY IN GOLD BG.png');
 /**
  * The newsletter, drafted for you.
  *
- * Nat writes the newsletter somewhere else — this screen's job is to put
- * everything that happened since the last meeting in front of her in the shape
- * she already likes (the meeting summary), so writing it is choosing what to
- * keep rather than remembering what happened. Hence Copy: the draft is raw
- * material, not a publication.
+ * The newsletter is written here. HIVE puts everything that happened during
+ * the month in front of Nat, drafts the first pass, and then leaves the actual
+ * title and letter open for her to shape without moving to another screen.
+ * Preview reads those same words through the email/public renderer; Facts keeps
+ * the source material beside them. Saving makes a private draft. Sending stays
+ * a separate, explicit step in Admin.
  */
 /** The colours a letter is set in. Paper by default; The Buzz reads in space. */
 export type LetterPalette = {
@@ -73,8 +73,8 @@ export const PAPER_LETTER: LetterPalette = {
  * Every run of body text goes through `LinkifiedText`, so the web addresses Nat
  * pasted into the old Wix letters are tappable instead of decorative.
  *
- * Copying is untouched — `asPlainText()` and `prose` still hand over the
- * original string, so what she pastes is exactly what was written.
+ * The editor keeps that original string intact, so Write and Preview are two
+ * views of the same words rather than separate copies that can drift.
  *
  * Exported because the archive needs the same treatment: The Buzz (app/(app)/
  * buzz.tsx) still prints a whole letter into one `<Text>`. Swapping that for
@@ -348,7 +348,6 @@ export function LetterProse({
 
 export default function NewsletterScreen() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
   const { from } = useLocalSearchParams<{ from?: string }>();
   const { communityId, profile } = useAuth();
   const { appNews: mergedAppNews } = useAppNews();
@@ -359,13 +358,15 @@ export default function NewsletterScreen() {
   const [cycleStart, setCycleStart] = useState<string | null>(null);
   const [recapTitle, setRecapTitle] = useState<string | null>(null);
   const [prose, setProse] = useState<string | null>(null);
-  /** True when the prose above is a letter Nat already wrote, not a generated one. */
-  const [existingDraft, setExistingDraft] = useState(false);
-  // The letter is what she pastes into Wix; the outline is for checking the
-  // facts behind it. Same data, two readings.
-  const [view, setView] = useState<'letter' | 'facts'>('letter');
+  /** Once a draft has an id, every edit on this page saves back to that issue. */
+  const [draftPostId, setDraftPostId] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'not_saved' | 'unsaved' | 'saving' | 'saved' | 'error'>('idle');
+  const editRevision = useRef(0);
+  const [editorHeight, setEditorHeight] = useState(520);
+  // Write is the default because this is an editor. Preview and Facts are
+  // checks beside the work, not a read-only page the writer has to escape.
+  const [view, setView] = useState<'write' | 'preview' | 'facts'>('write');
   const [writing, setWriting] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [pictureBusy, setPictureBusy] = useState(false);
   const [pictureNote, setPictureNote] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
@@ -390,7 +391,9 @@ export default function NewsletterScreen() {
     setLoading(true);
     setError(null);
     setProse(null);
-    setExistingDraft(false);
+    setDraftPostId(null);
+    setSaveState('idle');
+    editRevision.current += 1;
 
     // What's new in the app, straight from the list every member already sees on
     // Home. This used to come off the meeting deck's frozen copy, so a recap
@@ -473,7 +476,8 @@ export default function NewsletterScreen() {
       if (inProgress && String(inProgress.content ?? '').trim()) {
         setProse(inProgress.content);
         setRecapTitle(inProgress.title);
-        setExistingDraft(true);
+        setDraftPostId(inProgress.id);
+        setSaveState('saved');
         return;
       }
     }
@@ -486,7 +490,9 @@ export default function NewsletterScreen() {
     });
     if (written?.success) {
       if ((written.sections ?? []).length > 0) setSections(written.sections as SummarySection[]);
-      setProse(typeof written.prose === 'string' && written.prose.trim() ? written.prose : null);
+      const generated = typeof written.prose === 'string' && written.prose.trim() ? written.prose : null;
+      setProse(generated);
+      if (generated) setSaveState('not_saved');
     }
     setWriting(false);
   }, [communityId, mergedAppNews]);
@@ -507,15 +513,10 @@ export default function NewsletterScreen() {
    * Put a photograph in the letter.
    *
    * Nat writes the letter as text, so a picture has to be a line of text too —
-   * this uploads the photo and hands back the `[[IMAGE:…]]` line for it,
-   * already on the clipboard. She pastes it where she wants the picture and it
-   * renders in the email, in The Buzz and on the public site from that one
-   * line.
-   *
-   * The clipboard rather than an insertion point because the letter is not
-   * edited on this screen — it is written and edited as the post itself. One
-   * paste is the shortest honest path between a photo on her phone and a photo
-   * in the letter.
+   * this uploads the photo and places its `[[IMAGE:…]]` line directly into the
+   * editable draft. The line remains the single source of truth for the email,
+   * The Buzz and the public archive; the writer can move it to the right spot
+   * and replace the accessible description without leaving this page.
    */
   const addPicture = async () => {
     if (!profile || pictureBusy) return;
@@ -529,12 +530,15 @@ export default function NewsletterScreen() {
         setPictureNote('That picture did not upload. Try it again in a moment.');
         return;
       }
-      // The alt text is a placeholder on purpose: she is about to paste this
-      // line into a letter she is writing, and describing her own photo is one
+      // The alt text is a placeholder on purpose: the marker has just landed in
+      // a letter she is writing, and describing her own photo is one
       // small edit. A blank one would have shipped with nothing to read.
       const marker = `[[IMAGE:${uploaded.url}|Describe the picture here]]`;
-      await Clipboard.setStringAsync(marker);
-      setPictureNote('Copied. Paste it into the letter on its own line, where you want the picture.');
+      editRevision.current += 1;
+      setProse((current) => `${String(current ?? '').trimEnd()}\n\n${marker}\n`);
+      setSaveState(draftPostId ? 'unsaved' : 'not_saved');
+      setView('write');
+      setPictureNote('Added to the bottom of the draft. Move the picture line wherever you want it.');
     } catch (pictureError) {
       setPictureNote(userFacingError(pictureError, 'That picture did not upload.'));
     } finally {
@@ -542,18 +546,49 @@ export default function NewsletterScreen() {
     }
   };
 
-  const copyAll = async () => {
-    // Copy what you're looking at — the letter goes to Wix, the outline is for
-    // when you want the raw material instead.
-    const text = view === 'letter' && prose ? prose : asPlainText();
-    await Clipboard.setStringAsync(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const markEdited = () => {
+    editRevision.current += 1;
+    setSaveState(draftPostId ? 'unsaved' : 'not_saved');
+    setPostError(null);
+    setPostedTo(null);
   };
 
-  // The newsletter should be reachable more than one way: email from Wix, the
-  // public site, and here. This is the in-app door — post the draft, then edit
-  // the thread to match whatever actually went out.
+  /** A saved issue keeps itself safe while Nat writes. It never sends. */
+  const saveExistingDraft = useCallback(async (revision: number) => {
+    if (!draftPostId || prose === null) return;
+    const title = String(recapTitle ?? '').trim();
+    if (!title || !prose.trim()) {
+      setSaveState('error');
+      setPostError('A newsletter needs both a title and some words before it can save.');
+      return;
+    }
+
+    setSaveState('saving');
+    const { error: saveError } = await (supabase as any)
+      .from('board_posts')
+      .update({ title, content: prose, edited_at: new Date().toISOString() })
+      .eq('id', draftPostId);
+
+    if (saveError) {
+      setSaveState('error');
+      setPostError(userFacingError(saveError, 'Your words are still on this page, but they did not save. Try again.'));
+      return;
+    }
+    // If another keystroke landed while the request was in flight, schedule
+    // one more save instead of falsely calling the newer words saved.
+    setSaveState(editRevision.current === revision ? 'saved' : 'unsaved');
+  }, [draftPostId, prose, recapTitle]);
+
+  useEffect(() => {
+    if (!draftPostId || saveState !== 'unsaved') return;
+    const revision = editRevision.current;
+    const timer = setTimeout(() => { void saveExistingDraft(revision); }, 700);
+    return () => clearTimeout(timer);
+  }, [draftPostId, prose, recapTitle, saveExistingDraft, saveState]);
+
+  // The newsletter should be reachable more than one way: email, the public
+  // site, and here. This is the in-app writing door — the first save gives the
+  // issue a private home in The Buzz, then edits keep saving on this page.
   const postToBoard = async () => {
     if (!communityId || !profile || posting || sections.length === 0) return;
     setPosting(true);
@@ -582,7 +617,7 @@ export default function NewsletterScreen() {
       // Named for the month it recaps, not the month it goes out — "The Buzz —
       // July 2026 HIVE Recap", published in August. Nat renamed these on Wix so
       // a letter about July stops feeling a month late (2026-08-03).
-      const title = recapTitle ?? `The Buzz — ${month} HIVE Recap`;
+      const title = String(recapTitle ?? `The Buzz — ${month} HIVE Recap`).trim();
 
       /**
        * The issue in progress, if there is one — otherwise this month's
@@ -634,11 +669,13 @@ export default function NewsletterScreen() {
       const existing = inProgress ? [inProgress] : byMonth;
 
       const content = prose ?? asPlainText();
+      let savedId: string | null = null;
       if ((existing ?? []).length > 0) {
+        savedId = (existing as { id: string }[])[0].id;
         const { error: updateError } = await (supabase as any)
           .from('board_posts')
           .update({ title, content, is_pinned: true, edited_at: new Date().toISOString() })
-          .eq('id', (existing as { id: string }[])[0].id);
+          .eq('id', savedId);
         if (updateError) {
           setPostError(userFacingError(updateError, 'The draft is still here. Try updating the post again.'));
           return;
@@ -647,20 +684,28 @@ export default function NewsletterScreen() {
         // Pinned so the published letter sits above the shout-out thread that
         // fed it — the board should read as an archive of newsletters, not a
         // pile of collection threads.
-        const { error: insertError } = await (supabase as any).from('board_posts').insert({
-          community_id: communityId,
-          category_id: board.id,
-          author_id: profile.id,
-          title,
-          content,
-          is_pinned: true,
-        });
+        const { data: inserted, error: insertError } = await (supabase as any)
+          .from('board_posts')
+          .insert({
+            community_id: communityId,
+            category_id: board.id,
+            author_id: profile.id,
+            title,
+            content,
+            is_pinned: true,
+          })
+          .select('id')
+          .single();
         if (insertError) {
           setPostError(userFacingError(insertError, 'The draft is still here. Try posting it again.'));
           return;
         }
+        savedId = inserted?.id ?? null;
       }
-      setPostedTo(`${board.name} → ${title}`);
+      setDraftPostId(savedId);
+      setSaveState(savedId ? 'saved' : 'error');
+      setPostedTo(savedId ? `${board.name} → ${title}` : null);
+      if (!savedId) setPostError('The draft saved, but HIVE could not confirm its new address. Reopen it from The Buzz before editing more.');
     } finally {
       setPosting(false);
     }
@@ -794,7 +839,7 @@ export default function NewsletterScreen() {
 
             {prose ? (
               <View style={{ flexDirection: 'row', alignSelf: 'center', gap: 6, marginBottom: 14 }}>
-                {(['letter', 'facts'] as const).map((option) => {
+                {(['write', 'preview', 'facts'] as const).map((option) => {
                   const selected = view === option;
                   return (
                     <Pressable
@@ -818,7 +863,7 @@ export default function NewsletterScreen() {
                           color: selected ? '#8a6b30' : '#9a8060',
                         }}
                       >
-                        {option === 'letter' ? 'The letter' : 'The facts'}
+                        {option === 'write' ? 'Write' : option === 'preview' ? 'Preview' : 'The facts'}
                       </Text>
                     </Pressable>
                   );
@@ -842,18 +887,79 @@ export default function NewsletterScreen() {
                 style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: '#ffffff' }}
                 resizeMode="contain"
               />
-              <Text
-                style={{
-                  fontFamily: 'Lato_700Bold', fontSize: 12, letterSpacing: 3,
-                  textTransform: 'uppercase', color: '#8a6a2f', textAlign: 'center',
-                  paddingHorizontal: 20,
-                }}
-              >
-                {recapTitle ?? 'The Buzz'}
-              </Text>
+              {view === 'write' ? (
+                <TextInput
+                  value={recapTitle ?? ''}
+                  onChangeText={(next) => { setRecapTitle(next); markEdited(); }}
+                  accessibilityLabel="Newsletter title"
+                  placeholder="The Buzz — this month’s recap"
+                  placeholderTextColor="#a09585"
+                  style={{
+                    width: '100%', maxWidth: 680, paddingHorizontal: 20, paddingVertical: 8,
+                    fontFamily: 'Lato_700Bold', fontSize: 13, letterSpacing: 2,
+                    color: '#8a6a2f', textAlign: 'center',
+                    borderWidth: 1, borderColor: 'rgba(189,147,72,0.35)', borderRadius: 10,
+                    backgroundColor: '#fffdf7',
+                  }}
+                />
+              ) : (
+                <Text
+                  style={{
+                    fontFamily: 'Lato_700Bold', fontSize: 12, letterSpacing: 3,
+                    textTransform: 'uppercase', color: '#8a6a2f', textAlign: 'center',
+                    paddingHorizontal: 20,
+                  }}
+                >
+                  {recapTitle ?? 'The Buzz'}
+                </Text>
+              )}
             </View>
 
-            {view === 'letter' && prose ? (
+            {view === 'write' && prose ? (
+              <View className="mb-4 bg-paper rounded-2xl border border-gold/20 px-5 py-5">
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                  <Text style={{ flex: 1, fontFamily: 'Lato_400Regular', fontSize: 12.5, color: '#8a7a5e' }}>
+                    Click anywhere in the letter and type.
+                  </Text>
+                  <Text
+                    accessibilityLiveRegion="polite"
+                    style={{
+                      fontFamily: 'Lato_700Bold', fontSize: 12,
+                      color: saveState === 'error' ? '#b65f5f' : saveState === 'saved' ? '#6f8b62' : '#9a7c42',
+                    }}
+                  >
+                    {saveState === 'saving'
+                      ? 'Saving…'
+                      : saveState === 'saved'
+                        ? 'Saved'
+                        : saveState === 'unsaved'
+                          ? 'Unsaved changes'
+                          : saveState === 'error'
+                            ? 'Couldn’t save'
+                            : 'Not saved yet'}
+                  </Text>
+                </View>
+                <TextInput
+                  value={prose}
+                  onChangeText={(next) => { setProse(next); markEdited(); }}
+                  onContentSizeChange={(event) => {
+                    setEditorHeight(Math.max(520, Math.ceil(event.nativeEvent.contentSize.height) + 32));
+                  }}
+                  accessibilityLabel="Newsletter draft"
+                  multiline
+                  scrollEnabled={false}
+                  textAlignVertical="top"
+                  placeholder="Write this month’s Buzz…"
+                  placeholderTextColor="#a09585"
+                  style={{
+                    minHeight: 520, height: editorHeight, paddingHorizontal: 16, paddingVertical: 16,
+                    fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 24,
+                    color: '#3f3a33', backgroundColor: '#fffdf7',
+                    borderWidth: 1, borderColor: 'rgba(189,147,72,0.35)', borderRadius: 12,
+                  }}
+                />
+              </View>
+            ) : view === 'preview' && prose ? (
               <View className="mb-4 bg-paper rounded-2xl border border-gold/20 px-5 py-5">
                 <LetterProse text={prose} />
               </View>
@@ -896,15 +1002,15 @@ export default function NewsletterScreen() {
               </Text>
             ) : null}
 
-            {existingDraft ? (
+            {draftPostId ? (
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 18, color: '#8a7a5e', textAlign: 'center', marginTop: 6, marginBottom: 10 }}>
-                This is the letter in progress — it is already saved. When it is
-                ready, send it from Admin → Newsletter → Test & send.
+                Your edits save here automatically. Nothing sends from this page —
+                when it is ready, use Admin → Newsletter → Test & send.
               </Text>
             ) : (
             <Pressable
               onPress={() => void postToBoard()}
-              disabled={posting}
+              disabled={posting || !String(recapTitle ?? '').trim() || !String(prose ?? '').trim()}
               style={({ pressed }) => ({
                 alignSelf: 'center',
                 marginTop: 6,
@@ -915,17 +1021,17 @@ export default function NewsletterScreen() {
                 borderWidth: 1,
                 borderColor: 'rgba(189,147,72,0.45)',
                 backgroundColor: pressed ? '#fbf4e3' : 'transparent',
-                opacity: posting ? 0.6 : 1,
+                opacity: posting || !String(recapTitle ?? '').trim() || !String(prose ?? '').trim() ? 0.6 : 1,
               })}
             >
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>
-                {posting ? 'Posting…' : '📰 Save to The Buzz'}
+                {posting ? 'Saving…' : '📰 Save draft to The Buzz'}
               </Text>
             </Pressable>
             )}
             {postedTo ? (
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#7a9a6b', textAlign: 'center', marginBottom: 8 }}>
-                Posted — {postedTo}. Edit it there to match what actually went out.
+                Saved — {postedTo}. Keep editing it right here.
               </Text>
             ) : null}
             {postError ? (
@@ -942,9 +1048,11 @@ export default function NewsletterScreen() {
                 marginTop: 8,
               }}
             >
-              {view === 'letter' && prose
-                ? 'A draft in your voice, from real facts only. Anything in [brackets] is yours to fill.'
-                : 'Gathered from the boards, to-dos, and check-ins — nothing was written twice.'}
+              {view === 'write'
+                ? 'This is the real draft. Preview shows exactly how the same words will read.'
+                : view === 'preview' && prose
+                  ? 'The email and public archive use this same preview.'
+                  : 'Gathered from the boards, to-dos, and check-ins — nothing was written twice.'}
             </Text>
           </>
         )}
