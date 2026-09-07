@@ -4,7 +4,7 @@ import { formatDateShort } from '../../lib/dateUtils';
 import type { BoardReply, Profile } from '../../types';
 import { BoardReactionBar } from './BoardReactionBar';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
-import { LinkifiedText } from '../ui/LinkifiedText';
+import { MarkdownContent } from '../chat/MarkdownContent';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { usePageSkin } from '../../lib/pageSkin';
@@ -104,12 +104,14 @@ export function BoardReplyItem({
               }}
             />
           ) : (
-            <LinkifiedText
-              style={{ fontFamily: 'Lato_400Regular', fontSize: 16, color: skin.ink, marginBottom: 8 }}
-              linkStyle={{ color: skin.gold }}
-            >
-              {reply.content}
-            </LinkifiedText>
+            /* Same renderer as the post above it (BoardPostDetail). Things We
+               Learned is built on replies — "every reply underneath is a dated
+               entry" — so a reply is a place people write real structure, not
+               just a one-liner. Rendered as plain text, every one of those
+               entries showed its asterisks and backticks raw. `isUser` is
+               MarkdownContent's light-ink-on-a-dark-ground setting, so it
+               follows the HIVE-Wide page the way the post does. */
+            <MarkdownContent content={reply.content} isUser={skin.dark} />
           )}
 
           {reply.attachments && reply.attachments.length > 0 && (
