@@ -12,6 +12,8 @@ const buzzArchiveMigration = fs.readFileSync(path.join(root, 'supabase/migration
 // a picture in the email and the literal text `[[IMAGE:…]]` on the website.
 const email = fs.readFileSync(path.join(root, 'supabase/functions/send-newsletter/index.ts'), 'utf8');
 const publicSite = fs.readFileSync(path.join(root, '../site/index.html'), 'utf8');
+const appNews = fs.readFileSync(path.join(root, 'lib/appNews.ts'), 'utf8');
+const draftFunction = fs.readFileSync(path.join(root, 'supabase/functions/draft-newsletter/index.ts'), 'utf8');
 const failures = [];
 
 if (!admin.includes("accessibilityLabel={direction < 0 ? 'Show earlier tabs' : 'Show more tabs'}")) {
@@ -41,6 +43,16 @@ if (!buzz.includes('subtitle={formatDateLong(item.created_at)}') || buzz.include
 if (!buzzArchiveMigration.includes('HIVE members locate the Buzz archive')
   || !buzzArchiveMigration.includes('HIVE members read the completed Buzz archive')) {
   failures.push('Every HIVE member must be able to locate and read the completed Buzz archive');
+}
+if (!writer.includes('.filter(isPublicNewsletterSafeAppNews)')) {
+  failures.push('Newsletter app news must be filtered before it leaves the client.');
+}
+if (!appNews.includes("!/\\bproduction(?:\\s+hive)?\\b/i.test(copy)")) {
+  failures.push('The public app-news filter must exclude Production HIVE.');
+}
+if (!draftFunction.includes('Never mention Production HIVE')
+  || !draftFunction.includes('exact number of HIVEs')) {
+  failures.push('The newsletter writer must never expose Production HIVE or an exact HIVE count.');
 }
 
 /**

@@ -168,15 +168,14 @@ export async function saveBirthdayScope({
   invitedScope: EventAudience;
   communityId?: string | null;
 }): Promise<{ error: { message?: string } | null }> {
-  // Birthdays are part of a member profile. They may stay in one HIVE or
-  // travel HIVE-Wide, but never identify that member to an unauthenticated
-  // visitor. Normalise stale callers as well as hiding the old option.
-  const safeVisibility: EventAudience = visibility === 'public' ? 'all_hives' : visibility;
-  const safeInvitedScope: EventAudience = invitedScope === 'public' ? 'all_hives' : invitedScope;
+  // A birthday is the one public event a member can approve for themselves.
+  // Keep the same invariant as ordinary events: an invitation can never reach
+  // farther than the people who are allowed to see it.
+  const safeInvitedScope = RANK[invitedScope] > RANK[visibility] ? visibility : invitedScope;
   const { error } = await supabase
     .from('profiles')
     .update({
-      birthday_visibility: safeVisibility,
+      birthday_visibility: visibility,
       birthday_invited_scope: safeInvitedScope,
       updated_at: new Date().toISOString(),
     })

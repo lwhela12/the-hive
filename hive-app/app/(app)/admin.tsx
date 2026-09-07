@@ -17,7 +17,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from '../../components/ui/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
-import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
+import { EventScopeFields, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { queryKeys } from '../../lib/queryClient';
 import {
@@ -751,6 +751,7 @@ export default function AdminScreen() {
 
   // Form states
   const [eventTitle, setEventTitle] = useState('');
+  const [eventVisibility, setEventVisibility] = useState<EventAudience>('members');
   const [eventAudience, setEventAudience] = useState<EventAudience>('members');
   const [eventDate, setEventDate] = useState('');
   const [eventDescription, setEventDescription] = useState('');
@@ -1002,11 +1003,7 @@ export default function AdminScreen() {
       event_type: 'custom',
       created_by: profile?.id,
       community_id: communityId,
-      visibility: eventAudience,
-      // This screen asks one question, so the answer is both: who can see it and
-      // who is invited. Leaving `invited_scope` to its default would have made
-      // an "every HIVE" event visible to everyone and open to nobody but us —
-      // a narrowing nobody asked for (migration 148).
+      visibility: eventVisibility,
       invited_scope: eventAudience,
     });
 
@@ -1017,6 +1014,7 @@ export default function AdminScreen() {
       setEventTitle('');
       setEventDate('');
       setEventDescription('');
+      setEventVisibility('members');
       setEventAudience('members');
       await fetchData();
     }
@@ -1574,9 +1572,11 @@ export default function AdminScreen() {
             />
 
             <View className="mb-4">
-              <EventAudienceToggle
-                value={eventAudience}
-                onChange={setEventAudience}
+              <EventScopeFields
+                visibility={eventVisibility}
+                onVisibilityChange={setEventVisibility}
+                invited={eventAudience}
+                onInvitedChange={setEventAudience}
                 allowPublic={profile?.is_owner === true}
               />
             </View>

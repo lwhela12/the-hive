@@ -18,7 +18,7 @@ import { supabase } from '../../lib/supabase';
 import { userFacingError } from '../../lib/userFacingError';
 import { hiveAccent } from '../../lib/hiveBrand';
 import { SCOPE_LADDER } from '../../lib/hiveWide';
-import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
+import { EventScopeFields, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { CHECK_INS_COMING_SOON_MESSAGE, hasMeetingDeck } from '../../lib/checkIns';
 import { useDeepTrail } from '../../lib/hooks/usePathTrail';
@@ -1262,6 +1262,7 @@ export default function MeetingHelperScreen() {
   const [quickAddDate, setQuickAddDate] = useState<string | null>(null);
   const [quickAddTitle, setQuickAddTitle] = useState('');
   const [quickAddTime, setQuickAddTime] = useState('');
+  const [quickAddVisibility, setQuickAddVisibility] = useState<EventAudience>('members');
   const [quickAddAudience, setQuickAddAudience] = useState<EventAudience>('members');
   const [quickAddSaving, setQuickAddSaving] = useState(false);
   const [quickAddError, setQuickAddError] = useState<string | null>(null);
@@ -1671,8 +1672,7 @@ export default function MeetingHelperScreen() {
       };
       if (normalizedTime.time) newEvent.event_time = normalizedTime.time;
       if (normalizedTime.note) newEvent.description = `Time note: ${normalizedTime.note}`;
-      newEvent.visibility = quickAddAudience;
-      // One question here, so it answers both — see admin.tsx and migration 148.
+      newEvent.visibility = quickAddVisibility;
       (newEvent as Record<string, unknown>).invited_scope = quickAddAudience;
 
       await createCalendarEvent(newEvent);
@@ -1680,6 +1680,7 @@ export default function MeetingHelperScreen() {
       setQuickAddDate(null);
       setQuickAddTitle('');
       setQuickAddTime('');
+      setQuickAddVisibility('members');
       setQuickAddAudience('members');
       // The idea has been claimed — disarm so the next day you tap starts fresh.
       setArmedHangIdea(null);
@@ -5900,7 +5901,13 @@ export default function MeetingHelperScreen() {
                 onSubmitEditing={handleQuickAddEvent}
                 style={PLAIN_FIELD}
               />
-              <EventAudienceToggle value={quickAddAudience} onChange={setQuickAddAudience} />
+              <EventScopeFields
+                visibility={quickAddVisibility}
+                onVisibilityChange={setQuickAddVisibility}
+                invited={quickAddAudience}
+                onInvitedChange={setQuickAddAudience}
+                allowPublic={profile?.is_owner === true}
+              />
               {quickAddError ? (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#b3261e' }}>
                   {quickAddError}

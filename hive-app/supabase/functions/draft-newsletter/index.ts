@@ -91,8 +91,8 @@ async function writeNewsletter(
   if (!apiKey || !factsText.trim()) return null;
 
   const system = [
-    "You draft the HIVE's monthly newsletter for Nat, who runs a 12-person",
-    'community. She pastes your draft into Wix, tweaks it, and sends it. Write',
+    "You draft the HIVE's monthly newsletter for Nat, who runs a growing",
+    'community network. She pastes your draft into Wix, tweaks it, and sends it. Write',
     'the letter she would write — not a summary of data.',
     '',
     'WHO READS IT (Nat, 2026-08-03, and this is the thing the draft kept getting',
@@ -112,6 +112,8 @@ async function writeNewsletter(
     'a HIVE, reveal a profile, role, ownership, wish, post, check-in, project or',
     'internal decision. Do not hint at an unnamed person either. If the facts are',
     'thin, write a shorter, warmer letter. Short and generous beats padded and cagey.',
+    'Never mention Production HIVE or any work connected to it. Never state an',
+    'exact number of HIVEs; say "multiple HIVEs" when the network itself matters.',
     '',
     'HER VOICE: warm, chatty, a little goofy. Short paragraphs. Exclamation',
     'points and em-dashes. Emoji sprinkled, never wall-to-wall. She says',
@@ -136,6 +138,8 @@ async function writeNewsletter(
     '  detail. If a section has no facts, leave it out entirely.',
     '- Never output a member name, profile detail, role, specific-HIVE membership,',
     '  ownership clue, private wish/post/check-in or internal project detail.',
+    '- Never mention Production HIVE and never say there are three (or any exact',
+    '  number of) HIVEs. The public wording is always "multiple HIVEs".',
     '- Never write "A Note from Nat" yourself. Output exactly this under that',
     '  heading: [Your note here, Nat 💛]',
     '- Where you need something only Nat knows, write it as a bracket, e.g.',
@@ -225,13 +229,13 @@ serve(async (req) => {
     // the one place that assembles a HIVE's contents into something that leaves.
     const { data: hive } = await supabaseAdmin
       .from('communities')
-      .select('name, max_share_scope')
+      .select('name, max_share_scope, publicly_listed')
       .eq('id', communityId)
       .maybeSingle();
 
     if (!hive) return errorResponse('The newsletter is drafted by the HIVE owner.', 403);
 
-    if (hive.max_share_scope !== 'public') {
+    if (hive.max_share_scope !== 'public' || hive.publicly_listed !== true) {
       return jsonResponse({
         success: true,
         blocked: true,
@@ -388,7 +392,12 @@ serve(async (req) => {
     // shows every member on Home — sent by the caller, who is the owner, and
     // already public-facing by design.
     const appNews = Array.isArray(body.appNews)
-      ? body.appNews.map((line) => String(line).trim()).filter(Boolean).slice(0, 12)
+      ? body.appNews
+        .map((line) => String(line).trim())
+        .filter(Boolean)
+        .filter((line) => !/\bproduction(?:\s+hive)?\b/i.test(line))
+        .filter((line) => !/\b(?:three|3)\s+hives?\b/i.test(line))
+        .slice(0, 12)
       : [];
     if (appNews.length > 0) {
       sections.push({ title: 'Around the HIVE (app updates)', lines: appNews });

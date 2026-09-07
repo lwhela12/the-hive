@@ -9,7 +9,7 @@ import { supabase } from '../../lib/supabase';
 import { userFacingError } from '../../lib/userFacingError';
 import { currentNewsletterDraft } from '../../lib/newsletterIssues';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { getAppNewsForMonth } from '../../lib/appNews';
+import { getAppNewsForMonth, isPublicNewsletterSafeAppNews } from '../../lib/appNews';
 import { useAppNews } from '../../lib/hooks/useAppNews';
 import { PARDON_OUR_DUST } from '../../lib/hiveWide';
 import { SummarySections, type SummarySection } from '../../components/meetings/SummarySections';
@@ -397,6 +397,7 @@ export default function NewsletterScreen() {
     // written after the meeting missed everything shipped since it.
     const month = lastMonth();
     const appNews = getAppNewsForMonth(month, mergedAppNews)
+      .filter(isPublicNewsletterSafeAppNews)
       .map((entry) => (entry.detail ? `${entry.title} — ${entry.detail}` : entry.title));
 
     // "Pardon our dust, we're in the process of expanding — what does that mean
