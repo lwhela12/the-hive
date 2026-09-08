@@ -70,6 +70,20 @@ export function isInvitedToEvent(
 }
 
 /**
+ * HIVE-Wide is the shared calendar, not a member's combined personal diary.
+ *
+ * A HIVE home includes its own events as well as the two wider rungs. The
+ * HIVE-Wide home deliberately includes only the two wider rungs: an event
+ * reaches this shared front door when its owner marked it HIVE-Wide or Public.
+ * The Admin calendar is a separate, cross-HIVE operational view.
+ */
+export function isUpcomingEventVisibleOnHiveWide(event: {
+  visibility?: string | null;
+}): boolean {
+  return event.visibility === 'all_hives' || event.visibility === 'public';
+}
+
+/**
  * Say who the invitation is actually for, not which HIVE happens to own the
  * database row. Quarter markers need an owning HIVE because community_id is
  * required, but they are HIVE-Wide; public hangs are Public; OG dues stay OG.

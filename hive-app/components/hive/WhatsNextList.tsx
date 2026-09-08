@@ -1,14 +1,14 @@
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useWhatsNext, type WhatsNextItem } from '../../lib/hooks/useWhatsNext';
+import { useWhatsNext, type WhatsNextItem, type WhatsNextView } from '../../lib/hooks/useWhatsNext';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { hiveTagMark } from '../../lib/hiveBrand';
 import { whatsNextDateLabel } from '../../lib/whatsNextFormat';
 
 
 /**
- * What's next — one list, everyone, on whatever dark page asks for it.
+ * Upcoming Events on Home, and the broader operating list in Admin.
  *
  * Nat, 2026-09-02, on why this is one component and not two: *"maybe my view is
  * different, cos I'm admin and actually need to MAKE some of those things, or
@@ -29,12 +29,14 @@ import { whatsNextDateLabel } from '../../lib/whatsNextFormat';
  */
 export function WhatsNextList({
   emptyLine = 'Nothing booked and nothing waiting. When a HIVE you’re in schedules its next meeting, it turns up here.',
+  view = 'admin',
 }: {
   emptyLine?: string;
+  view?: WhatsNextView;
 }) {
   const router = useRouter();
   const { memberships } = useAuth();
-  const { items, state, today, refresh } = useWhatsNext();
+  const { items, state, today, refresh } = useWhatsNext(view);
 
   if (state === 'loading') {
     return (

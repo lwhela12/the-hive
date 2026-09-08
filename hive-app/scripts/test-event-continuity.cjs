@@ -32,6 +32,9 @@ assert.equal(schedule.whatsNextIsOverdue('2026-08-06', '2026-09-09', '2026-09-08
 assert.equal(audience.eventAudienceLabel({ visibility: 'public', invited_scope: 'public' }, 'OG HIVE'), 'Public');
 assert.equal(audience.eventAudienceLabel({ visibility: 'all_hives', invited_scope: 'all_hives' }, 'OG HIVE'), 'HIVE-Wide');
 assert.equal(audience.eventAudienceLabel({ visibility: 'all_hives', invited_scope: 'members' }, 'OG HIVE'), 'OG HIVE');
+assert.equal(audience.isUpcomingEventVisibleOnHiveWide({ visibility: 'members' }), false);
+assert.equal(audience.isUpcomingEventVisibleOnHiveWide({ visibility: 'all_hives' }), true);
+assert.equal(audience.isUpcomingEventVisibleOnHiveWide({ visibility: 'public' }), true);
 
 const whatsNext = fs.readFileSync('lib/hooks/useWhatsNext.ts', 'utf8');
 assert.doesNotMatch(whatsNext, /event_time\?\.slice\(0, 5\)/, 'What’s Next never displays raw 24-hour meeting time');
@@ -39,6 +42,16 @@ assert.doesNotMatch(whatsNext, /through \$\{event\.end_date\}/, 'What’s Next n
 for (const promise of ['formatDateRangeShort(', 'formatTimeRange(', 'eventAudienceLabel(', 'whatsNextIsOverdue(', 'queryKeys.whatsNext(', 'useFocusEffect(']) {
   assert.ok(whatsNext.includes(promise), `What’s Next is missing shared continuity rule: ${promise}`);
 }
+assert.match(whatsNext, /view === 'hiveWideUpcomingEvents'/, 'HIVE-Wide Home has a distinct upcoming-events view');
+assert.match(whatsNext, /isUpcomingEventVisibleOnHiveWide\(meeting\)/, 'HIVE-Wide Home excludes private meetings');
+assert.match(whatsNext, /isUpcomingEventVisibleOnHiveWide\(event\)/, 'HIVE-Wide Home excludes private calendar events');
+
+const hiveWideHome = fs.readFileSync('app/(app)/hive-wide.tsx', 'utf8');
+assert.match(hiveWideHome, /label="Upcoming Events"/);
+assert.match(hiveWideHome, /view="hiveWideUpcomingEvents"/);
+
+const adminPanel = fs.readFileSync('components\/admin\/WhatsNextPanel.tsx', 'utf8');
+assert.match(adminPanel, /title="Upcoming Events"/);
 
 const eventQueries = fs.readFileSync('lib/eventQueries.ts', 'utf8');
 assert.match(eventQueries, /event_date\.gte\.\$\{today\},end_date\.gte\.\$\{today\}/);

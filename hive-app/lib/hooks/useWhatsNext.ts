@@ -6,7 +6,11 @@ import { useAuth } from './useAuth';
 import { hiveDisplayName } from '../hiveBrand';
 import { checkInDisplayName, isEndOfMonthCheckInSurvey, isPreMeetingCheckInSurvey } from '../checkIns';
 import { formatDateRangeShort, formatTimeRange } from '../dateUtils';
-import { eventAudienceLabel, isInvitedToEvent } from '../eventDisplay';
+import {
+  eventAudienceLabel,
+  isInvitedToEvent,
+  isUpcomingEventVisibleOnHiveWide,
+} from '../eventDisplay';
 import { queryKeys } from '../queryClient';
 import { whatsNextIsOverdue } from '../whatsNextFormat';
 
@@ -42,6 +46,9 @@ export type WhatsNextItem = {
   destination?: string;
 };
 
+/** Admin sees the full cross-HIVE operating list; Home is the shared calendar. */
+export type WhatsNextView = 'admin' | 'hiveWideUpcomingEvents';
+
 const pacificToday = () =>
   new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Los_Angeles',
@@ -56,7 +63,7 @@ const lastDayOfMonth = (dateOnly: string) => {
   return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
 };
 
-export function useWhatsNext() {
+export function useWhatsNext(view: WhatsNextView = 'admin') {
   const { memberships, profile } = useAuth();
   const isOwner = profile?.is_owner === true;
   const profileId = profile?.id ?? '';
@@ -68,7 +75,7 @@ export function useWhatsNext() {
   const enabled = !!profileId && hiveIds.length > 0;
 
   const query = useQuery({
-    queryKey: queryKeys.whatsNext(profileId, hiveIds.join(','), isOwner),
+    queryKey: queryKeys.whatsNext(profileId, hiveIds.join(','), isOwner, view),
     enabled,
     staleTime: 0,
     queryFn: async () => {
@@ -79,8 +86,7 @@ export function useWhatsNext() {
       const [meetingsResult, eventsResult, surveysResult, completionsResult] = await Promise.all([
         supabase
           .from('events')
-          .select('id, community_id, title, event_date, event_time, end_time, location, meet_link')
-          .in('community_id', hiveIds)
+          .select('id, community_id, title, event_date, event_time, end_time, location, meet_link, visibility, invited_scope, community:communities(name)')
           .eq('event_type', 'meeting')
           .eq('status', 'scheduled')
           .gte('event_date', today)
@@ -126,8 +132,8 @@ export function useWhatsNext() {
         throw meetingsResult.error ?? eventsResult.error ?? surveysResult.error ?? completionsResult.error;
       }
 
-      const nameOf = (id: string) =>
-        hiveDisplayName(memberships.find((m) => m.community_id === id)?.community?.name);
+      const nameOf = (id: string, fallbackName?: string | null) =>
+        hiveDisplayName(memberships.find((m) => m.community_id === id)?.community?.name ?? fallbackName);
 
       const meetings = (meetingsResult.data ?? []) as any[];
       const completions = (completionsResult.data ?? []) as any[];
@@ -135,14 +141,16 @@ export function useWhatsNext() {
 
       // ---- Meetings, and the email each one drags behind it.
       for (const meeting of meetings) {
-        const name = nameOf(meeting.community_id);
+        if (view === 'hiveWideUpcomingEvents' && !isUpcomingEventVisibleOnHiveWide(meeting)) continue;
+        const name = nameOf(meeting.community_id, meeting.community?.name);
+        const invited = isInvitedToEvent(meeting, hiveIds);
         push({
           key: `meeting_${meeting.id}`,
           date: meeting.event_date,
           what: `${name} meets`,
           detail: [
             meeting.event_time ? formatTimeRange(meeting.event_time, meeting.end_time) : null,
-            meeting.location,
+            invited ? meeting.location : null,
           ].filter(Boolean).join(' · '),
           communityId: meeting.community_id,
         });
@@ -150,6 +158,7 @@ export function useWhatsNext() {
 
       // ---- Calendar events a member can see, across all HIVEs.
       for (const event of (eventsResult.data ?? []) as any[]) {
+        if (view === 'hiveWideUpcomingEvents' && !isUpcomingEventVisibleOnHiveWide(event)) continue;
         const invited = isInvitedToEvent(event, hiveIds);
         const sourceName = hiveDisplayName(event.community?.name);
         const timing = event.event_time
@@ -171,6 +180,13 @@ export function useWhatsNext() {
           ].filter(Boolean).join(' · '),
           communityId: event.community_id,
         });
+      }
+
+      // Home's Upcoming Events is only the HIVE-Wide/Public calendar. The
+      // broader Admin view below retains check-ins and operational deadlines.
+      if (view === 'hiveWideUpcomingEvents') {
+        found.sort((a, b) => a.date.localeCompare(b.date));
+        return found;
       }
 
       // ---- Check-ins that are open and unanswered.

@@ -36,8 +36,8 @@ export const queryKeys = {
   honeyPot: (communityId: string) => ['honeyPot', communityId] as const,
   honeyPotLedger: (communityId: string) => ['honeyPotLedger', communityId] as const,
   meetings: (communityId: string) => ['meetings', communityId] as const,
-  whatsNext: (userId: string, hiveIds: string, isOwner: boolean) =>
-    ['whatsNext', userId, hiveIds, isOwner] as const,
+  whatsNext: (userId: string, hiveIds: string, isOwner: boolean, view: string) =>
+    ['whatsNext', userId, hiveIds, isOwner, view] as const,
   fallbackAdmin: (communityId: string) => ['fallbackAdmin', communityId] as const,
 
   // Who the "@" picker can offer, per HIVE. One list, shared by every composer

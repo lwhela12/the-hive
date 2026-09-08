@@ -10,7 +10,7 @@ import { HIVE_RULES } from '../../lib/hiveRules';
 import { formatDateShort, formatTimeRange } from '../../lib/dateUtils';
 
 /**
- * What's next — every HIVE, in date order, at the top of HIVE-Wide Admin.
+ * Upcoming Events — every HIVE, in date order, at the top of HIVE-Wide Admin.
  *
  * Nat, 2026-09-02: *"this is what I've been missing... what's next is exactly
  * what I was talking about needing. Can we just fold that into the HIVE app,
@@ -66,7 +66,7 @@ export function WhatsNextPanel({
      */
     <View style={[cellStyle, { order } as any]}>
       <Panel
-        title="What's next"
+        title="Upcoming Events"
         titleTabKey="next"
         tabs={[
           { key: 'grid', label: 'The grid' },

@@ -1033,13 +1033,10 @@ export default function HiveWideScreen() {
                   RESULT was missing. HIVE Help and HIVE Hangs came out to make
                   room: both were three lines of "tbd" repeated per HIVE, and
                   neither is a thing you can act on from up here. */}
-              {/* WHAT'S NEXT — everything dated, across every HIVE you can see.
-                  The replacement for the two boxes below, and it belongs HERE
-                  rather than only in Admin: they came out the same evening it
-                  was built, and for an hour members had no upcoming events at
-                  all. Nat, straight away: *"wait, we lost all the
-                  calendar/upcoming events from the HIVE-Wide home page?"* A
-                  replacement only the owner can see is not a replacement.
+              {/* UPCOMING EVENTS — the shared calendar rung only.
+                  This is not a personal all-HIVE diary. HIVE-Wide and Public
+                  events belong on this home; each HIVE's Home includes those
+                  plus events from that one HIVE. Admin retains the god-view.
 
                   Shut on arrival like every other panel here, deliberately.
                   There is a case for opening this one — it is the only panel
@@ -1048,8 +1045,11 @@ export default function HiveWideScreen() {
                   replaces were shut too, so this restores what she lost rather
                   than quietly changing it into something else. One word to
                   open it the day she says so. */}
-              <TopBox label="What's next" wide={wide}>
-                <WhatsNextList />
+              <TopBox label="Upcoming Events" wide={wide}>
+                <WhatsNextList
+                  view="hiveWideUpcomingEvents"
+                  emptyLine="No HIVE-Wide or public events are coming up yet."
+                />
               </TopBox>
 
               {/* "YOUR MEETINGS" AND THE HIVE-WIDE CALENDAR ARE GONE (2026-09-02).
@@ -1059,10 +1059,8 @@ export default function HiveWideScreen() {
 
                   Both are now said in places that already existed. Each HIVE's
                   own row in Your HIVEs carries when it next meets — one row,
-                  one HIVE, both facts — and every dated thing across every HIVE
-                  is the scrolling What's next list, which is the shape she
-                  actually reads: *"I really like the scrolling to see what's
-                  next."*
+                  one HIVE, both facts — and the shared HIVE-Wide/Public
+                  calendar is the scrolling Upcoming Events list.
 
                   The month grid was offered as a second view and she turned it
                   down: *"if the calendar view makes it more complicated, just
