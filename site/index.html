@@ -281,10 +281,17 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .f{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
 .f label{font-size:.8rem;font-weight:700;color:var(--charcoal);letter-spacing:.02em}
-.pane input,.pane textarea{font-family:var(--sans);font-size:.97rem;color:var(--charcoal);background:#fff;
-  border:1px solid rgba(189,147,72,.42);border-radius:12px;padding:11px 14px;width:100%}
+.pane input,.pane textarea,.pane select{font-family:var(--sans);font-size:.97rem;color:var(--charcoal);background:#fff;
+  border:1px solid rgba(189,147,72,.42);border-radius:12px;padding:11px 14px;width:100%;min-height:46px}
 .pane textarea{resize:vertical;min-height:96px;line-height:1.55}
-.pane input:focus,.pane textarea:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(189,147,72,.16)}
+.pane select{appearance:none;-webkit-appearance:none;cursor:pointer;text-align:left;padding-right:40px;
+  background-image:linear-gradient(45deg,transparent 50%,var(--gold) 50%),linear-gradient(135deg,var(--gold) 50%,transparent 50%);
+  background-position:calc(100% - 20px) 50%,calc(100% - 14px) 50%;background-size:6px 6px,6px 6px;background-repeat:no-repeat}
+.pane input:focus,.pane textarea:focus,.pane select:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(189,147,72,.16)}
+.f label .opt{font-weight:400;color:var(--label)}
+.f label .opt[hidden]{display:none}
+#contact.done .f,#contact.done .row2,#contact.done .btn{display:none}
+#contact.done .formnote{font-family:var(--serif);font-size:1.08rem;color:var(--deepgold)}
 .hp{position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important}
 
 #subscribe input{flex:1 1 220px;border-radius:999px}
@@ -544,17 +551,23 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
 
   <div class="panels">
     <div class="pane" id="p-message" role="region" aria-labelledby="t-message" hidden>
-      <p>Want to help with a HIVE Help? Chip in to a Honey Pot? Join one of the HIVEs,
-        work on something together, or just say hello? This is the door for all of it.</p>
+      <p>Something you wish HIVE had, a question, a hello, or a hand up to join one of the HIVEs.
+        This is the door for all of it.</p>
       <form id="contact" novalidate>
         <div class="row2">
-          <div class="f"><label for="cname">Your name</label>
+          <div class="f"><label for="cname">Name</label>
             <input id="cname" name="name" type="text" autocomplete="name" required></div>
           <div class="f"><label for="cmail">Email</label>
-            <input id="cmail" name="email" type="email" autocomplete="email" required></div>
+            <input id="cmail" name="email" type="email" autocomplete="email" inputmode="email" required></div>
         </div>
-        <div class="f"><label for="cmsg">What&rsquo;s on your mind?</label>
-          <textarea id="cmsg" name="message" rows="4" required></textarea></div>
+        <div class="f"><label for="ctopic">How can we help?</label>
+          <select id="ctopic" name="topic">
+            <option value="wish">Wishlist: something I&rsquo;d love to see</option>
+            <option value="question">A question</option>
+            <option value="hello">Just saying hello</option>
+          </select></div>
+        <div class="f"><label for="cmsg">Message <span class="opt" id="copt">(optional)</span></label>
+          <textarea id="cmsg" name="message" rows="4"></textarea></div>
         <!-- The bot trap. It used to be name="company", which was a mistake:
              the field is hidden by being parked off-screen rather than removed,
              so browsers still treat it as real — and "company" is one of the
@@ -564,7 +577,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
              nothing to any autofill heuristic. -->
         <input class="hp" type="text" name="hive-jar" tabindex="-1" autocomplete="off" aria-hidden="true">
         <p class="formnote" id="cnote" role="status" aria-live="polite"></p>
-        <button class="btn solid" type="submit">Send it <i>&rarr;</i></button>
+        <button class="btn solid" type="submit">Send <i>&rarr;</i></button>
       </form>
     </div>
 
@@ -957,39 +970,46 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     });
   });
 
-  /* ---------- contact: posts to the handler, falls back to mail ---------- */
-  var cform = document.getElementById('contact'), cnote = document.getElementById('cnote');
+  /* ---------- the one form: posts to api/hello ---------- */
+  var cform = document.getElementById('contact'), cnote = document.getElementById('cnote'),
+      copt = document.getElementById('copt'), NEEDS_MESSAGE = { wish: true, question: true };
+  function chint(){ copt.hidden = !!NEEDS_MESSAGE[cform.topic.value]; }
+  cform.topic.addEventListener('change', chint);
+  chint();
   cform.addEventListener('submit', function(e){
     e.preventDefault();
     var d = new FormData(cform);
     var name = (d.get('name')||'').toString().trim();
     var mail = (d.get('email')||'').toString().trim();
     var msg  = (d.get('message')||'').toString().trim();
-    if(d.get('hive-jar')) return;                     /* bots fill the hidden field */
-    if(!name || !msg || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)){
-      cnote.className = 'formnote';
-      cnote.textContent = 'We need a name, an email we can reply to, and a line about why.';
-      return;
-    }
+    var topic = (d.get('topic')||'').toString();
     cnote.className = 'formnote';
-    cnote.textContent = 'Sending\u2026';
-    fetch('/api/contact', {
+    if(!name){ cnote.textContent = 'Please add your name.'; cform.name.focus(); return; }
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)){ cnote.textContent = 'That email doesn\u2019t look right.'; cform.email.focus(); return; }
+    if(NEEDS_MESSAGE[topic] && !msg){ cnote.textContent = 'Please add a line so we know what you mean.'; cform.message.focus(); return; }
+    var cbtn = cform.querySelector('button'), clabel = cbtn.innerHTML;
+    cbtn.disabled = true; cbtn.textContent = 'Sending\u2026';
+    cnote.textContent = '';
+    fetch('/api/hello', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({name:name, email:mail, message:msg, company:(d.get('hive-jar')||'').toString()})
+      body: JSON.stringify({name:name, email:mail, topic:topic, message:msg, 'hive-jar':(d.get('hive-jar')||'').toString()})
     }).then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){
-      return {ok:r.ok, body:j};
+      return {ok:r.ok && j.ok, body:j};
     }); }).then(function(res){
-      if(res.ok && res.body.sent){
-        cform.reset();
-        cnote.className = 'formnote good';
-        cnote.textContent = 'Got it \u2014 we\u2019ll come back to you soon.';
-      } else { throw new Error('not configured'); }
+      cbtn.disabled = false; cbtn.innerHTML = clabel;
+      if(!res.ok){
+        var m = res.body && res.body.error;
+        if(!m || m === 'send_failed' || m === 'not_configured') m = 'That didn\u2019t go through. Please try again in a moment.';
+        cnote.textContent = m;
+        return;
+      }
+      cform.reset();
+      cform.classList.add('done');
+      cnote.className = 'formnote good';
+      cnote.textContent = 'Got it. I\u2019ll write back.';
     }).catch(function(){
-      cnote.className = 'formnote';
-      cnote.textContent = 'Opening your mail app instead\u2026';
-      window.location.href = 'mailto:NatWalstead@gmail.com'
-        + '?subject=' + encodeURIComponent('Honey, we have a message! \uD83C\uDF6F')
-        + '&body=' + encodeURIComponent(name + ' <' + mail + '>\n\n' + msg);
+      cbtn.disabled = false; cbtn.innerHTML = clabel;
+      cnote.textContent = 'That didn\u2019t go through. Please try again in a moment.';
     });
   });
 
