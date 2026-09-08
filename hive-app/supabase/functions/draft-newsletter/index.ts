@@ -42,7 +42,7 @@ interface DraftRequest {
 }
 
 type EditorialLead = {
-  source: "Nat's featured newsletter note" | "Nat's newsletter note" | 'End-of-month contribution';
+  source: "Nat's newsletter note" | 'End-of-month contribution';
   content: string;
 };
 
@@ -86,11 +86,11 @@ function hiveHelpCycle(date: string) {
 }
 
 /**
- * The worktop is a place to collect freely; a letter needs a compact, visible
- * editorial brief. Keep a mix of Nat's newest notes and submitted shout-outs
- * or event plugs, then show that exact shortlist in the facts.
+ * Every active worktop note is an editorial instruction for this issue. Survey
+ * contributions seed the same letter after Nat's notes, and duplicate text is
+ * kept out so a note never has to be starred to make the cut.
  */
-function selectEditorialLeads(ownerNotes: string[], endOfMonthNotes: string[], featuredOwnerNotes: string[]): EditorialLead[] {
+function selectEditorialLeads(ownerNotes: string[], endOfMonthNotes: string[]): EditorialLead[] {
   const unique = (values: string[]) => {
     const seen = new Set<string>();
     return values.filter((value) => {
@@ -102,19 +102,10 @@ function selectEditorialLeads(ownerNotes: string[], endOfMonthNotes: string[], f
   };
   const owner = unique(ownerNotes);
   const endOfMonth = unique(endOfMonthNotes);
-  const featured = unique(featuredOwnerNotes);
-  const featuredKeys = new Set(featured.map((value) => value.replace(/\s+/g, ' ').trim().toLocaleLowerCase()));
   return [
-    // A featured note is Nat's direct editorial instruction. It is never
-    // displaced by recent-but-unselected worktop notes or survey answers.
-    ...featured.slice(0, 5).map((content) => ({ source: "Nat's featured newsletter note" as const, content })),
-    ...owner.filter((content) => !featuredKeys.has(content.replace(/\s+/g, ' ').trim().toLocaleLowerCase()))
-      .slice(0, 3).map((content) => ({ source: "Nat's newsletter note" as const, content })),
-    ...endOfMonth.slice(0, 2).map((content) => ({ source: 'End-of-month contribution' as const, content })),
-    ...owner.filter((content) => !featuredKeys.has(content.replace(/\s+/g, ' ').trim().toLocaleLowerCase()))
-      .slice(3).map((content) => ({ source: "Nat's newsletter note" as const, content })),
-    ...endOfMonth.slice(2).map((content) => ({ source: 'End-of-month contribution' as const, content })),
-  ].slice(0, Math.max(5, featured.length));
+    ...owner.map((content) => ({ source: "Nat's newsletter note" as const, content })),
+    ...endOfMonth.map((content) => ({ source: 'End-of-month contribution' as const, content })),
+  ];
 }
 
 /** The editor's one inline formatting marker is safe in plain text and email. */
@@ -193,11 +184,12 @@ async function writeNewsletter(
     '  for a voluntary name supplied inside an End-of-month contribution itself.',
     '- Never mention Production HIVE and never say there are three (or any exact',
     '  number of) HIVEs. The public wording is always "multiple HIVEs".',
-    '- Every numbered Newsletter beat is selected editorial material. Carry each',
-    '  beat\'s substance into the letter once, in the section where it belongs.',
-    '  Do not silently skip a beat or turn it into a vague generic update. Nat\'s',
-    '  notes are not quotes or attribution. End-of-month contributions are express',
-    '  invitations for a shout-out or plug when their submitted words make that safe.',
+    '- Every numbered Newsletter beat is editorial material. Carry the substance',
+    '  of every Nat newsletter note into the letter once, in the section where it',
+    '  belongs. Merge related notes into a lively passage when useful, but never',
+    '  omit a Nat note or turn it into a vague generic update. Nat\'s notes are',
+    '  not quotes or attribution. End-of-month contributions are express invitations',
+    '  for a shout-out or plug when their submitted words make that safe.',
     '- Never ask readers to RSVP, coordinate with Nat, or join a group plan for',
     '  a public hang. Say HIVE members will be there and readers are welcome to join.',
     '- Never say check-ins were broken, lost, fixed, or only now reach Nat. If a',
@@ -216,9 +208,8 @@ async function writeNewsletter(
     '  start", and do not use cushioning qualifiers such as "small", "tiny",',
     '  "calm", "low effort", or "no shame" unless a supplied fact makes one',
     '  indispensable.',
-    '- Choose no more than five named highlights across the whole letter. The',
-    '  selected Newsletter beats are that limit; public HIVE Help and Hangs may',
-    '  sit beside them without creating a second pile of highlights.',
+    '- Keep the reader-facing highlights skimmable by combining related notes',
+    '  into the same section. Skimmability never permits dropping a Nat note.',
     '- Use **bold markdown markers** around every heading, including HIVE Hangs',
     '  and HIVE Help, and nowhere else. Headings sit on their own line.',
     '- Sign off: "Love in the biggest way," then "Nat" on the next line.',
@@ -394,9 +385,9 @@ serve(async (req) => {
       // Owner notes are editorial leads. They are never exposed outside this
       // owner-only drafting call.
       supabaseAdmin.from('newsletter_thoughts')
-        .select('content, created_at, featured_in_next_issue')
+        .select('content, created_at')
         .is('archived_at', null)
-        .order('created_at', { ascending: false }).limit(20),
+        .order('created_at', { ascending: false }),
       // These answers expressly ask for newsletter consideration. Keep their
       // authors out of the data so the writer cannot accidentally identify one.
       supabaseAdmin.from('survey_responses')
@@ -432,16 +423,13 @@ serve(async (req) => {
     const currentHelp = helperPosts.find((row) => row.created_at >= `${helpStart}T00:00:00Z` && row.created_at < `${helpEnd}T00:00:00Z`);
     const previousHelp = helperPosts.find((row) => row.created_at >= `${previousHelpStart}T00:00:00Z` && row.created_at < `${helpStart}T00:00:00Z`);
     const ownerNotes = ((thoughtRows.data ?? []) as any[])
-      .map((row) => String(row.content ?? '').trim()).filter(Boolean).slice(0, 8);
-    const featuredOwnerNotes = ((thoughtRows.data ?? []) as any[])
-      .filter((row) => row.featured_in_next_issue === true)
       .map((row) => String(row.content ?? '').trim()).filter(Boolean);
     const newsletterAnswerIds = ['q_eom_newsletter', 'q_newsletter', 'q_shoutout'];
     const endOfMonthNotes = ((responseRows.data ?? []) as any[])
       .filter((row) => String(row.submitted_at ?? row.created_at ?? '') >= startIso)
       .flatMap((row) => newsletterAnswerIds.map((id) => String(row.answers?.[id] ?? '').trim()))
-      .filter(Boolean).slice(0, 12);
-    const editorialLeads = selectEditorialLeads(ownerNotes, endOfMonthNotes, featuredOwnerNotes);
+      .filter(Boolean);
+    const editorialLeads = selectEditorialLeads(ownerNotes, endOfMonthNotes);
 
     const sections: { title: string; lines: string[] }[] = [];
 

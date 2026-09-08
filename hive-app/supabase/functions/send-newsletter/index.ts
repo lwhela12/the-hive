@@ -556,6 +556,23 @@ serve(async (req) => {
       })
     : 0;
 
+  // A live issue closes the active notes inbox. The next idea belongs to the
+  // next issue and starts a fresh list; archived notes remain recoverable in
+  // the data rather than being destructively deleted.
+  let thoughtsCleared = 0;
+  if (mode === 'live' && sent > 0) {
+    const { data: clearedThoughts, error: clearThoughtsError } = await supabase
+      .from('newsletter_thoughts')
+      .update({ archived_at: new Date().toISOString() })
+      .is('archived_at', null)
+      .select('id');
+    if (clearThoughtsError) {
+      console.error('[send-newsletter] could not clear used newsletter thoughts', clearThoughtsError);
+    } else {
+      thoughtsCleared = clearedThoughts?.length ?? 0;
+    }
+  }
+
   // Logged even for a test, so "did my test actually send?" has an answer
   // that does not live in somebody's inbox.
   await supabase.from('newsletter_sends').insert({
@@ -573,5 +590,6 @@ serve(async (req) => {
     failedAddresses: failures.slice(0, 20),
     total: recipients.length,
     mentionsNotified,
+    thoughtsCleared,
   });
 });
