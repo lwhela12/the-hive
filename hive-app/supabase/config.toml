@@ -129,6 +129,12 @@ verify_jwt = false
 [functions.check-in-reminder]
 verify_jwt = false
 
+# Called by a database trigger only (migration 254) whenever anyone answers a
+# daily question, posts or replies on a board, or makes a wish — emails every
+# HIVE owner. Checks the service-role key itself; no other caller is honoured.
+[functions.notify-admin-activity]
+verify_jwt = false
+
 # Import Gemini/Google Meet notes into Meeting Hub.
 # Auth and membership checks are handled in function code.
 [functions.import-meeting-notes]

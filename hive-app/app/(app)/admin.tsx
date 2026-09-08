@@ -44,6 +44,7 @@ import {
   hivePanelSkin,
 } from '../../components/admin/GodModePanels';
 import { WhatsNextPanel } from '../../components/admin/WhatsNextPanel';
+import { SendCheckInPanel } from '../../components/admin/SendCheckInPanel';
 import { EmailTemplatesPanel } from '../../components/admin/EmailTemplatesPanel';
 import { HIVE_GOLD, accentOnDark, accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 // Admin is always seen from the cosmos, whichever HIVE you happen to belong to,
@@ -1295,6 +1296,17 @@ export default function AdminScreen() {
               scrollStyle={panelScrollStyle}
               Panel={AdminPanel}
               order={0}
+            />
+          )}
+
+          {/* The button `open-check-in` never got. Owner-only, same bar as the
+              function itself — see `components/admin/SendCheckInPanel.tsx`. */}
+          {isOwner && (
+            <SendCheckInPanel
+              cellStyle={dashboardCellStyle}
+              panelStyle={dashboardPanelStyle}
+              bodyStyle={dashboardPanelBodyStyle}
+              Panel={AdminPanel}
             />
           )}
 
