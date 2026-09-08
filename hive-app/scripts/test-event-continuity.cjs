@@ -55,7 +55,7 @@ assert.match(whatsNext, /isUpcomingEventVisibleOnHiveWide\(event\)/, 'HIVE-Wide 
 assert.match(whatsNext, /canShareEventDetailsOnHiveWide\(event\)/, 'HIVE-Wide Home hides details for HIVE-only invitations');
 
 const hiveWideHome = fs.readFileSync('app/(app)/hive-wide.tsx', 'utf8');
-assert.match(hiveWideHome, /label="Upcoming Events"/);
+assert.match(hiveWideHome, /title="Upcoming Events"/);
 assert.match(hiveWideHome, /view="hiveWideUpcomingEvents"/);
 
 const adminPanel = fs.readFileSync('components\/admin\/WhatsNextPanel.tsx', 'utf8');

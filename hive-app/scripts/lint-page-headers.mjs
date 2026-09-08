@@ -99,8 +99,12 @@ if (adminHeaders.some((tag) => !/\btone\s*=\s*["']wide["']/.test(tag.text))) {
 }
 
 const wideHome = fs.readFileSync(path.join(root, 'app/(app)/hive-wide.tsx'), 'utf8');
-if (!/HIVE-Wide\s*<\/Text>[\s\S]{0,700}>\s*Home\s*<\/Text>/.test(wideHome)) {
-  failures.push('app/(app)/hive-wide.tsx must show tiny HIVE-Wide above large Home');
+const wideHomeHasSharedHeader = appHeaderOpeningTags(wideHome).some((tag) => (
+  /\btitle\s*=\s*["']Home["']/.test(tag.text)
+  && /\btone\s*=\s*["']wide["']/.test(tag.text)
+));
+if (!wideHomeHasSharedHeader) {
+  failures.push('app/(app)/hive-wide.tsx must use the shared HIVE-Wide Home header');
 }
 
 const customClarifiers = [
