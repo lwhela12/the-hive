@@ -628,9 +628,9 @@ export function NewsletterPanel({
       if (lastLiveNewsletterAt && String(row.submitted_at ?? row.created_at ?? '') <= lastLiveNewsletterAt) return [];
       const answers = (row.answers ?? {}) as Record<string, unknown>;
       const survey = Array.isArray(row.survey) ? row.survey[0] : row.survey;
-      // The dedicated halfway “For the Buzz” survey is the only survey that
-      // seeds the newsletter. Ordinary monthly and pre-meeting check-ins can
-      // happen to share a field id, but they are not newsletter submissions.
+      // The dedicated End of the month “For the Buzz” survey is the only
+      // survey that seeds the newsletter. Before we meet never does, even if
+      // an old historical record happens to carry the same field id.
       if (String(survey?.title ?? '').trim().toLocaleLowerCase() !== 'end of the month') return [];
       // A private HIVE may still deliberately offer a Buzz shout-out or plug.
       // HIVE-Wide can use the words, but it must never disclose who sent them
