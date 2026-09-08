@@ -65,7 +65,10 @@ serve(async (req) => {
   const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', serviceKey);
 
   const [{ data: owners }, { data: actor }, { data: hive }] = await Promise.all([
-    admin.from('profiles').select('id, name, email').eq('is_owner', true),
+    // Nat, 2026-09-08: "not lucas, just me, unless he can toggle it off." No
+    // toggle exists yet (see migration 255), so the honest default is off for
+    // everyone but her.
+    admin.from('profiles').select('id, name, email').eq('is_owner', true).eq('email_admin_activity_enabled', true),
     body.actor_id
       ? admin.from('profiles').select('name').eq('id', body.actor_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -94,7 +97,7 @@ serve(async (req) => {
       <div style="text-align: center; margin: 24px 0;">
         <a href="${escapeHtml(href)}" target="_top" style="background: ${mark.accent}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">${escapeHtml(copy.button)}</a>
       </div>
-      <p style="font-size: 12px; color: #b6b6b6; text-align: center;">You get this because you're a HIVE owner. Ask Claude to turn it off any time. 🍯</p>
+      <p style="font-size: 12px; color: #b6b6b6; text-align: center;">You asked to hear about every HIVE's activity. Ask Claude to turn it off any time. 🍯</p>
     </div>
   `;
   const subject = `HIVE · ${heading}`;
