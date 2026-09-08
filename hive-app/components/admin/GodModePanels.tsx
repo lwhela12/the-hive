@@ -652,9 +652,10 @@ export function NewsletterPanel({
       if (lastLiveNewsletterAt && String(row.submitted_at ?? row.created_at ?? '') <= lastLiveNewsletterAt) return [];
       const answers = (row.answers ?? {}) as Record<string, unknown>;
       const survey = Array.isArray(row.survey) ? row.survey[0] : row.survey;
-      // HIVE-Wide must never surface a contribution from a private HIVE.
-      // A survey without a community is the HIVE-Wide survey itself.
-      if (survey?.community_id && !publicHiveIds.has(survey.community_id)) return [];
+      // A private HIVE may still deliberately offer a Buzz shout-out or plug.
+      // HIVE-Wide can use the words, but it must never disclose who sent them
+      // or which private HIVE they came from.
+      const isPrivateHiveContribution = !!survey?.community_id && !publicHiveIds.has(survey.community_id);
       const author = (Array.isArray(row.user) ? row.user[0] : row.user)?.name ?? 'Someone';
       const hive = hiveNames.get(survey?.community_id) ?? '';
       return NEWSLETTER_ANSWER_IDS.flatMap((key) => {
@@ -664,7 +665,7 @@ export function NewsletterPanel({
           id: `${row.id}:${key}`,
           content: text,
           created_at: row.submitted_at ?? row.created_at,
-          author: hive ? `${author} · ${hive}` : author,
+          author: isPrivateHiveContribution ? 'Anonymous HIVE member' : (hive ? `${author} · ${hive}` : author),
           source: 'survey' as const,
           sourceAnswers: answers,
           answerKey: key,
