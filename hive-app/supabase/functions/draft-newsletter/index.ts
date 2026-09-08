@@ -126,9 +126,18 @@ function prettyDateRange(start: string, end?: string | null) {
   return `${prettyDate(start)}–${prettyDate(end)}`;
 }
 
-/** The calendar is the source of truth, so event listings keep every detail it has. */
+/**
+ * The HIVE-Wide Home calendar is the source of truth. Events marked
+ * HIVE-Wide can appear in the newsletter alongside public events, but a
+ * HIVE-only invitation still keeps its time, place, description, and link
+ * inside that HIVE. This exactly matches the Home list: date and title travel
+ * HIVE-Wide; joining information travels only when the invitation does too.
+ */
 function upcomingEventLine(event: any) {
   const facts = [`${event.title} — ${prettyDateRange(event.event_date, event.end_date)}`];
+  const invitationTravels = (event.invited_scope ?? event.visibility) === 'all_hives'
+    || (event.invited_scope ?? event.visibility) === 'public';
+  if (!invitationTravels) return facts.join(' · ');
   if (event.event_time) facts.push(prettyTimeRange(event.event_time, event.end_time));
   if (String(event.location ?? '').trim()) facts.push(`Where: ${String(event.location).trim()}`);
   if (String(event.description ?? '').trim()) facts.push(String(event.description).trim());
@@ -375,14 +384,15 @@ serve(async (req) => {
       helperFocusRows,
       lastLiveSendRows,
     ] = await Promise.all([
-      // Public events in the calendar month the letter is going out. A September
-      // newsletter names September invitations — never October's, even when it
-      // is drafted late in the month. Anything without public consent stays in
-      // the members' side.
+      // The same calendar feed as HIVE-Wide Home: every event a HIVE-Wide
+      // reader can see, restricted to the calendar month of this issue. A
+      // September newsletter names September events — never October's, even
+      // when it is drafted late. `publicHiveIds` keeps a private HIVE (notably
+      // Production) out even if a bad row ever carries a wider visibility.
       supabaseAdmin.from('events')
-        .select('title, event_date, end_date, event_time, end_time, event_type, location, description, meet_link')
+        .select('title, event_date, end_date, event_time, end_time, event_type, location, description, meet_link, visibility, invited_scope')
         .in('community_id', publicHiveIds)
-        .eq('visibility', 'public').eq('invited_scope', 'public')
+        .in('visibility', ['all_hives', 'public'])
         .gte('event_date', newsletterMonthStart)
         .lt('event_date', newsletterMonthEnd)
         .order('event_date', { ascending: true }).order('event_time', { ascending: true }),
@@ -436,12 +446,12 @@ serve(async (req) => {
         .order('created_at', { ascending: false }).limit(1),
     ]);
 
-    // Birthdays are profile data and can never be public. The extra exclusion
-    // is defence in depth for stale rows while the database migration lands.
+    // HIVE-Wide Home is the source, so its shared meetings travel too. Birthdays
+    // are profile data and can never be public; the travel exclusion is defence
+    // in depth for stale rows while the database migration lands.
     const upcoming = (upcomingRows.data ?? []) as any[];
     const upcomingEvents = upcoming.filter((event) => (
-      event.event_type !== 'meeting'
-      && event.event_type !== 'birthday'
+      event.event_type !== 'birthday'
       && !/\b(out of town|away|trip|travel|galavant)/i.test(event.title ?? '')
     ));
     const { start: helpStart, end: helpEnd, previousStart: previousHelpStart } = hiveHelpCycle(date);
