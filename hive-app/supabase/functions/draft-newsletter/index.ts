@@ -344,6 +344,7 @@ serve(async (req) => {
       thoughtRows,
       responseRows,
       helperFocusRows,
+      lastLiveSendRows,
     ] = await Promise.all([
       // Meetings are members-only by nature, so the public newsletter never
       // names one. Kept as a query only so the shape below stays readable.
@@ -401,6 +402,12 @@ serve(async (req) => {
         .eq('category.topic_kind', 'helper_log')
         .is('archived_at', null)
         .order('created_at', { ascending: false }).limit(24),
+      // Once a live issue has gone, the next issue starts with a fresh
+      // worktop. Keep the original survey receipt, but do not recycle it.
+      supabaseAdmin.from('newsletter_sends')
+        .select('created_at')
+        .eq('mode', 'live')
+        .order('created_at', { ascending: false }).limit(1),
     ]);
 
     const nextMeeting = ((nextMeetingRows.data ?? []) as any[])[0] ?? null;
@@ -425,8 +432,10 @@ serve(async (req) => {
     const ownerNotes = ((thoughtRows.data ?? []) as any[])
       .map((row) => String(row.content ?? '').trim()).filter(Boolean);
     const newsletterAnswerIds = ['q_eom_newsletter', 'q_newsletter', 'q_shoutout'];
+    const lastLiveNewsletterAt = String(((lastLiveSendRows.data ?? []) as any[])[0]?.created_at ?? '');
+    const newsletterInputStart = lastLiveNewsletterAt > startIso ? lastLiveNewsletterAt : startIso;
     const endOfMonthNotes = ((responseRows.data ?? []) as any[])
-      .filter((row) => String(row.submitted_at ?? row.created_at ?? '') >= startIso)
+      .filter((row) => String(row.submitted_at ?? row.created_at ?? '') >= newsletterInputStart)
       .filter((row) => {
         const survey = Array.isArray(row.survey) ? row.survey[0] : row.survey;
         // Null is the HIVE-Wide survey. A HIVE-specific answer may only feed

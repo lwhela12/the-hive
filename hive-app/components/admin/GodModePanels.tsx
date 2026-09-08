@@ -569,9 +569,11 @@ export function NewsletterPanel({
     ]);
 
     const sends = new Map<string, { created_at: string; recipient_count: number }>();
-    for (const row of ((sendRes.data ?? []) as any[])) {
+    const sentRows = (sendRes.data ?? []) as any[];
+    for (const row of sentRows) {
       if (!sends.has(row.post_id)) sends.set(row.post_id, row);
     }
+    const lastLiveNewsletterAt = String(sentRows[0]?.created_at ?? '');
     setIssues(((issueRes.data ?? []) as any[]).map((row) => ({
       id: row.id,
       title: String(row.title ?? 'Untitled'),
@@ -647,6 +649,7 @@ export function NewsletterPanel({
       .order('created_at', { ascending: false })
       .limit(120);
     const fromSurveys = ((answered ?? []) as any[]).flatMap((row) => {
+      if (lastLiveNewsletterAt && String(row.submitted_at ?? row.created_at ?? '') <= lastLiveNewsletterAt) return [];
       const answers = (row.answers ?? {}) as Record<string, unknown>;
       const survey = Array.isArray(row.survey) ? row.survey[0] : row.survey;
       // HIVE-Wide must never surface a contribution from a private HIVE.
@@ -684,6 +687,7 @@ export function NewsletterPanel({
           .from('board_replies')
           .select('id, content, created_at, author:profiles!author_id(name)')
           .in('post_id', threadIds)
+          .gt('created_at', lastLiveNewsletterAt || '1970-01-01T00:00:00Z')
           .order('created_at', { ascending: false })
           .limit(40)).data ?? []) as any[]).map((r) => ({
             id: r.id,
