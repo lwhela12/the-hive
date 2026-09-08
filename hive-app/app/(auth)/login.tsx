@@ -470,7 +470,9 @@ export default function LoginScreen() {
             >
               Saved You a Seat Studios
             </Text>
-            {' '}&middot; &copy; 2026. All rights reserved.
+          </Text>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, lineHeight: 18, color: 'rgba(246,244,229,0.34)', textAlign: 'center', marginTop: 3 }}>
+            &copy; 2026 Saved You a Seat Studios. All rights reserved.
           </Text>
           <Text
             style={{ fontFamily: 'Lato_400Regular', fontSize: 11, lineHeight: 18, color: 'rgba(246,244,229,0.34)', textAlign: 'center', marginTop: 3 }}

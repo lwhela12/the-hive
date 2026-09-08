@@ -395,6 +395,123 @@ function attachEndBounce(scrollNode: HTMLElement, getOptions: () => BounceOption
   };
 }
 
+// ---- back to top --------------------------------------------------------
+
+/** Below this the app is a phone (the same number `SideRail` uses for `isPhone`). */
+const PHONE_MAX_WIDTH = 768;
+/** Show the arrow once the reader is more than a screen down. */
+const BACK_TO_TOP_AFTER_SCREENS = 1;
+const BACK_TO_TOP_SIZE = 44;
+const BACK_TO_TOP_GAP = 16;
+
+/**
+ * A gold arrow, bottom-right, that appears on a phone once you have scrolled a
+ * screen or more and takes you back to the top (The Build Standard, check 29).
+ *
+ * Drawn straight into the DOM beside the scrolling box rather than as a React
+ * child, so no screen has to find room for it or remember to add it: every
+ * `BounceScrollView` (and every scroller that takes `useEndBounce`) gets one.
+ * It sits inside the scroller's parent — the screen, in practice — which is
+ * how it stays clear of the tab bar and the path strip along the bottom, both
+ * of which live outside the screen. The gap below it is measured from the
+ * scroller's own bottom edge, so a composer bar sitting under the list pushes
+ * the arrow up instead of being covered by it.
+ *
+ * Honours `prefers-reduced-motion`: the jump is instant instead of smooth.
+ * Only on web — native scrollers have the status-bar tap for this.
+ */
+function attachBackToTop(scrollNode: HTMLElement, getOptions: () => { backToTop: boolean }): () => void {
+  const host = scrollNode.parentElement;
+  if (!host) return () => {};
+  const doc = scrollNode.ownerDocument;
+  const win = doc.defaultView;
+  if (!win) return () => {};
+
+  const button = doc.createElement('button');
+  button.type = 'button';
+  button.setAttribute('aria-label', 'Back to top');
+  button.textContent = '↑';
+  Object.assign(button.style, {
+    position: 'absolute',
+    right: `${BACK_TO_TOP_GAP}px`,
+    bottom: `${BACK_TO_TOP_GAP}px`,
+    width: `${BACK_TO_TOP_SIZE}px`,
+    height: `${BACK_TO_TOP_SIZE}px`,
+    borderRadius: '50%',
+    border: '0',
+    padding: '0',
+    margin: '0',
+    background: '#bd9348',
+    color: '#313130',
+    font: `700 20px/${BACK_TO_TOP_SIZE}px Lato, system-ui, sans-serif`,
+    textAlign: 'center',
+    boxShadow: '0 8px 24px rgba(49, 49, 48, 0.28)',
+    cursor: 'pointer',
+    zIndex: '30',
+    opacity: '0',
+    pointerEvents: 'none',
+    transform: 'translateY(10px)',
+    transition: 'opacity 0.2s, transform 0.2s',
+  } as Partial<CSSStyleDeclaration>);
+
+  const reduceMotion = () =>
+    typeof win.matchMedia === 'function' && win.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let shown = false;
+  let mounted = false;
+
+  // The arrow keeps its distance from the scroller's edges, not the host's, so
+  // whatever the screen has stacked under or beside the list stays uncovered.
+  function place() {
+    const hostRect = host!.getBoundingClientRect();
+    const scrollRect = scrollNode.getBoundingClientRect();
+    const below = Math.max(0, Math.round(hostRect.bottom - scrollRect.bottom));
+    const beside = Math.max(0, Math.round(hostRect.right - scrollRect.right));
+    button.style.bottom = `${BACK_TO_TOP_GAP + below}px`;
+    button.style.right = `${BACK_TO_TOP_GAP + beside}px`;
+  }
+
+  function update() {
+    const want =
+      getOptions().backToTop &&
+      win!.innerWidth < PHONE_MAX_WIDTH &&
+      scrollNode.scrollTop > scrollNode.clientHeight * BACK_TO_TOP_AFTER_SCREENS;
+    if (want === shown) return;
+    shown = want;
+    if (want) {
+      if (!mounted) {
+        host!.appendChild(button);
+        mounted = true;
+      }
+      place();
+    }
+    button.style.opacity = want ? '1' : '0';
+    button.style.pointerEvents = want ? 'auto' : 'none';
+    button.style.transform = want ? 'translateY(0)' : 'translateY(10px)';
+  }
+
+  function onClick() {
+    scrollNode.scrollTo({ top: 0, behavior: reduceMotion() ? 'auto' : 'smooth' });
+  }
+
+  function onResize() {
+    if (shown) place();
+    update();
+  }
+
+  button.addEventListener('click', onClick);
+  scrollNode.addEventListener('scroll', update, { passive: true });
+  win.addEventListener('resize', onResize);
+  update();
+
+  return () => {
+    button.removeEventListener('click', onClick);
+    scrollNode.removeEventListener('scroll', update);
+    win.removeEventListener('resize', onResize);
+    if (mounted) button.remove();
+  };
+}
+
 export type EndBounceOptions = {
   /**
    * Off entirely. Read fresh on every gesture, so a screen that hands its
@@ -406,6 +523,12 @@ export type EndBounceOptions = {
   bounceDown?: boolean;
   /** Bounce when pushed past the bottom. Default on. */
   bounceUp?: boolean;
+  /**
+   * The phone's back-to-top arrow. Default on. Turn it off where "the top" is
+   * not where anyone wants to go — a chat log, where the newest line is at the
+   * bottom.
+   */
+  backToTop?: boolean;
 };
 
 /**
@@ -436,14 +559,6 @@ export function useEndBounce(options: EndBounceOptions = {}) {
     if (!isWeb || !node) return;
     if (typeof window === 'undefined') return;
 
-    // Somebody who has asked for less movement gets none of this.
-    if (
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    ) {
-      return;
-    }
-
     // ScrollView, FlatList and SectionList all answer `getScrollableNode()` with
     // the actual scrolling element.
     const scrollNode: HTMLElement | null =
@@ -468,11 +583,29 @@ export function useEndBounce(options: EndBounceOptions = {}) {
       if (verticalScale < 0) return;
     }
 
-    detach.current = attachEndBounce(scrollNode, () => ({
+    const detachBackToTop = attachBackToTop(scrollNode, () => ({
+      backToTop: latest.current.backToTop !== false,
+    }));
+
+    // Somebody who has asked for less movement gets none of the bounce. The
+    // arrow stays — it is a button, not motion — and jumps instead of gliding.
+    if (
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      detach.current = detachBackToTop;
+      return;
+    }
+
+    const detachBounce = attachEndBounce(scrollNode, () => ({
       enabled: latest.current.enabled !== false,
       bounceDown: latest.current.bounceDown !== false,
       bounceUp: latest.current.bounceUp !== false,
     }));
+    detach.current = () => {
+      detachBounce();
+      detachBackToTop();
+    };
   }, []);
 }
 
@@ -483,8 +616,8 @@ export type BounceScrollViewProps = ScrollViewProps & EndBounceOptions;
  * a page's main `ScrollView` is — every other prop is passed straight through.
  */
 export const BounceScrollView = forwardRef<ScrollView, BounceScrollViewProps>(
-  function BounceScrollView({ enabled, bounceDown, bounceUp, ...rest }, forwardedRef) {
-    const bounceRef = useEndBounce({ enabled, bounceDown, bounceUp });
+  function BounceScrollView({ enabled, bounceDown, bounceUp, backToTop, ...rest }, forwardedRef) {
+    const bounceRef = useEndBounce({ enabled, bounceDown, bounceUp, backToTop });
 
     const setRef = useCallback(
       (node: any) => {
