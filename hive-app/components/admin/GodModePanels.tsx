@@ -590,27 +590,8 @@ export function NewsletterPanel({
       .filter(Boolean));
 
     /**
-     * Shout-outs belong to ONE month, and retire with it.
-     *
-     * This read the newest THREE collecting threads and ignored archiving
-     * altogether, so a shout-out kept showing up for months and the count was
-     * really "the last three months of shout-outs, roughly". Nat asked the
-     * question that found it (2026-08-12): *"when do these populate, when do
-     * they get retired? how/when do they fall off? and where do they go?"* —
-     * and the honest answer was "they don't", right after she had archived
-     * July's thread and still saw its twelve.
-     *
-     * So: the one collecting thread that is currently open. A shout-out
-     * appears when somebody adds one (from The Buzz, or from the halfway
-     * check-in, both of which post a reply here) and leaves this box the
-     * moment that thread is archived or the next month's thread opens.
-     *
-     * Nowhere is it deleted — the replies stay on the board thread for good.
-     * This box is a worktop, not an archive.
-     */
-    /**
-     * Where a shout-out comes from, as of 2026-08-17: **the halfway check-in
-     * itself.**
+     * Where a shout-out comes from: the dedicated HIVE-Wide “End of the
+     * month” survey's “For the Buzz” fields.
      *
      * Nat, at length and in capitals: *"we do not have newsletter boards
      * period"* — *"stop putting newsletter boards"* — *"the end of the month
@@ -619,15 +600,10 @@ export function NewsletterPanel({
      * halfway newsletter stuff populates for each one, and then we use that
      * information to write this month."*
      *
-     * So the answers are read straight off `survey_responses`. Every HIVE's
-     * halfway check-in asks its own version of "anything for the newsletter?",
-     * and every one of those question ids is listed below — a HIVE that grows a
-     * new one is a new entry here, never a new board.
-     *
-     * The board replies are still read UNDERNEATH this, for now, because OG and
-     * Tech's halfway is the tune-up wizard and it still posts what it collects
-     * to a board. Nothing already written is thrown away while that moves.
-     */
+     * A repeated field id on an ordinary monthly or pre-meeting check-in does
+     * not make it newsletter material. The survey title is the boundary, not
+     * the field name, and there is no newsletter-board fallback.
+    */
     // The list is `lib/checkIns.ts`'s, imported rather than written out again.
     // It lived here as its own copy until 2026-09-01, which meant a HIVE could
     // be given a newsletter question in the file that writes the check-ins and
@@ -652,6 +628,10 @@ export function NewsletterPanel({
       if (lastLiveNewsletterAt && String(row.submitted_at ?? row.created_at ?? '') <= lastLiveNewsletterAt) return [];
       const answers = (row.answers ?? {}) as Record<string, unknown>;
       const survey = Array.isArray(row.survey) ? row.survey[0] : row.survey;
+      // The dedicated halfway “For the Buzz” survey is the only survey that
+      // seeds the newsletter. Ordinary monthly and pre-meeting check-ins can
+      // happen to share a field id, but they are not newsletter submissions.
+      if (String(survey?.title ?? '').trim().toLocaleLowerCase() !== 'end of the month') return [];
       // A private HIVE may still deliberately offer a Buzz shout-out or plug.
       // HIVE-Wide can use the words, but it must never disclose who sent them
       // or which private HIVE they came from.
@@ -673,37 +653,9 @@ export function NewsletterPanel({
       });
     });
 
-    // The old home, kept readable while OG and Tech's halfway still posts there.
-    const { data: threads } = await supabase
-      .from('board_posts')
-      .select('id, title')
-      .in('category_id', boardIds)
-      .ilike('title', '%newsletter%')
-      .is('archived_at', null)
-      .order('created_at', { ascending: false })
-      .limit(1);
-    const threadIds = ((threads ?? []) as { id: string }[]).map((t) => t.id);
-    const fromBoard = threadIds.length
-      ? (((await supabase
-          .from('board_replies')
-          .select('id, content, created_at, author:profiles!author_id(name)')
-          .in('post_id', threadIds)
-          .gt('created_at', lastLiveNewsletterAt || '1970-01-01T00:00:00Z')
-          .order('created_at', { ascending: false })
-          .limit(40)).data ?? []) as any[]).map((r) => ({
-            id: r.id,
-            content: String(r.content ?? '').trim(),
-            created_at: r.created_at,
-            author: r.author?.name ?? 'Someone',
-            source: 'board' as const,
-          })).filter((r) => r.content.length > 0)
-      : [];
-
-    setShoutOuts(
-      [...fromSurveys, ...fromBoard].sort(
-        (a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''))
-      )
-    );
+    setShoutOuts(fromSurveys.sort(
+      (a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''))
+    ));
   }, [profile?.is_owner]);
 
   // A plain `useEffect` only fires once, on mount — so if this box was
@@ -1182,7 +1134,7 @@ export function NewsletterPanel({
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.gold }}>
-                      {item.author}
+                      For the Buzz · {item.author}
                     </Text>
                     <Pressable
                       onPress={() => { setEditingContribution(item); setEditedContributionText(item.content); }}

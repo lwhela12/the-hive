@@ -392,7 +392,7 @@ serve(async (req) => {
       // These answers expressly ask for newsletter consideration. Keep their
       // authors out of the data so the writer cannot accidentally identify one.
       supabaseAdmin.from('survey_responses')
-        .select('answers, submitted_at, created_at')
+        .select('answers, submitted_at, created_at, survey:surveys!survey_id(title)')
         .order('created_at', { ascending: false }).limit(160),
       // A HIVE Help title is the shared focus, not somebody's contribution.
       // Read only that title and its date; never pull the private board body.
@@ -436,6 +436,10 @@ serve(async (req) => {
     const newsletterInputStart = lastLiveNewsletterAt > startIso ? lastLiveNewsletterAt : startIso;
     const endOfMonthNotes = ((responseRows.data ?? []) as any[])
       .filter((row) => String(row.submitted_at ?? row.created_at ?? '') >= newsletterInputStart)
+      .filter((row) => {
+        const survey = Array.isArray(row.survey) ? row.survey[0] : row.survey;
+        return String(survey?.title ?? '').trim().toLocaleLowerCase() === 'end of the month';
+      })
       .flatMap((row) => newsletterAnswerIds.map((id) => String(row.answers?.[id] ?? '').trim()))
       .filter(Boolean);
     const editorialLeads = selectEditorialLeads(ownerNotes, endOfMonthNotes);
