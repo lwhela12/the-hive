@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { HIVE_WIDE_INK } from '../../lib/scopeLook';
 import { ComposerBar } from '../ui/ComposerBar';
+import { usePersistentTextDraft } from '../../lib/hooks/usePersistentTextDraft';
 
 const INK = '#313130';
 const GOLD = '#bd9348';
@@ -60,7 +61,13 @@ export function QuickAdd({
   const [destination, setDestination] = useState<QuickAddDestination>(null);
   const [targetHiveId, setTargetHiveId] = useState<string | null>(null);
   const [meetingThought, setMeetingThought] = useState('');
-  const [newsletterThought, setNewsletterThought] = useState('');
+  // A newsletter note can be several careful paragraphs, not a disposable
+  // modal value. Nat wrote one, switched windows before pressing Save, and the
+  // next open blanked it (2026-09-07). Keep the draft on this device until the
+  // database confirms the note landed; closing Quick Add is never deletion.
+  const [newsletterThought, setNewsletterThought, clearNewsletterThought] = usePersistentTextDraft(
+    isOwner && profile?.id ? `quick-add:newsletter:${profile.id}` : null,
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,7 +76,6 @@ export function QuickAdd({
     setDestination(initialDestination === 'newsletter' && !isOwner ? null : initialDestination);
     setTargetHiveId(wholeHive ? null : communityId ?? null);
     setMeetingThought('');
-    setNewsletterThought('');
     setSaving(false);
     setError(null);
   }, [communityId, initialDestination, isOwner, visible, wholeHive]);
@@ -170,6 +176,7 @@ export function QuickAdd({
         setError('That did not save. Check your connection and try again.');
         return;
       }
+      clearNewsletterThought();
       finish();
       return;
     }

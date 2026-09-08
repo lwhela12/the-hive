@@ -14,6 +14,7 @@ const email = fs.readFileSync(path.join(root, 'supabase/functions/send-newslette
 const publicSite = fs.readFileSync(path.join(root, '../site/index.html'), 'utf8');
 const appNews = fs.readFileSync(path.join(root, 'lib/appNews.ts'), 'utf8');
 const draftFunction = fs.readFileSync(path.join(root, 'supabase/functions/draft-newsletter/index.ts'), 'utf8');
+const quickAdd = fs.readFileSync(path.join(root, 'components/navigation/QuickAdd.tsx'), 'utf8');
 const failures = [];
 
 if (!admin.includes("accessibilityLabel={direction < 0 ? 'Show earlier tabs' : 'Show more tabs'}")) {
@@ -58,6 +59,23 @@ if (!appNews.includes("!/\\bproduction(?:\\s+hive)?\\b/i.test(copy)")) {
 if (!draftFunction.includes('Never mention Production HIVE')
   || !draftFunction.includes('exact number of HIVEs')) {
   failures.push('The newsletter writer must never expose Production HIVE or an exact HIVE count.');
+}
+if (!draftFunction.includes(".eq('visibility', 'public').eq('invited_scope', 'public')")
+  || draftFunction.includes(".in('visibility', ['all_hives', 'public'])")) {
+  failures.push('The public newsletter event list must accept public/public events only, never member-only HIVE-Wide events.');
+}
+if (!draftFunction.includes('This is one sealed event block')
+  || !draftFunction.includes('Keep every shelter, mascot, costume, current-focus and logging')) {
+  failures.push('Upcoming events and HIVE Help must each stay in one non-repeating section.');
+}
+if (!draftFunction.includes('The HIVE knows every HD Wish')
+  || !draftFunction.includes('midMonthSpan')) {
+  failures.push('Wish copy and HIVE Help timing must match how the community actually works.');
+}
+if (!quickAdd.includes('usePersistentTextDraft')
+  || !quickAdd.includes('quick-add:newsletter:')
+  || !quickAdd.includes('clearNewsletterThought();')) {
+  failures.push('Quick Add must keep an unfinished newsletter note until a successful save.');
 }
 if (!writer.includes('accessibilityLabel="Newsletter title"')
   || !writer.includes('accessibilityLabel="Newsletter draft"')) {

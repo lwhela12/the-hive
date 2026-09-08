@@ -75,7 +75,15 @@ function prettyTimeRange(start: string, end?: string | null) {
     : `${startText}-${endText}`;
 }
 
-/** HIVE Help changes on the 15th, not at a calendar-month boundary. */
+/**
+ * HIVE Help rolls from one OG HIVE meeting to the next. The meetings fall
+ * around the middle of the month, so the newsletter speaks in honest human
+ * ranges ("mid-August to mid-September") rather than pretending the handoff
+ * always happens on the 15th.
+ *
+ * The date boundary below is only the database lookup window for the two focus
+ * cards. It must never become reader-facing copy.
+ */
 function hiveHelpCycle(date: string) {
   const [year, month, day] = date.split('-').map(Number);
   const start = new Date(Date.UTC(year, month - 1, day >= 15 ? 15 : -16));
@@ -83,6 +91,12 @@ function hiveHelpCycle(date: string) {
   const previous = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - 1, 15));
   const iso = (value: Date) => value.toISOString().slice(0, 10);
   return { start: iso(start), end: iso(end), previousStart: iso(previous) };
+}
+
+function midMonthSpan(start: string, end: string) {
+  const monthName = (value: string) => new Date(`${value}T00:00:00Z`)
+    .toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' });
+  return `mid-${monthName(start)} to mid-${monthName(end)}`;
 }
 
 /**
@@ -126,25 +140,9 @@ function prettyDateRange(start: string, end?: string | null) {
   return `${prettyDate(start)}–${prettyDate(end)}`;
 }
 
-/**
- * The HIVE-Wide Home calendar is the source of truth. Events marked
- * HIVE-Wide can appear in the newsletter alongside public events, but a
- * HIVE-only invitation still keeps its time, place, description, and link
- * inside that HIVE. This exactly matches the Home list: date and title travel
- * HIVE-Wide; joining information travels only when the invitation does too.
- */
+/** The newsletter receives only fully public events, with every entered detail. */
 function upcomingEventLine(event: any) {
-  // Home calls meetings "[HIVE] meets" rather than exposing the event's
-  // administrative title (for example, "OG HIVE — Sep"). Keep the newsletter
-  // on those same human-facing words.
-  const communityName = String(event.community?.name ?? '').trim();
-  const title = event.event_type === 'meeting' && communityName
-    ? `${communityName} meets`
-    : event.title;
-  const facts = [`${title} — ${prettyDateRange(event.event_date, event.end_date)}`];
-  const invitationTravels = (event.invited_scope ?? event.visibility) === 'all_hives'
-    || (event.invited_scope ?? event.visibility) === 'public';
-  if (!invitationTravels) return facts.join(' · ');
+  const facts = [`${event.title} — ${prettyDateRange(event.event_date, event.end_date)}`];
   if (event.event_time) facts.push(prettyTimeRange(event.event_time, event.end_time));
   if (String(event.location ?? '').trim()) facts.push(`Where: ${String(event.location).trim()}`);
   if (String(event.description ?? '').trim()) facts.push(String(event.description).trim());
@@ -240,9 +238,10 @@ async function writeNewsletter(
     '- Where you need something only Nat knows, write it as a bracket, e.g.',
     '  [add anything I missed] — do not guess.',
     '- Write the HIVE Help section as one story: celebrate the previous cycle\'s',
-    '  result first, then name the current focus and its dates. The current focus',
-    '  gets one optional invitation in the whole letter; do not repeat it under',
-    '  Keep the HIVE humming or as a second to-do.',
+    '  result first, then name the current focus and its mid-month-to-mid-month',
+    '  range. Keep every shelter, mascot, costume, current-focus and logging',
+    '  sentence inside this one section. Never begin another section with HIVE',
+    '  Help material and never return to it under Keep the HIVE humming.',
     '- Write affirmatively. Lead with what readers can enjoy, do, or celebrate.',
     '  Do not use negative framing such as "no pressure" or "no wrong time to',
     '  start", and do not use cushioning qualifiers such as "small", "tiny",',
@@ -251,9 +250,17 @@ async function writeNewsletter(
     '- Keep the reader-facing highlights skimmable by combining related notes',
     '  into the same section. Skimmability never permits dropping a Nat note.',
     '- When there are Upcoming events facts, use a **Upcoming events** heading and',
-    '  give every event its own useful line. Carry through the exact date, time,',
+    '  give every event its own useful line. This is one sealed event block:',
+    '  mention every supplied event exactly once here and nowhere else in the',
+    '  letter, including Keep the HIVE humming. Carry through the exact date, time,',
     '  place, description, ticket details, price and link supplied in the facts.',
     '  If a ticket link or price was not supplied, do not invent one.',
+    '- When the facts include new-member connection guidance, welcome the new',
+    '  members and carry every practical way to connect with them. Never reduce',
+    '  that guidance to only the number of people who joined.',
+    '- The HIVE knows every HD Wish and works on them together. When only an',
+    '  aggregate is public, celebrate how many HD Wishes were granted and do not',
+    '  claim that the HIVE does not know their stories. Do not describe a wish.',
     '- Use **bold markdown markers** around every heading, including Upcoming events',
     '  and HIVE Help, and nowhere else. Headings sit on their own line.',
     '- Sign off: "Love in the biggest way," then "Nat" on the next line.',
@@ -391,15 +398,15 @@ serve(async (req) => {
       helperFocusRows,
       lastLiveSendRows,
     ] = await Promise.all([
-      // The same calendar feed as HIVE-Wide Home: every event a HIVE-Wide
-      // reader can see, restricted to the calendar month of this issue. A
-      // September newsletter names September events — never October's, even
-      // when it is drafted late. `publicHiveIds` keeps a private HIVE (notably
-      // Production) out even if a bad row ever carries a wider visibility.
+      // The newsletter is public, so its calendar is narrower than the signed-in
+      // HIVE-Wide Home calendar. A September issue names every PUBLIC September
+      // event and no members-only/HIVE-Wide event. Both visibility fields must
+      // agree; an old half-migrated row stays private. `publicHiveIds` is another
+      // guard against a private HIVE leaking through a malformed event record.
       supabaseAdmin.from('events')
         .select('title, event_date, end_date, event_time, end_time, event_type, location, description, meet_link, visibility, invited_scope, community:communities(name)')
         .in('community_id', publicHiveIds)
-        .in('visibility', ['all_hives', 'public'])
+        .eq('visibility', 'public').eq('invited_scope', 'public')
         .gte('event_date', newsletterMonthStart)
         .lt('event_date', newsletterMonthEnd)
         .order('event_date', { ascending: true }).order('event_time', { ascending: true }),
@@ -453,12 +460,12 @@ serve(async (req) => {
         .order('created_at', { ascending: false }).limit(1),
     ]);
 
-    // HIVE-Wide Home is the source, so its shared meetings travel too. Birthdays
-    // are profile data and can never be public; the travel exclusion is defence
-    // in depth for stale rows while the database migration lands.
+    // Meetings and birthdays are never newsletter filler. The travel exclusion
+    // is defence in depth for stale rows while the database migration lands.
     const upcoming = (upcomingRows.data ?? []) as any[];
     const upcomingEvents = upcoming.filter((event) => (
-      event.event_type !== 'birthday'
+      event.event_type !== 'meeting'
+      && event.event_type !== 'birthday'
       && !/\b(out of town|away|trip|travel|galavant)/i.test(event.title ?? '')
     ));
     const { start: helpStart, end: helpEnd, previousStart: previousHelpStart } = hiveHelpCycle(date);
@@ -496,8 +503,8 @@ serve(async (req) => {
 
     if (previousHelp || currentHelp) {
       const lines: string[] = [];
-      if (previousHelp) lines.push(`Previous HIVE Help (${previousHelpStart} through ${helpStart}): ${focusText(previousHelp)}`);
-      if (currentHelp) lines.push(`Current HIVE Help (${helpStart} through ${helpEnd}): ${focusText(currentHelp)}`);
+      if (previousHelp) lines.push(`Previous HIVE Help (${midMonthSpan(previousHelpStart, helpStart)}): ${focusText(previousHelp)}`);
+      if (currentHelp) lines.push(`Current HIVE Help (${midMonthSpan(helpStart, helpEnd)}): ${focusText(currentHelp)}`);
       sections.push({ title: 'HIVE Help cycle', lines });
     }
 
@@ -553,7 +560,10 @@ serve(async (req) => {
     if (newMemberTotal > 0) {
       sections.push({
         title: 'The HIVE is growing',
-        lines: [`We welcomed ${newMemberTotal} new ${newMemberTotal === 1 ? 'member' : 'members'} this month.`],
+        lines: [
+          `We welcomed ${newMemberTotal} new ${newMemberTotal === 1 ? 'member' : 'members'} this month.`,
+          'If a newsletter beat supplies ways to connect with new members, carry all of that guidance here; the count is not a substitute for the note.',
+        ],
       });
     }
 
@@ -564,9 +574,8 @@ serve(async (req) => {
       sections.push({
         title: 'Wishes granted 🌟',
         lines: [
-          `${grantedTotal} ${grantedTotal === 1 ? 'wish' : 'wishes'} came true this month.`,
-          'NOTE TO THE WRITER: say the number warmly and move on. No names, no'
-          + ' hints, no "one member" descriptions — nobody chose to be in here yet.',
+          `${grantedTotal} HD ${grantedTotal === 1 ? 'Wish was' : 'Wishes were'} granted this month.`,
+          'The HIVE knows every HD Wish and works on them together. These wishes were not public, so celebrate the total without describing a wish or naming anyone.',
         ],
       });
     }
