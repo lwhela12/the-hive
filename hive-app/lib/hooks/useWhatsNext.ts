@@ -8,6 +8,7 @@ import { checkInDisplayName, isEndOfMonthCheckInSurvey, isPreMeetingCheckInSurve
 import { formatDateRangeShort, formatTimeRange } from '../dateUtils';
 import {
   eventAudienceLabel,
+  canShareEventDetailsOnHiveWide,
   isInvitedToEvent,
   isUpcomingEventVisibleOnHiveWide,
 } from '../eventDisplay';
@@ -143,15 +144,19 @@ export function useWhatsNext(view: WhatsNextView = 'admin') {
       for (const meeting of meetings) {
         if (view === 'hiveWideUpcomingEvents' && !isUpcomingEventVisibleOnHiveWide(meeting)) continue;
         const name = nameOf(meeting.community_id, meeting.community?.name);
-        const invited = isInvitedToEvent(meeting, hiveIds);
+        const canShowDetails = view === 'hiveWideUpcomingEvents'
+          ? canShareEventDetailsOnHiveWide(meeting)
+          : isInvitedToEvent(meeting, hiveIds);
         push({
           key: `meeting_${meeting.id}`,
           date: meeting.event_date,
           what: `${name} meets`,
-          detail: [
-            meeting.event_time ? formatTimeRange(meeting.event_time, meeting.end_time) : null,
-            invited ? meeting.location : null,
-          ].filter(Boolean).join(' · '),
+          detail: canShowDetails
+            ? [
+              meeting.event_time ? formatTimeRange(meeting.event_time, meeting.end_time) : null,
+              meeting.location,
+            ].filter(Boolean).join(' · ')
+            : '',
           communityId: meeting.community_id,
         });
       }
@@ -159,7 +164,9 @@ export function useWhatsNext(view: WhatsNextView = 'admin') {
       // ---- Calendar events a member can see, across all HIVEs.
       for (const event of (eventsResult.data ?? []) as any[]) {
         if (view === 'hiveWideUpcomingEvents' && !isUpcomingEventVisibleOnHiveWide(event)) continue;
-        const invited = isInvitedToEvent(event, hiveIds);
+        const canShowDetails = view === 'hiveWideUpcomingEvents'
+          ? canShareEventDetailsOnHiveWide(event)
+          : isInvitedToEvent(event, hiveIds);
         const sourceName = hiveDisplayName(event.community?.name);
         const timing = event.event_time
           ? formatTimeRange(event.event_time, event.end_time)
@@ -172,12 +179,14 @@ export function useWhatsNext(view: WhatsNextView = 'admin') {
           date: event.event_date,
           endDate: event.end_date,
           what: event.title,
-          detail: [
-            eventAudienceLabel(event, sourceName),
-            range,
-            timing,
-            invited ? event.location : null,
-          ].filter(Boolean).join(' · '),
+          detail: canShowDetails
+            ? [
+              eventAudienceLabel(event, sourceName),
+              range,
+              timing,
+              event.location,
+            ].filter(Boolean).join(' · ')
+            : '',
           communityId: event.community_id,
         });
       }

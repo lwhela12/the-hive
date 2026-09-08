@@ -84,6 +84,20 @@ export function isUpcomingEventVisibleOnHiveWide(event: {
 }
 
 /**
+ * The HIVE-Wide Home is its own viewer, not a shortcut for the signed-in
+ * person's memberships. A row may be seen HIVE-Wide while its invitation is
+ * still only for one HIVE. In that case the shared calendar gets the date and
+ * title, but never the time, address, or "Invited: OG HIVE" detail.
+ */
+export function canShareEventDetailsOnHiveWide(event: {
+  visibility?: string | null;
+  invited_scope?: string | null;
+}): boolean {
+  const inviteScope = event.invited_scope ?? event.visibility ?? 'members';
+  return inviteScope === 'all_hives' || inviteScope === 'public';
+}
+
+/**
  * Say who the invitation is actually for, not which HIVE happens to own the
  * database row. Quarter markers need an owning HIVE because community_id is
  * required, but they are HIVE-Wide; public hangs are Public; OG dues stay OG.

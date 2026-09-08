@@ -35,6 +35,13 @@ assert.equal(audience.eventAudienceLabel({ visibility: 'all_hives', invited_scop
 assert.equal(audience.isUpcomingEventVisibleOnHiveWide({ visibility: 'members' }), false);
 assert.equal(audience.isUpcomingEventVisibleOnHiveWide({ visibility: 'all_hives' }), true);
 assert.equal(audience.isUpcomingEventVisibleOnHiveWide({ visibility: 'public' }), true);
+assert.equal(
+  audience.canShareEventDetailsOnHiveWide({ visibility: 'all_hives', invited_scope: 'members' }),
+  false,
+  'a HIVE-Wide-visible, OG-only invitation keeps its details inside OG HIVE',
+);
+assert.equal(audience.canShareEventDetailsOnHiveWide({ visibility: 'all_hives', invited_scope: 'all_hives' }), true);
+assert.equal(audience.canShareEventDetailsOnHiveWide({ visibility: 'public', invited_scope: 'public' }), true);
 
 const whatsNext = fs.readFileSync('lib/hooks/useWhatsNext.ts', 'utf8');
 assert.doesNotMatch(whatsNext, /event_time\?\.slice\(0, 5\)/, 'What’s Next never displays raw 24-hour meeting time');
@@ -45,6 +52,7 @@ for (const promise of ['formatDateRangeShort(', 'formatTimeRange(', 'eventAudien
 assert.match(whatsNext, /view === 'hiveWideUpcomingEvents'/, 'HIVE-Wide Home has a distinct upcoming-events view');
 assert.match(whatsNext, /isUpcomingEventVisibleOnHiveWide\(meeting\)/, 'HIVE-Wide Home excludes private meetings');
 assert.match(whatsNext, /isUpcomingEventVisibleOnHiveWide\(event\)/, 'HIVE-Wide Home excludes private calendar events');
+assert.match(whatsNext, /canShareEventDetailsOnHiveWide\(event\)/, 'HIVE-Wide Home hides details for HIVE-only invitations');
 
 const hiveWideHome = fs.readFileSync('app/(app)/hive-wide.tsx', 'utf8');
 assert.match(hiveWideHome, /label="Upcoming Events"/);
