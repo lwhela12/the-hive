@@ -41,6 +41,7 @@ import { UndoBar, useUndoOffer } from '../../components/ui/UndoBar';
 import { matchesMemberSearchText } from '../../lib/memberAliases';
 import { confirmAction, showAlert } from '../../lib/showAlert';
 import { userFacingError } from '../../lib/userFacingError';
+import { getBoardAuthorIdentity } from '../../lib/hiveWideIdentity';
 import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -87,18 +88,21 @@ function getThreadActivity(thread: BoardSearchThreadMatch) {
   return thread.last_reply_at || thread.created_at;
 }
 
-function getThreadSearchValues(thread: BoardSearchThreadMatch) {
+function getThreadSearchValues(thread: BoardSearchThreadMatch, identityCommunityId: string | null) {
   return [
     thread.title,
     thread.content,
-    thread.author?.name,
-    ...thread.replies.map((reply) => `${reply.content || ''} ${reply.author?.name || ''}`),
+    getBoardAuthorIdentity(thread.author, identityCommunityId).isAnonymous ? null : thread.author?.name,
+    ...thread.replies.map((reply) => `${reply.content || ''} ${getBoardAuthorIdentity(reply.author, identityCommunityId).isAnonymous ? '' : reply.author?.name || ''}`),
   ];
 }
 
-function getThreadReplyMatchCount(thread: BoardSearchThreadMatch, query: string) {
+function getThreadReplyMatchCount(thread: BoardSearchThreadMatch, query: string, identityCommunityId: string | null) {
   return thread.replies.filter((reply) => (
-    matchesMemberSearchText([reply.content, reply.author?.name], query)
+    matchesMemberSearchText([
+      reply.content,
+      getBoardAuthorIdentity(reply.author, identityCommunityId).isAnonymous ? null : reply.author?.name,
+    ], query)
   )).length;
 }
 
@@ -201,6 +205,9 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     invalidateCategories,
   } = useBoardCategoriesQuery(isWide ? undefined : (myCommunityId ?? undefined), reach);
   const communityId = isWide ? (categories[0]?.community_id ?? null) : myCommunityId;
+  // Identity follows where the member opened the board, not who owns its row.
+  // A shared Tech board is anonymous at HIVE-Wide and familiar inside Tech.
+  const identityCommunityId = isWide ? null : myCommunityId;
 
   const routeCategoryId = getRouteParam(routeParams.categoryId);
   const routePostId = getRouteParam(routeParams.postId);
@@ -447,19 +454,19 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
 
     return Object.entries(boardSearchIndex).reduce<Record<string, BoardCategorySearchMatchSummary>>((matches, [categoryId, threads]) => {
       const matchingThreads = threads
-        .filter((thread) => matchesMemberSearchText(getThreadSearchValues(thread), boardSearchQuery))
+        .filter((thread) => matchesMemberSearchText(getThreadSearchValues(thread, identityCommunityId), boardSearchQuery))
         .sort((a, b) => getThreadActivity(b).localeCompare(getThreadActivity(a)));
 
       if (matchingThreads.length === 0) return matches;
 
       matches[categoryId] = {
         threadTitles: matchingThreads.map((thread) => thread.title),
-        replyMatchCount: matchingThreads.reduce((total, thread) => total + getThreadReplyMatchCount(thread, boardSearchQuery), 0),
+        replyMatchCount: matchingThreads.reduce((total, thread) => total + getThreadReplyMatchCount(thread, boardSearchQuery, identityCommunityId), 0),
         archivedOnly: matchingThreads.every((thread) => !!thread.archived_at),
       };
       return matches;
     }, {});
-  }, [boardSearchIndex, boardSearchQuery]);
+  }, [boardSearchIndex, boardSearchQuery, identityCommunityId]);
   // The newsletter board is not a board you browse.
   //
   // It holds every issue of The Buzz plus the thread that collects shout-outs,
@@ -496,14 +503,18 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     if (!selectedCategory?.id || !threadSearchQuery) return new Set<string>();
 
     const matchingThreads = (boardSearchIndex[selectedCategory.id] || [])
-      .filter((thread) => matchesMemberSearchText(getThreadSearchValues(thread), threadSearchQuery))
+      .filter((thread) => matchesMemberSearchText(getThreadSearchValues(thread, identityCommunityId), threadSearchQuery))
       .map((thread) => thread.id);
 
     return new Set(matchingThreads);
-  }, [boardSearchIndex, selectedCategory?.id, threadSearchQuery]);
+  }, [boardSearchIndex, identityCommunityId, selectedCategory?.id, threadSearchQuery]);
   const visiblePosts = threadSearchQuery
     ? listSourcePosts.filter((post) =>
-        matchesMemberSearchText([post.title, post.content, post.author?.name], threadSearch)
+        matchesMemberSearchText([
+          post.title,
+          post.content,
+          getBoardAuthorIdentity(post.author, identityCommunityId).isAnonymous ? null : post.author?.name,
+        ], threadSearch)
         || selectedCategorySearchPostIds.has(post.id)
       )
     : listSourcePosts;
@@ -2135,6 +2146,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       <BoardPostDetail
         postId={selectedPostId}
         onBack={handlePostBack}
+        identityCommunityId={identityCommunityId}
       />
     );
   }
@@ -2351,7 +2363,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
               linkedWishLabel={linkedWish ? 'Community Wish' : undefined}
               onLinkedWishPress={linkedWish ? () => setSelectedLinkedWish(linkedWish) : undefined}
               currentUserId={profile?.id}
-              boardReach={selectedCategory.reach}
+              identityCommunityId={identityCommunityId}
             />
           );
         }}

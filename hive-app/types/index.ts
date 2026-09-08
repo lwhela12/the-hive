@@ -704,6 +704,8 @@ export interface BoardReply extends Record<string, unknown> {
 
 export type ReactionUserProfile = Pick<Profile, 'id' | 'name'> & {
   avatar_url?: string | null;
+  profile_scope?: Profile['profile_scope'];
+  community_memberships?: Array<{ community_id: string | null }> | null;
 };
 
 export interface BoardReaction extends Record<string, unknown> {

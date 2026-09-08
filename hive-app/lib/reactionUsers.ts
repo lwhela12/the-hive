@@ -18,7 +18,7 @@ export async function attachReactionUsers<T extends ReactionWithUser>(
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, name, avatar_url')
+    .select('id, name, avatar_url, profile_scope, community_memberships(community_id)')
     .in('id', userIds);
 
   if (error) {
@@ -28,10 +28,13 @@ export async function attachReactionUsers<T extends ReactionWithUser>(
 
   const profilesById = new Map<string, ReactionUserProfile>();
   (data ?? []).forEach((profile) => {
-    profilesById.set(profile.id, {
-      id: profile.id,
-      name: profile.name,
-      avatar_url: profile.avatar_url ?? null,
+    const row = profile as unknown as ReactionUserProfile;
+    profilesById.set(row.id, {
+      id: row.id,
+      name: row.name,
+      avatar_url: row.avatar_url ?? null,
+      profile_scope: row.profile_scope ?? null,
+      community_memberships: row.community_memberships ?? [],
     });
   });
 

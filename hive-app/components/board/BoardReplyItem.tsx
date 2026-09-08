@@ -11,7 +11,6 @@ import { usePageSkin } from '../../lib/pageSkin';
 import { getBoardAuthorIdentity } from '../../lib/hiveWideIdentity';
 
 import { ComposerBar } from '../ui/ComposerBar';
-import type { BoardCategory } from '../../types';
 interface BoardReplyItemProps {
   reply: BoardReply & { author?: Profile };
   currentUserId?: string;
@@ -22,7 +21,8 @@ interface BoardReplyItemProps {
   onEdit?: (replyId: string, content: string) => void;
   onDelete?: (replyId: string) => void;
   canModerate?: boolean;
-  boardReach?: BoardCategory['reach'];
+  /** null = HIVE-Wide; a HIVE id = that HIVE; undefined = no identity gate. */
+  identityCommunityId?: string | null;
 }
 
 export function BoardReplyItem({
@@ -35,7 +35,7 @@ export function BoardReplyItem({
   onEdit,
   onDelete,
   canModerate = false,
-  boardReach,
+  identityCommunityId,
 }: BoardReplyItemProps) {
   const skin = usePageSkin();
   const [isEditing, setIsEditing] = useState(false);
@@ -48,7 +48,7 @@ export function BoardReplyItem({
   const isAuthor = currentUserId === reply.author_id;
   const canManage = isAuthor || canModerate;
   const timeAgo = getTimeAgo(new Date(reply.created_at));
-  const author = getBoardAuthorIdentity(reply.author, boardReach);
+  const author = getBoardAuthorIdentity(reply.author, identityCommunityId);
 
   const handleSaveEdit = () => {
     if (editContent.trim() && onEdit) {
@@ -135,6 +135,7 @@ export function BoardReplyItem({
               currentUserId={currentUserId}
               onReact={(emoji) => onReact(reply.id, emoji)}
               onRemoveReaction={(emoji) => onRemoveReaction(reply.id, emoji)}
+              identityCommunityId={identityCommunityId}
             />
           </View>
 
@@ -175,7 +176,7 @@ export function BoardReplyItem({
               onEdit={onEdit}
               onDelete={onDelete}
               canModerate={canModerate}
-              boardReach={boardReach}
+              identityCommunityId={identityCommunityId}
             />
           ))}
         </View>

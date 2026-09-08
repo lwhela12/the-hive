@@ -31,6 +31,8 @@ import type { BoardPost, BoardReply, BoardReaction, Profile, Attachment, BoardCa
 interface BoardPostDetailProps {
   postId: string;
   onBack: () => void;
+  /** null = HIVE-Wide; a HIVE id = that HIVE. */
+  identityCommunityId: string | null;
 }
 
 type PostWithAuthor = BoardPost & { author?: Profile; reactions?: BoardReaction[]; category?: BoardCategory };
@@ -85,7 +87,7 @@ function confirmBoardAction({
   ]);
 }
 
-export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
+export function BoardPostDetail({ postId, onBack, identityCommunityId }: BoardPostDetailProps) {
   const { profile, communityId, communityRole } = useAuth();
   // A thread is read on a cream HIVE page and on the black HIVE-Wide page. One
   // source for the panels AND the words, so they can't drift apart.
@@ -116,7 +118,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const isBoardOwner = !!post?.category?.owner_user_id && post.category.owner_user_id === profile?.id;
   const canManagePost = !!post && (isAuthor || isAdmin || isBoardOwner);
-  const postAuthor = getBoardAuthorIdentity(post?.author, post?.category?.reach);
+  const postAuthor = getBoardAuthorIdentity(post?.author, identityCommunityId);
 
   const invalidateBoardSearchIndex = useCallback(() => {
     if (!communityId) return;
@@ -160,7 +162,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
       // community_id (passed on to BoardComposer / BoardReplyComposer) —
       // never anything else off either join. Narrowed 2026-08-11, same fix
       // as lib/hooks/useHiveDataQuery.ts.
-      .select('*, author:profiles!board_posts_author_id_fkey(id, name, avatar_url, profile_scope), category:board_categories!board_posts_category_id_fkey(id, name, reach, owner_user_id, community_id)')
+      .select('*, author:profiles!board_posts_author_id_fkey(id, name, avatar_url, profile_scope, community_memberships(community_id)), category:board_categories!board_posts_category_id_fkey(id, name, reach, owner_user_id, community_id)')
       .eq('id', postId)
       .single();
 
@@ -181,7 +183,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     const { data: allReplies, error } = await supabase
       .from('board_replies')
       // BoardReplyItem reads identity plus the HIVE-Wide sharing switch.
-      .select('*, author:profiles!board_replies_author_id_fkey(id, name, avatar_url, profile_scope)')
+      .select('*, author:profiles!board_replies_author_id_fkey(id, name, avatar_url, profile_scope, community_memberships(community_id))')
       .eq('post_id', postId)
       .order('created_at', { ascending: true });
 
@@ -646,6 +648,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
             currentUserId={profile?.id}
             onReact={handlePostReaction}
             onRemoveReaction={handleRemovePostReaction}
+            identityCommunityId={identityCommunityId}
           />
         </View>
 
@@ -671,7 +674,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
                   onEdit={handleEditReply}
                   onDelete={handleDeleteReply}
                   canModerate={isAdmin}
-                  boardReach={post.category?.reach}
+                  identityCommunityId={identityCommunityId}
                 />
               </View>
             ))

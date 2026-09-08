@@ -4,16 +4,17 @@ import { supabase } from '../supabase';
 import { queryKeys } from '../queryClient';
 import { attachReactionUsers } from '../reactionUsers';
 import type { BoardCategory, BoardPost, BoardReaction, BoardReply, Profile } from '../../types';
+import type { ContextualAuthorIdentity } from '../hiveWideIdentity';
 
 export type PostWithAuthor = BoardPost & { author?: Profile; reactions?: BoardReaction[] };
 export type BoardSearchReplyMatch = Pick<BoardReply, 'id' | 'post_id' | 'content' | 'created_at'> & {
-  author?: Pick<Profile, 'name'> | null;
+  author?: ContextualAuthorIdentity | null;
 };
 export type BoardSearchThreadMatch = Pick<
   BoardPost,
   'id' | 'category_id' | 'title' | 'content' | 'archived_at' | 'created_at' | 'last_reply_at'
 > & {
-  author?: Pick<Profile, 'name'> | null;
+  author?: ContextualAuthorIdentity | null;
   replies: BoardSearchReplyMatch[];
 };
 export type BoardSearchIndex = Record<string, BoardSearchThreadMatch[]>;
@@ -155,7 +156,7 @@ async function fetchPostCounts(_communityId: string): Promise<Record<string, Cat
 async function fetchBoardSearchIndex(_communityId: string): Promise<BoardSearchIndex> {
   const { data, error } = await supabase
     .from('board_posts')
-    .select('id, category_id, title, content, archived_at, created_at, last_reply_at, author:profiles!board_posts_author_id_fkey(name)')
+    .select('id, category_id, title, content, archived_at, created_at, last_reply_at, author:profiles!board_posts_author_id_fkey(id, name, profile_scope, community_memberships(community_id))')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -170,7 +171,7 @@ async function fetchBoardSearchIndex(_communityId: string): Promise<BoardSearchI
   if (postIds.length > 0) {
     const { data: replies, error: repliesError } = await supabase
       .from('board_replies')
-      .select('id, post_id, content, created_at, author:profiles!board_replies_author_id_fkey(name)')
+      .select('id, post_id, content, created_at, author:profiles!board_replies_author_id_fkey(id, name, profile_scope, community_memberships(community_id))')
       .in('post_id', postIds)
       .order('created_at', { ascending: false });
 
@@ -203,11 +204,11 @@ async function fetchPosts(
 ): Promise<PostWithAuthor[]> {
   // Join reactions in the same query to avoid a sequential round-trip
   // BoardPostCard (the list this feeds) only ever reads
-  // id/name/avatar_url/profile_scope
+  // id/name/avatar_url/profile_scope/community memberships
   // off `author` — narrowed 2026-08-11, same fix as lib/hooks/useHiveDataQuery.ts.
   const { data, error } = await supabase
     .from('board_posts')
-    .select('*, author:profiles!board_posts_author_id_fkey(id, name, avatar_url, profile_scope), reactions:board_reactions(*)')
+    .select('*, author:profiles!board_posts_author_id_fkey(id, name, avatar_url, profile_scope, community_memberships(community_id)), reactions:board_reactions(*)')
     // Category id is the board identity. An all-HIVE board keeps its canonical
     // threads under the HIVE that created it, wherever the board is opened.
     .eq('category_id', categoryId)

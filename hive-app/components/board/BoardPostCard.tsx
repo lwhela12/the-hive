@@ -10,7 +10,7 @@ import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { usePageSkin } from '../../lib/pageSkin';
 import { getBoardAuthorIdentity } from '../../lib/hiveWideIdentity';
-import type { BoardCategory, BoardPost, BoardReaction, Profile } from '../../types';
+import type { BoardPost, BoardReaction, Profile } from '../../types';
 
 import { SignedImage } from '../ui/SignedImage';
 interface BoardPostCardProps {
@@ -22,7 +22,8 @@ interface BoardPostCardProps {
   linkedWishLabel?: string;
   onLinkedWishPress?: () => void;
   currentUserId?: string;
-  boardReach?: BoardCategory['reach'];
+  /** null = HIVE-Wide; a HIVE id = that HIVE; undefined = no identity gate. */
+  identityCommunityId?: string | null;
 }
 
 function createContentPreview(content: string, maxLength = 120): string {
@@ -56,7 +57,7 @@ export function BoardPostCard({
   linkedWishLabel,
   onLinkedWishPress,
   currentUserId,
-  boardReach,
+  identityCommunityId,
 }: BoardPostCardProps) {
   // Cream page or space page, same card. The skin decides both the fill and
   // the ink so the two can never disagree.
@@ -77,7 +78,7 @@ export function BoardPostCard({
   const imageStyle = useCompactImage
     ? { width: 176, height: 132 }
     : { width: '100%' as const, height: 210 };
-  const author = getBoardAuthorIdentity(post.author, boardReach);
+  const author = getBoardAuthorIdentity(post.author, identityCommunityId);
   // A granted thread wears a wash of the accent. pageSkin has no "gold at a
   // whisper" token, so the two live here — both are just skin.gold turned
   // right down, which is why they read the same on either page.
@@ -281,7 +282,7 @@ export function BoardPostCard({
           }}
           pointerEvents="box-none"
         >
-          <HiveReactionPills groups={reactionGroups} compact />
+          <HiveReactionPills groups={reactionGroups} compact identityCommunityId={identityCommunityId} />
         </View>
       )}
       {canEdit && onEdit && (

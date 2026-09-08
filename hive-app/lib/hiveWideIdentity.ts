@@ -1,25 +1,38 @@
-import type { BoardCategory, Profile } from '../types';
+import type { Profile } from '../types';
 
 export const PRIVATE_HIVE_WIDE_AUTHOR_NAME = 'HIVE member';
 
-type AuthorIdentity = Pick<Profile, 'id' | 'name'> & {
+export type ContextualAuthorIdentity = Pick<Profile, 'id' | 'name'> & {
   avatar_url?: string | null;
   profile_scope?: Profile['profile_scope'];
+  community_memberships?: Array<{ community_id: string | null }> | null;
 };
 
 /**
  * A shared thing may travel farther than the person who wrote it.
  *
- * On a HIVE-Wide board, the author gets a face/name/profile link only when
- * their profile is explicitly shared HIVE-Wide. Missing scope is private on
- * purpose: older or narrower selects must never turn into an identity leak.
- * Inside a person's own HIVE, the ordinary author treatment is unchanged.
+ * `identityCommunityId` describes WHERE the viewer is standing, not how far
+ * the board travels:
+ *
+ * - `null` is HIVE-Wide: only a profile explicitly shared HIVE-Wide travels.
+ * - a HIVE id is that HIVE: its own members know one another, while an author
+ *   from another HIVE stays anonymous unless their profile travels.
+ * - `undefined` is a caller that is not a contextual HIVE surface, so this
+ *   helper leaves its established identity treatment alone.
+ *
+ * Missing scope or membership data fails closed whenever a contextual surface
+ * asks the question. A narrower select must never turn into an identity leak.
  */
 export function getBoardAuthorIdentity(
-  author: AuthorIdentity | null | undefined,
-  boardReach: BoardCategory['reach'] | null | undefined,
+  author: ContextualAuthorIdentity | null | undefined,
+  identityCommunityId: string | null | undefined,
 ) {
-  const isAnonymous = boardReach === 'all_hives' && author?.profile_scope !== 'all_hives';
+  const isInViewingHive = typeof identityCommunityId === 'string'
+    && author?.community_memberships?.some((membership) => membership.community_id === identityCommunityId);
+  const identityIsGated = identityCommunityId !== undefined;
+  const isAnonymous = identityIsGated
+    && author?.profile_scope !== 'all_hives'
+    && !isInViewingHive;
 
   return {
     isAnonymous,
@@ -30,8 +43,6 @@ export function getBoardAuthorIdentity(
 }
 
 /** HIVE-Wide Home uses the same wording as the shared board it points to. */
-export function getHiveWideActivityAuthorName(author: AuthorIdentity | null | undefined) {
-  return author?.profile_scope === 'all_hives'
-    ? author.name || 'Unknown'
-    : PRIVATE_HIVE_WIDE_AUTHOR_NAME;
+export function getHiveWideActivityAuthorName(author: ContextualAuthorIdentity | null | undefined) {
+  return getBoardAuthorIdentity(author, null).name;
 }

@@ -16,6 +16,8 @@ interface BoardReactionBarProps {
   onRemoveReaction: (emoji: string) => void;
   accentColor?: string;
   compact?: boolean;
+  /** null = HIVE-Wide; a HIVE id = that HIVE; undefined = no identity gate. */
+  identityCommunityId?: string | null;
 }
 
 export function BoardReactionBar({
@@ -25,6 +27,7 @@ export function BoardReactionBar({
   onRemoveReaction,
   accentColor,
   compact = false,
+  identityCommunityId,
 }: BoardReactionBarProps) {
   // The gold goes muddy on the black page, so the accent comes from the skin
   // rather than a constant. A caller can still name its own.
@@ -57,6 +60,7 @@ export function BoardReactionBar({
         onReactionPress={handleReactionPress}
         accentColor={accent}
         compact={compact}
+        identityCommunityId={identityCommunityId}
       />
       <HiveReactionTrigger
         onPress={() => setShowPicker(true)}

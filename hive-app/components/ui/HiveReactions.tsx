@@ -3,6 +3,7 @@ import { View, Text, Pressable, Modal, ScrollView, TextInput } from 'react-nativ
 import { Avatar } from './Avatar';
 import { FIELD_LOOK } from './Input';
 import { MemberProfileLink } from './MemberProfileLink';
+import { getBoardAuthorIdentity } from '../../lib/hiveWideIdentity';
 import type { ReactionUserProfile } from '../../types';
 
 export interface ReactionLike {
@@ -59,6 +60,8 @@ interface ReactionPillsProps {
   onReactionPress?: (emoji: string, hasReacted: boolean) => void;
   accentColor?: string;
   compact?: boolean;
+  /** null = HIVE-Wide; a HIVE id = that HIVE; undefined = no identity gate. */
+  identityCommunityId?: string | null;
 }
 
 export function HiveReactionPills({
@@ -66,13 +69,17 @@ export function HiveReactionPills({
   onReactionPress,
   accentColor = '#bd9348',
   compact = false,
+  identityCommunityId,
 }: ReactionPillsProps) {
   if (groups.length === 0) return null;
 
   return (
     <View className="flex-row flex-wrap" style={{ gap: compact ? 4 : 6 }}>
       {groups.map(({ emoji, count, hasReacted, reactors }) => {
-        const visibleReactors = reactors.slice(0, 3);
+        const visibleReactors = reactors.slice(0, 3).map((reactor) => ({
+          reactor,
+          identity: getBoardAuthorIdentity(reactor, identityCommunityId),
+        }));
         const avatarSize = compact ? 14 : 18;
         const pillStyle = {
           paddingHorizontal: compact ? 7 : 8,
@@ -86,25 +93,31 @@ export function HiveReactionPills({
             <Text style={{ fontSize: compact ? 12 : 14, lineHeight: compact ? 16 : 18 }}>{emoji}</Text>
             {visibleReactors.length > 0 && (
               <View className="flex-row items-center ml-1">
-                {visibleReactors.map((reactor, index) => (
-                  <MemberProfileLink
-                    key={reactor.id}
-                    memberId={reactor.id}
-                    memberName={reactor.name}
-                    stopPropagation
-                    hitSlop={4}
-                    style={{
-                      marginLeft: index === 0 ? 0 : -5,
-                      borderRadius: avatarSize / 2,
-                      borderWidth: 1,
-                      borderColor: '#FFFFFF',
-                      overflow: 'hidden',
-                      zIndex: visibleReactors.length - index,
-                    }}
-                  >
-                    <Avatar name={reactor.name} url={reactor.avatar_url} size={avatarSize} />
-                  </MemberProfileLink>
-                ))}
+                {visibleReactors.map(({ reactor, identity }, index) => {
+                  const avatar = <Avatar name={identity.name} url={identity.avatarUrl} size={avatarSize} />;
+                  const style = {
+                    marginLeft: index === 0 ? 0 : -5,
+                    borderRadius: avatarSize / 2,
+                    borderWidth: 1,
+                    borderColor: '#FFFFFF',
+                    overflow: 'hidden' as const,
+                    zIndex: visibleReactors.length - index,
+                  };
+                  return identity.memberId ? (
+                    <MemberProfileLink
+                      key={reactor.id}
+                      memberId={identity.memberId}
+                      memberName={identity.name}
+                      stopPropagation
+                      hitSlop={4}
+                      style={style}
+                    >
+                      {avatar}
+                    </MemberProfileLink>
+                  ) : (
+                    <View key={reactor.id} style={style}>{avatar}</View>
+                  );
+                })}
               </View>
             )}
             <Text
