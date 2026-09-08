@@ -110,7 +110,31 @@ function selectEditorialLeads(ownerNotes: string[], endOfMonthNotes: string[]): 
 
 /** The editor's one inline formatting marker is safe in plain text and email. */
 function boldRequiredHeadings(prose: string): string {
-  return prose.replace(/^\s*(?:\*\*)?(HIVE Hangs|HIVE Help)(?:\*\*)?\s*$/gim, '**$1**');
+  return prose.replace(/^\s*(?:\*\*)?(Upcoming events|HIVE Help)(?:\*\*)?\s*$/gim, '**$1**');
+}
+
+function prettyDateRange(start: string, end?: string | null) {
+  if (!end || end === start) return prettyDate(start);
+  const startDate = new Date(`${start}T00:00:00Z`);
+  const endDate = new Date(`${end}T00:00:00Z`);
+  const sameMonth = startDate.getUTCFullYear() === endDate.getUTCFullYear()
+    && startDate.getUTCMonth() === endDate.getUTCMonth();
+  if (sameMonth) {
+    const month = startDate.toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' });
+    return `${month} ${startDate.getUTCDate()}–${endDate.getUTCDate()}`;
+  }
+  return `${prettyDate(start)}–${prettyDate(end)}`;
+}
+
+/** The calendar is the source of truth, so event listings keep every detail it has. */
+function upcomingEventLine(event: any) {
+  const facts = [`${event.title} — ${prettyDateRange(event.event_date, event.end_date)}`];
+  if (event.event_time) facts.push(prettyTimeRange(event.event_time, event.end_time));
+  if (String(event.location ?? '').trim()) facts.push(`Where: ${String(event.location).trim()}`);
+  if (String(event.description ?? '').trim()) facts.push(String(event.description).trim());
+  const meetLink = String(event.meet_link ?? '').trim();
+  if (meetLink && !String(event.description ?? '').includes(meetLink)) facts.push(`Link: ${meetLink}`);
+  return facts.join(' · ');
 }
 
 /**
@@ -171,7 +195,7 @@ async function writeNewsletter(
     'short letter, not a changelog:',
     '  Yellow!            (greeting — a sentence or two of hello; no boilerplate definition of HIVE)',
     `  Here's the buzz from ${month}`,
-    '  HIVE Hangs         (what happened, then what is coming up)',
+    '  Upcoming events    (public events happening this calendar month)',
     '  HIVE Help          (the focus, and a nudge to log it on the HIVE Help board)',
     '  Around the HIVE    (only explicitly newsletter-ready public updates)',
     '  Keep the HIVE humming  (at most three useful invitations or nudges)',
@@ -210,7 +234,11 @@ async function writeNewsletter(
     '  indispensable.',
     '- Keep the reader-facing highlights skimmable by combining related notes',
     '  into the same section. Skimmability never permits dropping a Nat note.',
-    '- Use **bold markdown markers** around every heading, including HIVE Hangs',
+    '- When there are Upcoming events facts, use a **Upcoming events** heading and',
+    '  give every event its own useful line. Carry through the exact date, time,',
+    '  place, description, ticket details, price and link supplied in the facts.',
+    '  If a ticket link or price was not supplied, do not invent one.',
+    '- Use **bold markdown markers** around every heading, including Upcoming events',
     '  and HIVE Help, and nowhere else. Headings sit on their own line.',
     '- Sign off: "Love in the biggest way," then "Nat" on the next line.',
     '- Keep it skimmable. Someone reads this over coffee.',
@@ -319,6 +347,8 @@ serve(async (req) => {
     // button produced the July recap on Friday and an August fragment on
     // Saturday, without saying so. The month is now stated, and only defaults.
     const [thisYear, thisMonth] = date.split('-').map(Number);
+    const newsletterMonthStart = `${thisYear}-${String(thisMonth).padStart(2, '0')}-01`;
+    const newsletterMonthEnd = new Date(Date.UTC(thisYear, thisMonth, 1)).toISOString().slice(0, 10);
     const requested = /^\d{4}-\d{2}$/.test(body.month ?? '') ? body.month! : null;
     const startYear = requested
       ? Number(requested.slice(0, 4))
@@ -336,7 +366,6 @@ serve(async (req) => {
     const endIso = `${cycleEnd}T00:00:00Z`;
 
     const [
-      nextMeetingRows,
       upcomingRows,
       grantedCountRows,
       newMemberCountRows,
@@ -346,20 +375,17 @@ serve(async (req) => {
       helperFocusRows,
       lastLiveSendRows,
     ] = await Promise.all([
-      // Meetings are members-only by nature, so the public newsletter never
-      // names one. Kept as a query only so the shape below stays readable.
+      // Public events in the calendar month the letter is going out. A September
+      // newsletter names September invitations — never October's, even when it
+      // is drafted late in the month. Anything without public consent stays in
+      // the members' side.
       supabaseAdmin.from('events')
-        .select('title, event_date, event_time, end_time')
-        .in('community_id', publicHiveIds).eq('event_type', 'meeting')
-        .eq('visibility', 'public').eq('invited_scope', 'public')
-        .gte('event_date', date).order('event_date', { ascending: true }).limit(1),
-      // "Everyone's invited" only. Anything left HIVErs Only never leaves the
-      // members' side — a privacy default has to fail closed.
-      supabaseAdmin.from('events')
-        .select('title, event_date, end_date, event_type')
+        .select('title, event_date, end_date, event_time, end_time, event_type, location, description, meet_link')
         .in('community_id', publicHiveIds)
         .eq('visibility', 'public').eq('invited_scope', 'public')
-        .gte('event_date', date).order('event_date', { ascending: true }).limit(30),
+        .gte('event_date', newsletterMonthStart)
+        .lt('event_date', newsletterMonthEnd)
+        .order('event_date', { ascending: true }).order('event_time', { ascending: true }),
       // Counted, never named — how many wishes came true is a fact about the
       // HIVE, not about anybody in it.
       supabaseAdmin.from('wishes')
@@ -410,16 +436,14 @@ serve(async (req) => {
         .order('created_at', { ascending: false }).limit(1),
     ]);
 
-    const nextMeeting = ((nextMeetingRows.data ?? []) as any[])[0] ?? null;
     // Birthdays are profile data and can never be public. The extra exclusion
     // is defence in depth for stale rows while the database migration lands.
     const upcoming = (upcomingRows.data ?? []) as any[];
-    const upcomingHangs = upcoming.filter((event) => (
+    const upcomingEvents = upcoming.filter((event) => (
       event.event_type !== 'meeting'
       && event.event_type !== 'birthday'
-      && !event.end_date
       && !/\b(out of town|away|trip|travel|galavant)/i.test(event.title ?? '')
-    )).slice(0, 8);
+    ));
     const { start: helpStart, end: helpEnd, previousStart: previousHelpStart } = hiveHelpCycle(date);
     const helperPosts = ((helperFocusRows.data ?? []) as any[]).filter((row) => (
       row.category?.topic_kind === 'helper_log'
@@ -446,21 +470,12 @@ serve(async (req) => {
 
     const sections: { title: string; lines: string[] }[] = [];
 
-    // What's coming up leads — someone skimming needs the next date more than
-    // they need the history (same call as Clive's recap shape).
-    const comingUp: string[] = [];
-    if (nextMeeting) {
-      comingUp.push(
-        `Next HIVE meeting: ${prettyDate(nextMeeting.event_date)}`
-        + (nextMeeting.event_time ? ` · ${prettyTimeRange(nextMeeting.event_time, nextMeeting.end_time)}` : '')
-      );
+    if (upcomingEvents.length > 0) {
+      sections.push({
+        title: 'Upcoming events',
+        lines: upcomingEvents.map(upcomingEventLine),
+      });
     }
-    if (currentHelp) comingUp.push(`Current HIVE Help (${helpStart} through ${helpEnd}): ${focusText(currentHelp)}`);
-    if (upcomingHangs.length > 0) {
-      comingUp.push('Upcoming HIVE hangs:');
-      upcomingHangs.slice(0, 2).forEach((hang) => comingUp.push(`    ${hang.title} — ${prettyDate(hang.event_date)}`));
-    }
-    if (comingUp.length > 0) sections.push({ title: "What's coming up", lines: comingUp });
 
     if (previousHelp || currentHelp) {
       const lines: string[] = [];

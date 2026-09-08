@@ -1,5 +1,5 @@
 import { View, Text } from 'react-native';
-import { usePathname, useRouter } from 'expo-router';
+import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Breadcrumbs, type Crumb } from '../ui/Breadcrumbs';
 import { HiveMark } from '../ui/HiveMark';
@@ -44,6 +44,7 @@ import { NAV_DESTINATIONS, ADMIN_DESTINATION, activeKeyForPath } from '../../lib
 export function PathFooter() {
   const pathname = usePathname();
   const router = useRouter();
+  const { from } = useGlobalSearchParams<{ from?: string }>();
   const { community, wholeHive } = useAuth();
   const deep = usePathTrail();
   const pagePress = usePagePress();
@@ -91,6 +92,21 @@ export function PathFooter() {
         onPress: stepTo(placeRoute),
       };
 
+  // Newsletter Draft has a real parent when it was opened from the Newsletter
+  // folder in Admin. The route alone cannot carry that history — it is still
+  // `/newsletter` — but the `from=admin` return address can. Showing the
+  // actual route matters more than pretending this is a free-floating page.
+  const newsletterFromAdmin = pathname === '/newsletter' && from === 'admin';
+  const pageTrail: Crumb[] = newsletterFromAdmin
+    ? [
+        { label: 'Admin', onPress: stepTo('/admin') },
+        { label: 'Newsletter', onPress: stepTo('/admin') },
+        { label: 'Newsletter Draft' },
+      ]
+    : page
+      ? [{ label: page.label, onPress: pagePress ?? stepTo(page.route) }]
+      : [];
+
   const items: Crumb[] = [
     place,
     // Home is named too. Leaving it out avoided a stutter and cost something
@@ -102,7 +118,7 @@ export function PathFooter() {
     // A screen holding its own depth (Boards keeps the open board and thread in
     // state while the route stays `/board`) says what this crumb should do, so
     // tapping "Boards" from inside a thread actually shows you the boards.
-    ...(page ? [{ label: page.label, onPress: pagePress ?? stepTo(page.route) }] : []),
+    ...pageTrail,
     ...deep,
   ];
 
