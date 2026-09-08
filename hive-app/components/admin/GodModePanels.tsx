@@ -716,7 +716,7 @@ export function NewsletterPanel({
     if (!editingThought || savingThought) return;
     const content = editedThoughtText.trim();
     if (!content) {
-      showAlert('Add a thought first', 'A newsletter thought cannot be blank.');
+      showAlert('Add a note first', 'A newsletter note cannot be blank.');
       return;
     }
     setSavingThought(true);
@@ -754,7 +754,7 @@ export function NewsletterPanel({
     if (!editingContribution || savingContribution) return;
     const content = editedContributionText.trim();
     if (!content) {
-      showAlert('Add a contribution first', 'A newsletter contribution cannot be blank.');
+      showAlert('Add a note first', 'A newsletter note cannot be blank.');
       return;
     }
     setSavingContribution(true);
@@ -1045,7 +1045,7 @@ export function NewsletterPanel({
                 >
                   <Ionicons name="add" size={16} color={SPACE_SKIN.gold} />
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.ink }}>
-                    Quick add a newsletter thought
+                    Add a newsletter note
                   </Text>
                 </Pressable>
               ) : null}
@@ -1064,13 +1064,13 @@ export function NewsletterPanel({
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.gold }}>
-                      Your newsletter thought · private
+                      Newsletter note
                     </Text>
                     <Pressable
                       onPress={() => { setEditingThought(thought); setEditedThoughtText(thought.content); }}
                       hitSlop={8}
                       accessibilityRole="button"
-                      accessibilityLabel="Edit newsletter thought"
+                      accessibilityLabel="Edit newsletter note"
                     >
                       <Ionicons name="pencil-outline" size={17} color={SPACE_SKIN.inkSoft} />
                     </Pressable>
@@ -1078,7 +1078,7 @@ export function NewsletterPanel({
                       onPress={() => setThoughtToArchive(thought)}
                       hitSlop={8}
                       accessibilityRole="button"
-                      accessibilityLabel="Remove newsletter thought"
+                      accessibilityLabel="Remove newsletter note"
                     >
                       <Ionicons name="trash-outline" size={17} color={SPACE_SKIN.inkSoft} />
                     </Pressable>
@@ -1088,7 +1088,7 @@ export function NewsletterPanel({
                       <TextInput
                         value={editedThoughtText}
                         onChangeText={setEditedThoughtText}
-                        accessibilityLabel="Edit newsletter thought text"
+                        accessibilityLabel="Edit newsletter note text"
                         multiline
                         autoFocus
                         style={{
@@ -1118,7 +1118,7 @@ export function NewsletterPanel({
 
               {newsletterThoughts.length === 0 && shoutOuts.length === 0 ? (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: SPACE_SKIN.inkSoft, lineHeight: 19 }}>
-                  Nothing collected yet. Your private thoughts and anything members ask to have mentioned will wait here.
+                  Nothing collected yet. Add notes whenever they come up; every note here is for the next newsletter.
                 </Text>
               ) : shoutOuts.map((item) => (
                 <View
@@ -1134,13 +1134,13 @@ export function NewsletterPanel({
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.gold }}>
-                      For the Buzz · {item.author}
+                      Newsletter note
                     </Text>
                     <Pressable
                       onPress={() => { setEditingContribution(item); setEditedContributionText(item.content); }}
                       hitSlop={8}
                       accessibilityRole="button"
-                      accessibilityLabel="Edit newsletter contribution"
+                      accessibilityLabel="Edit newsletter note"
                     >
                       <Ionicons name="pencil-outline" size={17} color={SPACE_SKIN.inkSoft} />
                     </Pressable>
@@ -1148,7 +1148,7 @@ export function NewsletterPanel({
                       onPress={() => setContributionToRemove(item)}
                       hitSlop={8}
                       accessibilityRole="button"
-                      accessibilityLabel="Remove newsletter contribution"
+                      accessibilityLabel="Remove newsletter note"
                     >
                       <Ionicons name="trash-outline" size={17} color={SPACE_SKIN.inkSoft} />
                     </Pressable>
@@ -1158,7 +1158,7 @@ export function NewsletterPanel({
                       <TextInput
                         value={editedContributionText}
                         onChangeText={setEditedContributionText}
-                        accessibilityLabel="Edit newsletter contribution text"
+                        accessibilityLabel="Edit newsletter note text"
                         multiline
                         autoFocus
                         style={{
@@ -1268,7 +1268,7 @@ export function NewsletterPanel({
       />
       <ConfirmDialog
         visible={!!thoughtToArchive}
-        title="Remove this newsletter thought?"
+        title="Remove this newsletter note?"
         body="It will leave this worktop. It is archived, not permanently deleted."
         confirmLabel={savingThought ? 'Removing…' : 'Remove'}
         destructive
@@ -1277,7 +1277,7 @@ export function NewsletterPanel({
       />
       <ConfirmDialog
         visible={!!contributionToRemove}
-        title="Remove this newsletter contribution?"
+        title="Remove this newsletter note?"
         body="It will leave this month’s newsletter worktop."
         confirmLabel={savingContribution ? 'Removing…' : 'Remove'}
         destructive
