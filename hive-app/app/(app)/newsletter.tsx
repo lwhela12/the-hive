@@ -377,7 +377,7 @@ export default function NewsletterScreen() {
   // a minute. So do it in two passes — put the facts on screen straight away,
   // then swap in the letter when it lands. Staring at a spinner for a minute is
   // the same wait, just worse (Nat 2026-07-25).
-  const loadDraft = useCallback(async () => {
+  const loadDraft = useCallback(async (rebuild = false) => {
     setLoading(true);
     setError(null);
     setProse(null);
@@ -446,6 +446,7 @@ export default function NewsletterScreen() {
       .limit(1);
     const newsletterBoardIds = ((boardRows ?? []) as { id: string }[]).map((b) => b.id);
 
+    let draftToReplaceId: string | null = null;
     if (newsletterBoardIds.length > 0) {
       const { data: drafts } = await supabase
         .from('board_posts')
@@ -459,11 +460,14 @@ export default function NewsletterScreen() {
       }[]).map((row) => ({ ...row, sentAt: sentAtById.get(row.id) ?? null }));
       const inProgress = currentNewsletterDraft(candidates);
       if (inProgress && String(inProgress.content ?? '').trim()) {
-        setProse(inProgress.content);
-        setRecapTitle(inProgress.title);
-        setDraftPostId(inProgress.id);
-        setSaveState('saved');
-        return;
+        if (!rebuild) {
+          setProse(inProgress.content);
+          setRecapTitle(inProgress.title);
+          setDraftPostId(inProgress.id);
+          setSaveState('saved');
+          return;
+        }
+        draftToReplaceId = inProgress.id;
       }
     }
 
@@ -487,6 +491,24 @@ export default function NewsletterScreen() {
         );
       }
       if (generated && profile) {
+        const title = String(written.recap_title ?? data.recap_title ?? '').trim();
+        if (draftToReplaceId && title) {
+          // Rebuild is an explicit replacement action. Keep one working draft
+          // rather than creating a stack of nearly-identical copies.
+          const { error: replaceError } = await (supabase as any)
+            .from('board_posts')
+            .update({ title, content: generated, edited_at: new Date().toISOString() })
+            .eq('id', draftToReplaceId);
+          if (replaceError) {
+            setSaveState('not_saved');
+            setPostError(userFacingError(replaceError, 'The rebuilt draft is here, but it did not replace the saved one. Try Save draft to The Buzz.'));
+          } else {
+            setDraftPostId(draftToReplaceId);
+            setSaveState('saved');
+          }
+          setWriting(false);
+          return;
+        }
         // A fresh draft is working material, not a thing Nat should have to
         // remember to protect. Give it its private home immediately so a page
         // refresh returns to this version instead of asking the writer for a
@@ -498,7 +520,6 @@ export default function NewsletterScreen() {
           .order('created_at', { ascending: true })
           .limit(1);
         const board = ((boards ?? []) as { id: string; name: string; community_id: string }[])[0];
-        const title = String(written.recap_title ?? data.recap_title ?? '').trim();
         if (!board || !title) {
           setSaveState('not_saved');
         } else {
@@ -823,7 +844,7 @@ export default function NewsletterScreen() {
           </Text>
         </View>
         <Pressable
-          onPress={() => void loadDraft()}
+          onPress={() => void loadDraft(true)}
           hitSlop={10}
           disabled={loading}
           accessibilityLabel="Rebuild the draft"
@@ -852,7 +873,7 @@ export default function NewsletterScreen() {
               {error}
             </Text>
             <Pressable
-              onPress={() => void loadDraft()}
+              onPress={() => void loadDraft(true)}
               style={{ backgroundColor: '#bd9348', paddingHorizontal: 18, paddingVertical: 9, borderRadius: 999 }}
             >
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#fff' }}>Try again</Text>
