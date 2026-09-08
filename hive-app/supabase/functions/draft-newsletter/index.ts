@@ -134,7 +134,14 @@ function prettyDateRange(start: string, end?: string | null) {
  * HIVE-Wide; joining information travels only when the invitation does too.
  */
 function upcomingEventLine(event: any) {
-  const facts = [`${event.title} — ${prettyDateRange(event.event_date, event.end_date)}`];
+  // Home calls meetings "[HIVE] meets" rather than exposing the event's
+  // administrative title (for example, "OG HIVE — Sep"). Keep the newsletter
+  // on those same human-facing words.
+  const communityName = String(event.community?.name ?? '').trim();
+  const title = event.event_type === 'meeting' && communityName
+    ? `${communityName} meets`
+    : event.title;
+  const facts = [`${title} — ${prettyDateRange(event.event_date, event.end_date)}`];
   const invitationTravels = (event.invited_scope ?? event.visibility) === 'all_hives'
     || (event.invited_scope ?? event.visibility) === 'public';
   if (!invitationTravels) return facts.join(' · ');
@@ -390,7 +397,7 @@ serve(async (req) => {
       // when it is drafted late. `publicHiveIds` keeps a private HIVE (notably
       // Production) out even if a bad row ever carries a wider visibility.
       supabaseAdmin.from('events')
-        .select('title, event_date, end_date, event_time, end_time, event_type, location, description, meet_link, visibility, invited_scope')
+        .select('title, event_date, end_date, event_time, end_time, event_type, location, description, meet_link, visibility, invited_scope, community:communities(name)')
         .in('community_id', publicHiveIds)
         .in('visibility', ['all_hives', 'public'])
         .gte('event_date', newsletterMonthStart)
