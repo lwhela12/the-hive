@@ -391,7 +391,7 @@ serve(async (req) => {
       // These answers expressly ask for newsletter consideration. Keep their
       // authors out of the data so the writer cannot accidentally identify one.
       supabaseAdmin.from('survey_responses')
-        .select('answers, submitted_at, created_at')
+        .select('answers, submitted_at, created_at, survey:surveys!survey_id(community_id)')
         .order('created_at', { ascending: false }).limit(160),
       // A HIVE Help title is the shared focus, not somebody's contribution.
       // Read only that title and its date; never pull the private board body.
@@ -427,6 +427,12 @@ serve(async (req) => {
     const newsletterAnswerIds = ['q_eom_newsletter', 'q_newsletter', 'q_shoutout'];
     const endOfMonthNotes = ((responseRows.data ?? []) as any[])
       .filter((row) => String(row.submitted_at ?? row.created_at ?? '') >= startIso)
+      .filter((row) => {
+        const survey = Array.isArray(row.survey) ? row.survey[0] : row.survey;
+        // Null is the HIVE-Wide survey. A HIVE-specific answer may only feed
+        // The Buzz when that HIVE has explicitly allowed public sharing.
+        return !survey?.community_id || publicHiveIds.includes(survey.community_id);
+      })
       .flatMap((row) => newsletterAnswerIds.map((id) => String(row.answers?.[id] ?? '').trim()))
       .filter(Boolean);
     const editorialLeads = selectEditorialLeads(ownerNotes, endOfMonthNotes);

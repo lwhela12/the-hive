@@ -76,6 +76,16 @@ type NewsletterThought = {
   created_at: string;
 };
 
+type NewsletterContribution = {
+  id: string;
+  content: string;
+  created_at: string;
+  author: string;
+  source: 'survey' | 'board';
+  sourceAnswers?: Record<string, unknown>;
+  answerKey?: string;
+};
+
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 /**
@@ -483,15 +493,17 @@ export function NewsletterPanel({
    * That was the half that existed.
    */
   const [tab, setTab] = useState<'write' | 'shoutouts' | 'signed' | 'send'>('shoutouts');
-  const [shoutOuts, setShoutOuts] = useState<
-    { id: string; content: string; created_at: string; author: string }[]
-  >([]);
+  const [shoutOuts, setShoutOuts] = useState<NewsletterContribution[]>([]);
   const [newsletterThoughts, setNewsletterThoughts] = useState<NewsletterThought[]>([]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [editingThought, setEditingThought] = useState<NewsletterThought | null>(null);
   const [editedThoughtText, setEditedThoughtText] = useState('');
   const [thoughtToArchive, setThoughtToArchive] = useState<NewsletterThought | null>(null);
   const [savingThought, setSavingThought] = useState(false);
+  const [editingContribution, setEditingContribution] = useState<NewsletterContribution | null>(null);
+  const [editedContributionText, setEditedContributionText] = useState('');
+  const [contributionToRemove, setContributionToRemove] = useState<NewsletterContribution | null>(null);
+  const [savingContribution, setSavingContribution] = useState(false);
   const [issues, setIssues] = useState<NewsletterIssue[]>([]);
   const [memberEmails, setMemberEmails] = useState<string[]>([]);
   const [sending, setSending] = useState<string | null>(null);
@@ -620,10 +632,14 @@ export function NewsletterPanel({
     // this box would go on not showing the answers — the exact shape of Nat's
     // rule that a question without a destination is busy work. One list, and
     // adding an id registers it in both places at once.
-    const hiveNames = new Map(
-      (((await supabase.from('communities').select('id, name')).data ?? []) as {
-        id: string; name: string;
-      }[]).map((c) => [c.id, c.name])
+    const communities = ((await supabase
+      .from('communities')
+      .select('id, name, max_share_scope')).data ?? []) as {
+        id: string; name: string; max_share_scope: string | null;
+      }[];
+    const hiveNames = new Map(communities.map((c) => [c.id, c.name]));
+    const publicHiveIds = new Set(
+      communities.filter((c) => c.max_share_scope === 'public').map((c) => c.id)
     );
     const { data: answered } = await supabase
       .from('survey_responses')
@@ -633,6 +649,9 @@ export function NewsletterPanel({
     const fromSurveys = ((answered ?? []) as any[]).flatMap((row) => {
       const answers = (row.answers ?? {}) as Record<string, unknown>;
       const survey = Array.isArray(row.survey) ? row.survey[0] : row.survey;
+      // HIVE-Wide must never surface a contribution from a private HIVE.
+      // A survey without a community is the HIVE-Wide survey itself.
+      if (survey?.community_id && !publicHiveIds.has(survey.community_id)) return [];
       const author = (Array.isArray(row.user) ? row.user[0] : row.user)?.name ?? 'Someone';
       const hive = hiveNames.get(survey?.community_id) ?? '';
       return NEWSLETTER_ANSWER_IDS.flatMap((key) => {
@@ -643,6 +662,9 @@ export function NewsletterPanel({
           content: text,
           created_at: row.submitted_at ?? row.created_at,
           author: hive ? `${author} · ${hive}` : author,
+          source: 'survey' as const,
+          sourceAnswers: answers,
+          answerKey: key,
         }];
       });
     });
@@ -668,6 +690,7 @@ export function NewsletterPanel({
             content: String(r.content ?? '').trim(),
             created_at: r.created_at,
             author: r.author?.name ?? 'Someone',
+            source: 'board' as const,
           })).filter((r) => r.content.length > 0)
       : [];
 
@@ -763,6 +786,64 @@ export function NewsletterPanel({
       .eq('id', thoughtToArchive.id);
     setSavingThought(false);
     setThoughtToArchive(null);
+    if (error) {
+      showAlert('Could not remove that', 'Try again in a moment.');
+      return;
+    }
+    await load();
+  };
+
+  const saveContribution = async () => {
+    if (!editingContribution || savingContribution) return;
+    const content = editedContributionText.trim();
+    if (!content) {
+      showAlert('Add a contribution first', 'A newsletter contribution cannot be blank.');
+      return;
+    }
+    setSavingContribution(true);
+    const { error } = editingContribution.source === 'survey'
+      ? await supabase
+          .from('survey_responses')
+          .update({
+            answers: {
+              ...(editingContribution.sourceAnswers ?? {}),
+              [editingContribution.answerKey ?? 'q_newsletter']: content,
+            },
+          })
+          .eq('id', editingContribution.id.split(':')[0])
+      : await supabase
+          .from('board_replies')
+          .update({ content, edited_at: new Date().toISOString() })
+          .eq('id', editingContribution.id);
+    setSavingContribution(false);
+    if (error) {
+      showAlert('Could not save that', 'Try again in a moment.');
+      return;
+    }
+    setEditingContribution(null);
+    setEditedContributionText('');
+    await load();
+  };
+
+  const removeContribution = async () => {
+    if (!contributionToRemove || savingContribution) return;
+    setSavingContribution(true);
+    const { error } = contributionToRemove.source === 'survey'
+      ? await supabase
+          .from('survey_responses')
+          .update({
+            answers: {
+              ...(contributionToRemove.sourceAnswers ?? {}),
+              [contributionToRemove.answerKey ?? 'q_newsletter']: '',
+            },
+          })
+          .eq('id', contributionToRemove.id.split(':')[0])
+      : await supabase
+          .from('board_replies')
+          .update({ content: '', edited_at: new Date().toISOString() })
+          .eq('id', contributionToRemove.id);
+    setSavingContribution(false);
+    setContributionToRemove(null);
     if (error) {
       showAlert('Could not remove that', 'Try again in a moment.');
       return;
@@ -1094,12 +1175,57 @@ export function NewsletterPanel({
                     gap: 3,
                   }}
                 >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.gold }}>
-                    {item.author}
-                  </Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13.5, color: SPACE_SKIN.inkBody, lineHeight: 20 }}>
-                    {item.content}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.gold }}>
+                      {item.author}
+                    </Text>
+                    <Pressable
+                      onPress={() => { setEditingContribution(item); setEditedContributionText(item.content); }}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit newsletter contribution"
+                    >
+                      <Ionicons name="pencil-outline" size={17} color={SPACE_SKIN.inkSoft} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setContributionToRemove(item)}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Remove newsletter contribution"
+                    >
+                      <Ionicons name="trash-outline" size={17} color={SPACE_SKIN.inkSoft} />
+                    </Pressable>
+                  </View>
+                  {editingContribution?.id === item.id ? (
+                    <>
+                      <TextInput
+                        value={editedContributionText}
+                        onChangeText={setEditedContributionText}
+                        accessibilityLabel="Edit newsletter contribution text"
+                        multiline
+                        autoFocus
+                        style={{
+                          minHeight: 86, fontFamily: 'Lato_400Regular', fontSize: 13.5, color: FIELD.ink,
+                          backgroundColor: FIELD.fill, borderWidth: 1, borderColor: FIELD.border,
+                          borderRadius: 10, paddingHorizontal: 10, paddingVertical: 9, textAlignVertical: 'top',
+                        }}
+                      />
+                      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+                        <Pressable onPress={() => { setEditingContribution(null); setEditedContributionText(''); }} disabled={savingContribution}>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.inkSoft }}>Cancel</Text>
+                        </Pressable>
+                        <Pressable onPress={() => void saveContribution()} disabled={savingContribution}>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.gold }}>
+                            {savingContribution ? 'Saving…' : 'Save'}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </>
+                  ) : (
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13.5, color: SPACE_SKIN.inkBody, lineHeight: 20 }}>
+                      {item.content}
+                    </Text>
+                  )}
                 </View>
               ))}
             </View>
@@ -1191,6 +1317,15 @@ export function NewsletterPanel({
         destructive
         onConfirm={() => { void archiveThought(); }}
         onCancel={() => { if (!savingThought) setThoughtToArchive(null); }}
+      />
+      <ConfirmDialog
+        visible={!!contributionToRemove}
+        title="Remove this newsletter contribution?"
+        body="It will leave this month’s newsletter worktop."
+        confirmLabel={savingContribution ? 'Removing…' : 'Remove'}
+        destructive
+        onConfirm={() => { void removeContribution(); }}
+        onCancel={() => { if (!savingContribution) setContributionToRemove(null); }}
       />
       <ConfirmDialog
         visible={!!confirmRemoveSub}
