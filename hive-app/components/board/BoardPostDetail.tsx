@@ -25,6 +25,7 @@ import { SpaceBackdrop } from '../ui/SpaceBackdrop';
 import { BounceScrollView } from '../ui/BounceScrollView';
 import { usePageSkin } from '../../lib/pageSkin';
 import { userFacingError } from '../../lib/userFacingError';
+import { getBoardAuthorIdentity } from '../../lib/hiveWideIdentity';
 import type { BoardPost, BoardReply, BoardReaction, Profile, Attachment, BoardCategory } from '../../types';
 
 interface BoardPostDetailProps {
@@ -115,8 +116,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const isBoardOwner = !!post?.category?.owner_user_id && post.category.owner_user_id === profile?.id;
   const canManagePost = !!post && (isAuthor || isAdmin || isBoardOwner);
-  const postAuthorId = post?.author?.id ?? post?.author_id ?? null;
-  const postAuthorName = post?.author?.name || 'Unknown';
+  const postAuthor = getBoardAuthorIdentity(post?.author, post?.category?.reach);
 
   const invalidateBoardSearchIndex = useCallback(() => {
     if (!communityId) return;
@@ -155,12 +155,12 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     const { data, error } = await supabase
       .from('board_posts')
       // `author` only ever renders as an avatar + name on this screen
-      // (postAuthorId/Name below, both id/name/avatar_url). `category` is
+      // (postAuthor below, id/name/avatar_url/profile_scope). `category` is
       // read for owner_user_id (permission check), name, reach and
       // community_id (passed on to BoardComposer / BoardReplyComposer) —
       // never anything else off either join. Narrowed 2026-08-11, same fix
       // as lib/hooks/useHiveDataQuery.ts.
-      .select('*, author:profiles!board_posts_author_id_fkey(id, name, avatar_url), category:board_categories!board_posts_category_id_fkey(id, name, reach, owner_user_id, community_id)')
+      .select('*, author:profiles!board_posts_author_id_fkey(id, name, avatar_url, profile_scope), category:board_categories!board_posts_category_id_fkey(id, name, reach, owner_user_id, community_id)')
       .eq('id', postId)
       .single();
 
@@ -180,8 +180,8 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     // Fetch all replies for this post
     const { data: allReplies, error } = await supabase
       .from('board_replies')
-      // BoardReplyItem only ever reads id/name/avatar_url off `author`.
-      .select('*, author:profiles!board_replies_author_id_fkey(id, name, avatar_url)')
+      // BoardReplyItem reads identity plus the HIVE-Wide sharing switch.
+      .select('*, author:profiles!board_replies_author_id_fkey(id, name, avatar_url, profile_scope)')
       .eq('post_id', postId)
       .order('created_at', { ascending: true });
 
@@ -607,16 +607,22 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
             {post.title}
           </Text>
           <View className="flex-row items-center mb-3">
-            <MemberProfileLink
-              memberId={postAuthorId}
-              memberName={postAuthorName}
-              hitSlop={8}
-              className="mr-2 active:opacity-70"
-            >
-              <Avatar name={postAuthorName} url={post.author?.avatar_url} size={32} />
-            </MemberProfileLink>
+            {postAuthor.memberId ? (
+              <MemberProfileLink
+                memberId={postAuthor.memberId}
+                memberName={postAuthor.name}
+                hitSlop={8}
+                className="mr-2 active:opacity-70"
+              >
+                <Avatar name={postAuthor.name} url={postAuthor.avatarUrl} size={32} />
+              </MemberProfileLink>
+            ) : (
+              <View className="mr-2">
+                <Avatar name={postAuthor.name} url={null} size={32} />
+              </View>
+            )}
             <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }}>
-              {postAuthorName}
+              {postAuthor.name}
             </Text>
             <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }} className="text-sm ml-2">
               {formatDateMedium(post.created_at)}
@@ -665,6 +671,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
                   onEdit={handleEditReply}
                   onDelete={handleDeleteReply}
                   canModerate={isAdmin}
+                  boardReach={post.category?.reach}
                 />
               </View>
             ))

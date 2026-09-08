@@ -2351,6 +2351,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
               linkedWishLabel={linkedWish ? 'Community Wish' : undefined}
               onLinkedWishPress={linkedWish ? () => setSelectedLinkedWish(linkedWish) : undefined}
               currentUserId={profile?.id}
+              boardReach={selectedCategory.reach}
             />
           );
         }}

@@ -202,11 +202,12 @@ async function fetchPosts(
   categoryId: string
 ): Promise<PostWithAuthor[]> {
   // Join reactions in the same query to avoid a sequential round-trip
-  // BoardPostCard (the list this feeds) only ever reads id/name/avatar_url
+  // BoardPostCard (the list this feeds) only ever reads
+  // id/name/avatar_url/profile_scope
   // off `author` — narrowed 2026-08-11, same fix as lib/hooks/useHiveDataQuery.ts.
   const { data, error } = await supabase
     .from('board_posts')
-    .select('*, author:profiles!board_posts_author_id_fkey(id, name, avatar_url), reactions:board_reactions(*)')
+    .select('*, author:profiles!board_posts_author_id_fkey(id, name, avatar_url, profile_scope), reactions:board_reactions(*)')
     // Category id is the board identity. An all-HIVE board keeps its canonical
     // threads under the HIVE that created it, wherever the board is opened.
     .eq('category_id', categoryId)

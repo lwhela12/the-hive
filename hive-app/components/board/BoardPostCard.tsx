@@ -9,7 +9,8 @@ import { getReactionGroups, HiveReactionPills } from '../ui/HiveReactions';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { usePageSkin } from '../../lib/pageSkin';
-import type { BoardPost, BoardReaction, Profile } from '../../types';
+import { getBoardAuthorIdentity } from '../../lib/hiveWideIdentity';
+import type { BoardCategory, BoardPost, BoardReaction, Profile } from '../../types';
 
 import { SignedImage } from '../ui/SignedImage';
 interface BoardPostCardProps {
@@ -21,6 +22,7 @@ interface BoardPostCardProps {
   linkedWishLabel?: string;
   onLinkedWishPress?: () => void;
   currentUserId?: string;
+  boardReach?: BoardCategory['reach'];
 }
 
 function createContentPreview(content: string, maxLength = 120): string {
@@ -54,6 +56,7 @@ export function BoardPostCard({
   linkedWishLabel,
   onLinkedWishPress,
   currentUserId,
+  boardReach,
 }: BoardPostCardProps) {
   // Cream page or space page, same card. The skin decides both the fill and
   // the ink so the two can never disagree.
@@ -74,8 +77,7 @@ export function BoardPostCard({
   const imageStyle = useCompactImage
     ? { width: 176, height: 132 }
     : { width: '100%' as const, height: 210 };
-  const authorId = post.author?.id ?? post.author_id;
-  const authorName = post.author?.name || 'Unknown';
+  const author = getBoardAuthorIdentity(post.author, boardReach);
   // A granted thread wears a wash of the accent. pageSkin has no "gold at a
   // whisper" token, so the two live here — both are just skin.gold turned
   // right down, which is why they read the same on either page.
@@ -218,21 +220,27 @@ export function BoardPostCard({
             )}
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center flex-1 mr-2">
-                <MemberProfileLink
-                  memberId={authorId}
-                  memberName={authorName}
-                  stopPropagation
-                  hitSlop={8}
-                  className="active:opacity-70 mr-2"
-                >
-                  <Avatar name={authorName} url={post.author?.avatar_url} size={24} />
-                </MemberProfileLink>
+                {author.memberId ? (
+                  <MemberProfileLink
+                    memberId={author.memberId}
+                    memberName={author.name}
+                    stopPropagation
+                    hitSlop={8}
+                    className="active:opacity-70 mr-2"
+                  >
+                    <Avatar name={author.name} url={author.avatarUrl} size={24} />
+                  </MemberProfileLink>
+                ) : (
+                  <View className="mr-2">
+                    <Avatar name={author.name} url={null} size={24} />
+                  </View>
+                )}
                 <Text
                   style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }}
                   className="text-xs flex-1"
                   numberOfLines={1}
                 >
-                  {authorName} · {timeAgo}
+                  {author.name} · {timeAgo}
                 </Text>
               </View>
               <View className="flex-row items-center gap-1">

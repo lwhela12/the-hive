@@ -8,8 +8,10 @@ import { MarkdownContent } from '../chat/MarkdownContent';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { usePageSkin } from '../../lib/pageSkin';
+import { getBoardAuthorIdentity } from '../../lib/hiveWideIdentity';
 
 import { ComposerBar } from '../ui/ComposerBar';
+import type { BoardCategory } from '../../types';
 interface BoardReplyItemProps {
   reply: BoardReply & { author?: Profile };
   currentUserId?: string;
@@ -20,6 +22,7 @@ interface BoardReplyItemProps {
   onEdit?: (replyId: string, content: string) => void;
   onDelete?: (replyId: string) => void;
   canModerate?: boolean;
+  boardReach?: BoardCategory['reach'];
 }
 
 export function BoardReplyItem({
@@ -32,6 +35,7 @@ export function BoardReplyItem({
   onEdit,
   onDelete,
   canModerate = false,
+  boardReach,
 }: BoardReplyItemProps) {
   const skin = usePageSkin();
   const [isEditing, setIsEditing] = useState(false);
@@ -44,8 +48,7 @@ export function BoardReplyItem({
   const isAuthor = currentUserId === reply.author_id;
   const canManage = isAuthor || canModerate;
   const timeAgo = getTimeAgo(new Date(reply.created_at));
-  const authorId = reply.author?.id ?? reply.author_id;
-  const authorName = reply.author?.name || 'Unknown';
+  const author = getBoardAuthorIdentity(reply.author, boardReach);
 
   const handleSaveEdit = () => {
     if (editContent.trim() && onEdit) {
@@ -60,18 +63,24 @@ export function BoardReplyItem({
       style={isNested ? { borderLeftColor: skin.border } : undefined}
     >
       <View className="flex-row items-start">
-        <MemberProfileLink
-          memberId={authorId}
-          memberName={authorName}
-          hitSlop={8}
-          className="mr-3 active:opacity-70"
-        >
-          <Avatar name={authorName} url={reply.author?.avatar_url} size={32} />
-        </MemberProfileLink>
+        {author.memberId ? (
+          <MemberProfileLink
+            memberId={author.memberId}
+            memberName={author.name}
+            hitSlop={8}
+            className="mr-3 active:opacity-70"
+          >
+            <Avatar name={author.name} url={author.avatarUrl} size={32} />
+          </MemberProfileLink>
+        ) : (
+          <View className="mr-3">
+            <Avatar name={author.name} url={null} size={32} />
+          </View>
+        )}
         <View className="flex-1">
           <View className="flex-row items-center mb-1">
             <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="text-sm">
-              {authorName}
+              {author.name}
             </Text>
             <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }} className="text-xs ml-2">
               {timeAgo}
@@ -131,7 +140,7 @@ export function BoardReplyItem({
 
           <View className="flex-row items-center gap-4">
             {onReply && (
-              <Pressable onPress={() => onReply(reply.id, reply.author?.name || 'Unknown')}>
+              <Pressable onPress={() => onReply(reply.id, author.name)}>
                 <Text style={{ fontFamily: 'Lato_400Regular', color: skin.gold }} className="text-sm">
                   Reply
                 </Text>
@@ -166,6 +175,7 @@ export function BoardReplyItem({
               onEdit={onEdit}
               onDelete={onDelete}
               canModerate={canModerate}
+              boardReach={boardReach}
             />
           ))}
         </View>

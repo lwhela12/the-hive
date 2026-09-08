@@ -20,6 +20,7 @@ import { useOpenFeedback } from '../../lib/openFeedback';
 import { useAppNews } from '../../lib/hooks/useAppNews';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { supabase } from '../../lib/supabase';
+import { getHiveWideActivityAuthorName } from '../../lib/hiveWideIdentity';
 
 /**
  * HIVE-Wide is a Home, not a separate orientation product. Its layout is the
@@ -188,7 +189,7 @@ export default function HiveWideScreen() {
     try {
       const [wishResult, postsResult, todoResult] = await Promise.all([
         supabase.from('wishes').select('id, title, description, created_at, user:profiles!user_id(name, avatar_url), community:communities(name, slug, accent_color)').eq('share_scope', 'all_hives').eq('status', 'public').or('is_active.is.true,is_active.is.null').order('created_at', { ascending: false }).limit(12),
-        supabase.from('board_posts').select('id, title, created_at, author:profiles!author_id(name), category:board_categories!inner(reach)').eq('category.reach', 'all_hives').or('status.is.null,status.neq.archived').order('created_at', { ascending: false }).limit(12),
+        supabase.from('board_posts').select('id, title, created_at, author:profiles!author_id(id, name, profile_scope), category:board_categories!inner(reach)').eq('category.reach', 'all_hives').or('status.is.null,status.neq.archived').order('created_at', { ascending: false }).limit(12),
         supabase.from('surveys').select('id, title, due_date').is('community_id', null).eq('is_active', true).order('due_date', { ascending: true }),
       ]);
       if (wishResult.error) throw wishResult.error;
@@ -207,7 +208,7 @@ export default function HiveWideScreen() {
       setWideWishes(wishes);
       setTodos(surveyRows.map((survey) => ({ ...survey, done: completedSurveyIds.has(survey.id) })));
       const wishActivity: WideActivity[] = wishes.map((wish) => ({ id: `wish:${wish.id}`, emoji: '⭐', text: `${wish.user?.name ?? 'Someone'} shared a wish with HIVE-Wide`, timestamp: wish.created_at, destination: '/members' }));
-      const postActivity: WideActivity[] = (postsResult.data ?? []).map((post: any) => ({ id: `post:${post.id}`, emoji: '📋', text: `${post.author?.name ?? 'Someone'} posted: ${post.title}`, timestamp: post.created_at, destination: '/hive-wide-boards' }));
+      const postActivity: WideActivity[] = (postsResult.data ?? []).map((post: any) => ({ id: `post:${post.id}`, emoji: '📋', text: `${getHiveWideActivityAuthorName(post.author)} posted: ${post.title}`, timestamp: post.created_at, destination: '/hive-wide-boards' }));
       setActivity([...wishActivity, ...postActivity].sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 12));
     } catch (error) {
       console.warn('Could not load HIVE-Wide Home', error);
