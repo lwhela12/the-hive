@@ -33,7 +33,6 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { FIELD_LOOK } from '../ui/Input';
 import { ThinkingBee } from '../ui/ThinkingBee';
 import { SurveyModal } from '../surveys/SurveyModal';
-import { QuickAdd } from '../navigation/QuickAdd';
 /**
  * Everyone, everywhere, in one room.
  *
@@ -471,18 +470,6 @@ export function NewsletterPanel({
    * noticed the draft was reading none of them.
    */
   /**
-   * Writing it is a tab too, now.
-   *
-   * Nat, 2026-08-06: "I just think we need to move the 'write this months
-   * newsletter' into it's own tab." It was a full-width banner pinned above the
-   * tab row, so it stayed on screen whichever tab you were reading — one job
-   * shouting over the other two instead of standing beside them.
-   *
-   * The box opens on Shout-outs rather than Write, because what the box is FOR
-   * on arrival is showing you what members have asked to have mentioned. Write
-   * is where you go once you've read them.
-   */
-  /**
    * And a fourth: actually sending it.
    *
    * Until 2026-08-12 there was no way to put an issue in anybody's inbox.
@@ -492,10 +479,9 @@ export function NewsletterPanel({
    * button on the public facing site & inside the app, right?"* — she did.
    * That was the half that existed.
    */
-  const [tab, setTab] = useState<'write' | 'shoutouts' | 'signed' | 'send'>('shoutouts');
+  const [tab, setTab] = useState<'shoutouts' | 'signed' | 'send'>('shoutouts');
   const [shoutOuts, setShoutOuts] = useState<NewsletterContribution[]>([]);
   const [newsletterThoughts, setNewsletterThoughts] = useState<NewsletterThought[]>([]);
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [editingThought, setEditingThought] = useState<NewsletterThought | null>(null);
   const [editedThoughtText, setEditedThoughtText] = useState('');
   const [thoughtToArchive, setThoughtToArchive] = useState<NewsletterThought | null>(null);
@@ -875,7 +861,6 @@ export function NewsletterPanel({
         // The folder name IS the ideas worktop now. That removes the duplicate
         // first tab and gives Nat one obvious way back to collected material.
         tabs={[
-          ...(profile?.is_owner ? [{ key: 'write', label: 'Write this month’s' }] : []),
           // Sending speaks for HIVE to everybody it has an address for, so
           // the door is owners-only, same as writing.
           // "Test & send", never "Send it". A tab is a place, but this one was
@@ -886,68 +871,11 @@ export function NewsletterPanel({
           { key: 'signed', label: `Signed up (${active.length})` },
         ]}
         activeTab={tab}
-        onTabChange={(key: string) => setTab(key as 'write' | 'shoutouts' | 'signed' | 'send')}
-        // No action tab. This box's one "do it" is writing the draft, and Nat
-        // made that a tab on 2026-08-06 — so the folder's edge already carries
-        // it, and a gold pill saying the same word twice would be the pill she
-        // asked to get rid of, wearing a new hat.
+        onTabChange={(key: string) => setTab(key as 'shoutouts' | 'signed' | 'send')}
         style={panelStyle}
         bodyStyle={bodyStyle}
       >
         <ScrollView style={scrollStyle} nestedScrollEnabled showsVerticalScrollIndicator>
-          {tab === 'write' && profile?.is_owner ? (
-            <View>
-              {/* Drawn like the tool rows inside a HIVE's folder — same gap, same
-                  two weights, same chevron — because it is the same kind of row:
-                  a door out of the box onto a page of its own. */}
-              <Pressable
-                onPress={() => router.push({ pathname: '/newsletter', params: { from: 'admin' } } as any)}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 10,
-                  paddingHorizontal: 14,
-                  paddingVertical: 13,
-                  borderBottomWidth: 1,
-                  borderBottomColor: PANEL_HAIRLINE,
-                  backgroundColor: pressed ? PANEL_INSET : 'transparent',
-                })}
-              >
-                <Ionicons name="create-outline" size={18} color={SPACE_SKIN.gold} />
-                <View style={{ flex: 1 }}>
-                  {/* Name the letter in progress rather than a generic errand.
-                      Nat, 2026-08-12: *"I keep feeling like this tab should be
-                      showing the draft version we're working on now, shouldnt
-                      it? and once its posted, then that clears?"* Yes to both —
-                      an issue stops being a draft the moment it is sent or
-                      published, which is the same test The Buzz uses. */}
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13.5, color: SPACE_SKIN.ink }}>
-                    {draftIssue ? draftIssue.title : 'Start this month’s newsletter'}
-                  </Text>
-                  {draftIssue ? (
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: SPACE_SKIN.gold, marginTop: 2 }}>
-                      In progress · not sent yet
-                    </Text>
-                  ) : null}
-                </View>
-                <Ionicons name="chevron-forward" size={15} color={SPACE_SKIN.inkSoft} />
-              </Pressable>
-              <Text
-                style={{
-                  fontFamily: 'Lato_400Regular', fontSize: 13, color: SPACE_SKIN.inkSoft,
-                  lineHeight: 19, padding: 14,
-                }}
-              >
-                {draftIssue
-                  ? 'Opens on its own page, where you shape it and post it. It stops showing here once you send it.'
-                  : 'The draft opens on its own page, where you shape it and post it.'}
-                {shoutOuts.length > 0
-                  ? ` The ${shoutOuts.length} ${shoutOuts.length === 1 ? 'thing' : 'things'} members have asked to have mentioned are in Shout-outs — worth reading before you start.`
-                  : ' Anything members ask to have mentioned shows up in Shout-outs.'}
-              </Text>
-            </View>
-          ) : null}
-
           {tab === 'send' && profile?.is_owner ? (
             <View style={{ padding: 12, gap: 10 }}>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: SPACE_SKIN.inkSoft, lineHeight: 19 }}>
@@ -1034,7 +962,9 @@ export function NewsletterPanel({
             <View style={{ padding: 12, gap: 8 }}>
               {profile?.is_owner ? (
                 <Pressable
-                  onPress={() => setQuickAddOpen(true)}
+                  onPress={() => router.push({ pathname: '/newsletter', params: { from: 'admin' } } as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Write this month’s newsletter"
                   style={({ pressed }) => ({
                     alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6,
                     borderWidth: 1, borderColor: SPACE_SKIN.border, borderRadius: 999,
@@ -1043,9 +973,9 @@ export function NewsletterPanel({
                     opacity: pressed ? 0.7 : 1,
                   })}
                 >
-                  <Ionicons name="add" size={16} color={SPACE_SKIN.gold} />
+                  <Ionicons name="create-outline" size={16} color={SPACE_SKIN.gold} />
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.ink }}>
-                    Add a newsletter note
+                    Write this month’s
                   </Text>
                 </Pressable>
               ) : null}
@@ -1292,12 +1222,6 @@ export function NewsletterPanel({
         destructive
         onConfirm={() => { void removeSubscriber(); }}
         onCancel={() => { if (!removingSub) setConfirmRemoveSub(null); }}
-      />
-      <QuickAdd
-        visible={quickAddOpen}
-        initialDestination="newsletter"
-        onClose={() => setQuickAddOpen(false)}
-        onSaved={() => { void load(); }}
       />
     </View>
   );

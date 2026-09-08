@@ -25,6 +25,11 @@ if (panels.includes('Ideas & shout-outs')) {
 if (!panels.includes('titleTabKey="shoutouts"')) {
   failures.push('Newsletter name tab must open the combined ideas worktop');
 }
+if (panels.includes("{ key: 'write', label: 'Write this month’s' }")
+  || !panels.includes('accessibilityLabel="Write this month’s newsletter"')
+  || panels.includes('Add a newsletter note')) {
+  failures.push('Newsletter must have one Write this month’s pill and no duplicate write or quick-add control');
+}
 if (!panels.includes('Sent & past issues') || panels.includes('issues.slice(0, 1)')) {
   failures.push('Test & send must put completed issues straight into one history shelf');
 }
