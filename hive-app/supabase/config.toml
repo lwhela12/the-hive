@@ -202,6 +202,12 @@ verify_jwt = false
 [functions.open-check-in]
 verify_jwt = false
 
+# Check-in previews go only to Nat. The daily database job calls it with the
+# service credential; Nat's approval link calls it after her signed-in session
+# has been verified in the handler.
+[functions.check-in-preview]
+verify_jwt = false
+
 [functions.send-newsletter]
 verify_jwt = false
 

@@ -125,6 +125,14 @@ export function EmailTemplatesPanel({
         <ScrollView style={scrollStyle} contentContainerStyle={{ paddingBottom: 6 }}>
 
           {approvalError ? <Text accessibilityRole="alert" style={{ color: '#ffb4a8', padding: 12 }}>{approvalError}</Text> : null}
+          <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 2 }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#fffdf5' }}>
+              Check-in previews
+            </Text>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: 'rgba(255,248,233,0.72)', paddingTop: 4 }}>
+              Before we meet comes to Nat at 9am the day before and the day of a meeting. It names only the people still waiting. Nothing reaches them until Nat presses Yes, send it in that email.
+            </Text>
+          </View>
           {/* The same five, in the place they will actually be read. */}
           <View style={{ paddingHorizontal: 12, paddingTop: 12 }}>
             <Pressable

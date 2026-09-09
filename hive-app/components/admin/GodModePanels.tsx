@@ -1558,9 +1558,22 @@ export function HiveMemberPanels({
       );
 
       ((data ?? []) as WaitlistRow[]).forEach((row) => {
-        const already = (email: string, id: string) =>
-          (next[id] ?? []).some((r) => r.email.trim().toLowerCase() === email.trim().toLowerCase())
-          || (nextInvites[id] ?? []).some((i) => i.email.trim().toLowerCase() === email.trim().toLowerCase());
+        const already = (person: WaitlistRow, id: string) => {
+          const email = person.email.trim().toLowerCase();
+          const members = next[id] ?? [];
+          const exactName = person.name?.trim().toLocaleLowerCase();
+          // Steele joined Tech under his work address after putting his hand up
+          // with Gmail. An email-only comparison put one real person in two
+          // stages of the pipeline forever. A name match is useful only when
+          // it identifies exactly one current member; two people with the same
+          // name remain visible rather than being silently folded together.
+          const uniqueNameMatch = !!exactName && members.filter((member) =>
+            member.name?.trim().toLocaleLowerCase() === exactName
+          ).length === 1;
+          return members.some((member) => member.email.trim().toLowerCase() === email)
+            || (nextInvites[id] ?? []).some((invite) => invite.email.trim().toLowerCase() === email)
+            || uniqueNameMatch;
+        };
 
         const targets = row.interested_in
           ? [slugFor.get(row.interested_in)].filter(Boolean) as string[]
@@ -1570,7 +1583,7 @@ export function HiveMemberPanels({
           // Somebody already invited or already in has moved up the totem
           // pole. Listing them here too would ask Nat to chase a person she
           // has already chased.
-          if (!already(row.email, id)) nextWaiting[id]?.push(row);
+          if (!already(row, id)) nextWaiting[id]?.push(row);
         });
       });
       setWaitingByHive(nextWaiting);
