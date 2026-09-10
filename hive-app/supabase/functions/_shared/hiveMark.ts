@@ -49,6 +49,15 @@ export type HiveMark = {
   /** The HIVE's accent, for the kicker, the heading and the button. */
   accent: string;
   /**
+   * The companion colour for a second, equally branded action.
+   *
+   * The September 2026 guideline defines each branch as a pair. Recap mail
+   * uses the environment colour for its primary button and this partner for
+   * its secondary button, so Tech stays Circuit Navy + Signal Blue instead of
+   * falling back to the generic gold + charcoal pair.
+   */
+  companion: string;
+  /**
    * The HIVE's SEAL — its round badge, in its own colours (Nat, 2026-09-04).
    *
    * The SIMPLIFIED one, without the motto. She drew both; the motto ring
@@ -74,6 +83,7 @@ export type HiveMark = {
 const DEFAULT_MARK: HiveMark = {
   emoji: '🐝',
   accent: '#bd9348',
+  companion: '#313130',
   logo: `${LOGO_BASE}/og-hive.png`,
   logoFormal: `${LOGO_BASE}/og-hive-formal.png`,
 };
@@ -87,6 +97,7 @@ const HIVE_MARKS: Record<string, HiveMark> = {
   tech: {
     emoji: '🤖',
     accent: '#011f46',
+    companion: '#2f82c2',
     logo: `${LOGO_BASE}/tech-hive.png`,
     logoFormal: `${LOGO_BASE}/tech-hive-formal.png`,
   },
@@ -96,6 +107,7 @@ const HIVE_MARKS: Record<string, HiveMark> = {
   show: {
     emoji: '🎬',
     accent: '#1f0338',
+    companion: '#a0708b',
     logo: `${LOGO_BASE}/production-hive.png`,
     logoFormal: `${LOGO_BASE}/production-hive-formal.png`,
   },
@@ -110,6 +122,7 @@ const HIVE_MARKS: Record<string, HiveMark> = {
 export const HIVE_WIDE_MARK: HiveMark = {
   emoji: '🐝',
   accent: '#bd9348',
+  companion: '#313130',
   logo: `${LOGO_BASE}/hive-wide.png`,
   logoFormal: `${LOGO_BASE}/hive-wide-formal.png`,
 };

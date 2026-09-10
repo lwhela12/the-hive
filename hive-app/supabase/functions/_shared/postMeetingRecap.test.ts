@@ -41,6 +41,21 @@ Deno.test('postMeetingRecapHtml has exactly the two required buttons and escapes
   if (html.includes('<Nat>') || html.includes('OG <HIVE>')) throw new Error('unescaped HTML reached the email');
 });
 
+Deno.test('Tech recap buttons use the Tech HIVE brand pair', () => {
+  const html = postMeetingRecapHtml('Kelly', {
+    ...meeting,
+    hiveName: 'Tech HIVE',
+    hiveSlug: 'tech',
+    hiveAccent: '#011f46',
+  }, 'https://app.example');
+  if (!html.includes('background:#011f46')) {
+    throw new Error('primary recap button is not Circuit Navy');
+  }
+  if (!html.includes('background:#2f82c2')) {
+    throw new Error('secondary recap button is not Signal Blue');
+  }
+});
+
 Deno.test('eligibleRecapRecipients requires explicit absence, email, and both enabled settings', () => {
   const recipients = eligibleRecapRecipients(['absent-on', 'absent-opted-out', 'absent-master-off'], [
     { id: 'absent-on', name: 'A', email: 'a@example.com' },

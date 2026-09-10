@@ -108,10 +108,10 @@ export function postMeetingRecapHtml(
       <p style="font-size:15px;">Hi ${name},</p>
       <p style="font-size:15px;">We missed you. Tonight&rsquo;s notes are sealed, so you can catch up without hunting through the app.</p>
       <div style="text-align:center;margin:28px 0 12px;">
-        <a href="${summaryUrl}" style="background:#bd9348;color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-size:15px;font-weight:600;display:inline-block;">Open Meeting Summaries</a>
+        <a href="${summaryUrl}" style="background:${mark.accent};color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-size:15px;font-weight:600;display:inline-block;">Open Meeting Summaries</a>
       </div>
       <div style="text-align:center;margin:12px 0 28px;">
-        <a href="${cliveUrl}" style="background:#313130;color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-size:15px;font-weight:600;display:inline-block;">Ask Clive what I missed</a>
+        <a href="${cliveUrl}" style="background:${mark.companion};color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-size:15px;font-weight:600;display:inline-block;">Ask Clive what I missed</a>
       </div>
       <p style="font-size:12px;color:#9a9a9a;text-align:center;">You received this because you were marked absent at Wrap-Up. Turn off <strong>Recap email if I miss a meeting</strong> in Profile → Settings any time.</p>
     </div>`;
