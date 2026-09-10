@@ -631,7 +631,7 @@ export default function BuzzScreen() {
                 // liked that."* The words say it; the border says it from
                 // across the room.
                 dashed={item.unsent}
-                subtitle={formatDateLong(item.created_at)}
+                subtitle={formatDateLong(item.sentAt ?? item.created_at)}
                 // One at a time — opening a letter shuts the one you were
                 // reading, which is what "expand the one you want to read"
                 // means when each of these is two thousand words.

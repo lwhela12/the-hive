@@ -505,6 +505,7 @@ Deno.serve(async (req) => {
         end_time: endTime || null,
         event_type: 'meeting',
         google_event_id: calendarEvent.id,
+        google_event_url: calendarEvent.htmlLink ?? null,
         meet_link: meetLink,
         location,
         community_id: communityId,

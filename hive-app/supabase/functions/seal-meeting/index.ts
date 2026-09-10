@@ -842,19 +842,14 @@ serve(async (req) => {
     ]);
     const remoteNames = new Set((transcriptResult?.attendance.remote ?? []).filter((name) => !absentNames.has(name)));
     const inPersonNames = new Set((transcriptResult?.attendance.in_person ?? []).filter((name) => !absentNames.has(name) && !remoteNames.has(name)));
-    helperSnapshot.check_ins.forEach((entry) => {
-      const name = firstName(entry.name);
-      if (absentNames.has(name) || remoteNames.has(name) || inPersonNames.has(name)) return;
-      const intention = entry.attendance.toLowerCase();
-      if (intention.includes('remote') || intention.includes('joining') || intention.includes('zoom')) remoteNames.add(name);
-      else if (intention && !intention.includes('miss') && !intention.includes("can't")) inPersonNames.add(name);
-    });
+    // A pre-meeting check-in is an intention, never proof of attendance. Kelly
+    // saying she planned to come cannot put her in the room after the fact.
     const unclearNames = rosterFirstNames.filter((name) => !absentNames.has(name) && !remoteNames.has(name) && !inPersonNames.has(name));
     const rollCallGroups = [
       { title: 'In the room', lines: [...inPersonNames] },
       { title: 'Joined remotely', lines: [...remoteNames] },
       { title: 'Confirmed away at Wrap-Up', lines: [...absentNames] },
-      { title: 'Attendance needs review', lines: unclearNames },
+      { title: 'Please confirm attendance', lines: unclearNames },
     ].filter((group) => group.lines.length > 0);
     if (rollCallGroups.length > 0) sections.push({
       title: 'Roll Call',
@@ -959,7 +954,7 @@ serve(async (req) => {
     const contextByPerson = new Map((transcriptResult?.member_context ?? []).map((item) => [firstName(item.person), item.context]));
     const dutyLabelByTask = new Map((transcriptResult?.duty_labels ?? []).map((item) => [item.task, item.label]));
     const dutySummaryLine = (duty: typeof dutyRows[number]) => {
-      const who = duty.owners.length > 4 ? 'OG HIVE' : duty.owners.join(' & ') || 'Owner needs review';
+      const who = duty.owners.length > 4 ? hiveName : duty.owners.join(' & ') || 'Owner needs review';
       return `Confirmed duty: ${duty.status === 'complete' ? '✓ ' : ''}${dutyLabelByTask.get(duty.task) ?? duty.task} — ${who}`;
     };
     const helperCheckInByPerson = new Map(helperSnapshot.check_ins.map((entry) => [firstName(entry.name), entry]));

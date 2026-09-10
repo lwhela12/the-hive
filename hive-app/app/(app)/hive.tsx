@@ -832,6 +832,8 @@ export default function HiveScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showAnswerModal, setShowAnswerModal] = useState(false);
   const [showCatchUpModal, setShowCatchUpModal] = useState(false);
+  const [catchUpQueue, setCatchUpQueue] = useState<ReturnType<typeof getTodayQuestion>[]>([]);
+  const [catchUpPosition, setCatchUpPosition] = useState(0);
   // Where to go when the daily-question sheets close. Screens that deep-link
   // into Catch up (?catchup=1&from=...) land you on the HIVE tab, so without
   // this you'd get dumped here instead of back where you tapped. Survives the
@@ -927,6 +929,31 @@ export default function HiveScreen() {
     setShowAnswerModal(true);
   };
 
+  const startRapidCatchUp = () => {
+    if (!profile?.id) return;
+    const unanswered = recentDailyQuestions.filter((prompt) => !getMyAnswerForPrompt(prompt));
+    if (unanswered.length === 0) return;
+    setCatchUpQueue(unanswered);
+    setCatchUpPosition(0);
+    setShowCatchUpModal(false);
+    openAnswerModal(unanswered[0], '');
+  };
+
+  const advanceRapidCatchUp = () => {
+    const nextPosition = catchUpPosition + 1;
+    const next = catchUpQueue[nextPosition];
+    if (!next) {
+      setCatchUpQueue([]);
+      setCatchUpPosition(0);
+      closeAnswerModal();
+      return;
+    }
+    setCatchUpPosition(nextPosition);
+    setActiveAnswerPrompt(next);
+    setMyAnswer(getMyAnswerForPrompt(next));
+    setAnswerError(null);
+  };
+
   // Retrace to whoever sent us into the daily questions, once.
   const retraceFromDailyQuestions = useCallback(() => {
     const target = catchUpReturnRef.current;
@@ -947,6 +974,8 @@ export default function HiveScreen() {
 
   const closeAnswerModal = useCallback(() => {
     setShowAnswerModal(false);
+    setCatchUpQueue([]);
+    setCatchUpPosition(0);
     retraceFromDailyQuestions();
   }, [retraceFromDailyQuestions]);
 
@@ -1006,7 +1035,8 @@ export default function HiveScreen() {
       next.set(currentAnswerPrompt.dateKey, answersForDate);
       return next;
     });
-    closeAnswerModal();
+    if (catchUpQueue.length > 0) advanceRapidCatchUp();
+    else closeAnswerModal();
     fetchTodayAnswers();
     fetchRecentAnswers();
   };
@@ -4786,6 +4816,16 @@ export default function HiveScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#8e7a5e', lineHeight: 20, marginBottom: 14 }}>
                 Answer the questions you missed, or peek at the days you already joined.
               </Text>
+              {profile?.id && recentDailyQuestions.some((prompt) => !getMyAnswerForPrompt(prompt)) ? (
+                <Pressable
+                  onPress={startRapidCatchUp}
+                  style={({ pressed }) => [{ backgroundColor: '#bd9348', borderRadius: 16, paddingVertical: 14, marginBottom: 14 }, pressed && { opacity: 0.75 }]}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white', textAlign: 'center' }}>
+                    Start unanswered questions →
+                  </Text>
+                </Pressable>
+              ) : null}
               <BounceScrollView
                 nestedScrollEnabled
                 keyboardShouldPersistTaps="handled"
@@ -4895,6 +4935,11 @@ export default function HiveScreen() {
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', letterSpacing: 0.8, marginTop: 12, marginBottom: 6 }}>
                 {currentAnswerPrompt.question.emoji} {currentAnswerPrompt.question.category.toUpperCase()}
               </Text>
+              {catchUpQueue.length > 0 ? (
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8e7a5e', marginBottom: 8 }}>
+                  Catch up · {catchUpPosition + 1} of {catchUpQueue.length}
+                </Text>
+              ) : null}
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 22, marginBottom: 20 }}>
                 {currentAnswerPrompt.question.text}
               </Text>
@@ -4934,8 +4979,18 @@ export default function HiveScreen() {
                   }}
                   style={({ pressed }) => [{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }, pressed && { opacity: 0.7 }]}
                 >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Cancel</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>
+                    {catchUpQueue.length > 0 ? 'Exit' : 'Cancel'}
+                  </Text>
                 </Pressable>
+                {catchUpQueue.length > 0 ? (
+                  <Pressable
+                    onPress={advanceRapidCatchUp}
+                    style={({ pressed }) => [{ flex: 1, backgroundColor: '#fffdf5', borderWidth: 1, borderColor: 'rgba(189,147,72,0.4)', borderRadius: 14, paddingVertical: 14 }, pressed && { opacity: 0.7 }]}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#8a6b30', textAlign: 'center' }}>Skip</Text>
+                  </Pressable>
+                ) : null}
                 <Pressable
                   onPress={handleSubmitAnswer}
                   style={({ pressed }) => [{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, opacity: myAnswer.trim() && !isSubmittingAnswer ? 1 : 0.4 }, pressed && { opacity: 0.7 }]}

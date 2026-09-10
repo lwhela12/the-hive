@@ -1398,7 +1398,28 @@ export default function MeetingsScreen() {
               </Text>
             </Pressable>
 
-
+            {isAdmin ? (
+              <Pressable
+                onPress={() => setShowNotesImport(true)}
+                style={({ pressed }) => ({
+                  flex: useCompactActions ? undefined : 1,
+                  width: useCompactActions ? '48%' : undefined,
+                  backgroundColor: 'rgba(255,255,255,0.08)',
+                  borderRadius: 14,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                  opacity: pressed ? 0.75 : 1,
+                })}
+              >
+                <Text style={{ fontSize: 22, marginBottom: 4 }}>📄</Text>
+                <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 13 }}>
+                  Add meeting notes
+                </Text>
+                <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.62)', fontSize: 10, marginTop: 2 }}>
+                  {hiveOnMeet ? 'Gemini, transcript, or file' : 'Notes, transcript, or file'}
+                </Text>
+              </Pressable>
+            ) : null}
 
             {/* The Newsletter tile is gone (Nat 2026-08-04). Third and last
                 place it was duplicated: it was on Admin's Meeting tools, in the
@@ -1653,12 +1674,16 @@ export default function MeetingsScreen() {
                           to add a meeting to a phone's calendar was to go find
                           it again from Home (Nat, 2026-08-25). */}
                       <Pressable
-                        onPress={() => addToCalendar.open(event)}
+                        onPress={() => event.google_event_url
+                          ? void Linking.openURL(event.google_event_url)
+                          : event.google_event_id
+                            ? void Linking.openURL('https://calendar.google.com/calendar/u/0/r/agenda')
+                            : addToCalendar.open(event)}
                         className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10 self-start"
                       >
                         <Text className="text-xs mr-1.5">📅</Text>
                         <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
-                          Add to Calendar
+                          {event.google_event_id ? 'Open in Google Calendar' : 'Add to Calendar'}
                         </Text>
                       </Pressable>
                     </View>

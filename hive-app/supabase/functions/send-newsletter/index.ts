@@ -1,7 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { hiveSealImg, HIVE_WIDE_MARK } from '../_shared/hiveMark.ts';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 import { readLetter, type LetterBlock } from '../_shared/letter.ts';
 import { hiveIsMeetingNow } from '../_shared/reachMail.ts';
@@ -280,17 +279,10 @@ function issueHtml(title: string, content: string, footerHtml: string, recipient
 <html>
   <body style="margin:0;padding:0;background:#f4efe2;">
     <div style="max-width:600px;margin:0 auto;padding:28px 20px 40px;">
-      <!-- The HIVE-WIDE seal, at the one size in the whole app that can hold
-           the motto ring. The Buzz goes to everybody, in every HIVE and to
-           people in none, so it is the one letter that must not wear a HIVE's
-           costume — see HIVE_WIDE_MARK in _shared/hiveMark.ts.
-           The white tile is gone with the old file: these seals are transparent
-           PNGs, and a round badge on a white square read as a sticker nobody
-           had peeled. Width in the tag as well as the style, because Outlook
-           ignores CSS sizing on images; alt text because a good many people
-           read mail with images off. -->
+      <!-- The Buzz is public-facing, so its masthead uses the same warm public
+           HIVE identity as the-hive.app rather than the in-app HIVE-Wide seal. -->
       <div style="text-align:center;padding-bottom:18px;">
-        ${hiveSealImg(HIVE_WIDE_MARK, 120)}
+        <img src="${PUBLIC_SITE_URL}/assets/hive-logo-email.png" width="120" alt="HIVE — Human, Insight, Vision, Execution" style="display:inline-block;width:120px;height:120px;border:0;outline:none;text-decoration:none;" />
         <!-- The masthead carries the whole title, and the letter starts with
              "Yellow!". It used to say "THE BUZZ" here and then repeat the title
              as a heading inside the card — Nat, 2026-08-12: *"this doubles up a

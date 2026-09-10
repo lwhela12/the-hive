@@ -28,9 +28,10 @@ export function currentNewsletterDraft<T extends NewsletterIssueState>(issues: T
     .sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null;
 }
 
-/** Everything except the live draft belongs on the past-issues shelf now. */
+/** Only a genuinely published/sent issue belongs on the past-issues shelf. */
 export function newsletterIssueHistory<T extends NewsletterIssueState>(issues: T[], draft: T | null): T[] {
   return [...issues]
     .filter((issue) => issue.id !== draft?.id)
+    .filter((issue) => !!issue.sentAt || issue.visibility === 'public')
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }

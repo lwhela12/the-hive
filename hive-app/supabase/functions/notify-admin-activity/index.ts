@@ -2,7 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { hiveMark, hiveSealImg } from '../_shared/hiveMark.ts';
-import { escapeHtml, plainTextFrom, deepLink } from '../_shared/reachMail.ts';
+import { escapeHtml, plainTextFrom, deepLink, hiveIsMeetingNow } from '../_shared/reachMail.ts';
 
 /**
  * Nat, 2026-09-08: *"as admin I want to get an email when anyone does anything
@@ -64,6 +64,14 @@ serve(async (req) => {
 
   const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', serviceKey);
 
+  // Meeting Helper, boards and duties are expected to move quickly while a
+  // HIVE is together. Those actions are the meeting record, not inbox alerts.
+  // The quiet window belongs to the content's HIVE and is dropped rather than
+  // queued, so Nat does not get a burst of stale mail when the meeting ends.
+  if (body.community_id && await hiveIsMeetingNow(admin, body.community_id)) {
+    return jsonResponse({ sent: 0, reason: 'meeting_in_progress' });
+  }
+
   const [{ data: owners }, { data: actor }, { data: hive }] = await Promise.all([
     // Nat, 2026-09-08: "not lucas, just me, unless he can toggle it off." No
     // toggle exists yet (see migration 255), so the honest default is off for
@@ -104,6 +112,9 @@ serve(async (req) => {
 
   let sent = 0;
   for (const owner of owners as { id: string; name: string | null; email: string | null }[]) {
+    // Nat already knows about the thing she just did. Activity mail is for
+    // discovering what happened while she was away from the app.
+    if (body.actor_id && owner.id === body.actor_id) continue;
     if (!owner.email) continue;
     try {
       const res = await fetch('https://api.resend.com/emails', {

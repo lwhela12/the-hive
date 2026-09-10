@@ -11,6 +11,7 @@ import {
   validateFeedbackAttachmentList,
   type FeedbackAttachment as Attachment,
 } from '../_shared/feedbackAttachments.ts';
+import { hiveMark, hiveSealImg } from '../_shared/hiveMark.ts';
 
 /**
  * App Feedback — files it, then tells Nat.
@@ -108,7 +109,7 @@ type Kind = (typeof KINDS)[number];
 const KIND_LABEL: Record<Kind, string> = {
   bug: 'Something is broken',
   idea: 'An idea',
-  confusing: 'Something is confusing',
+  confusing: 'This confused me',
   love: 'Something they love',
 };
 
@@ -362,6 +363,7 @@ serve(async (req) => {
     .insert({
       author_id: auth.userId,
       author_name: authorName,
+      author_email: author?.email ?? null,
       community_id: communityId,
       kind,
       message,
@@ -377,16 +379,17 @@ serve(async (req) => {
     return errorResponse('Could not save that. Try again in a moment.', 500);
   }
 
-  // 2. Tell the people who can do something about it. Owners, from the database
-  //    (migration 128) — not a hardcoded address, so it stays right if the list
-  //    of people running the HIVE ever changes.
+  // 2. Tell the person who opted into app-feedback triage. This is deliberately
+  //    separate from activity mail: Lucas may choose to hear about activity
+  //    later without becoming a recipient of Nat's product inbox.
   let emailed = false;
   if (RESEND_API_KEY) {
     try {
       const { data: owners } = await supabaseAdmin
         .from('profiles')
         .select('email')
-        .eq('is_owner', true);
+        .eq('is_owner', true)
+        .eq('email_app_feedback_enabled', true);
 
       const recipients = (owners ?? [])
         .map((o: { email: string | null }) => o.email)
@@ -394,9 +397,11 @@ serve(async (req) => {
 
       if (recipients.length > 0) {
         const subject = `${KIND_EMOJI[kind]} ${KIND_LABEL[kind]} — ${authorName}`;
+        const mark = hiveMark(null, null);
         const html = `
           <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;color:#313130;">
-            <p style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#8e7a5e;margin:0 0 4px;">App Feedback</p>
+            <div style="text-align:center;padding:8px 0 6px;">${hiveSealImg(mark, 88)}</div>
+            <p style="font-size:12px;letter-spacing:1.5px;text-align:center;text-transform:uppercase;color:${mark.accent};margin:0 0 4px;">${escapeHtml(communityName)} · App Feedback</p>
             <h1 style="font-size:20px;margin:0 0 16px;color:#313130;">${escapeHtml(KIND_LABEL[kind])}</h1>
             <div style="background:#fffdf5;border:1px solid rgba(189,147,72,0.3);border-radius:14px;padding:18px;">
               ${message ? paragraphs(message) : '<p style="margin:0;color:#8e7a5e;font-style:italic;">No words — see the attached screenshot or file.</p>'}
@@ -409,7 +414,7 @@ serve(async (req) => {
               ${platform ? `<tr><td style="padding-right:12px;">On</td><td style="color:#313130;">${escapeHtml(platform)}</td></tr>` : ''}
             </table>
             <p style="font-size:13px;color:#8e7a5e;margin-top:20px;">
-              <a href="${APP_URL}/app-feedback" style="color:#bd9348;">Open the HIVE</a>
+              <a href="${APP_URL}/app-feedback?tab=inbox&feedbackId=${stored.id}" style="color:#bd9348;">Open feedback in the HIVE</a>
             </p>
           </div>
         `;

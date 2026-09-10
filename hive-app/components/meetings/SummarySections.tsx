@@ -81,7 +81,6 @@ function EditableLine({
   mentionMembers?: Pick<Profile, 'id' | 'name'>[];
 }) {
   const nodeRef = useRef<unknown>(null);
-  const lastPressRef = useRef(0);
   const mention = useMentionInput({
     value: draftText,
     onChangeText: onChangeDraft,
@@ -134,19 +133,21 @@ function EditableLine({
       ref={nodeRef as never}
       onPress={() => {
         if (!editable) return;
-        const now = Date.now();
-        if (now - lastPressRef.current < 400) {
-          lastPressRef.current = 0;
-          onRequestEdit();
-        } else {
-          lastPressRef.current = now;
-        }
+        onRequestEdit();
       }}
-      accessibilityHint={editable ? 'Double tap to edit' : undefined}
+      accessibilityHint={editable ? 'Tap to edit' : undefined}
       className={className}
       style={style}
     >
       {children}
+      {editable ? (
+        <Text
+          aria-hidden
+          style={{ position: 'absolute', right: 2, top: 0, fontSize: 13, color: '#9a7c42' }}
+        >
+          ✎
+        </Text>
+      ) : null}
     </Pressable>
   );
 }

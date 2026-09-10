@@ -36,7 +36,7 @@ function escapeHtml(value: string) {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function previewHtml(opts: { hive: string; touch: string; names: string[]; sendHref: string; editHref: string }) {
+function previewHtml(opts: { hive: string; touch: string; names: string[]; sendHref: string; editHref: string; surveyHref: string }) {
   const count = opts.names.length;
   const when = opts.touch === 'day_of' ? 'today' : 'tomorrow';
   const people = count ? opts.names.map(escapeHtml).join(', ') : 'Nobody — everyone has already filled it in.';
@@ -45,6 +45,7 @@ function previewHtml(opts: { hive: string; touch: string; names: string[]; sendH
     <h1 style="font-size:24px;margin:6px 0">${escapeHtml(opts.hive)} meets ${when}</h1>
     <p>${count === 1 ? '1 person is' : `${count} people are`} still waiting on <strong>Before we meet</strong>.</p>
     <p style="padding:12px 14px;background:#f6f1e5;border-radius:10px"><strong>Who would receive this:</strong><br>${people}</p>
+    <p><strong>Check the exact form first:</strong><br><a href="${escapeHtml(opts.surveyHref)}" style="color:#7c5d29">Open Before we meet for ${escapeHtml(opts.hive)}</a></p>
     <p>People who finish the check-in before you send are removed automatically.</p>
     ${count ? `<p style="margin:26px 0 12px"><a href="${escapeHtml(opts.sendHref)}" style="display:inline-block;background:#bd9348;color:#17130d;text-decoration:none;padding:12px 20px;border-radius:999px;font-weight:700">Yes, send it to ${count}</a></p>` : ''}
     <p><a href="${escapeHtml(opts.editHref)}" style="color:#7c5d29">No, let me edit it first</a></p>
@@ -136,7 +137,8 @@ async function makeScheduledPreviews(admin: { from: (table: string) => any }) {
     }).select('id').single();
     if (hold.error || !hold.data?.id) throw new Error('Could not save the check-in preview.');
     const holdId = hold.data.id as string;
-    const html = previewHtml({ hive, touch, names, sendHref: `${APP_URL}/approve-check-in/${encodeURIComponent(holdId)}?action=send`, editHref: `${APP_URL}/admin` });
+    const surveyHref = `${APP_URL}/beforewemeet?meeting=${encodeURIComponent(event.id)}`;
+    const html = previewHtml({ hive, touch, names, surveyHref, sendHref: `${APP_URL}/approve-check-in/${encodeURIComponent(holdId)}?action=send`, editHref: `${APP_URL}/admin` });
     await sendPreview(nat.email, html, `[Waiting on you] ${hive} · Before we meet`);
     previews += 1;
   }
@@ -153,6 +155,12 @@ async function sendHeldCheckIn(admin: { from: (table: string) => any }, actorId:
   }
   const { data: event } = await admin.from('events').select('id, event_date, community_id').eq('id', meta.check_in_event_id).eq('status', 'scheduled').maybeSingle();
   if (!event) return errorResponse('That meeting is no longer scheduled. Nothing was sent.', 409);
+  const expectedDate = meta.check_in_touch === 'day_before'
+    ? pacificDate(new Date(Date.now() + 86400000))
+    : pacificDate();
+  if (event.event_date !== expectedDate) {
+    return errorResponse('That private preview is stale. Nothing was sent.', 409);
+  }
   if (await hiveIsMeetingNow(admin, event.community_id)) return errorResponse('That HIVE is meeting right now, so nothing was sent.', 409);
   const { waiting } = await pendingForEvent(admin, meta.check_in_survey_id, event as EventRow);
   const day = pacificDate();

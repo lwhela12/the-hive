@@ -222,6 +222,8 @@ export interface AppFeedback extends Record<string, unknown> {
   /** null once somebody deletes their profile; the report outlives them. */
   author_id: string | null;
   author_name: string | null;
+  /** Snapshotted for the private owner inbox; never shown to other members. */
+  author_email?: string | null;
   /** Where they were standing. null means HIVE-Wide, which is a real answer. */
   community_id: string | null;
   kind: 'bug' | 'idea' | 'confusing' | 'love';
@@ -485,6 +487,8 @@ export interface Event extends Record<string, unknown> {
   end_time?: string | null;
   event_type: EventType;
   google_event_id?: string;
+  /** Canonical Google event created by HIVE; opening it must not make a duplicate. */
+  google_event_url?: string | null;
   meet_link?: string;
   location?: string;
   status?: EventStatus;

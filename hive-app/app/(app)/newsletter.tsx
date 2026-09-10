@@ -473,6 +473,11 @@ export default function NewsletterScreen() {
 
     if ((data.sections ?? []).length === 0) return;
 
+    // Opening the writer is a read, not permission to create another issue.
+    // Nat starts a new draft deliberately with the button below; this also
+    // prevents two page loads from racing each other into duplicate issues.
+    if (!rebuild) return;
+
     setWriting(true);
     const { data: written, error: writingInvokeError } = await supabase.functions.invoke('draft-newsletter', {
       body: { ...draftBody, includeProse: true },
@@ -920,6 +925,22 @@ export default function NewsletterScreen() {
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 18, color: '#8a4d4d', textAlign: 'center' }}>
                   {writingError}
                 </Text>
+              </View>
+            ) : null}
+
+            {!prose && !writing ? (
+              <View style={{ alignItems: 'center', marginBottom: 16, gap: 8 }}>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6f6559', textAlign: 'center' }}>
+                  The facts are ready. Start one draft when you are ready to write this cycle’s Buzz.
+                </Text>
+                <Pressable
+                  onPress={() => void loadDraft(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Start this cycle's Buzz draft"
+                  style={{ backgroundColor: '#bd9348', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 999 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#fff' }}>Start this cycle’s draft</Text>
+                </Pressable>
               </View>
             ) : null}
 

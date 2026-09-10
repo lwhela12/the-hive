@@ -128,7 +128,7 @@ const WHERE_OPTIONS = FEEDBACK_WHERE_OPTIONS;
 
 /** Everything the list needs, in one place, so the two tabs cannot drift apart. */
 const FEEDBACK_COLUMNS =
-  'id, author_id, author_name, community_id, kind, message, created_at, status, attachments, reply, replied_at, replied_by, replied_by_name, where_in_app, platform';
+  'id, author_id, author_name, author_email, community_id, kind, message, created_at, status, attachments, reply, replied_at, replied_by, replied_by_name, where_in_app, platform';
 
 /**
  * The tab row, and an arrow when there is more of it than the screen.
@@ -208,6 +208,7 @@ export default function AppFeedbackScreen() {
     originLabel?: string | string[];
     originPath?: string | string[];
     captureNotice?: string | string[];
+    tab?: string | string[];
   }>();
   const routeOriginLabel = validFeedbackOriginLabel(
     Array.isArray(params.originLabel) ? params.originLabel[0] : params.originLabel
@@ -219,7 +220,10 @@ export default function AppFeedbackScreen() {
     ? params.captureNotice[0]
     : params.captureNotice);
 
-  const [tab, setTab] = useState<'say' | 'sent' | 'all'>('say');
+  const requestedTab = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+  const [tab, setTab] = useState<'say' | 'sent' | 'all'>(
+    isOwner && (requestedTab === 'inbox' || !requestedTab) ? 'all' : 'say'
+  );
   const [kind, setKind] = useState<Kind>('bug');
   const [message, setMessage] = useState('');
   const [whereInApp, setWhereInApp] = useState('');
@@ -486,6 +490,7 @@ export default function AppFeedbackScreen() {
           </Text>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: skin.inkSoft }}>
             · {timeAgo(item.created_at)}
+            {!mine && item.author_email ? ` · ${item.author_email}` : ''}
             {!mine && item.where_in_app ? ` · ${item.where_in_app}` : ''}
             {!mine && item.platform ? ` · ${item.platform}` : ''}
           </Text>
@@ -716,7 +721,7 @@ export default function AppFeedbackScreen() {
             tabs={[
               { key: 'say', label: narrow ? 'Say it' : 'Say something' },
               { key: 'sent', label: narrow ? 'Sent' : 'What you’ve sent', count: sent?.length },
-              ...(isOwner ? [{ key: 'all', label: 'Everyone', count: all?.length }] : []),
+              ...(isOwner ? [{ key: 'all', label: 'Inbox', count: all?.length }] : []),
             ]}
             activeTab={tab}
             onChange={(next) => setTab(next as 'say' | 'sent' | 'all')}
