@@ -6,6 +6,7 @@ import { meetingOccurrence, type CheckInMeeting } from '../_shared/checkInSessio
 import { PRE_MEETING_CHECK_IN_PATTERN } from '../_shared/checkInPatterns.ts';
 import { deliverCheckIn } from '../_shared/checkInDelivery.ts';
 import { genericLetter, hiveIsMeetingNow, sendReachEmail, templateIsApproved } from '../_shared/reachMail.ts';
+import { hiveMark, hiveSealImg, type HiveMark } from '../_shared/hiveMark.ts';
 
 const PREVIEW_EMAIL = 'natwalstead@gmail.com';
 const APP_URL = Deno.env.get('EXPO_PUBLIC_APP_URL') || 'https://app.the-hive.app';
@@ -15,7 +16,7 @@ const PACIFIC = 'America/Los_Angeles';
 
 type EventRow = CheckInMeeting & {
   event_date: string;
-  community?: { name?: string | null } | null;
+  community?: { name?: string | null; slug?: string | null; accent_color?: string | null } | null;
 };
 
 type HoldMeta = {
@@ -36,18 +37,19 @@ function escapeHtml(value: string) {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function previewHtml(opts: { hive: string; touch: string; names: string[]; sendHref: string; editHref: string; surveyHref: string }) {
+function previewHtml(opts: { hive: string; touch: string; names: string[]; sendHref: string; editHref: string; surveyHref: string; mark: HiveMark }) {
   const count = opts.names.length;
   const when = opts.touch === 'day_of' ? 'today' : 'tomorrow';
   const people = count ? opts.names.map(escapeHtml).join(', ') : 'Nobody — everyone has already filled it in.';
   return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;color:#2b2b2b;line-height:1.5">
-    <p style="font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:#8b6d35">Just for Nat · nothing has been sent</p>
-    <h1 style="font-size:24px;margin:6px 0">${escapeHtml(opts.hive)} meets ${when}</h1>
+    <div style="text-align:center;padding:8px 0 4px">${hiveSealImg(opts.mark, 88)}</div>
+    <p style="font-size:11px;font-weight:700;letter-spacing:1.4px;text-align:center;text-transform:uppercase;color:${opts.mark.accent}">Just for Nat · nothing has been sent</p>
+    <h1 style="font-size:24px;text-align:center;margin:6px 0;color:${opts.mark.accent}">${escapeHtml(opts.hive)} meets ${when}</h1>
     <p>${count === 1 ? '1 person is' : `${count} people are`} still waiting on <strong>Before we meet</strong>.</p>
     <p style="padding:12px 14px;background:#f6f1e5;border-radius:10px"><strong>Who would receive this:</strong><br>${people}</p>
     <p><strong>Check the exact form first:</strong><br><a href="${escapeHtml(opts.surveyHref)}" style="color:#7c5d29">Open Before we meet for ${escapeHtml(opts.hive)}</a></p>
     <p>People who finish the check-in before you send are removed automatically.</p>
-    ${count ? `<p style="margin:26px 0 12px"><a href="${escapeHtml(opts.sendHref)}" style="display:inline-block;background:#bd9348;color:#17130d;text-decoration:none;padding:12px 20px;border-radius:999px;font-weight:700">Yes, send it to ${count}</a></p>` : ''}
+    ${count ? `<p style="margin:26px 0 12px"><a href="${escapeHtml(opts.sendHref)}" style="display:inline-block;background:${opts.mark.accent};color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-weight:700">Yes, send it to ${count}</a></p>` : ''}
     <p><a href="${escapeHtml(opts.editHref)}" style="color:#7c5d29">No, let me edit it first</a></p>
   </div>`;
 }
@@ -114,7 +116,7 @@ async function makeScheduledPreviews(admin: { from: (table: string) => any }) {
   const today = pacificDate();
   const tomorrow = pacificDate(new Date(Date.now() + 86400000));
   const { data: events, error } = await admin.from('events')
-    .select('id, event_date, community_id, community:communities!community_id(name)')
+    .select('id, event_date, community_id, community:communities!community_id(name, slug, accent_color)')
     .eq('event_type', 'meeting').eq('status', 'scheduled').in('event_date', [today, tomorrow]);
   if (error) throw new Error('Could not read upcoming meetings.');
   let previews = 0;
@@ -138,7 +140,8 @@ async function makeScheduledPreviews(admin: { from: (table: string) => any }) {
     if (hold.error || !hold.data?.id) throw new Error('Could not save the check-in preview.');
     const holdId = hold.data.id as string;
     const surveyHref = `${APP_URL}/beforewemeet?meeting=${encodeURIComponent(event.id)}`;
-    const html = previewHtml({ hive, touch, names, surveyHref, sendHref: `${APP_URL}/approve-check-in/${encodeURIComponent(holdId)}?action=send`, editHref: `${APP_URL}/admin` });
+    const mark = hiveMark(event.community?.slug, event.community?.accent_color);
+    const html = previewHtml({ hive, touch, names, mark, surveyHref, sendHref: `${APP_URL}/approve-check-in/${encodeURIComponent(holdId)}?action=send`, editHref: `${APP_URL}/admin` });
     await sendPreview(nat.email, html, `[Waiting on you] ${hive} · Before we meet`);
     previews += 1;
   }
