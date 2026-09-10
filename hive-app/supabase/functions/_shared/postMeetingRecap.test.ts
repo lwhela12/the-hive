@@ -2,6 +2,7 @@ import {
   buildPostMeetingRecapLinks,
   eligibleRecapRecipients,
   postMeetingRecapHtml,
+  recipientsForApprovedPreview,
   type RecapMeeting,
 } from './postMeetingRecap.ts';
 
@@ -65,5 +66,20 @@ Deno.test('eligibleRecapRecipients requires explicit absence, email, and both en
   ]);
   if (recipients.map((recipient) => recipient.id).join(',') !== 'absent-on') {
     throw new Error(`unexpected recipients: ${recipients.map((recipient) => recipient.id).join(',')}`);
+  }
+});
+
+Deno.test('approval sends only the previewed list, minus opt-outs and copies already sent', () => {
+  const result = recipientsForApprovedPreview(['previewed', 'sent', 'opted-out'], ['sent'], [
+    { id: 'previewed', name: 'Previewed', email: 'previewed@example.com' },
+    { id: 'sent', name: 'Already sent', email: 'sent@example.com' },
+    { id: 'opted-out', name: 'Opted out', email: 'out@example.com', emailPostMeetingRecapEnabled: false },
+    { id: 'late-opt-in', name: 'Not in preview', email: 'late@example.com' },
+  ]);
+  if (result.recipients.map((recipient) => recipient.id).join(',') !== 'previewed') {
+    throw new Error(`approval escaped its previewed list: ${result.recipients.map((recipient) => recipient.id).join(',')}`);
+  }
+  if (result.becameIneligibleCount !== 1) {
+    throw new Error(`expected one previewed opt-out, got ${result.becameIneligibleCount}`);
   }
 });

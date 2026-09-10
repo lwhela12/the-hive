@@ -361,10 +361,12 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
     id: string;
     approval: string;
     absenteeIds: string[];
+    recipientIds: string[];
+    recipientNames: string[];
     sentIds: string[];
     recipientCount: number;
   } | null>(null);
-  const [recapPreviewSending, setRecapPreviewSending] = useState<Record<string, boolean>>({});
+  const [recapPreviewSending, setRecapPreviewSending] = useState(false);
   const [approvingRecap, setApprovingRecap] = useState(false);
   const [summaryToolsOpen, setSummaryToolsOpen] = useState(false);
   const [geminiNotesOpen, setGeminiNotesOpen] = useState(false);
@@ -495,6 +497,21 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   };
 
   const parsedSummary = parseSummary(meeting.summary);
+  const confirmedAbsenteeIds = parsedSummary.meeting_helper_snapshot?.confirmed_absentee_ids ?? [];
+  const confirmedAbsenteeNames = parsedSummary.meeting_helper_snapshot?.confirmed_absentee_names ?? [];
+  // One preview approves one shared template. Requiring the recipient snapshot
+  // as well as all absentee ids makes an old per-person hold visibly stale
+  // instead of leaving a stray Send button beside one name.
+  const recapRecipientSnapshotReady = !!recapHold
+    && confirmedAbsenteeIds.every((id) => recapHold.absenteeIds.includes(id))
+    && recapHold.recipientIds.length === recapHold.recipientCount
+    && recapHold.recipientNames.length === recapHold.recipientCount;
+  const recapPreviewReady = recapRecipientSnapshotReady && recapHold?.approval === 'pending';
+  const recapDeliveryComplete = recapRecipientSnapshotReady && recapHold?.approval === 'approved';
+  const recapPendingRecipientIds = recapHold?.recipientIds
+    .filter((id) => !recapHold.sentIds.includes(id)) ?? [];
+  const recapPendingRecipientNames = recapHold?.recipientNames
+    .filter((_, index) => recapPendingRecipientIds.includes(recapHold.recipientIds[index])) ?? [];
   const geminiAsset = [...(parsedSummary.meeting_assets ?? [])]
     .reverse()
     .find((asset) => asset.kind === 'gemini_notes');
@@ -1096,7 +1113,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
    * Nat, 2026-08-24: "I won't ever send that quickly... I'll read through the
    * notes, make sure they're correct, and THEN send." Sealing no longer holds
    * this automatically (see seal-meeting/index.ts); it starts only when she
-   * clicks a name below, after reviewing.
+   * previews the shared email below, after reviewing.
    */
   const loadRecapHold = useCallback(async () => {
     const { data } = await supabase
@@ -1114,6 +1131,12 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         absenteeIds: Array.isArray(metadata.post_meeting_recap_absentee_ids)
           ? metadata.post_meeting_recap_absentee_ids as string[]
           : [],
+        recipientIds: Array.isArray(metadata.post_meeting_recap_recipient_ids)
+          ? metadata.post_meeting_recap_recipient_ids as string[]
+          : [],
+        recipientNames: Array.isArray(metadata.post_meeting_recap_recipient_names)
+          ? metadata.post_meeting_recap_recipient_names as string[]
+          : [],
         sentIds: Array.isArray(metadata.post_meeting_recap_sent_recipient_ids)
           ? metadata.post_meeting_recap_sent_recipient_ids as string[]
           : [],
@@ -1128,12 +1151,12 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
 
   useEffect(() => { void loadRecapHold(); }, [loadRecapHold]);
 
-  const sendRecapPreview = async (personId: string) => {
+  const sendRecapPreview = async () => {
     if (!isHiveAdmin) return;
-    setRecapPreviewSending((current) => ({ ...current, [personId]: true }));
+    setRecapPreviewSending(true);
     try {
       const { data, error } = await supabase.functions.invoke('post-meeting-recap', {
-        body: { meeting_id: meeting.id, confirmed_absentee_ids: [personId] },
+        body: { meeting_id: meeting.id, confirmed_absentee_ids: confirmedAbsenteeIds },
       });
       if (error) throw error;
       if (data?.held === false) {
@@ -1145,16 +1168,17 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
       console.error('Error creating recap preview:', error);
       showAlert('Not sent', 'That preview could not be created just now. Please try again.');
     } finally {
-      setRecapPreviewSending((current) => ({ ...current, [personId]: false }));
+      setRecapPreviewSending(false);
     }
   };
 
   const approveRecap = () => {
     if (!recapHold) return;
     const pendingCount = recapHold.recipientCount - recapHold.sentIds.length;
+    const pendingNames = recapPendingRecipientNames.join(', ');
     confirmAction({
       title: 'Send "What you missed" now?',
-      message: `This sends the recap to ${pendingCount} confirmed absentee${pendingCount === 1 ? '' : 's'} who still have recap email turned on. Everyone else already sent stays untouched.`,
+      message: `This sends the approved email to ${pendingNames || `${pendingCount} confirmed absentee${pendingCount === 1 ? '' : 's'}`}. Each copy is personalized with the person's first name. Everyone already sent stays untouched.`,
       confirmLabel: 'Send it',
       onConfirm: async () => {
         setApprovingRecap(true);
@@ -1855,54 +1879,66 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           </View>
         )}
 
-        {isHiveAdmin && (parsedSummary.meeting_helper_snapshot?.confirmed_absentee_ids?.length ?? 0) > 0 && (
+        {isHiveAdmin && confirmedAbsenteeIds.length > 0 && (
           <View className="mb-6 bg-honey-50 border border-honey-200 rounded-xl p-4">
             <Text className="text-lg font-semibold text-hive-dark">What you missed</Text>
             <Text className="text-honey-800 mt-1 leading-5">
-              Nothing sends until you say so. Preview it for yourself first — send it to whoever missed once you're happy with the notes.
+              Everyone gets the same email; only their first name changes. Preview it once, check the exact list, then send to everyone together.
             </Text>
-            <View className="mt-3" style={{ gap: 8 }}>
-              {(parsedSummary.meeting_helper_snapshot?.confirmed_absentee_ids ?? []).map((personId, index) => {
-                const name = parsedSummary.meeting_helper_snapshot?.confirmed_absentee_names?.[index] ?? 'Someone';
-                const alreadySent = recapHold?.absenteeIds.includes(personId) && recapHold?.sentIds.includes(personId);
-                const previewedNotSent = recapHold?.absenteeIds.includes(personId) && !alreadySent;
-                const sending = recapPreviewSending[personId];
-                const canSend = !!recapHold && recapHold.approval === 'pending' && recapHold.recipientCount > recapHold.sentIds.length;
-                return (
-                  <View key={personId} className="flex-row items-center justify-between bg-white border border-honey-200 rounded-lg px-3 py-2">
-                    <Text className="text-gray-800 font-medium">{name}</Text>
-                    {alreadySent ? (
-                      <Text className="text-sm text-green-700">Sent</Text>
-                    ) : (
-                      <View className="flex-row" style={{ gap: 8 }}>
-                        <Pressable
-                          onPress={() => void sendRecapPreview(personId)}
-                          disabled={sending}
-                          accessibilityRole="button"
-                          className={`px-3 py-1.5 rounded-lg border border-honey-300 bg-honey-100 active:bg-honey-200 ${sending ? 'opacity-60' : ''}`}
-                        >
-                          <Text className="text-honey-900 font-semibold text-sm">
-                            {sending ? 'Sending…' : previewedNotSent ? 'Preview again' : 'Preview'}
-                          </Text>
-                        </Pressable>
-                        {canSend ? (
-                          <Pressable
-                            onPress={approveRecap}
-                            disabled={approvingRecap}
-                            accessibilityRole="button"
-                            className={`px-3 py-1.5 rounded-lg bg-honey-500 active:bg-honey-600 ${approvingRecap ? 'opacity-60' : ''}`}
-                          >
-                            <Text className="text-white font-semibold text-sm">
-                              {approvingRecap ? 'Sending…' : 'Send'}
-                            </Text>
-                          </Pressable>
-                        ) : null}
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
+            <View className="mt-3 bg-white border border-honey-200 rounded-lg px-3 py-3">
+              <Text className="text-xs font-semibold uppercase tracking-wider text-honey-800">
+                {recapDeliveryComplete
+                  ? 'Delivery finished'
+                  : recapPreviewReady
+                    ? `Will receive (${recapHold?.recipientCount ?? 0})`
+                    : `Confirmed absent (${confirmedAbsenteeIds.length})`}
+              </Text>
+              <View className="mt-2" style={{ gap: 6 }}>
+                {(recapRecipientSnapshotReady ? recapHold?.recipientNames ?? [] : confirmedAbsenteeNames).map((name, index) => {
+                  const personId = recapRecipientSnapshotReady ? recapHold?.recipientIds[index] : confirmedAbsenteeIds[index];
+                  const alreadySent = !!personId && !!recapHold?.sentIds.includes(personId);
+                  return (
+                    <View key={personId ?? `${name}-${index}`} className="flex-row items-center justify-between">
+                      <Text className="text-gray-800 font-medium">{name || 'Someone'}</Text>
+                      <Text className={`text-sm ${alreadySent ? 'text-green-700' : 'text-gray-500'}`}>
+                        {alreadySent ? 'Sent' : recapDeliveryComplete ? 'Skipped' : recapPreviewReady ? 'Ready' : 'Check at preview'}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+              {recapRecipientSnapshotReady && confirmedAbsenteeIds.length > (recapHold?.recipientCount ?? 0) ? (
+                <Text className="text-xs text-gray-500 mt-2 leading-4">
+                  {confirmedAbsenteeIds.length - (recapHold?.recipientCount ?? 0)} confirmed absentee{confirmedAbsenteeIds.length - (recapHold?.recipientCount ?? 0) === 1 ? ' has' : 's have'} recap email turned off or is no longer eligible.
+                </Text>
+              ) : null}
             </View>
+            {!recapDeliveryComplete ? (
+              <View className="mt-3 flex-row justify-end flex-wrap" style={{ gap: 8 }}>
+                <Pressable
+                  onPress={() => void sendRecapPreview()}
+                  disabled={recapPreviewSending || approvingRecap}
+                  accessibilityRole="button"
+                  className={`px-4 py-2 rounded-lg border border-honey-300 bg-honey-100 active:bg-honey-200 ${recapPreviewSending ? 'opacity-60' : ''}`}
+                >
+                  <Text className="text-honey-900 font-semibold text-sm">
+                    {recapPreviewSending ? 'Sending preview…' : recapPreviewReady ? 'Preview again' : 'Preview email'}
+                  </Text>
+                </Pressable>
+                {recapPreviewReady && recapPendingRecipientIds.length > 0 ? (
+                  <Pressable
+                    onPress={approveRecap}
+                    disabled={approvingRecap || recapPreviewSending}
+                    accessibilityRole="button"
+                    className={`px-4 py-2 rounded-lg bg-honey-500 active:bg-honey-600 ${approvingRecap ? 'opacity-60' : ''}`}
+                  >
+                    <Text className="text-white font-semibold text-sm">
+                      {approvingRecap ? 'Sending…' : `Send to ${recapPendingRecipientIds.length}`}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
           </View>
         )}
 

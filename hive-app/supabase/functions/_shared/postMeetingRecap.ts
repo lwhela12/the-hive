@@ -75,6 +75,24 @@ export function eligibleRecapRecipients(
   );
 }
 
+/**
+ * Resolve a held approval against the exact list Nat saw in her preview.
+ * Opting out before Send can remove someone; opting in afterward cannot add a
+ * person she did not approve. Previously sent copies are also never repeated.
+ */
+export function recipientsForApprovedPreview(
+  previewedRecipientIds: string[],
+  alreadySentRecipientIds: string[],
+  profiles: RecapRecipient[],
+): { recipients: RecapRecipient[]; becameIneligibleCount: number } {
+  const eligible = eligibleRecapRecipients(previewedRecipientIds, profiles);
+  const alreadySent = new Set(alreadySentRecipientIds);
+  return {
+    recipients: eligible.filter((recipient) => !alreadySent.has(recipient.id)),
+    becameIneligibleCount: previewedRecipientIds.length - eligible.length,
+  };
+}
+
 export function postMeetingRecapSubject(meeting: RecapMeeting): string {
   return `${meeting.hiveName} · What you missed at ${meeting.title}`;
 }

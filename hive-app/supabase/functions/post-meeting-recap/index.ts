@@ -7,6 +7,7 @@ import {
   postMeetingRecapHtml,
   postMeetingRecapSubject,
   recapPreviewBanner,
+  recipientsForApprovedPreview,
   type RecapMeeting,
   type RecapRecipient,
 } from '../_shared/postMeetingRecap.ts';
@@ -29,6 +30,8 @@ type HeldMetadata = {
   post_meeting_recap_meeting_id?: string;
   post_meeting_recap_community_id?: string;
   post_meeting_recap_absentee_ids?: string[];
+  post_meeting_recap_recipient_ids?: string[];
+  post_meeting_recap_recipient_names?: string[];
   post_meeting_recap_sent_recipient_ids?: string[];
 };
 
@@ -157,9 +160,12 @@ serve(async (req) => {
 
       const meetingId = metadata.post_meeting_recap_meeting_id ?? '';
       const communityId = metadata.post_meeting_recap_community_id ?? '';
-      const confirmedIds = Array.isArray(metadata.post_meeting_recap_absentee_ids)
-        ? metadata.post_meeting_recap_absentee_ids
-        : [];
+      const previewedRecipientIds = Array.isArray(metadata.post_meeting_recap_recipient_ids)
+        ? metadata.post_meeting_recap_recipient_ids
+        : null;
+      if (!previewedRecipientIds) {
+        return errorResponse('That recipient list predates group preview. Preview the email once more before sending.', 409);
+      }
       const meeting = await loadMeeting(admin, meetingId);
       if (!meeting || meeting.communityId !== communityId) {
         return errorResponse('That held recap no longer matches a meeting.', 422);
@@ -167,11 +173,12 @@ serve(async (req) => {
 
       // Re-read membership and both settings at approval time. A held preview is
       // never consent frozen in amber: leaving the HIVE or opting out wins.
-      const alreadySent = new Set(metadata.post_meeting_recap_sent_recipient_ids ?? []);
-      const recipients = eligibleRecapRecipients(
-        confirmedIds,
+      const alreadySentIds = metadata.post_meeting_recap_sent_recipient_ids ?? [];
+      const { recipients, becameIneligibleCount } = recipientsForApprovedPreview(
+        previewedRecipientIds,
+        alreadySentIds,
         await loadCommunityProfiles(admin, communityId),
-      ).filter((recipient) => !alreadySent.has(recipient.id));
+      );
 
       const { data: claimed } = await admin.from('notifications').update({
         metadata: { ...metadata, post_meeting_recap_approval: 'sending' },
@@ -179,7 +186,7 @@ serve(async (req) => {
       if (!claimed) return errorResponse('That recap is already being approved.', 409);
 
       let sent = 0;
-      const sentRecipientIds = [...alreadySent];
+      const sentRecipientIds = [...alreadySentIds];
       const failures: string[] = [];
       for (const recipient of recipients) {
         try {
@@ -208,7 +215,7 @@ serve(async (req) => {
       }).eq('id', approveId);
 
       if (!settled) return errorResponse(`Sent ${sent}; ${failures.length} failed. Approval remains pending.`, 502);
-      return jsonResponse({ approved: true, sent, opted_out_or_ineligible: confirmedIds.length - recipients.length });
+      return jsonResponse({ approved: true, sent, opted_out_or_ineligible: becameIneligibleCount });
     }
 
     // Two trusted paths create a hold. Seal Meeting no longer calls this
@@ -235,10 +242,11 @@ serve(async (req) => {
     const meeting = await loadMeeting(admin, meetingId);
     if (!meeting) return errorResponse('Meeting not found.', 404);
 
-    // A pending hold from an earlier click (or a person added since) grows
-    // rather than duplicates — one held preview per meeting, always reflecting
-    // the current, reviewed notes. A hold that already finished sending gets
-    // a fresh one instead of being reopened underneath people who were sent.
+    // A pending hold is refreshed rather than duplicated. The requested ids
+    // are the complete current attendance snapshot, not additions to an older
+    // per-person hold: one preview must show the exact group one Send approves.
+    // A hold that already finished gets a fresh one instead of being reopened
+    // underneath people who were sent.
     const { data: existingRows } = await admin
       .from('notifications')
       .select('id, metadata')
@@ -247,10 +255,7 @@ serve(async (req) => {
       .limit(1);
     const existingRow = existingRows?.[0] as { id: string; metadata: HeldMetadata } | undefined;
     const existingPending = existingRow?.metadata?.post_meeting_recap_approval === 'pending' ? existingRow : null;
-    const confirmedIds = [...new Set([
-      ...(existingPending?.metadata.post_meeting_recap_absentee_ids ?? []),
-      ...requestedIds,
-    ])];
+    const confirmedIds = requestedIds;
 
     const recipients = eligibleRecapRecipients(
       confirmedIds,
@@ -279,6 +284,8 @@ serve(async (req) => {
           ...existingPending.metadata,
           post_meeting_recap_absentee_ids: confirmedIds,
           post_meeting_recap_preview_recipient_count: recipients.length,
+          post_meeting_recap_recipient_ids: recipients.map((recipient) => recipient.id),
+          post_meeting_recap_recipient_names: recipients.map((recipient) => recipient.name?.trim() || recipient.email || 'Someone'),
         },
       }).eq('id', existingPending.id);
       if (error) throw error;
@@ -298,6 +305,8 @@ serve(async (req) => {
         post_meeting_recap_community_id: meeting.communityId,
         post_meeting_recap_absentee_ids: confirmedIds,
         post_meeting_recap_preview_recipient_count: recipients.length,
+        post_meeting_recap_recipient_ids: recipients.map((recipient) => recipient.id),
+        post_meeting_recap_recipient_names: recipients.map((recipient) => recipient.name?.trim() || recipient.email || 'Someone'),
       },
     }).select('id').single();
     if (error) throw error;
