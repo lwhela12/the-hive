@@ -103,6 +103,128 @@ type WishWithGranters = Wish & {
 type WishStatusTabKey = HdWishTabKey;
 type TodoStatusTabKey = 'open' | 'done';
 
+/**
+ * The year-ahead calendar, kept inside the HIVE whose Home opened it.
+ *
+ * Birthdays have always been in Home's event data, but the only control beside
+ * Upcoming Events said "Hide". Izzy reasonably remembered the useful part — a
+ * year of birthdays — and had no noun she could click to get back to it. This
+ * gives that view a literal door without creating a second calendar or a
+ * second birthday source. The same `upcomingEvents` rows power both views.
+ */
+function YearCalendarSheet({
+  visible,
+  events,
+  hiveName,
+  onClose,
+}: {
+  visible: boolean;
+  events: Event[];
+  hiveName: string;
+  onClose: () => void;
+}) {
+  const months = useMemo(() => {
+    const today = new Date();
+    const firstMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const result: { key: string; label: string; events: Event[] }[] = [];
+
+    for (let offset = 0; offset < 12; offset += 1) {
+      const date = new Date(firstMonth.getFullYear(), firstMonth.getMonth() + offset, 1);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      result.push({
+        key,
+        label: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        events: events
+          .filter((event) => event.event_date.startsWith(key))
+          .sort((a, b) => a.event_date.localeCompare(b.event_date) || (a.event_time || '').localeCompare(b.event_time || '')),
+      });
+    }
+    return result;
+  }, [events]);
+
+  const birthdayCount = months.reduce(
+    (count, month) => count + month.events.filter((event) => event.event_type === 'birthday').length,
+    0,
+  );
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', justifyContent: 'flex-end' }}
+        onPress={onClose}
+      >
+        <Pressable
+          onPress={(event) => event.stopPropagation()}
+          style={{
+            width: '100%', maxWidth: 760, maxHeight: '90%', alignSelf: 'center',
+            backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+            overflow: 'hidden',
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 20, paddingRight: 10, paddingTop: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.55)' }}>
+            <View style={{ flex: 1 }}>
+              <Text accessibilityRole="header" style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 21, color: '#313130' }}>
+                Year calendar
+              </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#6f6559', marginTop: 3 }}>
+                {hiveName} · the next 12 months · {birthdayCount} {birthdayCount === 1 ? 'birthday' : 'birthdays'}
+              </Text>
+            </View>
+            <CloseButton onPress={onClose} accessibilityLabel="Close the year calendar" />
+          </View>
+          <BounceScrollView showsVerticalScrollIndicator contentContainerStyle={{ padding: 16, paddingBottom: 36 }}>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#6f6559', marginBottom: 14 }}>
+              Birthdays stay visible here even when you hide them from the short list on Home.
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+              {months.map((month) => (
+                <View
+                  key={month.key}
+                  style={{
+                    flexGrow: 1, flexBasis: 320, minWidth: 0,
+                    borderWidth: 1, borderColor: 'rgba(222,193,129,0.62)',
+                    borderRadius: 16, backgroundColor: '#ffffff', overflow: 'hidden',
+                  }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#8a6b30', paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#fdf3dc' }}>
+                    {month.label}
+                  </Text>
+                  {month.events.length === 0 ? (
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, color: '#9a8060', paddingHorizontal: 14, paddingVertical: 12 }}>
+                      Nothing on the calendar yet.
+                    </Text>
+                  ) : month.events.map((event, index) => (
+                    <View
+                      key={event.id}
+                      style={{
+                        flexDirection: 'row', alignItems: 'flex-start', gap: 9,
+                        paddingHorizontal: 14, paddingVertical: 10,
+                        borderTopWidth: index === 0 ? 0 : 1,
+                        borderTopColor: 'rgba(222,193,129,0.34)',
+                      }}
+                    >
+                      <Text style={{ fontSize: 16 }}>{getEventEmoji(event)}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, lineHeight: 18, color: '#313130' }}>
+                          {event.title}
+                        </Text>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 17, color: '#6f6559', marginTop: 1 }}>
+                          {formatDateRangeShort(event.event_date, event.end_date)}
+                          {event.event_time ? ` · ${formatTimeRange(event.event_time, event.end_time)}` : ''}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ))}
+            </View>
+          </BounceScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 type HomeTodo = {
   id: string;
   emoji: string;
@@ -1074,6 +1196,7 @@ export default function HiveScreen() {
 
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
+  const [showYearCalendar, setShowYearCalendar] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   // The quarter-end reminder begins as a generated calendar card. Opening it
   // still uses the normal event editor. Its first save creates the real event
@@ -3720,6 +3843,11 @@ export default function HiveScreen() {
                             selected={hideBirthdayEvents}
                             accessibilityLabel={hideBirthdayEvents ? 'Show birthday events' : 'Hide birthday events'}
                           />
+                          <HeaderActionPill
+                            label="📅 Year"
+                            onPress={() => setShowYearCalendar(true)}
+                            accessibilityLabel="Open the year calendar with birthdays"
+                          />
                           <HeaderActionPill label="+ Event" onPress={openCreateEvent} />
                         </>
                       }
@@ -4385,6 +4513,13 @@ export default function HiveScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <YearCalendarSheet
+        visible={showYearCalendar}
+        events={upcomingEvents}
+        hiveName={community?.name || 'This HIVE'}
+        onClose={() => setShowYearCalendar(false)}
+      />
 
 
       <WishManageModal

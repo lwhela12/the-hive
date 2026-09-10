@@ -31,7 +31,14 @@ import { hiveMark, hiveSealImg } from '../_shared/hiveMark.ts';
  */
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
-const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'H.I.V.E. <hive@yourdomain.com>';
+// HIVE follows the studio mail contract used by Nat's other products: the
+// studio inbox is the working inbox, Nat gets her own copy, and the product's
+// verified hello@ address is the sender. These are purpose-specific rather
+// than reusing the broad FROM_EMAIL setting so an invitation/config change can
+// never quietly redirect product feedback.
+const FEEDBACK_TO = Deno.env.get('APP_FEEDBACK_TO') || 'savedyouaseatstudios@gmail.com';
+const FEEDBACK_CC = Deno.env.get('APP_FEEDBACK_CC') || 'natwalstead@gmail.com';
+const FEEDBACK_FROM_EMAIL = Deno.env.get('APP_FEEDBACK_FROM_EMAIL') || 'HIVE <hello@the-hive.app>';
 const APP_URL = Deno.env.get('EXPO_PUBLIC_APP_URL') || 'https://app.the-hive.app';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 
@@ -324,23 +331,14 @@ serve(async (req) => {
     return errorResponse('Could not save that. Try again in a moment.', 500);
   }
 
-  // 2. Tell the person who opted into app-feedback triage. This is deliberately
-  //    separate from activity mail: Lucas may choose to hear about activity
-  //    later without becoming a recipient of Nat's product inbox.
+  // 2. Tell Nat through the studio's normal product-feedback route. This is
+  //    deliberately separate from activity mail: Lucas may choose to hear
+  //    about HIVE activity later without becoming a recipient of Nat's product
+  //    inbox. The in-app owner inbox remains the source of truth either way.
   let emailed = false;
   if (RESEND_API_KEY) {
     try {
-      const { data: owners } = await supabaseAdmin
-        .from('profiles')
-        .select('email')
-        .eq('is_owner', true)
-        .eq('email_app_feedback_enabled', true);
-
-      const recipients = (owners ?? [])
-        .map((o: { email: string | null }) => o.email)
-        .filter((email: string | null): email is string => !!email);
-
-      if (recipients.length > 0) {
+      if (FEEDBACK_TO) {
         const subject = `${KIND_EMOJI[kind]} ${KIND_LABEL[kind]} — ${authorName}`;
         const mark = hiveMark(null, null);
         const html = `
@@ -371,8 +369,11 @@ serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: FROM_EMAIL,
-            to: recipients,
+            from: FEEDBACK_FROM_EMAIL,
+            to: [FEEDBACK_TO],
+            ...(FEEDBACK_CC && FEEDBACK_CC.toLowerCase() !== FEEDBACK_TO.toLowerCase()
+              ? { cc: [FEEDBACK_CC] }
+              : {}),
             subject,
             html,
             attachments: emailAttachments,
@@ -387,7 +388,7 @@ serve(async (req) => {
           console.error('Resend refused the feedback email:', await response.text());
         }
       } else {
-        console.error('No owner has an email address; feedback stored but unannounced');
+        console.error('APP_FEEDBACK_TO is empty; feedback stored but unannounced');
       }
     } catch (error) {
       // Stored is stored. An email that did not send is not worth failing over.
