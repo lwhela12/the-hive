@@ -237,6 +237,8 @@ export function SummarySections({
   onReassignByMention,
   onDeleteDuty,
   onEditDutyText,
+  onSetDutyOwners,
+  hiveName,
   onHideLine,
 }: {
   sections: SummarySection[];
@@ -262,6 +264,10 @@ export function SummarySections({
   onDeleteDuty?: (key: string, lineText: string, actionItemIds: string[]) => void;
   /** A duty line's wording changed with no "@" reassign in it — the real to-do's description is corrected too, not just the summary's copy. */
   onEditDutyText?: (key: string, actionItemIds: string[], description: string, fullLineText: string) => Promise<void> | void;
+  /** Replaces the actual people assigned to the underlying duty rows. */
+  onSetDutyOwners?: (key: string, actionItemIds: string[], ownerIds: string[], fullLineText: string) => Promise<void> | void;
+  /** The duty's real community scope; displayed as context, not editable copy. */
+  hiveName?: string;
   /** A non-duty line, double-clicked, cleared, and blurred — just hides it. No real record underneath to preserve. */
   onHideLine?: (key: string) => void;
 }) {
@@ -269,6 +275,7 @@ export function SummarySections({
   const [expandedMeetingSections, setExpandedMeetingSections] = useState<Set<string>>(() => new Set());
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draftText, setDraftText] = useState('');
+  const [peoplePickerKey, setPeoplePickerKey] = useState<string | null>(null);
 
   const commitEdit = async (key: string, original: string, dutyMeta?: DutyMeta) => {
     if (editingKey !== key) return;
@@ -472,6 +479,9 @@ export function SummarySections({
                           const duty = effectiveLine.startsWith('Confirmed duty:');
                           const clean = duty ? effectiveLine.replace(/^Confirmed duty:\s*/, '') : effectiveLine;
                           const isEditingThis = editingKey === key;
+                          const currentOwnerIds = [...new Set((dutyMeta?.owner_ids ?? []).filter((id): id is string => !!id))];
+                          const currentOwners = (mentionMembers ?? []).filter((member) => currentOwnerIds.includes(member.id));
+                          const availableOwners = (mentionMembers ?? []).filter((member) => !currentOwnerIds.includes(member.id));
                           return (
                             <View key={lineIndex}>
                               <EditableLine
@@ -507,6 +517,48 @@ export function SummarySections({
                                   {clean}
                                 </Text>
                               </EditableLine>
+                              {duty && dutyMeta && editable && onSetDutyOwners ? (
+                                <View style={{ marginLeft: 21, marginTop: 7, gap: 7 }}>
+                                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                    {currentOwners.map((owner) => (
+                                      <Pressable
+                                        key={owner.id}
+                                        onPress={() => void onSetDutyOwners(key, dutyMeta.action_item_ids, currentOwnerIds.filter((id) => id !== owner.id), effectiveLine)}
+                                        accessibilityLabel={`Remove ${owner.name} from this duty`}
+                                        style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, backgroundColor: '#f5e8c9', borderWidth: 1, borderColor: '#dcc38b' }}
+                                      >
+                                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#6d5427' }}>{owner.name}  ×</Text>
+                                      </Pressable>
+                                    ))}
+                                    {hiveName ? (
+                                      <View style={{ borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, backgroundColor: '#edf4ff', borderWidth: 1, borderColor: '#b8cceb' }}>
+                                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#27466f' }}>{hiveName} scope</Text>
+                                      </View>
+                                    ) : null}
+                                    {availableOwners.length > 0 ? (
+                                      <Pressable onPress={() => setPeoplePickerKey(peoplePickerKey === key ? null : key)} style={{ borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, borderWidth: 1, borderColor: '#d7cbb9' }}>
+                                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#7d6b53' }}>+ Add person</Text>
+                                      </Pressable>
+                                    ) : null}
+                                  </View>
+                                  {peoplePickerKey === key ? (
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                      {availableOwners.map((owner) => (
+                                        <Pressable
+                                          key={owner.id}
+                                          onPress={() => {
+                                            setPeoplePickerKey(null);
+                                            void onSetDutyOwners(key, dutyMeta.action_item_ids, [...currentOwnerIds, owner.id], effectiveLine);
+                                          }}
+                                          style={{ borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5, backgroundColor: '#fffdf9', borderWidth: 1, borderColor: '#bd9348' }}
+                                        >
+                                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#6d5427' }}>{owner.name}</Text>
+                                        </Pressable>
+                                      ))}
+                                    </View>
+                                  ) : null}
+                                </View>
+                              ) : null}
                             </View>
                           );
                         })}

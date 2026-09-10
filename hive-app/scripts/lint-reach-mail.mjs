@@ -57,6 +57,31 @@ for (const [kind, column] of kinds) {
   }
 }
 
+// Every direct Resend sender wears a HIVE mark. This is intentionally broader
+// than the member-reach family above: feedback, invites, previews, recaps and
+// the dormant owner-only notify door all count. A new raw white email must fail
+// the build until it joins the visual system.
+const RESEND_SENDERS = [
+  'supabase/functions/_shared/reachMail.ts',
+  'supabase/functions/app-feedback/index.ts',
+  'supabase/functions/check-in-preview/index.ts',
+  'supabase/functions/check-in-reminder/index.ts',
+  'supabase/functions/email-preview/index.ts',
+  'supabase/functions/invite/index.ts',
+  'supabase/functions/notify-admin-activity/index.ts',
+  'supabase/functions/notify/index.ts',
+  'supabase/functions/post-meeting-recap/index.ts',
+  'supabase/functions/send-newsletter/index.ts',
+  'supabase/functions/subscribe-welcome/index.ts',
+  'supabase/functions/worth-capturing/index.ts',
+];
+for (const file of RESEND_SENDERS) {
+  const source = read(file);
+  if (!source.includes('api.resend.com/emails')) continue;
+  const wearsMark = /hiveSealImg|hive-logo-email\.png|postMeetingRecapHtml|reachEmailHtml/.test(source);
+  if (!wearsMark) failures.push(`${file} sends email without a HIVE mark.`);
+}
+
 // --- Half two: something sends it.
 //
 //     The check-in kinds are sent by the app's own send door rather than by a

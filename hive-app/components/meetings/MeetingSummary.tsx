@@ -847,6 +847,54 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
     }
   };
 
+  const setDutyOwners = async (key: string, actionItemIds: string[], ownerIds: string[], fullLineText: string) => {
+    if (!isHiveAdmin) return;
+    try {
+      const { data, error } = await supabase.rpc('set_meeting_duty_owners', {
+        p_meeting_id: meeting.id,
+        p_action_item_ids: actionItemIds,
+        p_owner_ids: ownerIds,
+      });
+      if (error) throw error;
+      const result = data as { action_item_ids?: string[]; owner_ids?: (string | null)[] } | null;
+      const nextIds = result?.action_item_ids ?? actionItemIds;
+      const nextOwnerIds = result?.owner_ids ?? ownerIds;
+      const names = ownerIds
+        .map((id) => mentionableMembers.find((member) => member.id === id)?.name?.trim().split(/\s+/)[0])
+        .filter((name): name is string => !!name);
+      const ownerLabel = names.length ? names.join(' & ') : 'No one tagged';
+      const correctedLine = /—\s*[^—]+$/.test(fullLineText)
+        ? fullLineText.replace(/—\s*[^—]+$/, `— ${ownerLabel}`)
+        : `${fullLineText} — ${ownerLabel}`;
+      const base = storedSummaryBase();
+      const dutyIndex = { ...((base.duty_index as ParsedSummary['duty_index']) ?? {}) };
+      const match = Object.entries(dutyIndex).find(([, meta]) => {
+        const ids = [...(meta.action_item_ids ?? [])].sort();
+        return ids.length === actionItemIds.length && ids.every((id, index) => id === [...actionItemIds].sort()[index]);
+      });
+      if (!match) throw new Error('This duty is no longer indexed in the meeting summary.');
+      dutyIndex[match[0]] = { action_item_ids: nextIds, owner_ids: nextOwnerIds };
+      const nextKey = `duty:${[...nextIds].sort().join(',')}`;
+      const lineCorrections = { ...((base.line_corrections as ParsedSummary['line_corrections']) ?? {}) };
+      delete lineCorrections[key];
+      lineCorrections[nextKey] = correctedLine;
+      const { data: updated, error: summaryError } = await supabase
+        .from('meetings')
+        .update({ summary: JSON.stringify({ ...base, duty_index: dutyIndex, line_corrections: lineCorrections }) })
+        .eq('id', meeting.id)
+        .select('*')
+        .single();
+      if (summaryError) throw summaryError;
+      if (updated) {
+        setMeeting(updated as Meeting);
+        onMeetingUpdated?.(updated as Meeting);
+      }
+    } catch (error) {
+      console.error('Error changing duty tags:', error);
+      showAlert('Tags not saved', 'Those people did not change. Please try again.');
+    }
+  };
+
   /**
    * A non-duty line, deleted. Nat, 2026-08-24: "I don't think we need this
    * extra info here... right?" — a redundant note or a line the AI shouldn't
@@ -1561,6 +1609,8 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
               onReassignByMention={reassignByMention}
               onDeleteDuty={deleteDuty}
               onEditDutyText={editDutyText}
+              onSetDutyOwners={setDutyOwners}
+              hiveName={parsedSummary.title?.replace(/^\S+\s+/, '').replace(/\s+Meeting$/, '') || 'This HIVE'}
               onHideLine={hideLine}
               renderReview={(review) => (
                 isHiveAdmin ? (

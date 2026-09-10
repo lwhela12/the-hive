@@ -1212,6 +1212,10 @@ export interface Database {
     };
     Views: {};
     Functions: {
+      set_meeting_duty_owners: {
+        Args: { p_meeting_id: string; p_action_item_ids: string[]; p_owner_ids: string[] };
+        Returns: { action_item_ids: string[]; owner_ids: (string | null)[] };
+      };
       save_check_in_occurrence: {
         Args: { p_survey_id: string; p_community_id: string | null; p_occurrence: string; p_answers: Record<string, any> };
         Returns: SurveyResponse;

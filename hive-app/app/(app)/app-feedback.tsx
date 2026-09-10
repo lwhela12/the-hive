@@ -62,7 +62,7 @@ import { formatDateShort } from '../../lib/dateUtils';
  *
  *   And it answers back. "does it show the turn around and the fix as well? or
  *   just a list of grievances?" — it was a list of grievances. Owners get a
- *   third tab and can reply; the reply lands here and in the member's inbox.
+ *   third tab and can reply; the reply stays beside the report in the HIVE.
  */
 
 type Kind = 'bug' | 'idea' | 'confusing' | 'love';
@@ -209,6 +209,7 @@ export default function AppFeedbackScreen() {
     originPath?: string | string[];
     captureNotice?: string | string[];
     tab?: string | string[];
+    feedbackId?: string | string[];
   }>();
   const routeOriginLabel = validFeedbackOriginLabel(
     Array.isArray(params.originLabel) ? params.originLabel[0] : params.originLabel
@@ -221,6 +222,7 @@ export default function AppFeedbackScreen() {
     : params.captureNotice);
 
   const requestedTab = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+  const focusedFeedbackId = Array.isArray(params.feedbackId) ? params.feedbackId[0] : params.feedbackId;
   const [tab, setTab] = useState<'say' | 'sent' | 'all'>(
     isOwner && (requestedTab === 'inbox' || !requestedTab) ? 'all' : 'say'
   );
@@ -268,6 +270,7 @@ export default function AppFeedbackScreen() {
   const [all, setAll] = useState<SentItem[] | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyResult, setReplyResult] = useState<Record<string, string>>({});
 
   const loadSent = useCallback(async () => {
     if (!profile?.id) return;
@@ -407,13 +410,15 @@ export default function AppFeedbackScreen() {
       setReplyingTo(id);
       try {
         const { error } = await supabase.functions.invoke('app-feedback', {
-          body: { action: 'reply', feedback_id: id, reply, status: 'read' },
+          body: { action: 'reply', feedback_id: id, reply, status: 'done' },
         });
         if (error) throw error;
         setReplyDrafts((prev) => ({ ...prev, [id]: '' }));
+        setReplyResult((prev) => ({ ...prev, [id]: 'Saved in HIVE · marked done' }));
         void loadAll();
       } catch (error) {
         console.warn('Could not send the reply', error);
+        setReplyResult((prev) => ({ ...prev, [id]: 'Not saved · try again' }));
       } finally {
         setReplyingTo(null);
       }
@@ -481,6 +486,9 @@ export default function AppFeedbackScreen() {
           paddingVertical: 14,
           borderTopWidth: index === 0 ? 0 : 1,
           borderTopColor: skin.border,
+          backgroundColor: item.id === focusedFeedbackId ? (skin.dark ? '#221d11' : '#fff8df') : 'transparent',
+          borderRadius: item.id === focusedFeedbackId ? 12 : 0,
+          paddingHorizontal: item.id === focusedFeedbackId ? 10 : 0,
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
@@ -594,11 +602,11 @@ export default function AppFeedbackScreen() {
                   maxLength={4000}
                   placeholder="What happened about it?"
                   // Enter makes a new paragraph. An answer to a bug report runs
-                  // to several lines, and "Answer & tell them" is right below.
+                  // to several lines, and "Answer in HIVE" is right below.
                   submitOnEnterKey={false}
                   submitting={replyingTo === item.id}
                 />
-                {/* Wrapping, because "Answer & tell them" and "Mark read" side
+                {/* Wrapping, because "Answer in HIVE" and "Mark read" side
                     by side are wider than a phone panel and the second one was
                     running off the edge of the card. */}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
@@ -619,7 +627,7 @@ export default function AppFeedbackScreen() {
                         color: (replyDrafts[item.id] ?? '').trim() ? (skin.dark ? '#07080F' : '#fffdf5') : skin.inkFaint,
                       }}
                     >
-                      {replyingTo === item.id ? 'Sending…' : 'Answer & tell them'}
+                      {replyingTo === item.id ? 'Saving…' : 'Answer in HIVE'}
                     </Text>
                   </Pressable>
                   {item.status === 'new' ? (
@@ -637,6 +645,11 @@ export default function AppFeedbackScreen() {
                     </Pressable>
                   ) : null}
                 </View>
+                {replyResult[item.id] ? (
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: replyResult[item.id].startsWith('Saved') ? skin.gold : '#a44', marginTop: 7 }}>
+                    {replyResult[item.id]}
+                  </Text>
+                ) : null}
               </>
             ) : (
               <Pressable

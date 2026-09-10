@@ -237,66 +237,11 @@ serve(async (req) => {
       return errorResponse('Could not save that answer', 500);
     }
 
-    // Tell them. A reply nobody sees is the same as no reply — and the person
-    // who reported a bug three weeks ago is not sitting on the feedback screen
-    // waiting.
-    let notified = false;
-    if (reply && updated.author_id && RESEND_API_KEY) {
-      try {
-        // Deliberately NOT gated on `preferred_contact`. That flag exists to stop
-        // the app broadcasting at people; this is a direct answer to something
-        // this person wrote and asked about, which is the one email in the app
-        // nobody has to opt in to receive.
-        const { data: recipient } = await supabaseAdmin
-          .from('profiles')
-          .select('email, name')
-          .eq('id', updated.author_id)
-          .maybeSingle();
-
-        if (recipient?.email) {
-          const html = `
-            <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;color:#313130;">
-              <p style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#8e7a5e;margin:0 0 4px;">App Feedback</p>
-              <h1 style="font-size:20px;margin:0 0 16px;color:#313130;">${escapeHtml(me.name ?? 'The HIVE')} answered you</h1>
-              <p style="font-size:14px;color:#8e7a5e;margin:0 0 6px;">You said:</p>
-              <div style="border-left:3px solid rgba(189,147,72,0.4);padding-left:14px;margin:0 0 18px;color:#4b4740;font-size:14px;">
-                ${paragraphs(updated.message || 'You sent a screenshot.')}
-              </div>
-              <div style="background:#fffdf5;border:1px solid rgba(189,147,72,0.3);border-radius:14px;padding:18px;">
-                ${paragraphs(reply)}
-              </div>
-              <p style="font-size:13px;color:#8e7a5e;margin-top:20px;">
-                <a href="${APP_URL}/app-feedback" style="color:#bd9348;">See it in the HIVE</a>
-              </p>
-            </div>
-          `;
-
-          const response = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${RESEND_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              from: FROM_EMAIL,
-              to: [recipient.email],
-              subject: `💛 About the thing you told us`,
-              html,
-            }),
-          });
-
-          notified = response.ok;
-          if (!response.ok) {
-            console.error('Resend refused the reply email:', await response.text());
-          }
-        }
-      } catch (error) {
-        // The reply is saved. It will be read in the app either way.
-        console.error('Could not email the reply:', error);
-      }
-    }
-
-    return jsonResponse({ id: updated.id, status: updated.status, notified });
+    // The reply lives with the report, in the HIVE. Filing feedback already
+    // sends Nat one branded intake notice; answering it must not start a second
+    // email thread or quietly add to a member's inbox. The member sees the
+    // answer on their own "Sent" tab the next time they open this screen.
+    return jsonResponse({ id: updated.id, status: updated.status, stored: true });
   }
 
   // ─── Filing one ───────────────────────────────────────────────────────────

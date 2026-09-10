@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
+import { hiveMark, hiveSealImg } from '../_shared/hiveMark.ts';
 
 // Restored and locked down on 2026-08-03, after being deleted earlier the same day.
 //
@@ -146,6 +147,17 @@ serve(async (req) => {
       return errorResponse('Nobody to notify', 400);
     }
 
+    const { data: hive } = await supabaseAdmin
+      .from('communities')
+      .select('name, slug, accent_color')
+      .eq('id', community_id)
+      .maybeSingle();
+    const hiveName = (hive as { name?: string | null } | null)?.name || 'HIVE';
+    const mark = hiveMark(
+      (hive as { slug?: string | null } | null)?.slug,
+      (hive as { accent_color?: string | null } | null)?.accent_color,
+    );
+
     const { data: users, error: usersError } = await supabaseAdmin
       .from('profiles')
       .select('id, name, email, preferred_contact')
@@ -217,6 +229,16 @@ serve(async (req) => {
         break;
       }
     }
+
+    // This function is dormant today, but a future owner-triggered use should
+    // not resurrect the old anonymous white email. Keep the caller's approved
+    // words intact and put the correct HIVE identity around them.
+    emailBody = `
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;color:#2b2b2b;line-height:1.5;">
+        <div style="text-align:center;padding:8px 0 4px;">${hiveSealImg(mark)}</div>
+        <p style="text-align:center;color:${mark.accent};font-size:11px;letter-spacing:1.6px;text-transform:uppercase;font-weight:700;margin:0 0 16px;">${escapeHtml(hiveName)}</p>
+        ${emailBody}
+      </div>`;
 
     // Every row is stamped with the HIVE we checked membership against. The old
     // version fell back to each person's own current HIVE, which meant the row
