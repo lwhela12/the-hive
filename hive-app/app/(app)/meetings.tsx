@@ -1398,28 +1398,11 @@ export default function MeetingsScreen() {
               </Text>
             </Pressable>
 
-            {isAdmin ? (
-              <Pressable
-                onPress={() => setShowNotesImport(true)}
-                style={({ pressed }) => ({
-                  flex: useCompactActions ? undefined : 1,
-                  width: useCompactActions ? '48%' : undefined,
-                  backgroundColor: 'rgba(255,255,255,0.08)',
-                  borderRadius: 14,
-                  paddingVertical: 16,
-                  alignItems: 'center',
-                  opacity: pressed ? 0.75 : 1,
-                })}
-              >
-                <Text style={{ fontSize: 22, marginBottom: 4 }}>📄</Text>
-                <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 13 }}>
-                  Add meeting notes
-                </Text>
-                <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.62)', fontSize: 10, marginTop: 2 }}>
-                  {hiveOnMeet ? 'Gemini, transcript, or file' : 'Notes, transcript, or file'}
-                </Text>
-              </Pressable>
-            ) : null}
+            {/* Gemini notes belong to one exact Tech meeting. Their one clear
+                home is now inside that meeting's summary, where attaching them
+                immediately rebuilds the record they support. The old tile here
+                opened a removed import sheet and could not identify which
+                summary Nat meant. */}
 
             {/* The Newsletter tile is gone (Nat 2026-08-04). Third and last
                 place it was duplicated: it was on Admin's Meeting tools, in the

@@ -22,6 +22,8 @@ interface ImportMeetingNotesAudioFile {
 
 interface ImportMeetingNotesRequest {
   communityId: string;
+  /** Attach these notes to an existing sealed meeting instead of creating a second record. */
+  meetingId?: string | null;
   notesText?: string;
   title?: string;
   date?: string;
@@ -238,7 +240,7 @@ serve(async (req) => {
 
     const { data: membership } = await supabaseUser
       .from('community_memberships')
-      .select('id')
+      .select('id, role')
       .eq('community_id', communityId)
       .eq('user_id', userId)
       .single();
@@ -251,6 +253,96 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
+
+    const targetMeetingId = typeof body.meetingId === 'string' ? body.meetingId.trim() : '';
+    if (targetMeetingId) {
+      if (hasAudio) {
+        return errorResponse('Add written Gemini notes or a notes document to an existing summary.', 400);
+      }
+
+      const { data: ownerProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('is_owner')
+        .eq('id', userId)
+        .maybeSingle();
+      if (membership.role !== 'admin' && ownerProfile?.is_owner !== true) {
+        return errorResponse('Only a HIVE admin can add notes to a meeting summary.', 403);
+      }
+
+      const { data: targetMeeting, error: targetError } = await supabaseAdmin
+        .from('meetings')
+        .select('id, community_id, date, summary, transcript_raw, transcript_attributed')
+        .eq('id', targetMeetingId)
+        .eq('community_id', communityId)
+        .maybeSingle();
+      if (targetError || !targetMeeting) {
+        return errorResponse('That meeting summary was not found in this HIVE.', 404);
+      }
+
+      let previousSummary: Record<string, unknown> = {};
+      if (typeof targetMeeting.summary === 'string' && targetMeeting.summary.trim()) {
+        try {
+          const parsed = JSON.parse(targetMeeting.summary);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            previousSummary = parsed as Record<string, unknown>;
+          }
+        } catch {
+          previousSummary = { summary: targetMeeting.summary };
+        }
+      }
+
+      const importedAt = new Date().toISOString();
+      const existingTranscript = typeof targetMeeting.transcript_raw === 'string'
+        ? targetMeeting.transcript_raw.trim()
+        : '';
+      const alreadyAttached = existingTranscript.includes(imported.notesText);
+      const notesBlock = `Gemini meeting notes — imported ${importedAt}\n${imported.notesText}`;
+      const combinedTranscript = alreadyAttached
+        ? existingTranscript
+        : [existingTranscript, notesBlock].filter(Boolean).join('\n\n');
+      const existingAssets = Array.isArray(previousSummary.meeting_assets)
+        ? previousSummary.meeting_assets
+        : [];
+      const importedFileNames = imported.importedFiles
+        .map((file) => file.fileName)
+        .filter((fileName): fileName is string => typeof fileName === 'string' && !!fileName);
+      const meetingAssets = alreadyAttached
+        ? existingAssets
+        : [
+            ...existingAssets,
+            {
+              kind: 'gemini_notes',
+              source: imported.source,
+              file_names: importedFileNames,
+              imported_at: importedAt,
+              imported_by: userId,
+            },
+          ];
+
+      const { data: updatedMeeting, error: updateError } = await supabaseAdmin
+        .from('meetings')
+        .update({
+          transcript_raw: combinedTranscript,
+          transcript_attributed: combinedTranscript,
+          summary: JSON.stringify({ ...previousSummary, meeting_assets: meetingAssets }),
+          processing_status: 'complete',
+        })
+        .eq('id', targetMeeting.id)
+        .select()
+        .single();
+      if (updateError || !updatedMeeting) {
+        console.error('Failed to attach Gemini notes to meeting:', updateError);
+        return errorResponse(updateError?.message || 'Failed to attach Gemini notes', 500);
+      }
+
+      return jsonResponse({
+        success: true,
+        attached: true,
+        duplicate: alreadyAttached,
+        meeting: updatedMeeting,
+        source: imported.source,
+      });
+    }
 
     const summaryPayload = {
       source: imported.source,

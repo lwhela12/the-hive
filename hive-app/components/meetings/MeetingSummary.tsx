@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput, Platform } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '../../lib/supabase';
 import { confirmAction, showAlert } from '../../lib/showAlert';
 import { formatDateLong, formatDateShort, formatTimeRange } from '../../lib/dateUtils';
@@ -110,6 +112,13 @@ interface ParsedSummary {
     check_in_response_count?: number;
     community_member_count?: number;
   };
+  meeting_assets?: {
+    kind?: string;
+    source?: string;
+    file_names?: string[];
+    imported_at?: string;
+    imported_by?: string;
+  }[];
   details?: string[];
   wishes_surfaced?: { person_name: string; description: string }[];
   /**
@@ -358,10 +367,18 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   const [recapPreviewSending, setRecapPreviewSending] = useState<Record<string, boolean>>({});
   const [approvingRecap, setApprovingRecap] = useState(false);
   const [summaryToolsOpen, setSummaryToolsOpen] = useState(false);
+  const [geminiNotesOpen, setGeminiNotesOpen] = useState(false);
+  const [geminiNotesDraft, setGeminiNotesDraft] = useState('');
+  const [geminiNotesFile, setGeminiNotesFile] = useState<{
+    fileName: string;
+    fileMimeType: string | null;
+    fileBase64: string;
+  } | null>(null);
+  const [savingGeminiNotes, setSavingGeminiNotes] = useState(false);
   const [taskChecklistOpen, setTaskChecklistOpen] = useState(false);
   const [resolvingConflictId, setResolvingConflictId] = useState<string | null>(null);
 
-  const { profile, communityId, communityRole } = useAuth();
+  const { profile, community, communityId, communityRole } = useAuth();
 
   /**
    * Naming the voices is a HIVE admin's job, and an owner may do it anywhere.
@@ -478,6 +495,10 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   };
 
   const parsedSummary = parseSummary(meeting.summary);
+  const geminiAsset = [...(parsedSummary.meeting_assets ?? [])]
+    .reverse()
+    .find((asset) => asset.kind === 'gemini_notes');
+  const isTechMeeting = communityId === meeting.community_id && community?.meets_on_google_meet === true;
   const manualCorrection = parsedSummary.manual_correction?.text?.trim()
     ? parsedSummary.manual_correction
     : null;
@@ -570,6 +591,110 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
     if (data) {
       setMeeting(data as Meeting);
       onMeetingUpdated?.(data as Meeting);
+    }
+  };
+
+  const pickGeminiNotesFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'text/plain',
+          'text/markdown',
+        ],
+        copyToCacheDirectory: true,
+        multiple: false,
+        base64: false,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+
+      const asset = result.assets[0];
+      let fileBase64 = asset.base64 ?? '';
+      if (!fileBase64 && Platform.OS === 'web' && asset.file) {
+        fileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const value = typeof reader.result === 'string' ? reader.result : '';
+            resolve(value.includes(',') ? value.split(',').pop() ?? value : value);
+          };
+          reader.onerror = () => reject(reader.error ?? new Error('Could not read the notes file.'));
+          reader.readAsDataURL(asset.file!);
+        });
+      }
+      if (!fileBase64) {
+        fileBase64 = await FileSystem.readAsStringAsync(asset.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
+
+      setGeminiNotesFile({
+        fileName: asset.name,
+        fileMimeType: asset.mimeType ?? null,
+        fileBase64: fileBase64.includes(',') ? fileBase64.split(',').pop() ?? fileBase64 : fileBase64,
+      });
+    } catch (error) {
+      console.error('Error reading Gemini notes file:', error);
+      showAlert('File not added', 'Use a Word, text, or Markdown copy of the Gemini notes, or paste them here.');
+    }
+  };
+
+  /**
+   * Tech HIVE's Meet notes support the Helper record; they never replace it.
+   * One press attaches the source and rebuilds this exact record so Nat does
+   * not have to save in one screen, hunt for Summary options, then rebuild in
+   * another. The rebuild preserves the prior version and still sends nothing.
+   */
+  const addGeminiNotesAndRebuild = async () => {
+    const notesText = geminiNotesDraft.trim();
+    if (savingGeminiNotes || !isHiveAdmin || !isTechMeeting) return;
+    if (notesText.length < 20 && !geminiNotesFile) {
+      showAlert('Gemini notes needed', 'Paste the Gemini notes or add a Word, text, or Markdown file.');
+      return;
+    }
+
+    setSavingGeminiNotes(true);
+    try {
+      const { error: importError } = await supabase.functions.invoke('import-meeting-notes', {
+        body: {
+          communityId: meeting.community_id,
+          meetingId: meeting.id,
+          date: meeting.date,
+          notesText: notesText.length >= 20 ? notesText : undefined,
+          files: geminiNotesFile ? [geminiNotesFile] : [],
+        },
+      });
+      if (importError) throw importError;
+
+      const { data: rebuildData, error: rebuildError } = await supabase.functions.invoke('seal-meeting', {
+        body: {
+          communityId: meeting.community_id,
+          date: meeting.date,
+          meetingId: meeting.id,
+          mode: 'rebuild',
+        },
+      });
+      if (rebuildError || !rebuildData?.rebuilt) {
+        await reloadMeeting();
+        throw new Error(rebuildData?.reason ?? 'The notes were saved, but the summary did not rebuild.');
+      }
+
+      await reloadMeeting();
+      await loadActionItems();
+      setGeminiNotesDraft('');
+      setGeminiNotesFile(null);
+      setGeminiNotesOpen(false);
+      showAlert(
+        'Gemini notes added',
+        'This summary now combines the Meeting Helper with the Gemini notes. The version it replaced is preserved, and nothing was emailed.'
+      );
+    } catch (error) {
+      console.error('Error adding Gemini notes to summary:', error);
+      showAlert(
+        'Summary not rebuilt',
+        'The current summary and every existing record are still safe. Try again, or use Rebuild from saved records if the notes now appear here.'
+      );
+    } finally {
+      setSavingGeminiNotes(false);
     }
   };
 
@@ -1372,6 +1497,106 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
             <Text className="font-medium text-red-700">
               Something went wrong writing this summary.
             </Text>
+          </View>
+        )}
+
+        {isHiveAdmin && isTechMeeting && (
+          <View className="mb-5 border border-blue-200 rounded-xl p-4 bg-blue-50">
+            <View className="flex-row items-start justify-between gap-3">
+              <View className="flex-1">
+                <Text className="text-gray-800 font-semibold">
+                  {geminiAsset ? '✓ Gemini notes added' : 'Add Gemini notes'}
+                </Text>
+                <Text className="text-gray-600 text-sm mt-1 leading-5">
+                  {geminiAsset
+                    ? parsedSummary.provenance?.transcript_used
+                      ? 'This summary combines the Meeting Helper with Gemini context.'
+                      : 'The notes are saved with this meeting. Rebuild the summary to use them.'
+                    : 'Paste or upload the notes from this Google Meet. HIVE will rebuild this summary with them.'}
+                </Text>
+                <Text className="text-gray-500 text-xs mt-1">Nothing gets emailed from here.</Text>
+              </View>
+              {!geminiNotesOpen && (
+                <Pressable
+                  onPress={() => setGeminiNotesOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={geminiAsset ? 'Add newer Gemini notes' : 'Add Gemini notes'}
+                  className="px-3 py-2 rounded-lg border border-blue-200 bg-white active:bg-blue-100"
+                >
+                  <Text className="text-blue-800 font-semibold text-sm">
+                    {geminiAsset ? 'Add newer notes' : 'Add notes'}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+
+            {geminiNotesOpen && (
+              <View className="mt-4 pt-4 border-t border-blue-200">
+                <Text className="text-sm font-medium text-gray-700 mb-2">Gemini notes</Text>
+                {/* This is source material to paste, not prose composed in HIVE,
+                    so the app's writing microphone would be the wrong control. */}
+                <TextInput
+                  value={geminiNotesDraft}
+                  onChangeText={setGeminiNotesDraft}
+                  multiline
+                  textAlignVertical="top"
+                  placeholder="Paste the Google Meet notes here"
+                  accessibilityLabel="Gemini meeting notes"
+                  className="bg-white border border-blue-200 rounded-xl px-4 py-3 text-gray-800 leading-5"
+                  style={{ minHeight: 180 }}
+                />
+
+                <View className="flex-row flex-wrap items-center gap-2 mt-3">
+                  <Pressable
+                    onPress={() => void pickGeminiNotesFile()}
+                    disabled={savingGeminiNotes}
+                    accessibilityRole="button"
+                    accessibilityLabel="Upload Gemini notes document"
+                    className="px-3 py-2 rounded-lg border border-blue-200 bg-white active:bg-blue-100"
+                  >
+                    <Text className="text-blue-800 font-semibold text-sm">Upload Word or text file</Text>
+                  </Pressable>
+                  {geminiNotesFile ? (
+                    <View className="flex-row items-center gap-2">
+                      <Text className="text-gray-700 text-sm">{geminiNotesFile.fileName}</Text>
+                      <Pressable
+                        onPress={() => setGeminiNotesFile(null)}
+                        disabled={savingGeminiNotes}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${geminiNotesFile.fileName}`}
+                        className="px-2 py-1 rounded-lg active:bg-blue-100"
+                      >
+                        <Text className="text-gray-600 font-semibold">×</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+
+                <View className="flex-row flex-wrap gap-2 mt-4">
+                  <Pressable
+                    onPress={() => void addGeminiNotesAndRebuild()}
+                    disabled={savingGeminiNotes || (geminiNotesDraft.trim().length < 20 && !geminiNotesFile)}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: savingGeminiNotes || (geminiNotesDraft.trim().length < 20 && !geminiNotesFile) }}
+                    className={`px-4 py-3 rounded-lg bg-blue-800 active:bg-blue-900 ${
+                      savingGeminiNotes || (geminiNotesDraft.trim().length < 20 && !geminiNotesFile) ? 'opacity-50' : ''
+                    }`}
+                  >
+                    <Text className="text-white font-semibold">
+                      {savingGeminiNotes ? 'Adding notes and rebuilding…' : 'Add notes & rebuild summary'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setGeminiNotesOpen(false)}
+                    disabled={savingGeminiNotes}
+                    accessibilityRole="button"
+                    className="px-4 py-3 rounded-lg border border-gray-300 bg-white active:bg-gray-100"
+                  >
+                    <Text className="text-gray-700 font-semibold">Cancel</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
           </View>
         )}
 
