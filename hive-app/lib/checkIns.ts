@@ -486,6 +486,13 @@ const YEAR_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
     q('q_year_thanks', 'Who helped you get there? Name names.'),
     q('q_year_next', 'What do you want to take a real swing at next year?'),
     q('q_year_wish_hive', 'One wish for this HIVE next year.'),
+    // September's first Tech HIVE meeting chose not to start a Honey Pot yet.
+    // Nat, 2026-09-10: revisit that decision in the final December
+    // End-of-the-Month check-in, where the end-of-year section already lives.
+    q(
+      'q_year_honey_pot',
+      'Tech HIVE left the Honey Pot at $0 in September. Heading into next year, should we start one — and if so, how much should each person contribute and what should it be for?',
+    ),
     // Nat, 2026-08-13: giving goes both ways — "i dont want it to be peopel
     // just expecting help."
     q('q_year_give_take', 'What did the HIVE give you this year — and what did you give it?'),
