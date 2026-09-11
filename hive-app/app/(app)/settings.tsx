@@ -205,6 +205,12 @@ export default function SettingsScreen() {
   const emailIsOn = (setting: EmailSetting) =>
     preferencePending[setting.column] ?? (profile as any)[setting.column] !== false;
 
+  // Activity mail is opt-in, unlike the ordinary member-reach emails above.
+  // A missing column must therefore read as off, never as accidental consent.
+  const activityMailIsOn =
+    preferencePending.email_admin_activity_enabled
+    ?? profile.email_admin_activity_enabled === true;
+
   // The database default is document-style writing for everyone. A member who
   // wants the old fast-send behaviour opts into it once and carries it with
   // their profile to any computer.
@@ -364,6 +370,26 @@ export default function SettingsScreen() {
                 </View>
               );
             })}
+            <RowDivider />
+            <Switch
+              on={activityMailIsOn}
+              busy={preferenceBusyKey === 'email_admin_activity_enabled'}
+              label="Notify me about everything"
+              onToggle={(next) => void saveBooleanPreference(
+                'email_admin_activity_enabled',
+                next,
+                { email_admin_activity_enabled: next },
+                'That activity email setting did not save. Please try again.'
+              )}
+            />
+            <Text
+              style={{
+                fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 18,
+                color: MUTED, paddingHorizontal: 16, paddingBottom: 12, marginTop: -6,
+              }}
+            >
+              Daily answers, board activity, and wishes in your HIVE. Off by default.
+            </Text>
           </Panel>
         </Section>
 

@@ -3028,7 +3028,7 @@ export default function MonthlyTuneupScreen() {
       <StepHeader
         title="HIVE helps"
         icon={<Text style={{ fontSize: 20 }}>🤝</Text>}
-        subtitle="Little kindnesses since last meeting — no act too tiny, totally optional."
+        subtitle="Little kindnesses since last meeting — every act counts, totally optional."
       />
       {helperThread?.postTitle ? (
         <View style={{ marginTop: -6, marginBottom: 12, gap: 2 }}>

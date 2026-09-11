@@ -2252,7 +2252,7 @@ export default function ProfileScreen() {
             Add the texture
           </Text>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: '#7d715f', marginBottom: 18 }}>
-            Favorites and tiny facts make a sparse profile feel human fast.
+            Favorites and personal facts make a sparse profile feel human fast.
           </Text>
           {renderDeepQuizField({
             label: 'Favorite food',
@@ -2282,7 +2282,7 @@ export default function ProfileScreen() {
                   next[index] = text;
                   setEditFunFacts(next);
                 },
-                placeholder: index === 0 ? 'Something people would not guess at first glance' : 'Another tiny, delightful detail',
+                placeholder: index === 0 ? 'Something people would not guess at first glance' : 'Another delightful detail',
                 multiline: true,
               })}
             </View>

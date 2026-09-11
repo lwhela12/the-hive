@@ -2075,7 +2075,7 @@ function MemberDetailPage({
                       </View>
                     ) : null}
                     <ProfilePromptInput
-                      label="Tiny bio"
+                      label="Short bio"
                       placeholder="A few sentences about who you are..."
                       value={draftBio}
                       onChangeText={setDraftBio}

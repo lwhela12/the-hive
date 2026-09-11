@@ -17,10 +17,9 @@ import { escapeHtml, plainTextFrom, deepLink, hiveIsMeetingNow } from '../_share
  * and never lets a failure here roll back their post.
  *
  * Deliberately NOT gated by `templateIsApproved`/the member reach-mail switches
- * in `_shared/reachMail.ts` — those exist because a MEMBER did not choose to
- * be emailed about somebody else's message. This is the opposite: an OWNER
- * asked, by name, to hear about everything. It goes to `profiles.is_owner`
- * only, never a member.
+ * in `_shared/reachMail.ts`. This is an explicit personal subscription saved
+ * on the recipient's profile. Owners may subscribe to activity across HIVEs;
+ * members may subscribe only to activity in HIVEs they belong to.
  *
  * Unlike member-facing mail (`_shared/reachMail.ts`'s `genericLetter`), this
  * one is allowed to say who and what — the entire point is Nat not having to
@@ -72,11 +71,13 @@ serve(async (req) => {
     return jsonResponse({ sent: 0, reason: 'meeting_in_progress' });
   }
 
-  const [{ data: owners }, { data: actor }, { data: hive }] = await Promise.all([
-    // Nat, 2026-09-08: "not lucas, just me, unless he can toggle it off." No
-    // toggle exists yet (see migration 255), so the honest default is off for
-    // everyone but her.
-    admin.from('profiles').select('id, name, email').eq('is_owner', true).eq('email_admin_activity_enabled', true),
+  const [{ data: subscribers }, { data: memberships }, { data: actor }, { data: hive }] = await Promise.all([
+    // Opt-in for every member. Migration 261 preserves Nat's existing choice
+    // and leaves everybody else off until they deliberately turn it on.
+    admin.from('profiles').select('id, name, email, is_owner').eq('email_admin_activity_enabled', true),
+    body.community_id
+      ? admin.from('community_memberships').select('user_id').eq('community_id', body.community_id)
+      : Promise.resolve({ data: [] }),
     body.actor_id
       ? admin.from('profiles').select('name').eq('id', body.actor_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -85,8 +86,14 @@ serve(async (req) => {
       : Promise.resolve({ data: null }),
   ]);
 
-  if (!owners?.length || !RESEND_API_KEY) {
-    return jsonResponse({ sent: 0, reason: !RESEND_API_KEY ? 'no RESEND_API_KEY' : 'no owners' });
+  const memberIds = new Set((memberships ?? []).map((membership: { user_id: string }) => membership.user_id));
+  const recipients = (subscribers ?? []).filter(
+    (subscriber: { id: string; is_owner?: boolean | null }) =>
+      subscriber.is_owner === true || memberIds.has(subscriber.id),
+  );
+
+  if (!recipients.length || !RESEND_API_KEY) {
+    return jsonResponse({ sent: 0, reason: !RESEND_API_KEY ? 'no RESEND_API_KEY' : 'no subscribers' });
   }
 
   const actorName = (actor as { name?: string } | null)?.name || 'Somebody';
@@ -105,24 +112,24 @@ serve(async (req) => {
       <div style="text-align: center; margin: 24px 0;">
         <a href="${escapeHtml(href)}" target="_top" style="background: ${mark.accent}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">${escapeHtml(copy.button)}</a>
       </div>
-      <p style="font-size: 12px; color: #b6b6b6; text-align: center;">You asked to hear about every HIVE's activity. Ask Claude to turn it off any time. 🍯</p>
+      <p style="font-size: 12px; color: #b6b6b6; text-align: center;">You asked to hear about activity in your HIVE. You can turn this off in Settings at any time. 🍯</p>
     </div>
   `;
   const subject = `HIVE · ${heading}`;
 
   let sent = 0;
-  for (const owner of owners as { id: string; name: string | null; email: string | null }[]) {
-    // Nat already knows about the thing she just did. Activity mail is for
-    // discovering what happened while she was away from the app.
-    if (body.actor_id && owner.id === body.actor_id) continue;
-    if (!owner.email) continue;
+  for (const recipient of recipients as { id: string; name: string | null; email: string | null }[]) {
+    // People already know about the thing they just did. Activity mail is for
+    // discovering what happened while they were away from the app.
+    if (body.actor_id && recipient.id === body.actor_id) continue;
+    if (!recipient.email) continue;
     try {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           from: FROM_EMAIL,
-          to: owner.email,
+          to: recipient.email,
           subject,
           html,
           text: plainTextFrom(html),

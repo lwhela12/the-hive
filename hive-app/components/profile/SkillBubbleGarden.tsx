@@ -209,7 +209,7 @@ const SEED_SURVEY: SurveyQuestion[] = [
     ],
   },
   {
-    prompt: 'Choose a tiny joy.',
+    prompt: 'Choose an everyday joy.',
     choices: [
       { icon: '🍄', label: 'Mossy forests', detail: 'Soft ground, secret worlds', seeds: ['Foraging', 'Gardening', 'Composting', 'Plant Parenting', 'Cloud Watching'] },
       { icon: '📼', label: 'Niche documentaries', detail: 'Specific stories, stranger than fiction', seeds: ['Video Editing', 'Writing', 'Photography', 'Storytelling', 'Proofreading'] },

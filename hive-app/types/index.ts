@@ -284,6 +284,8 @@ export interface Profile extends Record<string, unknown> {
   push_token?: string;
   email_reminders_enabled?: boolean | null;
   email_post_meeting_recap_enabled?: boolean | null;
+  /** Opt-in mail for daily answers, board activity, and wishes in the member's HIVE(s). */
+  email_admin_activity_enabled?: boolean | null;
   onboarded_at?: string;
   current_community_id?: string;
   bio?: string | null;

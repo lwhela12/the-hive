@@ -33,7 +33,7 @@ const TODOS_BULLET =
  * "pick up trash whenever you go on a walk", August's was a shelter donation,
  * June's was paying for the person behind you in line — and the check-in step
  * is where you log what you managed. Its own subtitle says it plainly: *"Little
- * kindnesses since last meeting — no act too tiny, totally optional."*
+ * kindnesses since last meeting — every act counts, totally optional."*
  *
  * This bullet read *"Want a hand with something? Ask for it in HIVE Help"* for
  * about an hour on 2026-08-28, which inverts it: it turns a thing you give into
@@ -46,7 +46,7 @@ const TODOS_BULLET =
  * it describes rather than inside the HTML.
  */
 const HIVE_HELP_BULLET =
-  "Done anything for this month's <strong>HIVE Help</strong>? Log it — no act too tiny";
+  "Done anything for this month's <strong>HIVE Help</strong>? Log it — every act counts";
 
 /** OG's three: newsletter, to-dos, HIVE Help. */
 const DEFAULT_STEPS = [NEWSLETTER_BULLET, TODOS_BULLET, HIVE_HELP_BULLET];
