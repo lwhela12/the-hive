@@ -22,6 +22,8 @@ interface BoardComposerProps {
   onClose: () => void;
   onSubmit: (title: string, content: string, attachments?: Attachment[]) => Promise<boolean>;
   existingPost?: BoardPost | null; // For edit mode
+  /** A member-readable starter post can open a new thread with its format already in place. */
+  prefill?: { title?: string; content: string } | null;
   draftStorageKey?: string | null;
   mentionableMembers?: Pick<Profile, 'id' | 'name'>[];
   managementActions?: ReactNode;
@@ -34,6 +36,7 @@ export function BoardComposer({
   onClose,
   onSubmit,
   existingPost,
+  prefill,
   draftStorageKey,
   mentionableMembers = [],
   managementActions,
@@ -77,6 +80,9 @@ export function BoardComposer({
       setTitle(existingPost.title);
       setContent(existingPost.content);
       // Note: existing attachments are shown but not editable for simplicity
+    } else if (visible && prefill) {
+      setTitle(prefill.title || '');
+      setContent(prefill.content);
     } else if (!visible) {
       // Reset when modal closes
       setTitle('');
@@ -84,7 +90,7 @@ export function BoardComposer({
       setSelectedImages([]);
       setSelectedFiles([]);
     }
-  }, [visible, existingPost, draftStorageKey]);
+  }, [visible, existingPost, prefill, draftStorageKey]);
 
   useEffect(() => {
     if (!visible || !draftStorageKey) return;

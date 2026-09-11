@@ -246,6 +246,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [showComposer, setShowComposer] = useState(false);
   const [editingPost, setEditingPost] = useState<BoardPost | null>(null);
+  const [composerTemplatePost, setComposerTemplatePost] = useState<BoardPost | null>(null);
   const [showTopicComposer, setShowTopicComposer] = useState(false);
   const [editingTopic, setEditingTopic] = useState<BoardCategory | null>(null);
   const [threadListView, setThreadListView] = useState<BoardThreadListView>('active');
@@ -271,6 +272,9 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const boardPostStorageKey = storageScope ? `the-hive:last-board-post:${storageScope}` : null;
   const boardDirectOpenStorageKey = storageScope ? `the-hive:board-direct-open:${storageScope}` : null;
   const boardDraftStorageKey = selectedCategoryId ? `the-hive:board-draft:${selectedCategoryId}` : null;
+  const activeBoardDraftStorageKey = composerTemplatePost && boardDraftStorageKey
+    ? `${boardDraftStorageKey}:template:${composerTemplatePost.id}`
+    : boardDraftStorageKey;
   const boardSortStorageKey = storageScope && profile?.id
     ? `the-hive:boards-sort:${storageScope}:${profile.id}`
     : null;
@@ -385,6 +389,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     setSelectedPostId(null);
     setShowComposer(false);
     setEditingPost(null);
+    setComposerTemplatePost(null);
     setShowTopicComposer(false);
     setEditingTopic(null);
     setShowAddLinkedWishModal(false);
@@ -742,6 +747,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     setThreadListView('active');
     setShowComposer(false);
     setEditingPost(null);
+    setComposerTemplatePost(null);
     setShowTopicComposer(false);
     setEditingTopic(null);
     setShowAddLinkedWishModal(false);
@@ -907,6 +913,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
 
   const handleOpenComposer = useCallback(() => {
     setEditingPost(null);
+    setComposerTemplatePost(null);
     setShowComposer(true);
     if (boardComposerStorageKey) {
       setStoredItem(boardComposerStorageKey, 'true');
@@ -916,8 +923,18 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const handleCloseComposer = useCallback(() => {
     setShowComposer(false);
     setEditingPost(null);
+    setComposerTemplatePost(null);
     if (boardComposerStorageKey) {
       removeStoredItem(boardComposerStorageKey);
+    }
+  }, [boardComposerStorageKey]);
+
+  const handleUseThreadFormat = useCallback((post: BoardPost) => {
+    setEditingPost(null);
+    setComposerTemplatePost(post);
+    setShowComposer(true);
+    if (boardComposerStorageKey) {
+      setStoredItem(boardComposerStorageKey, 'true');
     }
   }, [boardComposerStorageKey]);
 
@@ -1712,6 +1729,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
 
   const handleEditThread = useCallback((post: BoardPost) => {
     if (!canManageThread(post)) return;
+    setComposerTemplatePost(null);
     setEditingPost(post);
     setShowComposer(true);
   }, [canManageThread]);
@@ -2359,6 +2377,9 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
               onPress={() => handlePostSelect(item.id)}
               canEdit={canManageThread(item)}
               onEdit={handleEditThread}
+              onUseFormat={canPost() && item.is_pinned && /^start here\b/i.test(item.title.trim())
+                ? handleUseThreadFormat
+                : undefined}
               compactImages={!useMobileLayout}
               linkedWishLabel={linkedWish ? 'Community Wish' : undefined}
               onLinkedWishPress={linkedWish ? () => setSelectedLinkedWish(linkedWish) : undefined}
@@ -2483,7 +2504,8 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         onClose={handleCloseComposer}
         onSubmit={editingPost ? handleUpdatePost : handleCreatePost}
         existingPost={editingPost}
-        draftStorageKey={editingPost ? null : boardDraftStorageKey}
+        prefill={composerTemplatePost ? { content: composerTemplatePost.content } : null}
+        draftStorageKey={editingPost ? null : activeBoardDraftStorageKey}
         mentionableMembers={topicMembers}
         managementActions={editingPost ? (
           <>

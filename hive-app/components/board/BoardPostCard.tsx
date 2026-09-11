@@ -18,6 +18,7 @@ interface BoardPostCardProps {
   onPress: () => void;
   canEdit?: boolean;
   onEdit?: (post: BoardPost & { author?: Profile; reactions?: BoardReaction[] }) => void;
+  onUseFormat?: (post: BoardPost & { author?: Profile; reactions?: BoardReaction[] }) => void;
   compactImages?: boolean;
   linkedWishLabel?: string;
   onLinkedWishPress?: () => void;
@@ -53,6 +54,7 @@ export function BoardPostCard({
   onPress,
   canEdit = false,
   onEdit,
+  onUseFormat,
   compactImages = false,
   linkedWishLabel,
   onLinkedWishPress,
@@ -201,6 +203,23 @@ export function BoardPostCard({
             >
               {contentPreview}
             </LinkifiedText>
+            {onUseFormat && (
+              <Pressable
+                onPress={(event) => {
+                  event.stopPropagation();
+                  onUseFormat(post);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Use the format from ${post.title}`}
+                className="self-start flex-row items-center border rounded-full px-3 py-2 mb-2 active:opacity-70"
+                style={{ backgroundColor: chipFill, borderColor: skin.borderStrong, minHeight: 44 }}
+              >
+                <Ionicons name="copy-outline" size={15} color={skin.gold} />
+                <Text style={{ fontFamily: 'Lato_700Bold', color: skin.gold }} className="text-xs ml-1">
+                  Use this format
+                </Text>
+              </Pressable>
+            )}
             {linkedWishLabel && (
               <Pressable
                 onPress={(event) => {
