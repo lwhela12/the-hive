@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppUpdate } from '../../lib/hooks/useAppUpdate';
+import { CloseButton } from './CloseButton';
 
 /**
  * "Fresh honey" banner — a slim, dismissible, app-wide bar shown when a newer
@@ -27,6 +28,21 @@ export function AppUpdateBanner() {
   const [dismissed, setDismissed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // On an installed iPhone web app, SafeAreaProvider can report zero during
+  // the first portrait. Rotating the phone makes it measure again, which is why
+  // Izzy could suddenly read and dismiss the bar in landscape. CSS owns the
+  // glass edge from the first painted frame, so keep whichever answer is
+  // larger: the live React inset or the browser's safe-area environment.
+  const topInset = Platform.OS === 'web'
+    ? (`max(${insets.top}px, env(safe-area-inset-top))` as any)
+    : insets.top;
+  const leftInset = Platform.OS === 'web'
+    ? (`max(${insets.left}px, env(safe-area-inset-left))` as any)
+    : insets.left;
+  const rightInset = Platform.OS === 'web'
+    ? (`max(${insets.right}px, env(safe-area-inset-right))` as any)
+    : insets.right;
+
   if (Platform.OS !== 'web' || !updateAvailable || dismissed) return null;
 
   const handleRefresh = () => {
@@ -43,10 +59,11 @@ export function AppUpdateBanner() {
         backgroundColor: '#fdf3dc',
         borderBottomWidth: 1,
         borderBottomColor: 'rgba(222,193,129,0.7)',
-        paddingTop: insets.top,
+        paddingTop: topInset,
         // The notch is a corner on a phone held sideways, not a strip at the top.
-        paddingLeft: insets.left,
-        paddingRight: insets.right,
+        paddingLeft: leftInset,
+        paddingRight: rightInset,
+        zIndex: 100,
       }}
     >
       <Pressable
@@ -64,19 +81,13 @@ export function AppUpdateBanner() {
           {refreshing ? '🍯 Getting fresh honey...' : '🍯 Fresh honey available — tap to refresh'}
         </Text>
       </Pressable>
-      <Pressable
+      <CloseButton
         onPress={() => setDismissed(true)}
-        accessibilityRole="button"
         accessibilityLabel="Dismiss update notice"
-        hitSlop={8}
-        style={({ pressed }) => ({
-          paddingVertical: 8,
-          paddingHorizontal: 14,
-          opacity: pressed ? 0.6 : 1,
-        })}
-      >
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#7b6b59' }}>✕</Text>
-      </Pressable>
+        color="#7b6b59"
+        size={18}
+        style={{ marginHorizontal: 2 }}
+      />
     </View>
   );
 }
