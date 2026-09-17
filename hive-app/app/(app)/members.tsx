@@ -3336,12 +3336,12 @@ export default function MembersScreen() {
     96,
     Math.min(
       honeycombCellWidth - (isCompactHoneycomb ? 64 : 96),
-      honeycombCellWidth * 0.64,
+      honeycombCellWidth * 0.52,
     ),
   );
   const honeycombActionMaxWidth = Math.max(
-    116,
-    Math.min(honeycombTextMaxWidth, honeycombCellWidth * 0.6),
+    124,
+    Math.min(honeycombTextMaxWidth, honeycombCellWidth * 0.5),
   );
 
   return (
@@ -3709,13 +3709,11 @@ export default function MembersScreen() {
                     const matchBadgeTop = Math.round(honeycombCardHeight * (isCompactHoneycomb ? 0.11 : 0.12));
                     const wishChip = `${profileCurrentWishes.length} wish${profileCurrentWishes.length === 1 ? '' : 'es'}`;
                     const sharedAnswerCount = member.questionAnswerCount;
-                    const connectionChip = sharedAnswerCount > 0
-                      ? isCompactHoneycomb
-                        ? `${sharedAnswerCount} shared`
-                        : `${sharedAnswerCount} shared answer${sharedAnswerCount === 1 ? '' : 's'}`
-                      : isCompactHoneycomb
-                        ? '0 shared'
-                        : '0 shared answers';
+                    // The button's accessible name still says "shared answers";
+                    // the visible copy stays intentionally short so the pair of
+                    // actions has breathing room inside the hexagon's lower
+                    // diagonals.
+                    const connectionChip = `${sharedAnswerCount} answer${sharedAnswerCount === 1 ? '' : 's'}`;
                     // In the Swarm Report the useful chip is not how many
                     // answers exist, it is what you keep meeting each other on.
                     // Nat asked how smart the analytics are; a theme you share
@@ -3908,13 +3906,13 @@ export default function MembersScreen() {
                                     style={({ pressed }) => ({
                                       backgroundColor: pressed ? 'rgba(222,193,129,0.7)' : 'rgba(245,234,209,0.86)',
                                       borderRadius: 999,
-                                      paddingHorizontal: 6,
+                                      paddingHorizontal: 5,
                                       paddingVertical: 3,
                                       flexShrink: 1,
                                       minWidth: 0,
                                     })}
                                   >
-                                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: isCompactHoneycomb ? 8 : 8.5, color: '#8a6a2f' }} numberOfLines={1}>
+                                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: isCompactHoneycomb ? 8 : 8.25, color: '#8a6a2f' }} numberOfLines={1}>
                                       {chip.label} ›
                                     </Text>
                                   </Pressable>

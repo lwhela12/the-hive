@@ -7,13 +7,14 @@ const source = fs.readFileSync(
 );
 
 const expectations = [
-  ['hex-safe text width', 'honeycombCellWidth * 0.64'],
-  ['narrower bottom action shelf', 'honeycombCellWidth * 0.6'],
+  ['hex-safe text width', 'honeycombCellWidth * 0.52'],
+  ['narrower bottom action shelf', 'honeycombCellWidth * 0.5'],
   ['bounded lower content', 'maxWidth: honeycombActionMaxWidth'],
   ['lower content clips at its safe rectangle', "overflow: 'hidden'"],
   ['answer and wish actions share one row', "flexDirection: 'row'"],
   ['long current-focus copy is clamped', 'numberOfLines={2}'],
   ['action labels cannot force the row wider', 'flexShrink: 1'],
+  ['visible answer count stays compact', 'const connectionChip = `${sharedAnswerCount} answer'],
 ];
 
 for (const [label, needle] of expectations) {
