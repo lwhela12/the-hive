@@ -3329,7 +3329,20 @@ export default function MembersScreen() {
   const honeycombAvatarSize = isCompactHoneycomb ? 42 : honeycombCellWidth < 300 ? 50 : 56;
   const honeycombNameFontSize = isCompactHoneycomb ? 12 : honeycombCellWidth < 300 ? 13.5 : 14.5;
   const honeycombNameLineHeight = isCompactHoneycomb ? 16 : honeycombCellWidth < 300 ? 18 : 19;
-  const honeycombTextMaxWidth = Math.max(96, honeycombCellWidth - (isCompactHoneycomb ? 64 : 96));
+  // Text must fit the hexagon, not merely its rectangular image bounds. The
+  // angled sides leave a much narrower safe column through the middle and an
+  // even narrower shelf near the bottom where the action pills live.
+  const honeycombTextMaxWidth = Math.max(
+    96,
+    Math.min(
+      honeycombCellWidth - (isCompactHoneycomb ? 64 : 96),
+      honeycombCellWidth * 0.64,
+    ),
+  );
+  const honeycombActionMaxWidth = Math.max(
+    116,
+    Math.min(honeycombTextMaxWidth, honeycombCellWidth * 0.6),
+  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: skin.page }} edges={['top']}>
@@ -3787,7 +3800,7 @@ export default function MembersScreen() {
                               </Text>
                             </View>
                           ) : (
-                          <>
+                          <View style={{ flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'space-between' }}>
                           {hasDailyMatch && (
                             <View
                               accessible
@@ -3851,38 +3864,65 @@ export default function MembersScreen() {
                             </View>
                           </View>
 
-                          {spotlight && !isCompactHoneycomb && (
-                            <View style={{ marginTop: 8, alignItems: 'center', maxWidth: honeycombTextMaxWidth }}>
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 8.5, color: '#bd9348', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 2 }} numberOfLines={1}>
-                                {spotlightLabel}
-                              </Text>
-                              <Text style={{ fontFamily: combKnownFor ? 'LibreBaskerville_400Regular' : 'Lato_400Regular', fontSize: combKnownFor ? 10.8 : 10.5, color: '#5c5648', lineHeight: 14.5, textAlign: 'center', fontStyle: combKnownFor ? 'italic' : 'normal' }} numberOfLines={2}>
-                                {spotlight}
-                              </Text>
-                            </View>
-                          )}
+                          <View
+                            style={{
+                              width: '100%',
+                              maxWidth: honeycombActionMaxWidth,
+                              minHeight: 0,
+                              alignItems: 'center',
+                              justifyContent: 'flex-end',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            {spotlight && !isCompactHoneycomb && (
+                              <View style={{ alignItems: 'center', width: '100%', maxWidth: honeycombTextMaxWidth, overflow: 'hidden' }}>
+                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 8.5, color: '#bd9348', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 2 }} numberOfLines={1}>
+                                  {spotlightLabel}
+                                </Text>
+                                <Text style={{ fontFamily: combKnownFor ? 'LibreBaskerville_400Regular' : 'Lato_400Regular', fontSize: combKnownFor ? 10.4 : 10.2, color: '#5c5648', lineHeight: 13.5, textAlign: 'center', fontStyle: combKnownFor ? 'italic' : 'normal', width: '100%' }} numberOfLines={2}>
+                                  {spotlight}
+                                </Text>
+                              </View>
+                            )}
 
-                          {visibleChips.length > 0 && (
-                            <View style={{ flexDirection: 'column', alignItems: 'center', gap: isCompactHoneycomb ? 3 : 4, marginTop: isCompactHoneycomb ? 7 : 9 }}>
-                              {visibleChips.slice(0, isCompactHoneycomb ? 1 : 2).map(chip => (
-                                <Pressable
-                                  key={chip.key}
-                                  onPress={(event) => {
-                                    event.stopPropagation();
-                                    openMemberProfile(member, chip.key === 'answers');
-                                  }}
-                                  accessibilityRole="button"
-                                  accessibilityLabel={chip.key === 'answers' ? `See ${member.name}'s shared answers` : `See ${member.name}'s wishes`}
-                                  style={({ pressed }) => ({ backgroundColor: pressed ? 'rgba(222,193,129,0.7)' : 'rgba(245,234,209,0.86)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 })}
-                                >
-                                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: isCompactHoneycomb ? 8 : 9, color: '#8a6a2f' }} numberOfLines={1}>
-                                    {chip.label} ›
-                                  </Text>
-                                </Pressable>
-                              ))}
-                            </View>
-                          )}
-                          </>
+                            {visibleChips.length > 0 && (
+                              <View
+                                style={{
+                                  flexDirection: 'row',
+                                  justifyContent: 'center',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  marginTop: spotlight && !isCompactHoneycomb ? 5 : 0,
+                                  width: '100%',
+                                }}
+                              >
+                                {visibleChips.slice(0, isCompactHoneycomb ? 1 : 2).map(chip => (
+                                  <Pressable
+                                    key={chip.key}
+                                    onPress={(event) => {
+                                      event.stopPropagation();
+                                      openMemberProfile(member, chip.key === 'answers');
+                                    }}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={chip.key === 'answers' ? `See ${member.name}'s shared answers` : `See ${member.name}'s wishes`}
+                                    style={({ pressed }) => ({
+                                      backgroundColor: pressed ? 'rgba(222,193,129,0.7)' : 'rgba(245,234,209,0.86)',
+                                      borderRadius: 999,
+                                      paddingHorizontal: 6,
+                                      paddingVertical: 3,
+                                      flexShrink: 1,
+                                      minWidth: 0,
+                                    })}
+                                  >
+                                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: isCompactHoneycomb ? 8 : 8.5, color: '#8a6a2f' }} numberOfLines={1}>
+                                      {chip.label} ›
+                                    </Text>
+                                  </Pressable>
+                                ))}
+                              </View>
+                            )}
+                          </View>
+                          </View>
                           )}
                         </HoneycombCardShell>
                       </Pressable>
