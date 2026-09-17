@@ -13,6 +13,7 @@ const buzzArchiveMigration = fs.readFileSync(path.join(root, 'supabase/migration
 const email = fs.readFileSync(path.join(root, 'supabase/functions/send-newsletter/index.ts'), 'utf8');
 const publicSite = fs.readFileSync(path.join(root, '../site/index.html'), 'utf8');
 const appNews = fs.readFileSync(path.join(root, 'lib/appNews.ts'), 'utf8');
+const issuePolicy = fs.readFileSync(path.join(root, 'lib/newsletterIssues.ts'), 'utf8');
 const draftFunction = fs.readFileSync(path.join(root, 'supabase/functions/draft-newsletter/index.ts'), 'utf8');
 const quickAdd = fs.readFileSync(path.join(root, 'components/navigation/QuickAdd.tsx'), 'utf8');
 const failures = [];
@@ -39,6 +40,9 @@ if (!panels.includes('currentNewsletterDraft(issues)') || !writer.includes('curr
 }
 if (!buzz.includes('currentNewsletterDraft(candidates)') || !buzz.includes('newsletterIssueHistory(candidates, draft)')) {
   failures.push('The Buzz must share the same draft/history policy as Admin and the writer');
+}
+if (!issuePolicy.includes('issue.created_at <= NEWSLETTER_SEND_LAUNCHED_AT')) {
+  failures.push('The Buzz history must keep imported pre-send issues even without a modern send row');
 }
 if (buzz.includes("filter((row) => row.visibility === 'public' || sent.has(row.id) || isOwner)")) {
   failures.push('The Buzz must not relabel imported history as owner-only drafts');

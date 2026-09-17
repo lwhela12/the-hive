@@ -3835,22 +3835,6 @@ export default function HiveScreen() {
                   <>
                     <HeaderTabs
                       tabs={[{ key: 'events', label: 'Upcoming Events' }]}
-                      actions={
-                        <>
-                          <HeaderActionPill
-                            label={hideBirthdayEvents ? '🎂 Hidden' : '🎂 Hide'}
-                            onPress={toggleHideBirthdayEvents}
-                            selected={hideBirthdayEvents}
-                            accessibilityLabel={hideBirthdayEvents ? 'Show birthday events' : 'Hide birthday events'}
-                          />
-                          <HeaderActionPill
-                            label="📅 Year"
-                            onPress={() => setShowYearCalendar(true)}
-                            accessibilityLabel="Open the year calendar with birthdays"
-                          />
-                          <HeaderActionPill label="+ Event" onPress={openCreateEvent} />
-                        </>
-                      }
                     />
                     <View style={{
                       backgroundColor: '#fffdf5',
@@ -3866,6 +3850,35 @@ export default function HiveScreen() {
                       overflow: 'hidden',
                       height: dashboardPanelHeight,
                     }}>
+                      {/* Keep the folder name readable at every width. These
+                          controls used to compete with "Upcoming Events" in
+                          one header row, so the title became "Upco…" on an
+                          iPhone. The actions belong inside the folder they
+                          change and wrap there without stealing its name. */}
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          flexWrap: 'wrap',
+                          alignItems: 'center',
+                          gap: 6,
+                          paddingHorizontal: 10,
+                          paddingTop: 9,
+                          paddingBottom: 5,
+                        }}
+                      >
+                        <HeaderActionPill
+                          label={hideBirthdayEvents ? '🎂 Birthdays hidden' : '🎂 Hide birthdays'}
+                          onPress={toggleHideBirthdayEvents}
+                          selected={hideBirthdayEvents}
+                          accessibilityLabel={hideBirthdayEvents ? 'Show birthday events' : 'Hide birthday events'}
+                        />
+                        <HeaderActionPill
+                          label="📅 Year calendar"
+                          onPress={() => setShowYearCalendar(true)}
+                          accessibilityLabel="Open the year calendar with birthdays"
+                        />
+                        <HeaderActionPill label="+ Event" onPress={openCreateEvent} />
+                      </View>
                       {/* Inner top highlight — liquid glass gloss */}
                       <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.95)', marginHorizontal: 10, marginTop: 0 }} />
                       {/* Past events load inline above upcoming — one timeline, one month per tap */}

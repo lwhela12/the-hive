@@ -22,6 +22,12 @@ if (!openFeedback.includes("...(originPath ? { originPath } : {})")) {
 if (!feedbackPage.includes('onBackPress={originPath ? () => router.replace(originPath as never) : undefined}')) {
   failures.push('App Feedback must return to the page that opened it');
 }
+for (const retired of ['Answer in HIVE', 'Mark read', "label: 'Inbox'", "label: 'Sent'"]) {
+  if (feedbackPage.includes(retired)) failures.push(`App Feedback restores the retired in-app support loop: “${retired}”`);
+}
+if (!feedbackPage.includes('straight to Nat’s inbox') || !feedbackPage.includes('Shipped fixes appear in What’s New')) {
+  failures.push('App Feedback must explain the one inbox -> fix -> What’s New loop');
+}
 
 if (failures.length) {
   console.error('App Feedback opens directly and always has a way back.\n');

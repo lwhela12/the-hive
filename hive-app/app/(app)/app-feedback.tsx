@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   Pressable,
-  ScrollView,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from '../../components/ui/SafeArea';
@@ -16,11 +14,10 @@ import { usePageSkin } from '../../lib/pageSkin';
 import { AppHeader } from '../../components/navigation';
 import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
-import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { uploadMultipleImages, uploadMultipleFiles } from '../../lib/attachmentUpload';
-import type { AppFeedback, Attachment } from '../../types';
+import type { Attachment } from '../../types';
 import { consumeFeedbackDraft, validFeedbackCaptureNotice } from '../../lib/feedbackDraft';
 import {
   FEEDBACK_WHERE_OPTIONS,
@@ -30,9 +27,7 @@ import {
 } from '../../lib/feedbackOrigin';
 
 import { ComposerBar } from '../../components/ui/ComposerBar';
-import { SignedImage } from '../../components/ui/SignedImage';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
-import { formatDateShort } from '../../lib/dateUtils';
 /**
  * App Feedback — its own place, at last.
  *
@@ -60,9 +55,10 @@ import { formatDateShort } from '../../lib/dateUtils';
  *   and the second fastest is talking. "any and every time we have a text box we
  *   always want both of those."
  *
- *   And it answers back. "does it show the turn around and the fix as well? or
- *   just a list of grievances?" — it was a list of grievances. Owners get a
- *   third tab and can reply; the reply stays beside the report in the HIVE.
+ * Feedback now follows the same operating loop Nat uses everywhere else:
+ * send the report to her inbox, fix it, and name the shipped change in What's
+ * New. The old in-app tracking loop duplicated email and asked members to
+ * monitor a second support system.
  */
 
 type Kind = 'bug' | 'idea' | 'confusing' | 'love';
@@ -99,18 +95,6 @@ const KIND_BY_KEY = Object.fromEntries(KINDS.map((k) => [k.key, k])) as Record<
   (typeof KINDS)[number]
 >;
 
-type SentItem = AppFeedback;
-
-function timeAgo(iso: string): string {
-  const then = new Date(iso).getTime();
-  const days = Math.floor((Date.now() - then) / 86400000);
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 7) return `${days}d ago`;
-  if (days < 60) return `${Math.floor(days / 7)}w ago`;
-  return formatDateShort(iso);
-}
-
 /**
  * Matches MAX_ATTACHMENTS in the app-feedback edge function. The picker used to
  * allow 5 images AND 5 files while the function silently kept the first 6 of
@@ -126,90 +110,14 @@ const MAX_FEEDBACK_ATTACHMENTS = 6;
  */
 const WHERE_OPTIONS = FEEDBACK_WHERE_OPTIONS;
 
-/** Everything the list needs, in one place, so the two tabs cannot drift apart. */
-const FEEDBACK_COLUMNS =
-  'id, author_id, author_name, author_email, community_id, kind, message, created_at, status, attachments, reply, replied_at, replied_by, replied_by_name, where_in_app, platform';
-
-/**
- * The tab row, and an arrow when there is more of it than the screen.
- *
- * Nat, from her iPhone (2026-08-06): "you cant see all the tabs, its cut off, we
- * have to make it fit on an iphone screen better/easier." The row read
- * "Say something | What you've sent (0) | E…" and stopped there — the third tab
- * was not merely ugly, it was unreachable, and for an owner that is the tab
- * holding every report anybody has ever sent.
- *
- * The tabs are shorter now (see the labels below) and fit a 375-point phone with
- * room to spare, so this wrapper does nothing most days. It is here for the day
- * a count reaches three digits or somebody opens the app on a smaller screen:
- * the row slides instead of being sliced, and the arrow says so. A strip that
- * scrolls with no sign it scrolls is what caused the confusion in the first
- * place, so the arrow is the whole point of the wrapper — it appears only while
- * there is genuinely something further right, and goes when you reach the end.
- */
-function TabStrip({ children }: { children: ReactNode }) {
-  const skin = usePageSkin();
-  const [visibleWidth, setVisibleWidth] = useState(0);
-  const [rowWidth, setRowWidth] = useState(0);
-  const [scrolledBy, setScrolledBy] = useState(0);
-  // Four points of slack, so a rounding difference between the row and the
-  // window never leaves an arrow pointing at nothing.
-  const moreToTheRight = rowWidth - visibleWidth - scrolledBy > 4;
-
-  return (
-    <View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        onLayout={(event) => setVisibleWidth(event.nativeEvent.layout.width)}
-        onContentSizeChange={(width) => setRowWidth(width)}
-        onScroll={(event) => setScrolledBy(event.nativeEvent.contentOffset.x)}
-        scrollEventThrottle={16}
-      >
-        {children}
-      </ScrollView>
-      {moreToTheRight ? (
-        // Sits over the last visible tab and lets every press through to it.
-        <View
-          pointerEvents="none"
-          style={{ position: 'absolute', right: 0, top: 0, bottom: 0, justifyContent: 'center' }}
-        >
-          <View
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: 11,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: skin.card,
-              borderWidth: 1,
-              borderColor: skin.border,
-            }}
-          >
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, lineHeight: 16, color: skin.gold }}>
-              ›
-            </Text>
-          </View>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
 export default function AppFeedbackScreen() {
   const { profile, communityId } = useAuth();
   const skin = usePageSkin();
   const router = useRouter();
-  const isOwner = profile?.is_owner === true;
-  // The app's own phone line, the one the layout and the side rail already use.
-  const { width } = useWindowDimensions();
-  const narrow = width < 768;
   const params = useLocalSearchParams<{
     originLabel?: string | string[];
     originPath?: string | string[];
     captureNotice?: string | string[];
-    tab?: string | string[];
-    feedbackId?: string | string[];
   }>();
   const routeOriginLabel = validFeedbackOriginLabel(
     Array.isArray(params.originLabel) ? params.originLabel[0] : params.originLabel
@@ -221,11 +129,6 @@ export default function AppFeedbackScreen() {
     ? params.captureNotice[0]
     : params.captureNotice);
 
-  const requestedTab = Array.isArray(params.tab) ? params.tab[0] : params.tab;
-  const focusedFeedbackId = Array.isArray(params.feedbackId) ? params.feedbackId[0] : params.feedbackId;
-  const [tab, setTab] = useState<'say' | 'sent' | 'all'>(
-    isOwner && (requestedTab === 'inbox' || !requestedTab) ? 'all' : 'say'
-  );
   const [kind, setKind] = useState<Kind>('bug');
   const [message, setMessage] = useState('');
   const [whereInApp, setWhereInApp] = useState('');
@@ -265,56 +168,6 @@ export default function AppFeedbackScreen() {
   // The "what was in the box before the mic opened" bookkeeping used to live
   // here, hand-written. It lives in ComposerBar now, through the shared
   // `useDictation` hook, which has been got wrong twice and is right once.
-
-  const [sent, setSent] = useState<SentItem[] | null>(null);
-  const [all, setAll] = useState<SentItem[] | null>(null);
-  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
-  const [replyResult, setReplyResult] = useState<Record<string, string>>({});
-
-  const loadSent = useCallback(async () => {
-    if (!profile?.id) return;
-    const { data, error } = await supabase
-      .from('app_feedback')
-      .select(FEEDBACK_COLUMNS)
-      .eq('author_id', profile.id)
-      .order('created_at', { ascending: false })
-      .limit(25);
-    if (error) {
-      console.warn('Could not load your feedback', error);
-      setSent([]);
-      return;
-    }
-    setSent((data ?? []) as SentItem[]);
-  }, [profile?.id]);
-
-  // Owners only — and the database agrees, so this is a convenience, not the
-  // guard. A member running this query gets their own rows back and nothing else.
-  const loadAll = useCallback(async () => {
-    if (!isOwner) {
-      setAll([]);
-      return;
-    }
-    const { data, error } = await supabase
-      .from('app_feedback')
-      .select(FEEDBACK_COLUMNS)
-      .order('created_at', { ascending: false })
-      .limit(100);
-    if (error) {
-      console.warn('Could not load all feedback', error);
-      setAll([]);
-      return;
-    }
-    setAll((data ?? []) as SentItem[]);
-  }, [isOwner]);
-
-  useEffect(() => {
-    void loadSent();
-  }, [loadSent]);
-
-  useEffect(() => {
-    if (tab === 'all') void loadAll();
-  }, [tab, loadAll]);
 
   const hasAttachments = selectedImages.length > 0 || selectedFiles.length > 0;
   const capturedScreenshot = capturedDraftRef.current?.screenshot ?? null;
@@ -384,10 +237,9 @@ export default function AppFeedbackScreen() {
         emailed: !!data?.emailed,
         text:
           (data?.emailed
-            ? 'Sent. It landed in Nat’s inbox as well as here.'
-            : 'Saved. The email did not go out, but your note is safely filed and Nat will see it.') + missing,
+            ? 'Sent! It landed in Nat’s inbox.'
+            : 'Saved safely. The email hit a snag, so the HIVE team can recover your note.') + missing,
       });
-      void loadSent();
     } catch (error: any) {
       // The function stores before it emails. A network error is therefore
       // ambiguous, so never delete uploads here and risk breaking a saved row.
@@ -401,45 +253,7 @@ export default function AppFeedbackScreen() {
       inFlightRef.current = false;
       setSending(false);
     }
-  }, [canSend, kind, message, whereInApp, communityId, loadSent, profile?.id, selectedImages, selectedFiles, hasAttachments]);
-
-  const sendReply = useCallback(
-    async (id: string) => {
-      const reply = (replyDrafts[id] ?? '').trim();
-      if (!reply) return;
-      setReplyingTo(id);
-      try {
-        const { error } = await supabase.functions.invoke('app-feedback', {
-          body: { action: 'reply', feedback_id: id, reply, status: 'done' },
-        });
-        if (error) throw error;
-        setReplyDrafts((prev) => ({ ...prev, [id]: '' }));
-        setReplyResult((prev) => ({ ...prev, [id]: 'Saved in HIVE · marked done' }));
-        void loadAll();
-      } catch (error) {
-        console.warn('Could not send the reply', error);
-        setReplyResult((prev) => ({ ...prev, [id]: 'Not saved · try again' }));
-      } finally {
-        setReplyingTo(null);
-      }
-    },
-    [replyDrafts, loadAll]
-  );
-
-  const markStatus = useCallback(
-    async (id: string, status: 'new' | 'read' | 'done') => {
-      try {
-        const { error } = await supabase.functions.invoke('app-feedback', {
-          body: { action: 'reply', feedback_id: id, status },
-        });
-        if (error) throw error;
-        void loadAll();
-      } catch (error) {
-        console.warn('Could not change that status', error);
-      }
-    },
-    [loadAll]
-  );
+  }, [canSend, kind, message, whereInApp, communityId, profile?.id, selectedImages, selectedFiles, hasAttachments]);
 
   const active = KIND_BY_KEY[kind];
 
@@ -450,7 +264,6 @@ export default function AppFeedbackScreen() {
         borderColor: skin.border,
         borderWidth: 1,
         borderRadius: 16,
-        borderTopLeftRadius: 0,
         padding: 18,
       } as const,
       field: {
@@ -474,214 +287,6 @@ export default function AppFeedbackScreen() {
     [skin]
   );
 
-  /** One report, drawn the same way in both lists. */
-  const renderItem = (item: SentItem, index: number, mine: boolean) => {
-    const images = (item.attachments ?? []).filter((a) => a.mime_type?.startsWith('image/'));
-    const others = (item.attachments ?? []).filter((a) => !a.mime_type?.startsWith('image/'));
-
-    return (
-      <View
-        key={item.id}
-        style={{
-          paddingVertical: 14,
-          borderTopWidth: index === 0 ? 0 : 1,
-          borderTopColor: skin.border,
-          backgroundColor: item.id === focusedFeedbackId ? (skin.dark ? '#221d11' : '#fff8df') : 'transparent',
-          borderRadius: item.id === focusedFeedbackId ? 12 : 0,
-          paddingHorizontal: item.id === focusedFeedbackId ? 10 : 0,
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
-          <Text style={{ fontSize: 15 }}>{KIND_BY_KEY[item.kind]?.emoji ?? '💬'}</Text>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: skin.ink }}>
-            {mine ? KIND_BY_KEY[item.kind]?.label ?? 'Feedback' : item.author_name ?? 'Someone'}
-          </Text>
-          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: skin.inkSoft }}>
-            · {timeAgo(item.created_at)}
-            {!mine && item.author_email ? ` · ${item.author_email}` : ''}
-            {!mine && item.where_in_app ? ` · ${item.where_in_app}` : ''}
-            {!mine && item.platform ? ` · ${item.platform}` : ''}
-          </Text>
-          {item.status !== 'new' ? (
-            <Text
-              style={{
-                fontFamily: 'Lato_700Bold',
-                fontSize: 11,
-                letterSpacing: 0.6,
-                textTransform: 'uppercase',
-                color: skin.gold,
-              }}
-            >
-              {item.status === 'done' ? 'Done' : 'Read'}
-            </Text>
-          ) : null}
-        </View>
-
-        {item.message ? (
-          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 22, color: skin.inkBody }}>
-            {item.message}
-          </Text>
-        ) : null}
-
-        {images.length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }} contentContainerStyle={{ gap: 8 }}>
-            {images.map((a) => (
-              <SignedImage
-                key={a.id || a.url}
-                uri={a.url}
-                style={{
-                  width: 132,
-                  height: 132,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: skin.border,
-                  backgroundColor: skin.field,
-                }}
-                resizeMode="cover"
-              />
-            ))}
-          </ScrollView>
-        ) : null}
-
-        {others.map((a) => (
-          <Text
-            key={a.id || a.url}
-            style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: skin.gold, marginTop: 6 }}
-          >
-            📎 {a.filename}
-          </Text>
-        ))}
-
-        {/* The answer. This is the half that makes it worth writing the next one. */}
-        {item.reply ? (
-          <View
-            style={{
-              marginTop: 12,
-              borderLeftWidth: 3,
-              borderLeftColor: skin.gold,
-              paddingLeft: 12,
-            }}
-          >
-            <Text style={{ ...styles.caption, fontSize: 11, marginBottom: 4 }}>
-              {item.replied_by_name ?? 'The HIVE'} said
-              {item.replied_at ? ` · ${timeAgo(item.replied_at)}` : ''}
-            </Text>
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 22, color: skin.inkBody }}>
-              {item.reply}
-            </Text>
-          </View>
-        ) : mine ? (
-          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: skin.inkFaint, marginTop: 8 }}>
-            {item.status === 'new' ? 'Not looked at yet.' : 'Seen. No answer written yet.'}
-          </Text>
-        ) : null}
-
-        {/* Owner controls. Only on the third tab, only for owners. */}
-        {!mine ? (
-          <View style={{ marginTop: 12 }}>
-            {!item.reply ? (
-              <>
-                {/* The owner's answer. Words, so it gets the microphone — and
-                    the mic sits inside the box's own border rather than on a
-                    shelf underneath it. `next` arrives as either a string or an
-                    updater, because dictation has to read what is already there
-                    to append to it. */}
-                <ComposerBar
-                  variant="form"
-                  value={replyDrafts[item.id] ?? ''}
-                  onChangeText={(next) =>
-                    setReplyDrafts((prev) => ({
-                      ...prev,
-                      [item.id]: typeof next === 'function' ? next(prev[item.id] ?? '') : next,
-                    }))
-                  }
-                  minHeight={64}
-                  // 4000 is what the app-feedback edge function accepts. Raising
-                  // it here would only let somebody write a reply the server
-                  // then refuses.
-                  maxLength={4000}
-                  placeholder="What happened about it?"
-                  // Enter makes a new paragraph. An answer to a bug report runs
-                  // to several lines, and "Answer in HIVE" is right below.
-                  submitOnEnterKey={false}
-                  submitting={replyingTo === item.id}
-                />
-                {/* Wrapping, because "Answer in HIVE" and "Mark read" side
-                    by side are wider than a phone panel and the second one was
-                    running off the edge of the card. */}
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                  <Pressable
-                    onPress={() => void sendReply(item.id)}
-                    disabled={!(replyDrafts[item.id] ?? '').trim() || replyingTo === item.id}
-                    style={{
-                      borderRadius: 999,
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                      backgroundColor: (replyDrafts[item.id] ?? '').trim() ? skin.gold : skin.border,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: 'Lato_700Bold',
-                        fontSize: 13,
-                        color: (replyDrafts[item.id] ?? '').trim() ? (skin.dark ? '#07080F' : '#fffdf5') : skin.inkFaint,
-                      }}
-                    >
-                      {replyingTo === item.id ? 'Saving…' : 'Answer in HIVE'}
-                    </Text>
-                  </Pressable>
-                  {item.status === 'new' ? (
-                    <Pressable
-                      onPress={() => void markStatus(item.id, 'read')}
-                      style={{
-                        borderRadius: 999,
-                        paddingHorizontal: 16,
-                        paddingVertical: 8,
-                        borderWidth: 1,
-                        borderColor: skin.border,
-                      }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: skin.inkSoft }}>Mark read</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-                {replyResult[item.id] ? (
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: replyResult[item.id].startsWith('Saved') ? skin.gold : '#a44', marginTop: 7 }}>
-                    {replyResult[item.id]}
-                  </Text>
-                ) : null}
-              </>
-            ) : (
-              <Pressable
-                onPress={() => void markStatus(item.id, item.status === 'done' ? 'read' : 'done')}
-                style={{ alignSelf: 'flex-start' }}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: skin.gold }}>
-                  {item.status === 'done' ? 'Reopen' : 'Mark done'}
-                </Text>
-              </Pressable>
-            )}
-          </View>
-        ) : null}
-      </View>
-    );
-  };
-
-  const emptyLine = (text: string) => (
-    <Text
-      style={{
-        fontFamily: 'Lato_400Regular',
-        fontSize: 15,
-        lineHeight: 22,
-        color: skin.inkSoft,
-        textAlign: 'center',
-        paddingVertical: 22,
-      }}
-    >
-      {text}
-    </Text>
-  );
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: skin.page }} edges={['bottom']}>
       <SpaceBackdrop />
@@ -699,50 +304,13 @@ export default function AppFeedbackScreen() {
             fontSize: 15,
             lineHeight: 22,
             color: skin.inkBody,
-            marginBottom: 6,
-          }}
-        >
-          This feedback goes straight to Nat, so she can build you the best, most useful and
-          intuitive app possible! All thoughts and feedback welcome!
-        </Text>
-        <Text
-          style={{
-            fontFamily: 'Lato_400Regular',
-            fontSize: 15,
-            lineHeight: 22,
-            color: skin.inkBody,
             marginBottom: 18,
           }}
         >
-          The easiest way of all: take a screenshot, mark it up, and drop it in here. 📸
+          Send a note or marked-up screenshot straight to Nat’s inbox. Shipped fixes appear in What’s New. 📸
         </Text>
 
-        {/* Short words on a phone, the whole sentence where there is room.
-            The page on a phone is the screen minus the side rail minus its own
-            padding — about 280 points at 375 — and "Say something", "What
-            you've sent (0)" and "Everyone (0)" want more than 400 between them.
-            That is why the third one ran off the edge with nothing to say it
-            was there.
-
-            These are the same words shortened rather than renamed, and the set
-            lands inside 280. "Everyone" keeps its full name because it is the
-            owners' tab and the one worth being sure about; once its count runs
-            to three figures the row goes back over the line, which is what the
-            arrow above is for. */}
-        <TabStrip>
-          <HeaderTabs
-            tabs={[
-              { key: 'say', label: narrow ? 'Say it' : 'Say something' },
-              { key: 'sent', label: narrow ? 'Sent' : 'What you’ve sent', count: sent?.length },
-              ...(isOwner ? [{ key: 'all', label: 'Inbox', count: all?.length }] : []),
-            ]}
-            activeTab={tab}
-            onChange={(next) => setTab(next as 'say' | 'sent' | 'all')}
-          />
-        </TabStrip>
-
-        {tab === 'say' ? (
-          <View style={styles.panel}>
+        <View style={styles.panel}>
             <Text style={{ ...styles.caption, marginBottom: 10 }}>What kind of thing is it?</Text>
 
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
@@ -1009,28 +577,7 @@ export default function AppFeedbackScreen() {
                 {result.text}
               </Text>
             ) : null}
-          </View>
-        ) : tab === 'sent' ? (
-          <View style={styles.panel}>
-            {sent === null ? (
-              <ThinkingBee />
-            ) : sent.length === 0 ? (
-              emptyLine('Nothing yet. Anything you send will be listed here, along with what we said back.')
-            ) : (
-              sent.map((item, index) => renderItem(item, index, true))
-            )}
-          </View>
-        ) : (
-          <View style={styles.panel}>
-            {all === null ? (
-              <ThinkingBee />
-            ) : all.length === 0 ? (
-              emptyLine('Nobody has said anything yet.')
-            ) : (
-              all.map((item, index) => renderItem(item, index, false))
-            )}
-          </View>
-        )}
+        </View>
       </BounceScrollView>
     </SafeAreaView>
   );

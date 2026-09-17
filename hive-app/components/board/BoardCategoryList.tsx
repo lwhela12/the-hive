@@ -139,6 +139,11 @@ export const BoardCategoryList = memo(function BoardCategoryList({
         const recentThreads = (postCounts?.[item.id]?.recentThreads ?? []).slice(0, threadCapacity);
         const count = postCounts?.[item.id]?.count ?? 0;
         const countLabel = `${count} ${count === 1 ? 'thread' : 'threads'}`;
+        // A single long word cannot choose a clean line break. On a two-column
+        // phone grid "Announcements" used to strand its final "s" on a second
+        // line, so single-word names scale within one line while real phrases
+        // keep their natural two-line layout.
+        const singleWordTitle = compact && !/\s/.test(item.name.trim());
         const taggedNames = (item.member_tags ?? [])
           .map((tag) => tag.member?.name?.split(' ')[0])
           .filter(Boolean);
@@ -242,7 +247,9 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                   marginTop: 8,
                   color: isCompleted ? skin.inkSoft : skin.ink,
                 }}
-                numberOfLines={2}
+                numberOfLines={singleWordTitle ? 1 : 2}
+                adjustsFontSizeToFit={singleWordTitle}
+                minimumFontScale={0.72}
               >
                 {item.name}
               </Text>

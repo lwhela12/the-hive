@@ -14,7 +14,7 @@ import {
 import { hiveMark, hiveSealImg } from '../_shared/hiveMark.ts';
 
 /**
- * App Feedback — files it, then tells Nat.
+ * App Feedback — keeps a recovery copy, then tells Nat by email.
  *
  * The screen posts here rather than writing to the table itself, and the table
  * has no insert policy, so this is the only way a row gets made. That is what
@@ -22,7 +22,8 @@ import { hiveMark, hiveSealImg } from '../_shared/hiveMark.ts';
  * a name the caller typed. A member cannot file feedback as somebody else,
  * because they never touch the table.
  *
- * Order matters and is deliberate: STORE FIRST, then email. Resend can be down,
+ * Order matters and is deliberate: STORE FIRST, then email. The stored row is
+ * recovery plumbing, not a second support inbox. Resend can be down,
  * the key can be missing, a domain can be mid-move — none of that is a reason
  * to lose what somebody took the trouble to write. A stored row with no email
  * is a recoverable problem; an email with no row is a note that exists only in
@@ -39,7 +40,6 @@ const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const FEEDBACK_TO = Deno.env.get('APP_FEEDBACK_TO') || 'savedyouaseatstudios@gmail.com';
 const FEEDBACK_CC = Deno.env.get('APP_FEEDBACK_CC') || 'natwalstead@gmail.com';
 const FEEDBACK_FROM_EMAIL = Deno.env.get('APP_FEEDBACK_FROM_EMAIL') || 'HIVE <hello@the-hive.app>';
-const APP_URL = Deno.env.get('EXPO_PUBLIC_APP_URL') || 'https://app.the-hive.app';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 
 /**
@@ -169,86 +169,18 @@ serve(async (req) => {
   );
 
   let payload: {
-    action?: string;
     kind?: string;
     message?: string;
     where_in_app?: string | null;
     community_id?: string | null;
     platform?: string | null;
     attachments?: unknown;
-    feedback_id?: string;
-    reply?: string;
-    status?: string;
   };
 
   try {
     payload = await req.json();
   } catch {
     return errorResponse('Expected a JSON body', 400);
-  }
-
-  // ─── Answering one ────────────────────────────────────────────────────────
-  //
-  // The other half of the loop, and the reason any of this is worth building.
-  // A form that only takes is a form people fill in once. Nat, 2026-08-04:
-  // "does it show the turn around and the fix as well? or just a list of
-  // grievances?" — it was a list of grievances, so now it answers.
-  //
-  // Owner-only, checked here against `profiles.is_owner` rather than trusted
-  // from the body. It goes through the function for the same reason filing does:
-  // the name on a reply is the name on the JWT.
-  if (payload.action === 'reply') {
-    const { data: me } = await supabaseAdmin
-      .from('profiles')
-      .select('name, is_owner')
-      .eq('id', auth.userId)
-      .maybeSingle();
-
-    if (!me?.is_owner) {
-      return errorResponse('Only the people who run the HIVE can answer feedback', 403);
-    }
-
-    const feedbackId = (payload.feedback_id ?? '').trim();
-    if (!feedbackId) return errorResponse('Which one?', 400);
-
-    const reply = (payload.reply ?? '').trim();
-    if (reply.length > 4000) {
-      return errorResponse('That reply is longer than the form can take', 400);
-    }
-
-    const status = ['new', 'read', 'done'].includes(payload.status ?? '')
-      ? (payload.status as string)
-      : reply
-        ? 'done'
-        : 'read';
-
-    const { data: updated, error: replyError } = await supabaseAdmin
-      .from('app_feedback')
-      .update({
-        status,
-        ...(reply
-          ? {
-              reply,
-              replied_at: new Date().toISOString(),
-              replied_by: auth.userId,
-              replied_by_name: me.name ?? 'The HIVE',
-            }
-          : {}),
-      })
-      .eq('id', feedbackId)
-      .select('id, author_id, kind, message, reply, status')
-      .single();
-
-    if (replyError || !updated) {
-      console.error('Could not answer feedback:', replyError);
-      return errorResponse('Could not save that answer', 500);
-    }
-
-    // The reply lives with the report, in the HIVE. Filing feedback already
-    // sends Nat one branded intake notice; answering it must not start a second
-    // email thread or quietly add to a member's inbox. The member sees the
-    // answer on their own "Sent" tab the next time they open this screen.
-    return jsonResponse({ id: updated.id, status: updated.status, stored: true });
   }
 
   // ─── Filing one ───────────────────────────────────────────────────────────
@@ -334,7 +266,7 @@ serve(async (req) => {
   // 2. Tell Nat through the studio's normal product-feedback route. This is
   //    deliberately separate from activity mail: Lucas may choose to hear
   //    about HIVE activity later without becoming a recipient of Nat's product
-  //    inbox. The in-app owner inbox remains the source of truth either way.
+  //    inbox. The stored row is a recovery copy if delivery ever fails.
   let emailed = false;
   if (RESEND_API_KEY) {
     try {
@@ -356,9 +288,6 @@ serve(async (req) => {
               ${whereInApp ? `<tr><td style="padding-right:12px;">Where</td><td style="color:#313130;">${escapeHtml(whereInApp)}</td></tr>` : ''}
               ${platform ? `<tr><td style="padding-right:12px;">On</td><td style="color:#313130;">${escapeHtml(platform)}</td></tr>` : ''}
             </table>
-            <p style="font-size:13px;color:#8e7a5e;margin-top:20px;">
-              <a href="${APP_URL}/app-feedback?tab=inbox&feedbackId=${stored.id}" style="color:#bd9348;">Open feedback in the HIVE</a>
-            </p>
           </div>
         `;
 
