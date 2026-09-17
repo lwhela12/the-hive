@@ -15,6 +15,8 @@ const expectations = [
   ['long current-focus copy is clamped', 'numberOfLines={2}'],
   ['action labels cannot force the row wider', 'flexShrink: 1'],
   ['visible answer count stays compact', 'const connectionChip = `${sharedAnswerCount} answer'],
+  ['profile and current focus stay visually connected', "justifyContent: spotlight && !isCompactHoneycomb ? 'center' : 'space-between'"],
+  ['focused cards use a deliberate small gap', 'gap: spotlight && !isCompactHoneycomb ? 8 : 0'],
 ];
 
 for (const [label, needle] of expectations) {

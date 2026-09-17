@@ -3798,7 +3798,15 @@ export default function MembersScreen() {
                               </Text>
                             </View>
                           ) : (
-                          <View style={{ flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'space-between' }}>
+                          <View
+                            style={{
+                              flex: 1,
+                              minHeight: 0,
+                              alignItems: 'center',
+                              justifyContent: spotlight && !isCompactHoneycomb ? 'center' : 'space-between',
+                              gap: spotlight && !isCompactHoneycomb ? 8 : 0,
+                            }}
+                          >
                           {hasDailyMatch && (
                             <View
                               accessible
