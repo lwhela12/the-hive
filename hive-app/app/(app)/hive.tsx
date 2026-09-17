@@ -3878,46 +3878,22 @@ export default function HiveScreen() {
                           accessibilityLabel="Open the year calendar with birthdays"
                         />
                         <HeaderActionPill label="+ Event" onPress={openCreateEvent} />
-                      </View>
-                      {/* Inner top highlight — liquid glass gloss */}
-                      <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.95)', marginHorizontal: 10, marginTop: 0 }} />
-                      {/* Past events load inline above upcoming — one timeline, one month per tap */}
-                      <View style={{ flexDirection: 'row', alignItems: 'stretch', borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.4)' }}>
-                        <Pressable
+                        <HeaderActionPill
+                          label={pastEventsLoading ? 'Loading…' : pastMonthsShown === 0 ? '‹ View past events' : '‹ View earlier events'}
                           onPress={showMorePastEvents}
                           disabled={pastEventsLoading}
-                          accessibilityRole="button"
                           accessibilityLabel="View past events, one month further back per tap"
-                          style={({ pressed }) => ({
-                            flex: 1,
-                            paddingVertical: 10,
-                            alignItems: 'center',
-                            backgroundColor: pressed ? '#fbf0d7' : 'transparent',
-                            opacity: pastEventsLoading ? 0.6 : 1,
-                          })}
-                        >
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
-                            {pastEventsLoading ? 'Loading…' : pastMonthsShown === 0 ? '‹ View past events' : '‹ View earlier events'}
-                          </Text>
-                        </Pressable>
+                        />
                         {pastMonthsShown > 0 && (
-                          <Pressable
+                          <HeaderActionPill
+                            label="Collapse ✕"
                             onPress={collapsePastEvents}
-                            accessibilityRole="button"
                             accessibilityLabel="Collapse past events"
-                            style={({ pressed }) => ({
-                              paddingVertical: 10,
-                              paddingHorizontal: 14,
-                              justifyContent: 'center',
-                              borderLeftWidth: 1,
-                              borderLeftColor: 'rgba(222,193,129,0.4)',
-                              backgroundColor: pressed ? '#fbf0d7' : 'transparent',
-                            })}
-                          >
-                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#9a8060' }}>Collapse ✕</Text>
-                          </Pressable>
+                          />
                         )}
                       </View>
+                      {/* Inner top highlight — liquid glass gloss */}
+                      <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.95)', marginHorizontal: 10, marginTop: 0, marginBottom: 4 }} />
                       {loading.events ? (
                         <View style={{ padding: 16 }}><EventsListSkeleton /></View>
                       ) : (
