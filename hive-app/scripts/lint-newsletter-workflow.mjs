@@ -47,8 +47,10 @@ if (!issuePolicy.includes('issue.created_at <= NEWSLETTER_SEND_LAUNCHED_AT')) {
 if (buzz.includes("filter((row) => row.visibility === 'public' || sent.has(row.id) || isOwner)")) {
   failures.push('The Buzz must not relabel imported history as owner-only drafts');
 }
-if (!buzz.includes('subtitle={formatDateLong(item.sentAt ?? item.created_at)}') || buzz.includes(' · from ${hiveDisplayName')) {
-  failures.push('Buzz cards must show the date only, with no source-HIVE delineation');
+if (!buzz.includes('subtitle={newsletterIssueLabel(item)}')
+  || !buzz.includes("if (item.id === EARLY_MARCH_ISSUE_ID) return 'March 2026 issue'")
+  || buzz.includes(' · from ${hiveDisplayName')) {
+  failures.push('Buzz cards must show one clear issue month, including the early-posted March issue, with no source-HIVE delineation');
 }
 if (!buzzArchiveMigration.includes('HIVE members locate the Buzz archive')
   || !buzzArchiveMigration.includes('HIVE members read the completed Buzz archive')) {

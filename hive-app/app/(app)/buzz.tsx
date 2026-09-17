@@ -14,7 +14,6 @@ import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMenti
 import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { taggableHiveFromCommunity } from '../../lib/mentionableMembers';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
-import { formatDateLong } from '../../lib/dateUtils';
 import { SPACE_SKIN } from '../../lib/pageSkin';
 import { LetterProse, type LetterPalette } from './newsletter';
 import type { Community } from '../../types';
@@ -85,8 +84,8 @@ const MONTH_IN_TITLE =
  * Which month a letter is FOR.
  *
  * Two dates are in play and they are often different. The day the letter was
- * posted is `created_at` — the date already on the card. The month the letter
- * is about is the one on its masthead. In the live archive on 2026-08-06 they
+ * posted is `created_at`. The month the letter is about is the one on its
+ * masthead. In the live archive on 2026-08-06 they
  * disagreed on half the letters:
  *
  * | letter | posted | about |
@@ -146,6 +145,22 @@ const letterTrailLabel = (item: Buzz): string => {
   const { month, year } = letterMonth(item);
   const name = MONTH_NAMES[month];
   return year === new Date().getFullYear() ? name : `${name} ${year}`;
+};
+
+/**
+ * The archive shelf names the ISSUE month, not an old import/posting day.
+ *
+ * The legacy March issue is the one exception to deriving that month from the
+ * row date: Wix says "H.I.V.E. Newsletter #2, March 2026", but its imported
+ * row carries the early posting date February 23. Showing that raw date made
+ * the shelf look like two February newsletters and no March newsletter.
+ */
+const EARLY_MARCH_ISSUE_ID = '79aac910-1a1f-444c-bc0b-7af1fe9e96ef';
+
+const newsletterIssueLabel = (item: Buzz): string => {
+  if (item.id === EARLY_MARCH_ISSUE_ID) return 'March 2026 issue';
+  const issueDate = new Date(item.sentAt ?? item.created_at);
+  return `${MONTH_NAMES[issueDate.getMonth()]} ${issueDate.getFullYear()} issue`;
 };
 
 export default function BuzzScreen() {
@@ -631,7 +646,7 @@ export default function BuzzScreen() {
                 // liked that."* The words say it; the border says it from
                 // across the room.
                 dashed={item.unsent}
-                subtitle={formatDateLong(item.sentAt ?? item.created_at)}
+                subtitle={newsletterIssueLabel(item)}
                 // One at a time — opening a letter shuts the one you were
                 // reading, which is what "expand the one you want to read"
                 // means when each of these is two thousand words.
