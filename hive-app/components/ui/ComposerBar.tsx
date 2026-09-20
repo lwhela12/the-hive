@@ -488,6 +488,8 @@ export function ComposerBar({
         <View
           className="flex-row items-end rounded-2xl px-3 py-2 border"
           style={{
+            position: 'relative',
+            zIndex: attachmentMenuOpen ? 200 : 0,
             backgroundColor: isDragActive
               ? (look === FIELD_LOOK ? 'rgba(189,147,72,0.1)' : 'rgba(255,226,166,0.16)')
               : look.pillFill,
@@ -580,6 +582,8 @@ export function ComposerBar({
       <View
         className="rounded-xl overflow-hidden"
         style={{
+          position: 'relative',
+          zIndex: attachmentMenuOpen ? 200 : 0,
           borderWidth: 1,
           borderColor: isDragActive ? '#bd9348' : FIELD_BORDER,
           backgroundColor: isDragActive ? (look === FIELD_LOOK ? '#fdf3dc' : 'rgba(255,226,166,0.16)') : look.fill,
