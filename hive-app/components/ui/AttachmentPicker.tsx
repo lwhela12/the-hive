@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, View, Text, Image, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SelectedImage, pickMultipleImages, takePhoto } from '../../lib/imagePicker';
@@ -34,6 +34,7 @@ interface AttachmentPickerProps {
   maxAttachments?: number;
   disabled?: boolean;
   compact?: boolean;
+  onCompactMenuOpenChange?: (open: boolean) => void;
 }
 
 export function AttachmentPicker({
@@ -46,6 +47,7 @@ export function AttachmentPicker({
   maxAttachments,
   disabled = false,
   compact = false,
+  onCompactMenuOpenChange,
 }: AttachmentPickerProps) {
   const [showCompactMenu, setShowCompactMenu] = useState(false);
   const webAttachmentInputRef = useRef<HTMLInputElement | null>(null);
@@ -55,6 +57,11 @@ export function AttachmentPicker({
   const remainingFileSlots = Math.min(maxFiles - selectedFiles.length, remainingTotalSlots);
   const canAddFiles = remainingFileSlots > 0 && !disabled && !!onFilesChange;
   const useNativeWebAttachmentPicker = compact && isTouchWebDevice();
+
+  useEffect(() => {
+    onCompactMenuOpenChange?.(showCompactMenu);
+    return () => onCompactMenuOpenChange?.(false);
+  }, [onCompactMenuOpenChange, showCompactMenu]);
 
   const handlePickImages = async () => {
     if (!canAddMore) return;

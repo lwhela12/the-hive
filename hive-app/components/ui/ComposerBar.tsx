@@ -1,4 +1,4 @@
-import { useCallback, useRef, type ReactNode } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -215,6 +215,7 @@ export function ComposerBar({
   const isChat = variant === 'chat';
   const isInlineEdit = variant === 'inlineEdit';
   const showAttach = attachments === 'compact' && !!onImagesChange;
+  const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
 
   const setText = useCallback((text: string) => onChangeText(text), [onChangeText]);
   // Dictation writes with the raw setter, not through the mention tracker:
@@ -468,7 +469,11 @@ export function ComposerBar({
   // ---- the pill -----------------------------------------------------------
   if (isChat) {
     return (
-      <View className={containerClassName} {...dragDropProps}>
+      <View
+        className={containerClassName}
+        style={{ position: 'relative', zIndex: attachmentMenuOpen ? 300 : 0 }}
+        {...dragDropProps}
+      >
         {header}
         {attachmentPreviews}
         {dropBanner}
@@ -501,6 +506,7 @@ export function ComposerBar({
               maxFiles={maxFiles}
               maxAttachments={maxAttachments}
               disabled={submitting || !editable}
+              onCompactMenuOpenChange={setAttachmentMenuOpen}
             />
           )}
           {textInputNode}
@@ -556,7 +562,11 @@ export function ComposerBar({
   const showFooter = showAttach || showCounter || isInlineEdit;
 
   return (
-    <View className={containerClassName} {...dragDropProps}>
+    <View
+      className={containerClassName}
+      style={{ position: 'relative', zIndex: attachmentMenuOpen ? 300 : 0 }}
+      {...dragDropProps}
+    >
       {header}
       {label ? (
         <Text style={{ fontFamily: 'Lato_700Bold', color: look.ink }} className="mb-2">
@@ -643,6 +653,7 @@ export function ComposerBar({
                 maxFiles={maxFiles}
                 maxAttachments={maxAttachments}
                 disabled={submitting || !editable}
+                onCompactMenuOpenChange={setAttachmentMenuOpen}
               />
             )}
             {/* Tapping the shelf still gives the cursor back — it is a smaller
