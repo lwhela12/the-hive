@@ -11,6 +11,19 @@ import { SelectedFilePreview } from './SelectedFilePreview';
 const MAX_IMAGES = 5;
 const MAX_FILES = 5;
 
+/**
+ * The compact attachment chooser opens upward from a composer. ComposerBar's
+ * collapsed @-tag strip deliberately sits at z-index 100, so the chooser must
+ * own a higher layer or that strip draws straight through the middle of the
+ * menu (Nat's board-reply screenshot, 2026-09-19).
+ *
+ * Put the layer on the picker wrapper as well as the menu. On React Native Web
+ * the wrapper participates in the sibling stacking order; lifting only its
+ * absolutely positioned child is not enough when a neighbouring suggestion
+ * panel has already made its own stacking context.
+ */
+const COMPACT_ATTACHMENT_MENU_LAYER = 300;
+
 interface AttachmentPickerProps {
   selectedImages: SelectedImage[];
   onImagesChange: (images: SelectedImage[]) => void;
@@ -159,7 +172,14 @@ export function AttachmentPicker({
     const compactDisabled = !canAddMore && !canAddFiles;
 
     return (
-      <View className="relative flex-row items-center">
+      <View
+        className="relative flex-row items-center"
+        style={{
+          zIndex: showCompactMenu ? COMPACT_ATTACHMENT_MENU_LAYER : 0,
+          elevation: showCompactMenu ? 30 : 0,
+          overflow: 'visible',
+        }}
+      >
         {useNativeWebAttachmentPicker && React.createElement('input', {
           ref: webAttachmentInputRef,
           type: 'file',
@@ -179,7 +199,11 @@ export function AttachmentPicker({
         {showCompactMenu && !useNativeWebAttachmentPicker && (
           <View
             className="absolute left-0 bottom-10 bg-white border border-gold/20 rounded-2xl shadow-lg overflow-hidden"
-            style={{ minWidth: 178, zIndex: 50, elevation: 10 }}
+            style={{
+              minWidth: 178,
+              zIndex: COMPACT_ATTACHMENT_MENU_LAYER + 1,
+              elevation: 31,
+            }}
           >
             <Pressable
               onPress={async () => {
