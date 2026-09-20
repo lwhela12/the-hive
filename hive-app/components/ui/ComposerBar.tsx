@@ -477,7 +477,10 @@ export function ComposerBar({
         {header}
         {attachmentPreviews}
         {dropBanner}
-        {suggestionsNode}
+        {/* One transient tool at a time. Letting the always-available tag strip
+            remain under an open attachment chooser made the two controls read
+            as one broken panel even after their stacking order was correct. */}
+        {attachmentMenuOpen ? null : suggestionsNode}
         {taggedPills}
 
         {/* The pill takes its colour from the page, like the ink does.
@@ -709,7 +712,7 @@ export function ComposerBar({
         )}
       </View>
 
-      {suggestionsNode}
+      {attachmentMenuOpen ? null : suggestionsNode}
       {taggedPills}
     </View>
   );
