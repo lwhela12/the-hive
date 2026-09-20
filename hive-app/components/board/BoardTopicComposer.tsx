@@ -10,6 +10,7 @@ import { ComposerBar } from '../ui/ComposerBar';
 import { fieldLookFor } from '../ui/Input';
 import { usePageSkin } from '../../lib/pageSkin';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { ScopePicker, type ScopeOption } from '../ui/ScopePicker';
 import { ScopeBadge } from '../ui/ScopeBadge';
 import { BounceScrollView } from '../ui/BounceScrollView';
@@ -335,7 +336,14 @@ export function BoardTopicComposer({
   // Same reasoning as BoardComposer.tsx: a fixed cream sheet read as "you're
   // in a HIVE now" when opened from HIVE-Wide's dark page (Nat, 2026-08-08).
   const skin = usePageSkin();
-  const { community } = useAuth();
+  const { community, profile } = useAuth();
+  // Board descriptions use the same shared writing box as threads and
+  // replies, but this composer never handed that box the HIVE's members.
+  // The result looked like tagging was supported (you could type "@") while
+  // the picker had nobody to offer. `members` is already the board screen's
+  // current-HIVE directory, and `reach` keeps the whole-HIVE rows honest when
+  // an existing board is switched between HIVE-only and HIVE-Wide.
+  const mentionReach = useMentionReach({ reach });
   const look = fieldLookFor(skin.dark ? 'dark' : 'light');
   const selectOwner = (memberId: string) => {
     setTopicKind('hd_board');
@@ -616,6 +624,9 @@ export function BoardTopicComposer({
               onSubmit={handleSubmit}
               canSubmit={isValid}
               submitting={submitting}
+              mentionMembers={members}
+              mentionReach={mentionReach}
+              currentUserId={profile?.id}
             />
 
             {/* Info note */}
