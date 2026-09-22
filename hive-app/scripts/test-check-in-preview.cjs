@@ -6,6 +6,8 @@ const ts = require('typescript');
 let handler;
 const previews = [];
 const inserts = [];
+let heldNotification = null;
+let deliveries = 0;
 const event = { id: 'tech-meeting', event_date: '2026-09-09', community_id: 'tech', community: { name: 'Tech HIVE' } };
 
 function chain(table) {
@@ -13,7 +15,7 @@ function chain(table) {
     select() { return api; }, eq() { return api; }, ilike() { return api; }, is() { return api; }, in() { return api; },
     maybeSingle: async () => {
       if (table === 'profiles') return { data: { id: 'nat', email: 'natwalstead@gmail.com' } };
-      if (table === 'notifications') return { data: null };
+      if (table === 'notifications') return { data: heldNotification };
       return { data: null };
     },
     single: async () => ({ data: { id: 'hold-1' }, error: null }),
@@ -40,8 +42,9 @@ function imported(id) {
   if (id.endsWith('/auth.ts')) return { verifySupabaseJwt: async () => ({ userId: 'nat' }), isAuthError: () => false, isOwner: async () => true };
   if (id.endsWith('/checkInSession.ts')) return { meetingOccurrence: id => `meeting:${id}` };
   if (id.endsWith('/checkInPatterns.ts')) return { PRE_MEETING_CHECK_IN_PATTERN: /before\s+we\s+meet/i };
-  if (id.endsWith('/checkInDelivery.ts')) return { deliverCheckIn: async () => ({ emailed: 0, suppressed: 0, delivery_failed: 0 }) };
+  if (id.endsWith('/checkInDelivery.ts')) return { deliverCheckIn: async () => { deliveries += 1; return { emailed: 0, suppressed: 0, delivery_failed: 0 }; } };
   if (id.endsWith('/reachMail.ts')) return { templateIsApproved: async () => true, hiveIsMeetingNow: async () => false, genericLetter: () => ({}), sendReachEmail: async () => ({ sent: false }) };
+  if (id.endsWith('/hiveMark.ts')) return { hiveMark: () => ({ accent: '#bd9348' }), hiveSealImg: () => '' };
   throw new Error(`Unexpected import ${id}`);
 }
 
@@ -62,5 +65,13 @@ new Function('require', 'exports', output)((id) => imported(id), {});
   assert.match(previews[0].body.html, /approve-check-in\/hold-1\?action=send/);
   assert.equal(inserts.length, 1, 'the hold is saved before the preview is emailed');
   assert.equal(inserts[0].row.metadata.check_in_approval, 'pending');
+  heldNotification = { id: 'hold-1', metadata: { check_in_preview: true, check_in_approval: 'sent', check_in_sent_to: 8 } };
+  const repeat = await handler(new Request('https://offline.invalid/check-in-preview', {
+    method: 'POST', headers: { Authorization: 'Bearer nat-session' },
+    body: JSON.stringify({ action: 'send', hold_id: 'hold-1' }),
+  }));
+  assert.equal(repeat.status, 200);
+  assert.deepEqual(await repeat.json(), { already_sent: true, reached: 8 });
+  assert.equal(deliveries, 0, 'opening a used approval link never retries member delivery');
   console.log('check-in preview scheduler test passed');
 })().catch(error => { console.error(error); process.exit(1); });

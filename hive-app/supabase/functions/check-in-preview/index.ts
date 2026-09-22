@@ -27,6 +27,7 @@ type HoldMeta = {
   check_in_survey_id?: string;
   check_in_touch?: string;
   check_in_approval?: string;
+  check_in_sent_to?: number;
 };
 
 function pacificDate(at = new Date()) {
@@ -153,6 +154,12 @@ async function sendHeldCheckIn(admin: { from: (table: string) => any }, actorId:
   if (!actor?.email || actor.email.toLowerCase() !== PREVIEW_EMAIL) return errorResponse('This check-in preview is for Nat to send.', 403);
   const { data: hold } = await admin.from('notifications').select('id, metadata').eq('id', holdId).maybeSingle();
   const meta = (hold?.metadata ?? {}) as HoldMeta;
+  // An email approval link remains clickable after its first use. Report the
+  // saved result without entering delivery again; a second click is not a new
+  // instruction to send another round of reminders.
+  if (hold && meta.check_in_preview && meta.check_in_approval === 'sent') {
+    return jsonResponse({ already_sent: true, reached: meta.check_in_sent_to ?? 0 });
+  }
   if (!hold || !meta.check_in_preview || meta.check_in_approval !== 'pending' || !meta.check_in_event_id || !meta.check_in_community_id || !meta.check_in_survey_id) {
     return errorResponse('That check-in preview is no longer waiting.', 409);
   }

@@ -16,7 +16,7 @@ export default function ApproveCheckInPreview() {
   const holdId = (Array.isArray(rawHold) ? rawHold[0] : rawHold)?.trim() ?? '';
   const decision = Array.isArray(action) ? action[0] : action;
   const { profile, loading } = useAuth();
-  const [state, setState] = useState<'waiting' | 'sending' | 'sent' | 'empty' | 'error'>('waiting');
+  const [state, setState] = useState<'waiting' | 'sending' | 'sent' | 'already_sent' | 'empty' | 'error'>('waiting');
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -27,6 +27,11 @@ export default function ApproveCheckInPreview() {
       .then(({ data, error }) => {
         if (error) throw new Error((data as any)?.error ?? error.message);
         const reached = Number((data as any)?.reached ?? 0);
+        if ((data as any)?.already_sent) {
+          setState('already_sent');
+          setMessage(reached ? `Already sent to ${reached} ${reached === 1 ? 'person' : 'people'}. Nobody was emailed again.` : 'This reminder was already handled. Nobody was emailed again.');
+          return;
+        }
         setState(reached ? 'sent' : 'empty');
         setMessage(reached ? `Sent to ${reached} ${reached === 1 ? 'person' : 'people'} who still needed it.` : 'Everybody has completed it already, so nobody was emailed.');
       })
@@ -35,6 +40,7 @@ export default function ApproveCheckInPreview() {
 
   const copy = state === 'sending' ? 'Sending the check-in…' : state === 'waiting'
     ? 'Getting your check-in ready…' : state === 'sent' ? 'It is on its way.'
+    : state === 'already_sent' ? 'Already sent.'
     : state === 'empty' ? 'Nobody needs a reminder.' : 'This check-in was not sent.';
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0B0B12' }}>
