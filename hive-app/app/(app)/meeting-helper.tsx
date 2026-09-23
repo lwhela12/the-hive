@@ -3415,30 +3415,29 @@ export default function MeetingHelperScreen() {
           <EditPill noteKey="meetups" />
         </View>
 
-        {/* Meeting/Hang pick what a calendar tap schedules. OG's HIVE Help
-            check-in recap stays visible below these cards. */}
+        {/* Meeting/Hang pick what a calendar tap schedules. HIVE Help shows
+            its check-in recap until another card is selected. */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(16, 8) }}>
           {deck.plan.cards.map((column) => {
             const isHelpRecapCard = column.key === 'help' && deck.plan.helpExpansion.kind === 'voices';
-            // Exactly ONE interactive card carries the highlight: the open
-            // panel wins; otherwise the active schedule mode does.
+            // Exactly ONE card carries the highlight: the open panel wins;
+            // otherwise the active schedule mode does.
             const isSelected = expandedPlanCard
               ? expandedPlanCard === column.key
               : planMode === column.key;
             return (
               <Pressable
                 key={column.title}
-                disabled={isHelpRecapCard}
-                accessibilityRole={isHelpRecapCard ? 'text' : 'button'}
+                accessibilityRole="button"
                 accessibilityLabel={column.title}
                 accessibilityHint={deckIsOg
                   ? column.key === 'meeting'
                     ? 'Select, then tap a calendar day to schedule the meeting'
                     : isHelpRecapCard
-                      ? 'Check-in responses are always shown below'
+                      ? 'Show the check-in recap until another card is selected'
                       : 'Open HIVE Hang plans'
                   : undefined}
-                accessibilityState={isHelpRecapCard ? undefined : { selected: isSelected }}
+                accessibilityState={{ selected: isSelected }}
                 onPress={() => {
                   if (column.key === 'meeting') {
                     setPlanMode('meeting');
@@ -3451,7 +3450,7 @@ export default function MeetingHelperScreen() {
                       deck.plan.hangCardExpands && card !== 'hang' ? 'hang' : null
                     );
                   } else {
-                    setExpandedPlanCard((card) => (card === 'help' ? null : 'help'));
+                    setExpandedPlanCard('help');
                   }
                 }}
                 style={({ pressed }) => ({
@@ -3496,9 +3495,8 @@ export default function MeetingHelperScreen() {
           })}
         </View>
 
-        {/* OG's HIVE Help recap is part of the slide, regardless of which
-            scheduling card is selected. */}
-        {deck.plan.helpExpansion.kind === 'voices' ? (
+        {/* OG's check-in recap stays open while HIVE Help is selected. */}
+        {expandedPlanCard === 'help' && deck.plan.helpExpansion.kind === 'voices' ? (
           <View
             style={{
               marginTop: sz(14, 8),
@@ -3686,9 +3684,8 @@ export default function MeetingHelperScreen() {
           </View>
         ) : null}
 
-        {/* Tech's HIVE Help conversation is still opened by its card. OG's
-            check-in recap stays in view above, and its monthly focus lives in
-            the calendar headers. */}
+        {/* Tech's HIVE Help conversation opens with its card too. OG's
+            monthly focus lives in the calendar headers. */}
         {expandedPlanCard === 'help' && deck.plan.helpExpansion.kind === 'conversation' ? (
           <View
             style={{
