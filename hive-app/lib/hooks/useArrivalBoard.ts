@@ -28,10 +28,22 @@ export type ArrivalBoardMember = {
 };
 
 export type ArrivalBoardMeeting = {
+  id: string;
   event_date: string;
   event_time: string | null;
   end_time?: string | null;
   title: string;
+};
+
+export type MeetingAttendanceReport = {
+  meeting_id: string;
+  community_id: string;
+  user_id: string;
+  attendance: 'in_person' | 'remote' | 'missing' | null;
+  hd_wish: string;
+  help_idea: string;
+  reported_by: string;
+  updated_at: string;
 };
 
 export function getTextAnswer(answers: SurveyAnswers, key: string) {
@@ -56,7 +68,7 @@ export function getMonthNameFromPeriod(period?: string | null) {
   return date.toLocaleString('en-US', { month: 'long' });
 }
 
-export function formatMeetingDate(meeting: ArrivalBoardMeeting | null) {
+export function formatMeetingDate(meeting: (Pick<ArrivalBoardMeeting, 'event_date' | 'event_time' | 'end_time'> & { title?: string }) | null) {
   if (!meeting?.event_date) return '';
   const [year, month, day] = meeting.event_date.split('-').map(Number);
   if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return '';
@@ -83,11 +95,17 @@ export function getAttendance(response?: SurveyResponse): MeetingAttendance {
   return getArrivalAttendance(response?.answers as Record<string, unknown> | undefined);
 }
 
+export function getReportedAttendance(response?: SurveyResponse, report?: MeetingAttendanceReport): MeetingAttendance {
+  if (report?.attendance && (!response || report.updated_at >= response.submitted_at)) return report.attendance;
+  return getAttendance(response);
+}
+
 // Arrival order: first to check in takes the 1 spot, and the order reshuffles
 // naturally every meeting. Not-yet-checked-in members trail alphabetically.
 export function getCheckInOrder(
   members: ArrivalBoardMember[],
-  responsesByUser: Map<string, SurveyResponse>
+  responsesByUser: Map<string, SurveyResponse>,
+  reportsByUser: Map<string, MeetingAttendanceReport> = new Map(),
 ) {
   const checkedIn = members
     .filter((member) => responsesByUser.has(member.id))
@@ -96,8 +114,9 @@ export function getCheckInOrder(
       const bTime = responsesByUser.get(b.id)?.submitted_at ?? '';
       return aTime.localeCompare(bTime);
     });
-  const notYet = members.filter((member) => !responsesByUser.has(member.id));
-  return [...checkedIn, ...notYet];
+  const reported = members.filter((member) => !responsesByUser.has(member.id) && reportsByUser.has(member.id));
+  const notYet = members.filter((member) => !responsesByUser.has(member.id) && !reportsByUser.has(member.id));
+  return [...checkedIn, ...reported, ...notYet];
 }
 
 // Energy is answered on a 1–10 scale; show one ⚡ per point so the bolts
@@ -127,6 +146,7 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
   const [responsePeriod, setResponsePeriod] = useState<string | null>(null);
   const [members, setMembers] = useState<ArrivalBoardMember[]>([]);
   const [responsesByUser, setResponsesByUser] = useState<Map<string, SurveyResponse>>(new Map());
+  const [reportsByUser, setReportsByUser] = useState<Map<string, MeetingAttendanceReport>>(new Map());
   const [nextMeeting, setNextMeeting] = useState<ArrivalBoardMeeting | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const loadingCommunityRef = useRef<string | null>(null);
@@ -173,7 +193,7 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
           .eq('community_id', communityId),
         supabase
           .from('events')
-          .select('event_date, event_time, end_time, title')
+          .select('id, event_date, event_time, end_time, title')
           .eq('community_id', communityId)
           .eq('event_type', 'meeting')
           .gte('event_date', today)
@@ -230,6 +250,16 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
         : (!!meetingDayIso && today > meetingDayIso);
 
       const byUser = new Map<string, SurveyResponse>();
+      const reports = new Map<string, MeetingAttendanceReport>();
+      const meetingId = meetingRes.data?.[0]?.id;
+      if (meetingId) {
+        const { data: reportRows, error: reportError } = await supabase
+          .from('meeting_attendance_reports')
+          .select('*')
+          .eq('meeting_id', meetingId);
+        if (reportError) console.warn('Could not load reported attendance', reportError);
+        ((reportRows ?? []) as MeetingAttendanceReport[]).forEach((report) => reports.set(report.user_id, report));
+      }
       if (activeCheckIn && period && !cycleOver) {
         const { data: responseRows } = await supabase
           .from('survey_responses')
@@ -261,6 +291,7 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
       setResponsePeriod(period);
       setMembers(memberRows);
       setResponsesByUser(byUser);
+      setReportsByUser(reports);
       setNextMeeting((meetingRes.data?.[0] as ArrivalBoardMeeting | undefined) ?? null);
       setLastUpdatedAt(new Date());
     } catch (error) {
@@ -285,6 +316,7 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
     setResponsePeriod(null);
     setMembers([]);
     setResponsesByUser(new Map());
+    setReportsByUser(new Map());
     setNextMeeting(null);
     setLastUpdatedAt(null);
     void refresh();
@@ -316,6 +348,7 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
     responsePeriod,
     members,
     responsesByUser,
+    reportsByUser,
     nextMeeting,
     lastUpdatedAt,
     refresh,

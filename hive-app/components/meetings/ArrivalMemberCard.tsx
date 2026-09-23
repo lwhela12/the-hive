@@ -4,11 +4,13 @@ import { Avatar } from '../ui/Avatar';
 import {
   ENERGY_DOTS_MAX,
   getAttendance,
+  getReportedAttendance,
   getEnergyDots,
   getFirstName,
   getNumberAnswer,
   getTextAnswer,
   type ArrivalBoardMember,
+  type MeetingAttendanceReport,
 } from '../../lib/hooks/useArrivalBoard';
 import type { SurveyResponse } from '../../lib/hooks/useSurveys';
 
@@ -82,18 +84,22 @@ function ArrivalFact({
 export function ArrivalMemberCard({
   member,
   response,
+  report,
   isTV,
   compact = false,
   showLegacyEnergy = false,
 }: {
   member: ArrivalBoardMember;
   response?: SurveyResponse;
+  report?: MeetingAttendanceReport;
   isTV: boolean;
   compact?: boolean;
   showLegacyEnergy?: boolean;
 }) {
   const answers = response?.answers ?? {};
   const checkedIn = !!response;
+  const hasReport = !!report && (!response || report.updated_at >= response.submitted_at);
+  const active = checkedIn || hasReport;
   const nameToday = getTextAnswer(answers, 'q_name_today') || getFirstName(member.name);
   const feeling = getTextAnswer(answers, 'q_feeling_today');
   const feelingNote = getTextAnswer(answers, 'q_feeling_note');
@@ -101,7 +107,7 @@ export function ArrivalMemberCard({
   const energyMode = showLegacyEnergy ? getTextAnswer(answers, 'q_energy_mode') : '';
   const plate = getTextAnswer(answers, 'q_plate');
   const hardOut = personalHardOut(answers.q_hard_out).label;
-  const attendance = getAttendance(response);
+  const attendance = getReportedAttendance(response, report);
   const attendanceLabel = attendanceAtAGlance(attendance);
   const energyDots = energyLevel !== null ? getEnergyDots(energyLevel) : null;
   const scale = compact ? 0.78 : 1;
@@ -109,10 +115,10 @@ export function ArrivalMemberCard({
   return (
     <View
       style={{
-        backgroundColor: checkedIn ? '#fffdf5' : 'rgba(255,253,245,0.55)',
+        backgroundColor: active ? '#fffdf5' : 'rgba(255,253,245,0.55)',
         borderRadius: isTV ? 26 * scale : 18,
         borderWidth: 1,
-        borderColor: checkedIn ? 'rgba(222,193,129,0.65)' : 'rgba(222,193,129,0.28)',
+        borderColor: active ? 'rgba(222,193,129,0.65)' : 'rgba(222,193,129,0.28)',
         paddingVertical: (isTV ? 26 : 18) * scale,
         paddingHorizontal: (isTV ? 18 : 14) * scale,
         alignItems: 'center',
@@ -128,9 +134,9 @@ export function ArrivalMemberCard({
          * so the board stays a grid rather than a ragged pile.
          */
         minHeight: (isTV ? (checkedIn ? 340 : 210) : checkedIn ? 220 : 132) * scale,
-        opacity: checkedIn ? 1 : 0.55,
+        opacity: active ? 1 : 0.55,
         shadowColor: '#bd9348',
-        shadowOpacity: checkedIn ? 0.12 : 0,
+        shadowOpacity: active ? 0.12 : 0,
         shadowRadius: 14,
         shadowOffset: { width: 0, height: 6 },
       }}
@@ -158,6 +164,7 @@ export function ArrivalMemberCard({
 
       {checkedIn ? (
         <>
+          {hasReport && report?.attendance ? <Text style={{ fontFamily: 'Lato_700Bold', fontSize: (isTV ? 13 : 10) * scale, color: '#8a6b30', marginTop: 4 * scale }}>Attendance reported by admin</Text> : null}
           {feeling ? (
             <View style={{ alignItems: 'center', marginTop: (isTV ? 12 : 8) * scale }}>
               <Text
@@ -202,6 +209,12 @@ export function ArrivalMemberCard({
               {plate ? <ArrivalFact label="Capacity" value={plateAtAGlance(plate)} isTV={isTV} scale={scale} /> : null}
             </View>
           ) : null}
+          {hasReport && (report?.hd_wish || report?.help_idea) ? (
+            <View style={{ marginTop: (isTV ? 9 : 6) * scale, gap: 3 * scale }}>
+              {report.hd_wish ? <Text numberOfLines={2} style={{ fontFamily: 'Lato_400Regular', fontSize: (isTV ? 13 : 10) * scale, color: '#765b31', textAlign: 'center' }}>HD shared with admin: {report.hd_wish}</Text> : null}
+              {report.help_idea ? <Text numberOfLines={2} style={{ fontFamily: 'Lato_400Regular', fontSize: (isTV ? 13 : 10) * scale, color: '#765b31', textAlign: 'center' }}>Help idea: {report.help_idea}</Text> : null}
+            </View>
+          ) : null}
           {energyDots !== null || energyMode ? (
             <View style={{ alignItems: 'center', marginTop: 'auto', paddingTop: (isTV ? 14 : 10) * scale }}>
               {energyDots !== null ? (
@@ -242,6 +255,13 @@ export function ArrivalMemberCard({
             </View>
           ) : null}
         </>
+      ) : hasReport ? (
+        <View style={{ alignItems: 'center', marginTop: (isTV ? 14 : 10) * scale, gap: 5 * scale }}>
+          {attendanceLabel ? <Text style={{ fontFamily: 'Lato_700Bold', fontSize: (isTV ? 18 : 14) * scale, color: '#8a6b30', textAlign: 'center' }}>{attendanceLabel}</Text> : null}
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: (isTV ? 13 : 11) * scale, color: '#9a8060', textAlign: 'center' }}>Reported by admin</Text>
+          {report?.hd_wish ? <Text numberOfLines={2} style={{ fontFamily: 'Lato_400Regular', fontSize: (isTV ? 14 : 11) * scale, color: '#765b31', textAlign: 'center' }}>HD: {report.hd_wish}</Text> : null}
+          {report?.help_idea ? <Text numberOfLines={2} style={{ fontFamily: 'Lato_400Regular', fontSize: (isTV ? 14 : 11) * scale, color: '#765b31', textAlign: 'center' }}>Help: {report.help_idea}</Text> : null}
+        </View>
       ) : (
         <Text
           style={{

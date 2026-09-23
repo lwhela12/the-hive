@@ -1053,6 +1053,12 @@ export interface Database {
         Update: Partial<Omit<SurveyResponse, 'id' | 'submitted_at'>>;
         Relationships: [];
       };
+      meeting_attendance_reports: {
+        Row: { meeting_id: string; community_id: string; user_id: string; attendance: 'in_person' | 'remote' | 'missing' | null; hd_wish: string; help_idea: string; reported_by: string; updated_at: string };
+        Insert: { meeting_id: string; community_id: string; user_id: string; attendance?: 'in_person' | 'remote' | 'missing' | null; hd_wish?: string; help_idea?: string; reported_by: string; updated_at?: string };
+        Update: { attendance?: 'in_person' | 'remote' | 'missing' | null; hd_wish?: string; help_idea?: string; reported_by?: string; updated_at?: string };
+        Relationships: [];
+      };
       notifications: {
         Row: Notification;
         Insert: Omit<Notification, 'id' | 'created_at'>;

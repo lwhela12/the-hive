@@ -16,6 +16,7 @@ import {
   useArrivalBoard,
 } from '../../lib/hooks/useArrivalBoard';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
+import { AdminMemberUpdate } from '../../components/meetings/AdminMemberUpdate';
 import { surveyUsesLegacyEnergy } from '../../lib/arrivalSurveySelection';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -42,8 +43,10 @@ export default function ArrivalBoardScreen() {
     responsePeriod,
     members,
     responsesByUser,
+    reportsByUser,
     nextMeeting,
     lastUpdatedAt,
+    refresh,
   } = useArrivalBoard();
   const [nowTick, setNowTick] = useState(Date.now());
 
@@ -127,11 +130,17 @@ export default function ArrivalBoardScreen() {
           </View>
         </View>
 
+        {!loading && nextMeeting ? (
+          <View style={{ marginBottom: isTV ? 18 : 12 }}>
+            <AdminMemberUpdate members={members} meeting={nextMeeting} reportsByUser={reportsByUser} onSaved={refresh} compact={!isTV} />
+          </View>
+        ) : null}
+
         {loading ? (
           <View style={{ paddingVertical: 80, alignItems: 'center' }}>
             <ThinkingBee />
           </View>
-        ) : !survey ? (
+        ) : !survey && reportsByUser.size === 0 ? (
           <View
             style={{
               backgroundColor: '#fffdf5',
@@ -152,13 +161,14 @@ export default function ArrivalBoardScreen() {
           </View>
         ) : (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: isTV ? -10 : -6 }}>
-            {getCheckInOrder(members, responsesByUser).map((member) => (
+            {getCheckInOrder(members, responsesByUser, reportsByUser).map((member) => (
               <View key={member.id} style={{ width: `${100 / columns}%`, padding: isTV ? 10 : 6 }}>
                 <ArrivalMemberCard
                   member={member}
                   response={responsesByUser.get(member.id)}
+                  report={reportsByUser.get(member.id)}
                   isTV={isTV}
-                  showLegacyEnergy={surveyUsesLegacyEnergy(survey)}
+                  showLegacyEnergy={!!survey && surveyUsesLegacyEnergy(survey)}
                 />
               </View>
             ))}

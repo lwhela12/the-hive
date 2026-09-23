@@ -47,6 +47,7 @@ import { NEW_MEETING_WISH_ID, meetingWishCopy } from '../../lib/meetingWishCaptu
 import { parseFocusAnswer, focusAnswerDidIt, focusAnswerScore } from '../../components/surveys/SurveyQuestionField';
 import { Avatar } from '../../components/ui/Avatar';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
+import { AdminMemberUpdate } from '../../components/meetings/AdminMemberUpdate';
 import { surveyUsesLegacyEnergy } from '../../lib/arrivalSurveySelection';
 import { DeckVideo } from '../../components/meetings/DeckVideo';
 import { DeckSplit } from '../../components/meetings/DeckSplit';
@@ -62,7 +63,7 @@ import { getMentionedMembers, hasBroadcastMention } from '../../lib/mentions';
 import { useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import {
   formatMeetingDate,
-  getAttendance,
+  getReportedAttendance,
   getCheckInOrder,
   getFirstName,
   getLocalIsoDate,
@@ -1035,6 +1036,7 @@ export default function MeetingHelperScreen() {
     responsePeriod,
     members,
     responsesByUser,
+    reportsByUser,
     nextMeeting,
     lastUpdatedAt,
     refresh: refreshArrivals,
@@ -1611,11 +1613,12 @@ export default function MeetingHelperScreen() {
       return aTime.localeCompare(bTime);
     };
     const checkedIn = others.filter((member) => responsesByUser.has(member.id)).sort(bySubmitTime);
-    const absent = checkedIn.filter((member) => getAttendance(responsesByUser.get(member.id)) === 'missing');
-    const present = checkedIn.filter((member) => getAttendance(responsesByUser.get(member.id)) !== 'missing');
-    const notYet = others.filter((member) => !responsesByUser.has(member.id));
+    const reported = others.filter((member) => !responsesByUser.has(member.id) && reportsByUser.has(member.id));
+    const absent = [...checkedIn, ...reported].filter((member) => getReportedAttendance(responsesByUser.get(member.id), reportsByUser.get(member.id)) === 'missing');
+    const present = [...checkedIn, ...reported].filter((member) => getReportedAttendance(responsesByUser.get(member.id), reportsByUser.get(member.id)) !== 'missing');
+    const notYet = others.filter((member) => !responsesByUser.has(member.id) && !reportsByUser.has(member.id));
     return [...(leader ? [leader] : []), ...absent, ...present, ...notYet];
-  }, [members, responsesByUser]);
+  }, [members, responsesByUser, reportsByUser]);
 
   const wishesByUserId = useMemo(() => {
     const grouped = new Map<string, DeckWish[]>();
@@ -2269,20 +2272,23 @@ export default function MeetingHelperScreen() {
             {checkedInCount} of {members.length} checked in{lastUpdatedAt ? '  ·  live' : ''}
           </Text>
         ) : null}
+        <View style={{ marginTop: sz(9, 6) }}>
+          <AdminMemberUpdate members={members} meeting={nextMeeting} reportsByUser={reportsByUser} onSaved={refreshArrivals} compact={!isTV} />
+        </View>
       </View>
       {arrivalLoading ? (
         <View style={{ paddingVertical: 60, alignItems: 'center' }}>
           <ThinkingBee />
         </View>
-      ) : !survey ? (
+      ) : !survey && reportsByUser.size === 0 ? (
         <EmptyNote>
           No check-in is live right now — once one opens, arrivals will glow here.
         </EmptyNote>
       ) : (
         <View>
           {(() => {
-            const remote = members.filter((member) => getAttendance(responsesByUser.get(member.id)) === 'remote');
-            const missing = members.filter((member) => getAttendance(responsesByUser.get(member.id)) === 'missing');
+            const remote = members.filter((member) => getReportedAttendance(responsesByUser.get(member.id), reportsByUser.get(member.id)) === 'remote');
+            const missing = members.filter((member) => getReportedAttendance(responsesByUser.get(member.id), reportsByUser.get(member.id)) === 'missing');
             if (remote.length === 0 && missing.length === 0) return null;
             const parts = [
               remote.length > 0
@@ -2299,14 +2305,15 @@ export default function MeetingHelperScreen() {
             );
           })()}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: sz(-8, -5) }}>
-          {getCheckInOrder(members, responsesByUser).map((member) => (
+          {getCheckInOrder(members, responsesByUser, reportsByUser).map((member) => (
             <View key={member.id} style={{ width: `${100 / roomColumns}%`, padding: sz(8, 5) }}>
               <ArrivalMemberCard
                 member={member}
                 response={responsesByUser.get(member.id)}
+                report={reportsByUser.get(member.id)}
                 isTV={isTV}
                 compact
-                showLegacyEnergy={surveyUsesLegacyEnergy(survey)}
+                showLegacyEnergy={!!survey && surveyUsesLegacyEnergy(survey)}
               />
             </View>
           ))}
@@ -3132,6 +3139,9 @@ export default function MeetingHelperScreen() {
         .filter((voice) => !!voice.text);
     const underCards = deck.plan.voicesUnderCards;
     const underCardVoices = underCards ? voicesFor(underCards.answerKey) : [];
+    const reportedHelpIdeas = memberOrder
+      .map((member) => ({ id: member.id, name: getFirstName(member.name), idea: reportsByUser.get(member.id)?.help_idea?.trim() ?? '' }))
+      .filter((item) => !!item.idea);
 
     const focusTally = members.reduce(
       (tally, member) => {
@@ -3539,6 +3549,16 @@ export default function MeetingHelperScreen() {
                 No HIVE Help check-in responses yet.
               </Text>
             )}
+            {reportedHelpIdeas.length > 0 ? (
+              <View style={{ marginTop: sz(5, 4), gap: sz(4, 3) }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), color: GOLD_DEEP }}>Ideas shared with admin</Text>
+                {reportedHelpIdeas.map((item) => (
+                  <Text key={item.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), color: CHARCOAL }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold' }}>{item.name}: </Text>{item.idea}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
           </View>
         ) : null}
 
@@ -3948,7 +3968,8 @@ export default function MeetingHelperScreen() {
           const nameToday = getTextAnswer(answers, 'q_name_today') || getFirstName(member.name);
           const memberWishes = wishesByUserId.get(member.id) ?? [];
           const topWish = pickSpotlightWish(memberWishes) ?? memberWishes[0];
-          const hdGoal = topWish ? getWishQuickTitle(topWish, 40) : null;
+          const reportedWish = reportsByUser.get(member.id)?.hd_wish?.trim() ?? '';
+          const hdGoal = reportedWish || (topWish ? getWishQuickTitle(topWish, 40) : null);
           const priorities = getTextAnswer(answers, 'q_pop_priorities');
           // Their own answer to "what are you building right now?" — the line
           // the check-in promised would become their 30-second intro.
@@ -3961,7 +3982,7 @@ export default function MeetingHelperScreen() {
           );
           const assistsByMember = completedAssists.filter((assist) => assist.assignedTo === member.id);
           const grantedThisCycle = grantedWishes.filter((wish) => wish.user_id === member.id);
-          const attendance = getAttendance(response);
+          const attendance = getReportedAttendance(response, reportsByUser.get(member.id));
           // Whether they brought anything WRITTEN. Every bubble opens either
           // way: the meeting happens out loud, and someone who skipped the
           // digital part still gets a turn — often the idea only forms once
@@ -3971,6 +3992,7 @@ export default function MeetingHelperScreen() {
             detailSections.length > 0 ||
             !!introWords ||
             !!topWish?.description ||
+            !!reportedWish ||
             assistsForMember.length > 0 ||
             assistsByMember.length > 0 ||
             grantedThisCycle.length > 0;
@@ -4079,6 +4101,7 @@ export default function MeetingHelperScreen() {
     const nameToday = getTextAnswer(answers, 'q_name_today') || getFirstName(member.name);
     const memberWishList = wishesByUserId.get(member.id) ?? [];
     const topWish = pickSpotlightWish(memberWishList) ?? memberWishList[0];
+    const reportedWish = reportsByUser.get(member.id)?.hd_wish?.trim() ?? '';
     // The first night, their own line from the check-in leads the sheet.
     const introWords = introsFirst ? getIntroWords(answers) : '';
     // The tune-up SEEDS an empty Progress answer with "Checked off: …" and
@@ -4104,7 +4127,7 @@ export default function MeetingHelperScreen() {
     );
     const assistsByMember = completedAssists.filter((assist) => assist.assignedTo === member.id);
     const grantedThisCycle = grantedWishes.filter((wish) => wish.user_id === member.id);
-    const attendance = getAttendance(response);
+    const attendance = getReportedAttendance(response, reportsByUser.get(member.id));
     const sectionLabel = { fontFamily: 'Lato_700Bold' as const, fontSize: sz(15, 11), letterSpacing: 1.5, textTransform: 'uppercase' as const, color: GOLD, marginBottom: sz(4, 3) };
     const sectionText = { fontFamily: 'Lato_400Regular' as const, fontSize: sz(18, 13), lineHeight: sz(27, 19), color: CHARCOAL };
     const sectionContext = { fontFamily: 'Lato_400Regular' as const, fontSize: sz(14, 10), lineHeight: sz(19, 14), color: MUTED };
@@ -4184,6 +4207,7 @@ export default function MeetingHelperScreen() {
               ) : null}
               {!introsFirst
                 && !topWish?.description
+                && !reportedWish
                 && grantedThisCycle.length === 0
                 && detailSections.length === 0
                 && assistsForMember.length === 0
@@ -4192,10 +4216,16 @@ export default function MeetingHelperScreen() {
                   Nothing written down yet — that's what the floor is for. Catch what {nameToday} says below.
                 </Text>
               ) : null}
-              {topWish?.description ? (
+              {!reportedWish && topWish?.description ? (
                 <View>
                   <Text style={sectionLabel}>This month's HD</Text>
                   <Text style={sectionText}>{topWish.description}</Text>
+                </View>
+              ) : null}
+              {reportedWish ? (
+                <View>
+                  <Text style={sectionLabel}>HummDinger wish · shared with admin</Text>
+                  <Text style={sectionText}>{reportedWish}</Text>
                 </View>
               ) : null}
               {grantedThisCycle.length > 0 ? (
@@ -5335,7 +5365,7 @@ export default function MeetingHelperScreen() {
                     {memberOrder.map((member) => {
                       const isUp = expandedHummdingerId === member.id;
                       const wasVisited = hummdingerVisited.has(member.id) && !isUp;
-                      const railAttendance = getAttendance(responsesByUser.get(member.id));
+                      const railAttendance = getReportedAttendance(responsesByUser.get(member.id), reportsByUser.get(member.id));
                       const attendanceMark =
                         railAttendance === 'missing' ? ' 😢' : railAttendance === 'remote' ? ' 💻' : '';
                       return (
