@@ -226,7 +226,7 @@ type DeckDefinition = {
      * percentage, whether the HIVE wants a HIVE Help. The room reads where it
      * already stands and then spends its minutes deciding.
      */
-    cards: { key: 'meeting' | 'help' | 'hang'; title: string; blurb: string; vote?: VoteTally }[];
+    cards: { key: 'meeting' | 'help' | 'hang'; title: string; blurb?: string; vote?: VoteTally }[];
     /**
      * OG's Hang card opens the polls-and-ideas panel. Tech's third card is
      * HIVE Networking — tapping it arms the calendar for scheduling one,
@@ -425,12 +425,9 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
       kicker: 'Ways we gather · on the calendar',
       title: 'Plan the Meet Ups',
       cards: [
-        { key: 'meeting', title: 'HIVE Meeting', blurb: 'Second Wednesday — dinner, business, and the HummDinger.' },
-        // Nat, 2026-09-03, moving Tech: *"all HIVEs meet on the 2nd week of the
-        // month (ish)"* — so every one of these blurbs names a day in the
-        // second week, and none of them names a HIVE that is not this one.
-        { key: 'help', title: 'HIVE Help', blurb: 'Fifteen-minute favors — small asks, quick wins.' },
-        { key: 'hang', title: 'HIVE Hang', blurb: 'Casual get-togethers between meetings. Anyone can host.' },
+        { key: 'meeting', title: 'HIVE Meeting' },
+        { key: 'help', title: 'HIVE Help' },
+        { key: 'hang', title: 'HIVE Hang' },
       ],
       hangCardExpands: true,
       helpExpansion: { kind: 'voices' },
@@ -3431,6 +3428,16 @@ export default function MeetingHelperScreen() {
             return (
               <Pressable
                 key={column.title}
+                accessibilityRole="button"
+                accessibilityLabel={column.title}
+                accessibilityHint={deckIsOg
+                  ? column.key === 'meeting'
+                    ? 'Select, then tap a calendar day to schedule the meeting'
+                    : column.key === 'help'
+                      ? 'Open voices from the check-ins'
+                      : 'Open HIVE Hang plans'
+                  : undefined}
+                accessibilityState={{ selected: isSelected }}
                 onPress={() => {
                   if (column.key === 'meeting') {
                     setPlanMode('meeting');
@@ -3447,14 +3454,15 @@ export default function MeetingHelperScreen() {
                   }
                 }}
                 style={({ pressed }) => ({
-                  flex: 1,
-                  minWidth: sz(260, 150),
+                  flexGrow: deckIsOg ? 0 : 1,
+                  flexShrink: 1,
+                  minWidth: deckIsOg ? sz(190, 150) : sz(260, 150),
                   backgroundColor: isSelected ? tintWash(0.18) : CARD,
                   borderWidth: isSelected ? 2 : 1,
                   borderColor: isSelected ? GOLD : GOLD_SOFT,
                   borderRadius: sz(18, 14),
-                  paddingHorizontal: sz(22, 14),
-                  paddingVertical: sz(14, 10),
+                  paddingHorizontal: deckIsOg ? sz(18, 12) : sz(22, 14),
+                  paddingVertical: deckIsOg ? sz(12, 10) : sz(14, 10),
                   opacity: pressed ? 0.8 : 1,
                   outlineWidth: 0,
                 })}
@@ -3462,14 +3470,14 @@ export default function MeetingHelperScreen() {
                 <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(24, 16), color: GOLD_DEEP }}>
                   {column.title}
                 </Text>
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(25, 18), color: MUTED, marginTop: sz(4, 3) }}>
-                  {column.blurb}
-                </Text>
-                {/* OG's hang card says nothing extra — the panel it opens
-                    explains itself (Nat 2026-07-24). Tech's networking card
-                    schedules instead of expanding, so it talks like the
-                    meeting card does. */}
-                {column.key === 'hang' && deck.plan.hangCardExpands ? null : (
+                {column.blurb ? (
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(25, 18), color: MUTED, marginTop: sz(4, 3) }}>
+                    {column.blurb}
+                  </Text>
+                ) : null}
+                {/* OG's cards show their names only. Other decks keep their
+                    scheduling and expansion prompts beside the descriptions. */}
+                {deckIsOg || (column.key === 'hang' && deck.plan.hangCardExpands) ? null : (
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: isSelected ? GOLD_DEEP : 'rgba(154,128,96,0.55)', marginTop: sz(6, 4) }}>
                     {column.key === 'meeting'
                       ? isSelected ? '● tap a day below to schedule the meeting' : '○ select, then tap a day to schedule'
