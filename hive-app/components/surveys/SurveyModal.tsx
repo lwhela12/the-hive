@@ -20,6 +20,7 @@ import {
 } from '../../lib/carryForward';
 import type { Survey, SurveyAnswers, SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { SurveyQuestionField } from './SurveyQuestionField';
+import { OgIdeaChoices } from './OgIdeaChoices';
 import {
   checkInDisplayName,
   getSeasonCheckInKind,
@@ -907,6 +908,10 @@ export function SurveyModal({
                   );
                 });
               })()}
+
+              {draftLoaded && hiveSlug === 'default' && isPreMeetingCheckInSurvey(survey) && answerCommunityId && viewerProfile?.id && (
+                <OgIdeaChoices communityId={answerCommunityId} userId={viewerProfile.id} />
+              )}
 
               {error && (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#ef4444', marginBottom: 14 }}>{error}</Text>

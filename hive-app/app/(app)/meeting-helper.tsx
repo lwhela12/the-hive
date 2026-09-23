@@ -849,6 +849,7 @@ type DeckWish = {
 type HangIdea = {
   id: string;
   title: string | null;
+  votes?: number;
 };
 
 type GrantedWish = {
@@ -1053,6 +1054,7 @@ export default function MeetingHelperScreen() {
   const [honeyPotBalance, setHoneyPotBalance] = useState<number | null>(null);
   const [duesLedgerRows, setDuesLedgerRows] = useState<DuesTransactionRecognitionRow[] | null>(null);
   const [hangIdeas, setHangIdeas] = useState<HangIdea[]>([]);
+  const [helpIdeaVotes, setHelpIdeaVotes] = useState<{ title: string; votes: number }[]>([]);
   const [wishes, setWishes] = useState<DeckWish[]>([]);
   const [grantedWishes, setGrantedWishes] = useState<GrantedWish[]>([]);
   const [pastHangs, setPastHangs] = useState<DeckEvent[]>([]);
@@ -1360,10 +1362,44 @@ export default function MeetingHelperScreen() {
           .from('board_posts')
           .select('id, title')
           .eq('category_id', hangBoard.id)
+          .or('status.is.null,status.eq.active')
           .order('created_at', { ascending: false })
-          .limit(3);
-        setHangIdeas((posts ?? []) as HangIdea[]);
+          .limit(30);
+        const rows = (posts ?? []) as HangIdea[];
+        const ids = rows.map(row => row.id);
+        const { data: replies } = ids.length
+          ? await supabase.from('board_replies').select('post_id, author_id, content').in('post_id', ids).limit(500)
+          : { data: [] };
+        setHangIdeas(rows.map(row => ({ ...row, votes: new Set(((replies ?? []) as { post_id: string; author_id: string; content: string }[])
+          .filter(reply => reply.post_id === row.id && /^\+1\b/.test(reply.content.trim()))
+          .map(reply => reply.author_id)).size }))
+          .sort((a, b) => (b.votes ?? 0) - (a.votes ?? 0)).slice(0, 6));
       })().catch((error) => console.warn('Could not load hang ideas', error)),
+
+      // The old check-in's Help ideas and +1s share one standing board thread.
+      // Show them in the room so people who cannot attend still have a say.
+      (async () => {
+        if (!deckIsOg) { setHelpIdeaVotes([]); return; }
+        const { data: categories } = await supabase.from('board_categories')
+          .select('id, name, topic_kind, status').eq('community_id', communityId);
+        const board = ((categories ?? []) as { id: string; name: string; topic_kind?: string | null; status?: string | null }[])
+          .find(row => (!row.status || row.status === 'active') && (row.topic_kind === 'helper_log' || /hive help/i.test(row.name)));
+        if (!board) { setHelpIdeaVotes([]); return; }
+        const { data: threads } = await supabase.from('board_posts').select('id')
+          .eq('category_id', board.id).ilike('title', '%help ideas%')
+          .order('created_at', { ascending: false }).limit(1);
+        const threadId = threads?.[0]?.id;
+        if (!threadId) { setHelpIdeaVotes([]); return; }
+        const { data: replies } = await supabase.from('board_replies').select('content, author_id')
+          .eq('post_id', threadId).limit(500);
+        const lines = ((replies ?? []) as { content: string; author_id: string }[])
+          .map(reply => ({ ...reply, content: reply.content.trim() }));
+        const unique = [...new Set(lines.map(line => line.content).filter(line => line && !/^\+1\b/i.test(line)))];
+        setHelpIdeaVotes(unique.slice(0, 12).map(title => ({
+          title, votes: new Set(lines.filter(line => line.content === `+1 for ${title}! 🙋`)
+            .map(line => line.author_id)).size,
+        })).sort((a, b) => b.votes - a.votes));
+      })().catch((error) => console.warn('Could not load HIVE Help ideas', error)),
 
       // Member HDs: everyone's active public wishes
       (async () => {
@@ -3561,6 +3597,14 @@ export default function MeetingHelperScreen() {
                 ))}
               </View>
             ) : null}
+            {helpIdeaVotes.length > 0 ? (
+              <View style={{ marginTop: sz(5, 4), gap: sz(4, 3) }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), color: GOLD_DEEP }}>Ideas for next time</Text>
+                {helpIdeaVotes.map(idea => <Text key={idea.title} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), color: CHARCOAL }}>
+                  {idea.title} · {idea.votes} {idea.votes === 1 ? 'vote' : 'votes'}
+                </Text>)}
+              </View>
+            ) : null}
           </View>
         ) : null}
 
@@ -3689,7 +3733,7 @@ export default function MeetingHelperScreen() {
                         })}
                       >
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: isArmed ? 'white' : GOLD_DEEP }}>
-                          {isArmed ? `✓ ${label}` : label}
+                          {isArmed ? `✓ ${label}` : label}{idea.votes ? ` · ${idea.votes} ${idea.votes === 1 ? 'vote' : 'votes'}` : ''}
                         </Text>
                       </Pressable>
                     );
