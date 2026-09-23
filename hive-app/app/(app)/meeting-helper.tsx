@@ -1041,6 +1041,7 @@ export default function MeetingHelperScreen() {
     lastUpdatedAt,
     refresh: refreshArrivals,
   } = useArrivalBoard({ pollingEnabled: slideIndex <= 1 || ['meetups', 'treasurer'].includes(deck.slides[slideIndex]) });
+  const [arrivalMemberToEdit, setArrivalMemberToEdit] = useState<string | null>(null);
 
   // A meeting is one HIVE in one room, and a to-do jotted here lands on that
   // HIVE's lists — so "@all" is this HIVE, and the picker says its name.
@@ -2273,7 +2274,7 @@ export default function MeetingHelperScreen() {
           </Text>
         ) : null}
         <View style={{ marginTop: sz(9, 6) }}>
-          <AdminMemberUpdate members={members} meeting={nextMeeting} reportsByUser={reportsByUser} onSaved={refreshArrivals} compact={!isTV} />
+          <AdminMemberUpdate members={members} meeting={nextMeeting} reportsByUser={reportsByUser} onSaved={refreshArrivals} openForMemberId={arrivalMemberToEdit} onOpenForMemberHandled={() => setArrivalMemberToEdit(null)} compact={!isTV} />
         </View>
       </View>
       {arrivalLoading ? (
@@ -2311,6 +2312,7 @@ export default function MeetingHelperScreen() {
                 member={member}
                 response={responsesByUser.get(member.id)}
                 report={reportsByUser.get(member.id)}
+                onAdminPress={isAdmin && nextMeeting ? () => setArrivalMemberToEdit(member.id) : undefined}
                 isTV={isTV}
                 compact
                 showLegacyEnergy={!!survey && surveyUsesLegacyEnergy(survey)}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { supabase } from '../../lib/supabase';
@@ -10,11 +10,13 @@ const choices = [
   { value: 'missing', label: 'Not coming' },
 ] as const;
 
-export function AdminMemberUpdate({ members, meeting, reportsByUser, onSaved, compact = false }: {
+export function AdminMemberUpdate({ members, meeting, reportsByUser, onSaved, openForMemberId, onOpenForMemberHandled, compact = false }: {
   members: ArrivalBoardMember[];
   meeting: ArrivalBoardMeeting | null;
   reportsByUser: Map<string, MeetingAttendanceReport>;
   onSaved: () => Promise<void>;
+  openForMemberId?: string | null;
+  onOpenForMemberHandled?: () => void;
   compact?: boolean;
 }) {
   const { communityId, communityRole, profile, session } = useAuth();
@@ -26,6 +28,20 @@ export function AdminMemberUpdate({ members, meeting, reportsByUser, onSaved, co
   const [helpIdea, setHelpIdea] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // The tile and the top button open this same form. A tile supplies the
+  // member first; clearing the request lets the same tile open it again later.
+  useEffect(() => {
+    if (!openForMemberId || !members.some((member) => member.id === openForMemberId)) return;
+    const report = reportsByUser.get(openForMemberId);
+    setMemberId(openForMemberId);
+    setAttendance(report?.attendance ?? null);
+    setHdWish(report?.hd_wish ?? '');
+    setHelpIdea(report?.help_idea ?? '');
+    setError('');
+    setOpen(true);
+    onOpenForMemberHandled?.();
+  }, [openForMemberId]);
 
   if (!isAdmin || !meeting || !communityId) return null;
 

@@ -1,5 +1,5 @@
 import { personalHardOut } from '../../lib/personalHardOut';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Avatar } from '../ui/Avatar';
 import {
   ENERGY_DOTS_MAX,
@@ -85,6 +85,7 @@ export function ArrivalMemberCard({
   member,
   response,
   report,
+  onAdminPress,
   isTV,
   compact = false,
   showLegacyEnergy = false,
@@ -92,6 +93,7 @@ export function ArrivalMemberCard({
   member: ArrivalBoardMember;
   response?: SurveyResponse;
   report?: MeetingAttendanceReport;
+  onAdminPress?: () => void;
   isTV: boolean;
   compact?: boolean;
   showLegacyEnergy?: boolean;
@@ -113,8 +115,13 @@ export function ArrivalMemberCard({
   const scale = compact ? 0.78 : 1;
 
   return (
-    <View
-      style={{
+    <Pressable
+      onPress={onAdminPress}
+      disabled={!onAdminPress}
+      accessibilityRole={onAdminPress ? 'button' : undefined}
+      accessibilityLabel={onAdminPress ? `Update ${member.name}'s meeting information` : undefined}
+      accessibilityHint={onAdminPress ? 'Opens the admin form with this member selected' : undefined}
+      style={({ pressed }) => ({
         backgroundColor: active ? '#fffdf5' : 'rgba(255,253,245,0.55)',
         borderRadius: isTV ? 26 * scale : 18,
         borderWidth: 1,
@@ -134,12 +141,12 @@ export function ArrivalMemberCard({
          * so the board stays a grid rather than a ragged pile.
          */
         minHeight: (isTV ? (checkedIn ? 340 : 210) : checkedIn ? 220 : 132) * scale,
-        opacity: active ? 1 : 0.55,
+        opacity: (active ? 1 : 0.55) * (pressed ? 0.86 : 1),
         shadowColor: '#bd9348',
         shadowOpacity: active ? 0.12 : 0,
         shadowRadius: 14,
         shadowOffset: { width: 0, height: 6 },
-      }}
+      })}
     >
       <Avatar name={member.name} url={member.avatar_url} size={(isTV ? 88 : 56) * scale} />
       {/* One line, shrinking to fit rather than breaking. "Charlee" came out
@@ -275,6 +282,6 @@ export function ArrivalMemberCard({
           hasn't checked in yet 🌙
         </Text>
       )}
-    </View>
+    </Pressable>
   );
 }

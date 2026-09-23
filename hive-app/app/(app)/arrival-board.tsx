@@ -17,6 +17,7 @@ import {
 } from '../../lib/hooks/useArrivalBoard';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
 import { AdminMemberUpdate } from '../../components/meetings/AdminMemberUpdate';
+import { useAuth } from '../../lib/hooks/useAuth';
 import { surveyUsesLegacyEnergy } from '../../lib/arrivalSurveySelection';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -28,6 +29,9 @@ const hiveBee = require('../../assets/BEE ONLY IN GOLD BG.png');
 
 export default function ArrivalBoardScreen() {
   const router = useRouter();
+  const { communityRole, profile } = useAuth();
+  const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
+  const [memberToEdit, setMemberToEdit] = useState<string | null>(null);
   const { from } = useLocalSearchParams<{ from?: string }>();
   const closeBoard = () => {
     // Never `router.back()` — see the note in `settings.tsx`. The browser's
@@ -132,7 +136,7 @@ export default function ArrivalBoardScreen() {
 
         {!loading && nextMeeting ? (
           <View style={{ marginBottom: isTV ? 18 : 12 }}>
-            <AdminMemberUpdate members={members} meeting={nextMeeting} reportsByUser={reportsByUser} onSaved={refresh} compact={!isTV} />
+            <AdminMemberUpdate members={members} meeting={nextMeeting} reportsByUser={reportsByUser} onSaved={refresh} openForMemberId={memberToEdit} onOpenForMemberHandled={() => setMemberToEdit(null)} compact={!isTV} />
           </View>
         ) : null}
 
@@ -167,6 +171,7 @@ export default function ArrivalBoardScreen() {
                   member={member}
                   response={responsesByUser.get(member.id)}
                   report={reportsByUser.get(member.id)}
+                  onAdminPress={isAdmin && nextMeeting ? () => setMemberToEdit(member.id) : undefined}
                   isTV={isTV}
                   showLegacyEnergy={!!survey && surveyUsesLegacyEnergy(survey)}
                 />
