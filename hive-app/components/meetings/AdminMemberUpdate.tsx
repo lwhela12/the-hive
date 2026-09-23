@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { supabase } from '../../lib/supabase';
-import type { ArrivalBoardMeeting, ArrivalBoardMember, MeetingAttendanceReport } from '../../lib/hooks/useArrivalBoard';
+import { formatMeetingDate, type ArrivalBoardMeeting, type ArrivalBoardMember, type MeetingAttendanceReport } from '../../lib/hooks/useArrivalBoard';
 
 const choices = [
   { value: 'in_person', label: 'In person' },
@@ -96,7 +96,8 @@ export function AdminMemberUpdate({ members, meeting, reportsByUser, onSaved, co
               <Text style={{ flex: 1, fontFamily: 'LibreBaskerville_700Bold', fontSize: 21, color: '#2d2d2d' }}>Member update</Text>
               <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => setOpen(false)}><Text style={{ fontSize: 25, color: '#765b31' }}>×</Text></Pressable>
             </View>
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#765b31', marginTop: 6 }}>For {meeting.title} · saved as reported by an admin</Text>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#765b31', marginTop: 6 }}>For {meeting.title} · {formatMeetingDate(meeting)}</Text>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 3 }}>Saved as reported by an admin</Text>
             <ScrollView keyboardShouldPersistTaps="handled" style={{ marginTop: 16 }}>
               <Text style={{ fontFamily: 'Lato_700Bold', color: '#2d2d2d', marginBottom: 8 }}>Member</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
