@@ -100,7 +100,7 @@ export function AdminMemberUpdate({ members, meeting, reportsByUser, onSaved, op
     <>
       <Pressable
         accessibilityRole="button"
-        onPress={() => { setError(''); setOpen(true); }}
+        onPress={() => { setMemberId(''); setAttendance(null); setHdWish(''); setHelpIdea(''); setError(''); setOpen(true); }}
         style={{ alignSelf: 'flex-start', paddingHorizontal: compact ? 11 : 15, paddingVertical: compact ? 7 : 10, borderRadius: 999, borderWidth: 1, borderColor: '#b58b42', backgroundColor: '#fffdf5' }}
       >
         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: compact ? 12 : 14, color: '#765b31' }}>Record member update</Text>
