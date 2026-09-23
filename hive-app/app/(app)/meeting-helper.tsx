@@ -3137,6 +3137,7 @@ export default function MeetingHelperScreen() {
       (tally, member) => {
         const raw = getTextAnswer(responsesByUser.get(member.id)?.answers ?? {}, 'q_hive_help_recap');
         if (!raw.trim()) return tally;
+        tally.answered += 1;
         if (focusAnswerDidIt(raw)) tally.did += 1;
         const score = focusAnswerScore(raw);
         if (score) tally.ratings.push(score);
@@ -3144,7 +3145,7 @@ export default function MeetingHelperScreen() {
         if (choice === 'I did something else' && instead) tally.instead.push(`${getFirstName(member.name)}: ${instead}`);
         return tally;
       },
-      { did: 0, ratings: [] as number[], instead: [] as string[] }
+      { answered: 0, did: 0, ratings: [] as number[], instead: [] as string[] }
     );
     const focusAvg = focusTally.ratings.length > 0
       ? Math.round((focusTally.ratings.reduce((sum, value) => sum + value, 0) / focusTally.ratings.length) * 10) / 10
@@ -3414,30 +3415,30 @@ export default function MeetingHelperScreen() {
           <EditPill noteKey="meetups" />
         </View>
 
-        {/* Top: the three ways we gather — now the controls. Meeting/Hang pick
-            what a calendar tap schedules; Help expands with the focus + the
-            check-in voices. */}
+        {/* Meeting/Hang pick what a calendar tap schedules. OG's HIVE Help
+            check-in recap stays visible below these cards. */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(16, 8) }}>
           {deck.plan.cards.map((column) => {
-            // Exactly ONE card carries the highlight: the open panel wins;
-            // with nothing expanded, the active schedule mode does. The ●/○
-            // line still shows which mode calendar taps use.
+            const isHelpRecapCard = column.key === 'help' && deck.plan.helpExpansion.kind === 'voices';
+            // Exactly ONE interactive card carries the highlight: the open
+            // panel wins; otherwise the active schedule mode does.
             const isSelected = expandedPlanCard
               ? expandedPlanCard === column.key
               : planMode === column.key;
             return (
               <Pressable
                 key={column.title}
-                accessibilityRole="button"
+                disabled={isHelpRecapCard}
+                accessibilityRole={isHelpRecapCard ? 'text' : 'button'}
                 accessibilityLabel={column.title}
                 accessibilityHint={deckIsOg
                   ? column.key === 'meeting'
                     ? 'Select, then tap a calendar day to schedule the meeting'
-                    : column.key === 'help'
-                      ? 'Open voices from the check-ins'
+                    : isHelpRecapCard
+                      ? 'Check-in responses are always shown below'
                       : 'Open HIVE Hang plans'
                   : undefined}
-                accessibilityState={{ selected: isSelected }}
+                accessibilityState={isHelpRecapCard ? undefined : { selected: isSelected }}
                 onPress={() => {
                   if (column.key === 'meeting') {
                     setPlanMode('meeting');
@@ -3477,15 +3478,13 @@ export default function MeetingHelperScreen() {
                 ) : null}
                 {/* OG's cards show their names only. Other decks keep their
                     scheduling and expansion prompts beside the descriptions. */}
-                {deckIsOg || (column.key === 'hang' && deck.plan.hangCardExpands) ? null : (
+                {isHelpRecapCard || (column.key === 'hang' && deck.plan.hangCardExpands) ? null : (
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: isSelected ? GOLD_DEEP : 'rgba(154,128,96,0.55)', marginTop: sz(6, 4) }}>
                     {column.key === 'meeting'
                       ? isSelected ? '● tap a day below to schedule the meeting' : '○ select, then tap a day to schedule'
                       : column.key === 'hang'
                         ? isSelected ? '● tap a day below to schedule it' : '○ select, then tap a day to schedule'
-                        : deck.plan.helpExpansion.kind === 'voices'
-                          ? expandedPlanCard === 'help' ? '▾ voices from the check-ins' : '▸ tap for voices from the check-ins'
-                          : expandedPlanCard === 'help' ? '▾ the conversation' : '▸ tap to talk it over'}
+                        : expandedPlanCard === 'help' ? '▾ the conversation' : '▸ tap to talk it over'}
                   </Text>
                 )}
                 {/* Where the card's own check-in vote lands. Nothing draws
@@ -3496,6 +3495,54 @@ export default function MeetingHelperScreen() {
             );
           })}
         </View>
+
+        {/* OG's HIVE Help recap is part of the slide, regardless of which
+            scheduling card is selected. */}
+        {deck.plan.helpExpansion.kind === 'voices' ? (
+          <View
+            style={{
+              marginTop: sz(14, 8),
+              backgroundColor: CARD,
+              borderWidth: 1,
+              borderColor: GOLD_SOFT,
+              borderRadius: sz(18, 14),
+              paddingHorizontal: sz(22, 14),
+              paddingVertical: sz(16, 10),
+              gap: sz(8, 5),
+            }}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
+              HIVE Help · from the check-ins
+            </Text>
+            {focusTally.answered > 0 ? (
+              <View style={{ gap: sz(4, 3) }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(19, 13), color: GOLD_DEEP }}>
+                  🙌 {focusTally.did} of {members.length} did it
+                  {focusAvg ? ` · 🍯 ${focusAvg}/5${focusAvg >= 4.5 ? ' — we LOVED it' : focusAvg >= 3.5 ? ' — a hit' : ''}` : ''}
+                </Text>
+                {focusTally.instead.length > 0 ? (
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(15, 10), color: MUTED }}>
+                    Did their own thing — {focusTally.instead.join(' · ')}
+                  </Text>
+                ) : null}
+                <View style={{ height: sz(10, 7), borderRadius: 999, backgroundColor: tintWash(0.18), overflow: 'hidden' }}>
+                  <View
+                    style={{
+                      width: `${Math.round((focusTally.did / Math.max(1, members.length)) * 100)}%`,
+                      height: '100%',
+                      borderRadius: 999,
+                      backgroundColor: GOLD,
+                    }}
+                  />
+                </View>
+              </View>
+            ) : (
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), color: MUTED }}>
+                No HIVE Help check-in responses yet.
+              </Text>
+            )}
+          </View>
+        ) : null}
 
         {/* What people wrote in their check-in, for a card that doesn't open a
             panel of its own. Tech's networking answers live here. */}
@@ -3639,10 +3686,10 @@ export default function MeetingHelperScreen() {
           </View>
         ) : null}
 
-        {/* HIVE Help expansion: what everyone said in their check-ins —
-            absent voices still get heard. The monthly focus lives up in the
-            calendar headers now ("Help Focus: …"). */}
-        {expandedPlanCard === 'help' ? (
+        {/* Tech's HIVE Help conversation is still opened by its card. OG's
+            check-in recap stays in view above, and its monthly focus lives in
+            the calendar headers. */}
+        {expandedPlanCard === 'help' && deck.plan.helpExpansion.kind === 'conversation' ? (
           <View
             style={{
               marginTop: sz(14, 8),
@@ -3657,7 +3704,6 @@ export default function MeetingHelperScreen() {
           >
             {/* A HIVE still deciding whether it wants a HIVE Help gets the
                 conversation, in Nat's framing: no pressure, it's a choice. */}
-            {deck.plan.helpExpansion.kind === 'conversation' ? (
               <View style={{ gap: sz(8, 5) }}>
                 {/* Says which card opened this. The panels stack under the whole
                     row, so without a name the conversation reads as belonging to
@@ -3690,34 +3736,6 @@ export default function MeetingHelperScreen() {
                   emptyText="Nothing written down yet — talk it over, or write it in ahead of the meeting."
                 />
               </View>
-            ) : null}
-            {/* Survey says, for the focus: how many did it and how it landed.
-                This is the whole reason the recap is structured rather than a
-                paragraph — counts and averages can be shown, prose can only be
-                read aloud. */}
-            {deck.plan.helpExpansion.kind === 'voices' && focusTally.did > 0 ? (
-              <View style={{ gap: sz(4, 3) }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(19, 13), color: GOLD_DEEP }}>
-                  🙌 {focusTally.did} of {members.length} did it
-                  {focusAvg ? ` · 🍯 ${focusAvg}/5${focusAvg >= 4.5 ? ' — we LOVED it' : focusAvg >= 3.5 ? ' — a hit' : ''}` : ''}
-                </Text>
-                {focusTally.instead.length > 0 ? (
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(15, 10), color: MUTED }}>
-                    Did their own thing — {focusTally.instead.join(' · ')}
-                  </Text>
-                ) : null}
-                <View style={{ height: sz(10, 7), borderRadius: 999, backgroundColor: tintWash(0.18), overflow: 'hidden' }}>
-                  <View
-                    style={{
-                      width: `${Math.round((focusTally.did / Math.max(1, members.length)) * 100)}%`,
-                      height: '100%',
-                      borderRadius: 999,
-                      backgroundColor: GOLD,
-                    }}
-                  />
-                </View>
-              </View>
-            ) : null}
           </View>
         ) : null}
 
