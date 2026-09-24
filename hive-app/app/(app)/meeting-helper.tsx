@@ -797,6 +797,10 @@ type MeetingHelperNotes = {
   news?: string;
   appnews?: string;
   meetups?: string;
+  /** Nat's shortlist for one meeting, separate from members' board votes. */
+  helpIdeas?: string;
+  hangIdeas?: string;
+  ideasMeetingId?: string;
   wrapup?: string;
   // Where the dues conversation actually lands, typed live on the night.
   // Nat, 2026-08-12, on an all-remote Tech HIVE: *"its kinda nice to be able
@@ -822,7 +826,7 @@ type MeetingHelperNotes = {
   fourquestions?: string;
 };
 
-type EditableNoteKey = keyof MeetingHelperNotes;
+type EditableNoteKey = Exclude<keyof MeetingHelperNotes, 'ideasMeetingId'>;
 
 type DeckEvent = {
   id: string;
@@ -872,6 +876,14 @@ const EDIT_SLIDE_META: Record<EditableNoteKey, { title: string; placeholder: str
   meetups: {
     title: 'Plan the Meet Ups',
     placeholder: "This month's plans — who's hosting the hang, help requests, meeting notes…",
+  },
+  helpIdeas: {
+    title: "Nat's HIVE Help picks",
+    placeholder: 'One idea per line…',
+  },
+  hangIdeas: {
+    title: "Nat's HIVE Hang picks",
+    placeholder: 'One idea per line…',
   },
   wrapup: {
     title: 'Wrap-Up',
@@ -2100,14 +2112,26 @@ export default function MeetingHelperScreen() {
   const [savingNote, setSavingNote] = useState(false);
 
   const openNoteEditor = useCallback((key: EditableNoteKey) => {
-    setEditDraft(notes[key] ?? '');
+    const isIdeas = key === 'helpIdeas' || key === 'hangIdeas';
+    setEditDraft(isIdeas && notes.ideasMeetingId !== nextMeeting?.id ? '' : notes[key] ?? '');
     setEditKey(key);
-  }, [notes]);
+  }, [notes, nextMeeting?.id]);
 
   const saveNote = useCallback(async () => {
     if (!communityId || !editKey || savingNote) return;
     setSavingNote(true);
-    const nextNotes: MeetingHelperNotes = { ...notes, [editKey]: editDraft.trim() };
+    const isIdeas = editKey === 'helpIdeas' || editKey === 'hangIdeas';
+    if (isIdeas && !nextMeeting?.id) {
+      setSavingNote(false);
+      showAlert('No meeting yet', 'Schedule the next meeting before choosing its ideas.');
+      return;
+    }
+    const nextNotes: MeetingHelperNotes = {
+      ...notes,
+      ...(isIdeas && notes.ideasMeetingId !== nextMeeting?.id ? { helpIdeas: '', hangIdeas: '' } : {}),
+      [editKey]: editDraft.trim(),
+      ...(isIdeas ? { ideasMeetingId: nextMeeting?.id } : {}),
+    };
     const { error } = await (supabase.from('communities') as any)
       .update({ meeting_helper_notes: nextNotes })
       .eq('id', communityId);
@@ -2119,7 +2143,7 @@ export default function MeetingHelperScreen() {
     }
     setNotes(nextNotes);
     setEditKey(null);
-  }, [communityId, editDraft, editKey, notes, savingNote]);
+  }, [communityId, editDraft, editKey, nextMeeting?.id, notes, savingNote]);
 
   // ---- Sizing helpers ----
   const sz = useCallback(
@@ -3177,6 +3201,21 @@ export default function MeetingHelperScreen() {
         .filter((voice) => !!voice.text);
     const underCards = deck.plan.voicesUnderCards;
     const underCardVoices = underCards ? voicesFor(underCards.answerKey) : [];
+    const renderNatPicks = (noteKey: 'helpIdeas' | 'hangIdeas') => {
+      if (!deckIsOg) return null;
+      const value = notes.ideasMeetingId === nextMeeting?.id ? (notes[noteKey] ?? '').trim() : '';
+      if (!value && !isAdmin) return null;
+      const lines = value.split('\n').map(line => line.trim()).filter(Boolean);
+      return <View style={{ marginTop: sz(8, 5), gap: sz(5, 3), padding: sz(13, 9), borderRadius: sz(12, 9), backgroundColor: tintWash(0.16) }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), color: GOLD_DEEP }}>Nat's picks</Text>
+          <EditPill noteKey={noteKey} />
+        </View>
+        {lines.length ? lines.map((line, index) => <Text key={`${index}-${line}`} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), lineHeight: sz(23, 16), color: CHARCOAL }}>
+          {index + 1}. {line}
+        </Text>) : <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>Add ideas for this meeting.</Text>}
+      </View>;
+    };
     const reportedHelpIdeas = memberOrder
       .map((member) => ({ id: member.id, name: getFirstName(member.name), idea: reportsByUser.get(member.id)?.help_idea?.trim() ?? '' }))
       .filter((item) => !!item.idea);
@@ -3587,6 +3626,7 @@ export default function MeetingHelperScreen() {
                 No HIVE Help check-in responses yet.
               </Text>
             )}
+            {renderNatPicks('helpIdeas')}
             {reportedHelpIdeas.length > 0 ? (
               <View style={{ marginTop: sz(5, 4), gap: sz(4, 3) }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), color: GOLD_DEEP }}>Ideas shared with admin</Text>
@@ -3695,6 +3735,7 @@ export default function MeetingHelperScreen() {
                 </View>
                 <EditPill noteKey="meetups" />
               </View>
+              {renderNatPicks('hangIdeas')}
               {hangIdeas.length === 0 ? (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
                   No ideas on the board yet — first to post picks the venue.
