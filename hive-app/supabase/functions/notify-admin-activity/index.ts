@@ -101,7 +101,18 @@ serve(async (req) => {
   const hiveName = hiveRow?.name ?? 'HIVE';
   const copy = KIND_COPY[kind];
   const mark = hiveMark(hiveRow?.slug, hiveRow?.accent_color);
-  const href = deepLink(copy.path, body.community_id ?? null);
+  // The trigger supplies the exact row that caused this email. Board mail
+  // should land in that thread, just like mention and reply mail do, rather
+  // than dropping the reader at the HIVE's board grid.
+  let postId: string | null = null;
+  if (kind === 'board_post') postId = body.record_id ?? null;
+  if (kind === 'board_reply' && body.record_id && body.community_id) {
+    const { data: reply } = await admin.from('board_replies').select('post_id')
+      .eq('id', body.record_id).eq('community_id', body.community_id).maybeSingle();
+    postId = reply?.post_id ?? null;
+  }
+  const href = deepLink(postId ? `/board?postId=${encodeURIComponent(postId)}` : copy.path, body.community_id ?? null);
+  const button = postId ? 'Open the post' : copy.button;
   const heading = `${actorName} ${copy.verb}`;
 
   const html = `
@@ -110,7 +121,7 @@ serve(async (req) => {
       <p style="text-align: center; color: ${mark.accent}; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 0 0 2px;">${escapeHtml(hiveName)}</p>
       <h1 style="color: ${mark.accent}; font-size: 20px; text-align: center; margin: 8px 0 18px;">${escapeHtml(heading)}</h1>
       <div style="text-align: center; margin: 24px 0;">
-        <a href="${escapeHtml(href)}" target="_top" style="background: ${mark.accent}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">${escapeHtml(copy.button)}</a>
+        <a href="${escapeHtml(href)}" target="_top" style="background: ${mark.accent}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">${escapeHtml(button)}</a>
       </div>
       <p style="font-size: 12px; color: #b6b6b6; text-align: center;">You asked to hear about activity in your HIVE. You can turn this off in Settings at any time. 🍯</p>
     </div>

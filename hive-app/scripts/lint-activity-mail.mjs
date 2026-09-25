@@ -18,6 +18,11 @@ if (!sender.includes("from('community_memberships').select('user_id')")) {
 if (!/subscriber\.is_owner === true \|\| memberIds\.has\(subscriber\.id\)/.test(sender)) {
   failures.push('Recipients are not limited to owners or members of the activity HIVE.');
 }
+if (!sender.includes("if (kind === 'board_post') postId = body.record_id")
+  || !sender.includes("from('board_replies').select('post_id')")
+  || !sender.includes('`/board?postId=${encodeURIComponent(postId)}`')) {
+  failures.push('Board activity mail does not open the exact post or the parent post of a reply.');
+}
 if (!settings.includes('label="Notify me about everything"')
   || !settings.includes('profile.email_admin_activity_enabled === true')) {
   failures.push('Settings does not expose the explicit, default-off activity switch.');
