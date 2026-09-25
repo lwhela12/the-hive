@@ -1752,11 +1752,11 @@ export default function MeetingsScreen() {
               key={meeting.id}
               className="bg-white rounded-xl p-4 mb-3 shadow-sm"
             >
-              <Pressable
-                onPress={() => setSelectedMeeting(meeting)}
-                className="flex-row items-center justify-between active:opacity-70"
-              >
-                <View className="flex-1">
+              <View className="flex-row items-start justify-between">
+                <Pressable
+                  onPress={() => setSelectedMeeting(meeting)}
+                  className="flex-1 active:opacity-70"
+                >
                   <Text className="font-semibold text-gray-800">
                     {getMeetingCardTitle(meeting)}
                   </Text>
@@ -1777,15 +1777,19 @@ export default function MeetingsScreen() {
                       {cardStatus}
                     </Text>
                   </Text>
-                </View>
-                <Text className="text-2xl">
-                  {meeting.processing_status === 'complete'
-                    ? '✓'
-                    : meeting.processing_status === 'failed'
-                    ? '✗'
-                    : '⏳'}
-                </Text>
-              </Pressable>
+                </Pressable>
+                {isAdmin && (
+                  <EditButton
+                    onPress={() => handleRemoveMeetingSummary(meeting)}
+                    accessibilityLabel={`Manage ${getMeetingCardTitle(meeting)} summary`}
+                    style={{
+                      marginLeft: 8,
+                      marginTop: -4,
+                      opacity: removingMeetingId && removingMeetingId !== meeting.id ? 0.45 : 1,
+                    }}
+                  />
+                )}
+              </View>
               {/* Show Mark Complete button for non-complete meetings */}
               {meeting.processing_status !== 'complete' && (
                 <Pressable
@@ -1794,24 +1798,6 @@ export default function MeetingsScreen() {
                 >
                   <Text className="text-gray-700 text-sm font-medium">
                     {meeting.processing_status === 'failed' ? 'Skip & Mark Complete' : 'Mark Complete'}
-                  </Text>
-                </Pressable>
-              )}
-              {isAdmin && (
-                <Pressable
-                  onPress={() => handleRemoveMeetingSummary(meeting)}
-                  disabled={removingMeetingId !== null}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove ${getMeetingCardTitle(meeting)} from Meeting Summaries`}
-                  className="mt-3 border border-red-200 py-2.5 px-4 rounded-full active:bg-red-50 self-start"
-                  style={({ pressed }) => ({
-                    minHeight: 44,
-                    justifyContent: 'center',
-                    opacity: removingMeetingId && removingMeetingId !== meeting.id ? 0.45 : pressed ? 0.72 : 1,
-                  })}
-                >
-                  <Text className="text-red-700 text-sm font-semibold">
-                    {removingMeetingId === meeting.id ? 'Removing…' : 'Remove summary'}
                   </Text>
                 </Pressable>
               )}
