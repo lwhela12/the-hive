@@ -708,6 +708,7 @@ serve(async (req) => {
         .select('id, transcript_raw')
         .eq('community_id', verdict.community.id)
         .eq('date', verdict.meetingDate)
+        .is('archived_at', null)
         .order('created_at', { ascending: true });
       const rows = (existingRows ?? []) as { id: string; transcript_raw: string | null }[];
       const existing = rows.find((row) => row.transcript_raw) ?? rows[0] ?? null;

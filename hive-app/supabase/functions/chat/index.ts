@@ -1698,6 +1698,7 @@ serve(async (req) => {
               .from('meetings')
               .select('id, date, summary, transcript_attributed, transcript_raw, processing_status')
               .eq('community_id', communityId)
+              .is('archived_at', null)
               .order('date', { ascending: false })
               .limit(limit);
             const summaries = (meetingRows ?? []).map((meeting, index) => {

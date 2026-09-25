@@ -443,6 +443,7 @@ serve(async (req) => {
       .select('id, summary, transcript_raw')
       .eq('community_id', communityId)
       .eq('date', date)
+      .is('archived_at', null)
       .order('created_at', { ascending: true });
     const existing = (existingRows ?? []).find((row) => row.transcript_raw) ?? (existingRows ?? [])[0] ?? null;
     if (isRebuild && !existing) return errorResponse('Meeting not found.', 404);

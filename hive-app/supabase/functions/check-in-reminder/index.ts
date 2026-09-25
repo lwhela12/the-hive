@@ -1117,6 +1117,7 @@ serve(async (req) => {
             .from('meetings')
             .select('id, summary')
             .eq('community_id', communityId)
+            .is('archived_at', null)
             .eq('date', yesterdayStr);
           const alreadySealed = (sealedRows ?? []).some(
             (row: { summary: string | null }) => (row.summary ?? '').includes('"live_sealed_at"')

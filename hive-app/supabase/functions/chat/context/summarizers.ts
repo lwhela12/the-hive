@@ -160,6 +160,7 @@ export async function summarizeMeetings(
     .from('meetings')
     .select('date, summary')
     .eq('community_id', communityId)
+    .is('archived_at', null)
     .eq('processing_status', 'complete')
     .gte('date', thirtyDaysAgo.toISOString().slice(0, 10))
     .order('date', { ascending: false })

@@ -40,6 +40,7 @@ export async function getCycleStart(communityId: string, beforeDate: string): Pr
       .from('meetings')
       .select('date')
       .eq('community_id', communityId)
+      .is('archived_at', null)
       .lt('date', beforeDate)
       .order('date', { ascending: false })
       .limit(1),

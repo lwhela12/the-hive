@@ -274,6 +274,7 @@ serve(async (req) => {
         .select('id, community_id, date, summary, transcript_raw, transcript_attributed')
         .eq('id', targetMeetingId)
         .eq('community_id', communityId)
+        .is('archived_at', null)
         .maybeSingle();
       if (targetError || !targetMeeting) {
         return errorResponse('That meeting summary was not found in this HIVE.', 404);

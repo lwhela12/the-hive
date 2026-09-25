@@ -253,6 +253,7 @@ export default function MeetingsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [removingMeetingId, setRemovingMeetingId] = useState<string | null>(null);
 
   // Slide deck URL — pulled from community record, editable by admin
   const [slideDeckUrl, setSlideDeckUrl] = useState(community?.slide_deck_url ?? '');
@@ -470,6 +471,7 @@ export default function MeetingsScreen() {
       .from('meetings')
       .select('*')
       .eq('community_id', communityId)
+      .is('archived_at', null)
       .order('date', { ascending: false })
       .limit(20);
 
@@ -722,6 +724,38 @@ export default function MeetingsScreen() {
       message: 'Mark this meeting as complete? You can add notes manually.',
       confirmLabel: 'Mark Complete',
       onConfirm: doMark,
+    });
+  };
+
+  const handleRemoveMeetingSummary = (meeting: Meeting) => {
+    const title = getMeetingCardTitle(meeting);
+    const doRemove = async () => {
+      if (removingMeetingId) return;
+      setRemovingMeetingId(meeting.id);
+      try {
+        const { error } = await (supabase as any).rpc('archive_meeting_summary', {
+          p_meeting_id: meeting.id,
+        });
+
+        if (error) {
+          console.error('Remove meeting summary error:', error);
+          showAlert('Still here', userFacingError(error, 'The summary is still here. Please try again.'));
+          return;
+        }
+
+        setMeetings((current) => current.filter((item) => item.id !== meeting.id));
+        showAlert('Removed', 'The summary is off this list, and its record is safely kept.');
+      } finally {
+        setRemovingMeetingId(null);
+      }
+    };
+
+    confirmAction({
+      title: 'Remove summary',
+      message: `Remove “${title}” from Meeting Summaries? Its record will be kept for recovery.`,
+      confirmLabel: 'Remove summary',
+      destructive: true,
+      onConfirm: doRemove,
     });
   };
 
@@ -1760,6 +1794,24 @@ export default function MeetingsScreen() {
                 >
                   <Text className="text-gray-700 text-sm font-medium">
                     {meeting.processing_status === 'failed' ? 'Skip & Mark Complete' : 'Mark Complete'}
+                  </Text>
+                </Pressable>
+              )}
+              {isAdmin && (
+                <Pressable
+                  onPress={() => handleRemoveMeetingSummary(meeting)}
+                  disabled={removingMeetingId !== null}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${getMeetingCardTitle(meeting)} from Meeting Summaries`}
+                  className="mt-3 border border-red-200 py-2.5 px-4 rounded-full active:bg-red-50 self-start"
+                  style={({ pressed }) => ({
+                    minHeight: 44,
+                    justifyContent: 'center',
+                    opacity: removingMeetingId && removingMeetingId !== meeting.id ? 0.45 : pressed ? 0.72 : 1,
+                  })}
+                >
+                  <Text className="text-red-700 text-sm font-semibold">
+                    {removingMeetingId === meeting.id ? 'Removing…' : 'Remove summary'}
                   </Text>
                 </Pressable>
               )}

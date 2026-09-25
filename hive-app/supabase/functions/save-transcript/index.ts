@@ -68,6 +68,7 @@ serve(async (req) => {
       .select('id, transcript_raw')
       .eq('community_id', community_id)
       .eq('date', meetingDate)
+      .is('archived_at', null)
       .order('created_at', { ascending: true });
 
     const existing = (existingRows ?? []).find((row) => row.transcript_raw) ?? (existingRows ?? [])[0] ?? null;

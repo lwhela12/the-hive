@@ -419,6 +419,9 @@ export interface Meeting extends Record<string, unknown> {
   processing_status: 'pending' | 'transcribing' | 'summarizing' | 'complete' | 'failed';
   assemblyai_transcript_id?: string;
   linked_event_id?: string;
+  /** Removed from the live summary shelf without destroying the record. */
+  archived_at?: string | null;
+  archived_by?: string | null;
   created_at: string;
 }
 
