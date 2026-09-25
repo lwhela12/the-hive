@@ -385,6 +385,7 @@ export function SurveyModal({
 
   const isStaple = isPreMeetingCheckInSurvey(survey) || isEndOfMonthCheckInSurvey(survey);
   const isOgMeeting = hiveSlug === 'default' && isPreMeetingCheckInSurvey(survey);
+  const [openHiveThingsExpanded, setOpenHiveThingsExpanded] = useState(false);
   const [completedContext, setCompletedContext] = useState<{ id: string; text: string; helperName?: string }[]>([]);
   const [contextState, setContextState] = useState<'loading' | 'ready' | 'error'>('loading');
   useEffect(() => {
@@ -630,16 +631,34 @@ export function SurveyModal({
 
     return (
       <View style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: tint.line(0.55), borderRadius: 18, padding: 16, marginBottom: 24 }}>
-        <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 6 }}>
-          {heading}
-        </Text>
-        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#7f715f', lineHeight: 19, marginBottom: 14 }}>
-          {isProduction
-            ? 'Open each job’s thread to add findings, photos or files. Tick it done when the work and the record are complete.'
-            : 'Tick off anything else you’ve finished.'}
-        </Text>
+        {isOgMeeting ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${heading}: ${rosterItems.length} open things`}
+            accessibilityState={{ expanded: openHiveThingsExpanded }}
+            onPress={() => setOpenHiveThingsExpanded(value => !value)}
+            style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 12 }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#2d2d2d' }}>{heading}</Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#7f715f', marginTop: 4 }}>
+                {rosterItems.length} open · Tap to {openHiveThingsExpanded ? 'hide' : 'review or mark done'}
+              </Text>
+            </View>
+            <Ionicons name={openHiveThingsExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={tint.accent} />
+          </Pressable>
+        ) : (
+          <>
+            <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 6 }}>{heading}</Text>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#7f715f', lineHeight: 19, marginBottom: 14 }}>
+              {isProduction
+                ? 'Open each job’s thread to add findings, photos or files. Tick it done when the work and the record are complete.'
+                : 'Tick off anything else you’ve finished.'}
+            </Text>
+          </>
+        )}
 
-        <View style={{ gap: 12 }}>
+        {(!isOgMeeting || openHiveThingsExpanded) && <View style={{ gap: 12, marginTop: isOgMeeting ? 14 : 0 }}>
           {rosterItems.map((item) => {
             const parsed = item.type === 'action_item' ? parseActionItemDescription(item.label) : null;
             const detail = [parsed?.elaboration, parsed?.reLabel, item.detail].filter(Boolean).join(' · ');
@@ -695,7 +714,7 @@ export function SurveyModal({
             <Text style={{ flex: 1, color: '#6b7280' }}>Archived · {parseActionItemDescription(item.label).text}</Text>
             <Pressable accessibilityRole="button" accessibilityLabel={`Undo archive: ${parseActionItemDescription(item.label).text}`} onPress={() => updateCarryForwardItem(item, { status: 'keep_active' })} style={{ padding: 12 }}><Text style={{ color: tint.ink }}>Undo</Text></Pressable>
           </View>)}
-        </View>
+        </View>}
       </View>
     );
   };
