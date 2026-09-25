@@ -56,11 +56,11 @@ export type UseDeckSession = {
   /** Someone else is presenting and you have wandered off their slide. */
   hasWanderedOff: boolean;
   /** Start driving this HIVE's deck from the slide you are on. */
-  startPresenting: (slideKey: string) => Promise<void>;
+  startPresenting: (slideKey: string, state?: Record<string, unknown>) => Promise<void>;
   /** Put the deck down. Everyone keeps the slide they are on. */
   stopPresenting: () => Promise<void>;
   /** Presenter only — tell the room where you just moved to. */
-  publishSlide: (slideKey: string) => void;
+  publishSlide: (slideKey: string, state?: Record<string, unknown>) => void;
   /**
    * Presenter only — tell the room where your dials are now. Debounced, because
    * a slider drag is a hundred events and the room only needs the last one.
@@ -72,6 +72,8 @@ export type UseDeckSession = {
   catchUp: () => void;
   /** True once the first read has come back, so the UI can hold its tongue. */
   ready: boolean;
+  /** The presenter's last room write failed; their own screen may be ahead. */
+  syncError: boolean;
 };
 
 export function useDeckSession(
@@ -83,6 +85,7 @@ export function useDeckSession(
   const [session, setSession] = useState<DeckSession | null>(null);
   const [ready, setReady] = useState(false);
   const [wandered, setWandered] = useState(false);
+  const [syncError, setSyncError] = useState(false);
 
   // `onRoomMoved` is a fresh closure every render; the subscription must not
   // tear down and rebuild every time the deck re-renders, so it reads the
@@ -110,11 +113,15 @@ export function useDeckSession(
 
   const readSession = useCallback(async () => {
     if (!communityId) return null;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('deck_sessions')
       .select('community_id, presenter_id, slide_key, slide_state, presenter:profiles!deck_sessions_presenter_id_fkey(name)')
       .eq('community_id', communityId)
       .maybeSingle();
+    if (error) {
+      console.warn('Could not refresh the room deck', error);
+      return undefined;
+    }
     return (data as Row | null) ?? null;
   }, [communityId]);
 
@@ -126,10 +133,14 @@ export function useDeckSession(
     }
 
     let cancelled = false;
+    let readSequence = 0;
+    let pollCount = 0;
+    let roomIsActive = false;
 
     const apply = (row: Row | null, { moveMe }: { moveMe: boolean }) => {
       if (cancelled) return;
       const next = toSession(row, myIdRef.current);
+      roomIsActive = !!next;
       setSession(next);
       // The presenter's own screen is the source of the slide, so it never
       // takes one back from the row it just wrote.
@@ -141,11 +152,16 @@ export function useDeckSession(
       if (!next) setWandered(false);
     };
 
-    // Land on the room's slide when you open the deck mid-meeting.
-    readSession().then((row) => {
-      apply(row, { moveMe: true });
+    const refreshRoom = async () => {
+      const sequence = ++readSequence;
+      const row = await readSession();
+      if (sequence !== readSequence) return;
+      if (row !== undefined) apply(row, { moveMe: true });
       if (!cancelled) setReady(true);
-    });
+    };
+
+    // Land on the room's slide when you open the deck mid-meeting.
+    void refreshRoom();
 
     const channel = supabase
       .channel(`deck-session:${communityId}`)
@@ -159,57 +175,98 @@ export function useDeckSession(
         },
         async (payload) => {
           if (payload.eventType === 'DELETE') {
+            ++readSequence;
             apply(null, { moveMe: false });
             return;
           }
           // The change event carries the row but not the presenter's name, and
           // a name is what the pill says — so re-read rather than guess.
-          const row = await readSession();
-          apply(row, { moveMe: true });
+          await refreshRoom();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') void refreshRoom();
+      });
+
+    // Realtime can miss an update while a TV browser tab sleeps or reconnects.
+    // An active room checks again quickly; an idle deck checks less often so it
+    // can still discover a new presenter after a missed INSERT.
+    const poll = setInterval(() => {
+      if (roomIsActive || ++pollCount % 4 === 0) void refreshRoom();
+    }, 2500);
 
     return () => {
       cancelled = true;
+      clearInterval(poll);
       supabase.removeChannel(channel);
     };
   }, [communityId, readSession, toSession]);
 
   const startPresenting = useCallback(
-    async (slideKey: string) => {
+    async (slideKey: string, state?: Record<string, unknown>) => {
       if (!communityId || !myId) return;
       // Whoever presses Present takes the wheel — one row per HIVE, so this is
       // an upsert, and the previous presenter's deck starts following theirs.
-      await supabase.from('deck_sessions').upsert(
+      const { error } = await supabase.from('deck_sessions').upsert(
         {
           community_id: communityId,
           presenter_id: myId,
           slide_key: slideKey,
+          slide_state: state ? { [slideKey]: state } : null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'community_id' }
       );
+      if (error) {
+        console.warn('Could not present this deck to the room', error);
+        setSyncError(true);
+        return;
+      }
+      setSyncError(false);
       setWandered(false);
       const row = await readSession();
-      setSession(toSession(row, myId));
+      if (row !== undefined) setSession(toSession(row, myId));
     },
     [communityId, myId, readSession, toSession]
   );
 
   const stopPresenting = useCallback(async () => {
     if (!communityId) return;
-    await supabase.from('deck_sessions').delete().eq('community_id', communityId);
+    const { error } = await supabase.from('deck_sessions').delete().eq('community_id', communityId);
+    if (error) {
+      console.warn('Could not end the room deck', error);
+      setSyncError(true);
+      return;
+    }
+    setSyncError(false);
     setSession(null);
     setWandered(false);
   }, [communityId]);
 
-  // Every click writes a row. A meeting is a few dozen clicks, so this stays a
-  // handful of tiny writes — but they must not overtake each other, or a fast
-  // double-tap can leave the room a slide behind. Latest write wins.
-  const seqRef = useRef(0);
-  // A slider drag fires on every pixel. The room needs where your thumb landed,
-  // not the journey, so these coalesce into one write every 250ms.
+  // Keep writes in tap order. A fast card-open, option change, and next-slide
+  // sequence must reach the room in that order even when requests take longer.
+  const writeQueue = useRef<Promise<void>>(Promise.resolve());
+  const queueUpdate = useCallback((patch: Record<string, unknown>) => {
+    if (!communityId || !myId) return;
+    writeQueue.current = writeQueue.current.then(async () => {
+      const { error } = await supabase
+        .from('deck_sessions')
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq('community_id', communityId)
+        .eq('presenter_id', myId);
+      if (error) {
+        console.warn('Could not share this slide change with the room', error);
+        setSyncError(true);
+      } else {
+        setSyncError(false);
+      }
+    }).catch((error) => {
+      console.warn('Could not share this slide change with the room', error);
+      setSyncError(true);
+    });
+  }, [communityId, myId]);
+
+  // Coalesce a quick run of taps into the latest visible choice.
   const stateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingState = useRef<Record<string, unknown> | null>(null);
   const publishSlideState = useCallback(
@@ -224,14 +281,10 @@ export function useDeckSession(
         const payload = pendingState.current;
         stateTimer.current = null;
         if (!payload) return;
-        void supabase
-          .from('deck_sessions')
-          .update({ slide_state: payload, updated_at: new Date().toISOString() })
-          .eq('community_id', communityId)
-          .eq('presenter_id', myId);
-      }, 250);
+        queueUpdate({ slide_state: payload });
+      }, 100);
     },
-    [communityId, myId]
+    [communityId, myId, queueUpdate]
   );
 
   useEffect(() => () => {
@@ -239,20 +292,18 @@ export function useDeckSession(
   }, []);
 
   const publishSlide = useCallback(
-    (slideKey: string) => {
+    (slideKey: string, state?: Record<string, unknown>) => {
       if (!communityId || !myId) return;
-      const seq = ++seqRef.current;
-      setSession((current) => (current && current.isMine ? { ...current, slideKey } : current));
-      supabase
-        .from('deck_sessions')
-        .update({ slide_key: slideKey, updated_at: new Date().toISOString() })
-        .eq('community_id', communityId)
-        .eq('presenter_id', myId)
-        .then(() => {
-          if (seq !== seqRef.current) return;
-        });
+      if (stateTimer.current) clearTimeout(stateTimer.current);
+      stateTimer.current = null;
+      pendingState.current = null;
+      const slideState = state ? { [slideKey]: state } : null;
+      setSession((current) =>
+        current && current.isMine ? { ...current, slideKey, slideState } : current
+      );
+      queueUpdate({ slide_key: slideKey, slide_state: slideState });
     },
-    [communityId, myId]
+    [communityId, myId, queueUpdate]
   );
 
   const lookAround = useCallback(() => setWandered(true), []);
@@ -277,5 +328,6 @@ export function useDeckSession(
     lookAround,
     catchUp,
     ready,
+    syncError,
   };
 }

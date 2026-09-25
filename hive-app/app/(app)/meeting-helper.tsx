@@ -24,6 +24,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { CHECK_INS_COMING_SOON_MESSAGE, hasMeetingDeck } from '../../lib/checkIns';
 import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { useDeckSession } from '../../lib/hooks/useDeckSession';
+import { meetingPaceDeadline, minutesUntil, pacePerStop } from '../../lib/meetingPace';
 import { fetchHoneyPotLedger } from '../../lib/honeyPot';
 import {
   type DuesTransactionRecognitionRow,
@@ -1054,7 +1055,7 @@ export default function MeetingHelperScreen() {
     nextMeeting,
     lastUpdatedAt,
     refresh: refreshArrivals,
-  } = useArrivalBoard({ pollingEnabled: slideIndex <= 1 || ['meetups', 'treasurer'].includes(deck.slides[slideIndex]) });
+  } = useArrivalBoard({ pollingEnabled: true });
   const [arrivalMemberToEdit, setArrivalMemberToEdit] = useState<string | null>(null);
 
   // A meeting is one HIVE in one room, and a to-do jotted here lands on that
@@ -1229,9 +1230,9 @@ export default function MeetingHelperScreen() {
   };
 
   /**
-   * Gentle timekeeper: a clock with time-'til-the-official-meeting-end and a soft
-   * per-remaining-slide pace hint — enough to say "peep the time!" without
-   * anyone feeling on the clock.
+   * The clock counts to the HIVE's official end. Pace uses the earlier of that
+   * end and a present member's personal hard out, so the room can plan enough
+   * time for everyone without rewriting the HIVE's saved meeting time.
    *
    * The official meeting end belongs to the HIVE (migration 184), not to this
    * render and not to any member's personal hard-out check-in answer.
@@ -1244,6 +1245,30 @@ export default function MeetingHelperScreen() {
   useEffect(() => {
     setHardOutTime(community?.meeting_hard_out || '20:00');
   }, [community?.meeting_hard_out]);
+  useEffect(() => {
+    if (!communityId) return;
+    let cancelled = false;
+    const refreshEnd = async () => {
+      const { data, error } = await supabase
+        .from('communities')
+        .select('meeting_hard_out')
+        .eq('id', communityId)
+        .maybeSingle();
+      if (!cancelled && !error && data?.meeting_hard_out) setHardOutTime(data.meeting_hard_out);
+    };
+    void refreshEnd();
+    const channel = supabase.channel(`meeting-end:${communityId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'communities', filter: `id=eq.${communityId}`,
+      }, () => { void refreshEnd(); })
+      .subscribe();
+    const poll = setInterval(() => { void refreshEnd(); }, 20_000);
+    return () => {
+      cancelled = true;
+      clearInterval(poll);
+      void supabase.removeChannel(channel);
+    };
+  }, [communityId]);
   const [hardOutDraft, setHardOutDraft] = useState('');
   // Evening meetings: a bare "7:45" means PM unless someone says otherwise.
   const [hardOutMeridiem, setHardOutMeridiem] = useState<'AM' | 'PM'>('PM');
@@ -2751,7 +2776,7 @@ export default function MeetingHelperScreen() {
                 {memberRows.map(({ member, preview }) => (
                   <View key={member.id} style={{ width: `${100 / bubbleColumns}%`, padding: sz(8, 5) }}>
                     <Pressable
-                      onPress={() => setExpandedCheckInAnswer({
+                      onPress={() => openCheckInAnswer({
                         slide: entry.slide,
                         heading: entry.heading,
                         memberId: member.id,
@@ -2828,7 +2853,7 @@ export default function MeetingHelperScreen() {
       .map((question) => ({ ...question, text: getTextAnswer(answers, question.key).trim() }))
       .filter((section) => !!section.text);
     if (sections.length === 0) return null;
-    const close = () => setExpandedCheckInAnswer(null);
+    const close = closeCheckInAnswer;
     const firstName = getFirstName(member.name);
     const sectionLabel = { fontFamily: 'Lato_700Bold' as const, fontSize: sz(15, 11), letterSpacing: 1.5, textTransform: 'uppercase' as const, color: GOLD, marginBottom: sz(4, 3) };
     const sectionText = { fontFamily: 'Lato_400Regular' as const, fontSize: sz(18, 13), lineHeight: sz(27, 19), color: CHARCOAL };
@@ -3556,18 +3581,21 @@ export default function MeetingHelperScreen() {
                   : undefined}
                 accessibilityState={{ selected: isSelected }}
                 onPress={() => {
+                  if (isFollowing) lookAround();
                   if (column.key === 'meeting') {
                     setPlanMode('meeting');
                     setExpandedPlanCard(null);
+                    if (isPresenting) publishSlideState('meetups', { mode: 'meeting', card: null });
                   } else if (column.key === 'hang') {
                     setPlanMode('hang');
                     // Tech's third card (HIVE Networking) has no panel — it
                     // arms the calendar, the same move as the Meeting card.
-                    setExpandedPlanCard((card) =>
-                      deck.plan.hangCardExpands && card !== 'hang' ? 'hang' : null
-                    );
+                    const card = deck.plan.hangCardExpands && expandedPlanCard !== 'hang' ? 'hang' : null;
+                    setExpandedPlanCard(card);
+                    if (isPresenting) publishSlideState('meetups', { mode: 'hang', card });
                   } else {
                     setExpandedPlanCard('help');
+                    if (isPresenting) publishSlideState('meetups', { mode: planMode, card: 'help' });
                   }
                 }}
                 style={({ pressed }) => ({
@@ -4127,8 +4155,7 @@ export default function MeetingHelperScreen() {
             <View key={member.id} style={{ width: `${100 / bubbleColumns}%`, padding: sz(8, 5) }}>
               <Pressable
                 onPress={() => {
-                  setExpandedHummdingerId(member.id);
-                  setHummdingerVisited((visited) => new Set(visited).add(member.id));
+                  openHummdinger(member.id);
                   setLiveNoteDraft('');
                   setLiveNoteConfirmation(null);
                 }}
@@ -4253,10 +4280,10 @@ export default function MeetingHelperScreen() {
     const sectionContext = { fontFamily: 'Lato_400Regular' as const, fontSize: sz(14, 10), lineHeight: sz(19, 14), color: MUTED };
 
     return (
-      <Modal visible animationType="fade" transparent onRequestClose={() => setExpandedHummdingerId(null)}>
+      <Modal visible animationType="fade" transparent onRequestClose={closeHummdinger}>
         <Pressable
           style={{ flex: 1, backgroundColor: 'rgba(49,49,48,0.5)', alignItems: 'center', justifyContent: 'center', padding: sz(40, 14) }}
-          onPress={() => setExpandedHummdingerId(null)}
+          onPress={closeHummdinger}
         >
           <Pressable
             onPress={(event) => event.stopPropagation()}
@@ -4288,7 +4315,7 @@ export default function MeetingHelperScreen() {
                 ) : null}
               </View>
               <Pressable
-                onPress={() => setExpandedHummdingerId(null)}
+                onPress={closeHummdinger}
                 style={({ pressed }) => ({
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -4387,7 +4414,7 @@ export default function MeetingHelperScreen() {
                     const words = [introWords, ...detailSections.map((section) => `${section.label}: ${section.text}`)]
                       .filter(Boolean)
                       .join('\n');
-                    setExpandedHummdingerId(null);
+                    closeHummdinger();
                     router.push({
                       pathname: '/(app)',
                       params: {
@@ -5029,15 +5056,94 @@ export default function MeetingHelperScreen() {
     publishSlideState,
     lookAround,
     catchUp,
+    syncError,
   } = useDeckSession(communityId, profile?.id ?? null, onRoomMoved);
+
+  const openHummdinger = (memberId: string) => {
+    if (isFollowing) lookAround();
+    setExpandedHummdingerId(memberId);
+    const visitedIds = [...new Set([...hummdingerVisited, memberId])];
+    setHummdingerVisited(new Set(visitedIds));
+    if (isPresenting) publishSlideState('hummdinger', { memberId, visitedIds });
+  };
+  const closeHummdinger = () => {
+    if (isFollowing) lookAround();
+    setExpandedHummdingerId(null);
+    if (isPresenting) publishSlideState('hummdinger', { memberId: null, visitedIds: [...hummdingerVisited] });
+  };
+  const openCheckInAnswer = (answer: { slide: DeckSlideKey; heading: string; memberId: string }) => {
+    if (isFollowing) lookAround();
+    setExpandedCheckInAnswer(answer);
+    if (isPresenting) publishSlideState(answer.slide, { answer });
+  };
+  const closeCheckInAnswer = () => {
+    if (isFollowing) lookAround();
+    if (isPresenting && expandedCheckInAnswer) {
+      publishSlideState(expandedCheckInAnswer.slide, { answer: null });
+    }
+    setExpandedCheckInAnswer(null);
+  };
+
+  // These are presentation details, not personal notes. Keep the open card and
+  // plan selection on the TV and every following seat, including after reload.
+  useEffect(() => {
+    if (!isFollowing || !deckSession) return;
+    const key = deckSession.slideKey;
+    const state = deckSession.slideState?.[key];
+    if (key === 'hummdinger') {
+      const memberId = state && typeof state === 'object' && 'memberId' in state
+        ? state.memberId : null;
+      if (state && typeof state === 'object' && 'visitedIds' in state && Array.isArray(state.visitedIds)) {
+        const visited = new Set<string>(state.visitedIds.filter(
+          (id): id is string => typeof id === 'string' && members.some((member) => member.id === id)
+        ));
+        setHummdingerVisited((current) =>
+          current.size === visited.size && [...visited].every((id) => current.has(id)) ? current : visited
+        );
+      }
+      setExpandedHummdingerId(
+        typeof memberId === 'string' && members.some((member) => member.id === memberId)
+          ? memberId : null
+      );
+    } else {
+      setExpandedHummdingerId(null);
+    }
+    if (state && typeof state === 'object' && 'answer' in state && state.answer
+      && typeof state.answer === 'object' && 'memberId' in state.answer
+      && 'heading' in state.answer && 'slide' in state.answer) {
+      const answer = state.answer as { slide: DeckSlideKey; heading: string; memberId: string };
+      if (answer.slide === key && members.some((member) => member.id === answer.memberId)
+        && (deck.checkInSays ?? []).some((entry) => entry.slide === key && entry.heading === answer.heading)) {
+        setExpandedCheckInAnswer((current) =>
+          current?.slide === answer.slide && current.heading === answer.heading && current.memberId === answer.memberId
+            ? current : answer
+        );
+      } else {
+        setExpandedCheckInAnswer(null);
+      }
+    } else {
+      setExpandedCheckInAnswer(null);
+    }
+    if (key === 'meetups' && state && typeof state === 'object') {
+      if ('mode' in state && (state.mode === 'hang' || state.mode === 'meeting')) setPlanMode(state.mode);
+      if ('card' in state) setExpandedPlanCard(
+        state.card === 'hang' || state.card === 'help' ? state.card : null
+      );
+    }
+  }, [isFollowing, deckSession, members, deck.checkInSays]);
+
+  const stateForSlide = (key: DeckSlideKey): Record<string, unknown> | undefined => {
+    if (key === 'spend') return spend as unknown as Record<string, unknown>;
+    if (key === 'hummdinger') return { memberId: expandedHummdingerId, visitedIds: [...hummdingerVisited] };
+    if (key === 'meetups') return { mode: planMode, card: expandedPlanCard };
+    return undefined;
+  };
 
   /**
    * Where the honey goes — the one slide with dials on it.
    *
    * The presenter's dials ride along in the session row, so the room sees the
-   * number Nat is pointing at rather than its own. A follower who reaches out
-   * and turns something keeps their own answer until the presenter moves
-   * again, which is the same soft leash the slide key already has.
+   * number Nat is pointing at rather than its own.
    */
   const [spend, setSpend] = useState<SpendState>(DEFAULT_SPEND);
   const changeSpend = useCallback(
@@ -5050,11 +5156,11 @@ export default function MeetingHelperScreen() {
   const roomSpend = deckSession?.slideState?.spend as SpendState | undefined;
   useEffect(() => {
     // Mirror the presenter, never your own echo.
-    if (!roomSpend || isPresenting) return;
+    if (!roomSpend || !isFollowing || deckSession?.slideKey !== 'spend') return;
     setSpend((current) =>
       JSON.stringify(current) === JSON.stringify(roomSpend) ? current : { ...DEFAULT_SPEND, ...roomSpend }
     );
-  }, [roomSpend, isPresenting]);
+  }, [roomSpend, isFollowing, deckSession?.slideKey]);
 
   /**
    * Where the honey goes. The Treasurer slide says what is in the pot; this is
@@ -5100,6 +5206,20 @@ export default function MeetingHelperScreen() {
   const slideCount = slides.length;
   const clampedIndex = Math.min(slideIndex, slideCount - 1);
   const activeSlide = slides[clampedIndex];
+  const paceDeadline = meetingPaceDeadline(
+    clockNow,
+    hardOutTime,
+    members
+      .filter((member) => getReportedAttendance(responsesByUser.get(member.id), reportsByUser.get(member.id)) !== 'missing')
+      .map((member) => getTextAnswer(responsesByUser.get(member.id)?.answers ?? {}, 'q_hard_out')),
+  );
+  const paceMinutesLeft = minutesUntil(clockNow, paceDeadline);
+  const paceIsNear = paceMinutesLeft > 0 && paceMinutesLeft <= 180;
+  const slidesLeft = Math.max(1, slideCount - clampedIndex);
+  const slidePace = paceIsNear ? pacePerStop(paceMinutesLeft, slidesLeft) : null;
+  const paceTarget = paceDeadline
+    ? `${paceDeadline.source === 'member' ? 'first hard out' : 'meeting end'} ${paceDeadline.at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+    : null;
 
 
   /**
@@ -5114,11 +5234,14 @@ export default function MeetingHelperScreen() {
   const goToSlide = useCallback(
     (next: number) => {
       const bounded = Math.max(0, Math.min(next, deck.slides.length - 1));
+      const nextKey = deck.slides[bounded];
       setSlideIndex(bounded);
-      if (isPresenting) publishSlide(deck.slides[bounded]);
+      if (nextKey !== 'hummdinger') setExpandedHummdingerId(null);
+      if (expandedCheckInAnswer?.slide !== nextKey) setExpandedCheckInAnswer(null);
+      if (isPresenting) publishSlide(nextKey, stateForSlide(nextKey));
       else if (isFollowing) lookAround();
     },
-    [deck, isPresenting, isFollowing, publishSlide, lookAround]
+    [deck, isPresenting, isFollowing, publishSlide, lookAround, spend, expandedCheckInAnswer, expandedHummdingerId, hummdingerVisited, planMode, expandedPlanCard]
   );
 
   /**
@@ -5150,6 +5273,20 @@ export default function MeetingHelperScreen() {
     // broke over three lines and the tagline printed straight through it, so
     // the words get shorter rather than the button getting taller.
     const oneLine = { numberOfLines: 1 as const };
+
+    if (isPresenting && syncError) {
+      return (
+        <Pressable
+          onPress={() => publishSlide(activeSlide.key, stateForSlide(activeSlide.key))}
+          accessibilityRole="button"
+          accessibilityLabel="Room sync paused. Retry sharing this slide"
+          style={({ pressed }) => ({ ...pillStyle('quiet'), opacity: pressed ? 0.7 : 1 })}
+        >
+          <Ionicons name="warning-outline" size={sz(17, 12)} color="#b3261e" />
+          <Text {...oneLine} style={[labelStyle('quiet'), { color: '#b3261e' }]}>Room sync paused · retry</Text>
+        </Pressable>
+      );
+    }
 
     // You have the deck. Tapping puts it down — everybody keeps the slide they
     // are on rather than being dumped back to the start.
@@ -5199,7 +5336,7 @@ export default function MeetingHelperScreen() {
     // Lucas runs Tech's, and Production hands its jobs out live.
     return (
       <Pressable
-        onPress={() => startPresenting(deck.slides[clampedIndex])}
+        onPress={() => startPresenting(deck.slides[clampedIndex], stateForSlide(activeSlide.key))}
         accessibilityRole="button"
         accessibilityLabel="Present this deck to the room"
         style={({ pressed }) => ({ ...pillStyle('quiet'), opacity: pressed ? 0.7 : 1 })}
@@ -5242,9 +5379,9 @@ export default function MeetingHelperScreen() {
           setShowHardOutEditor(true);
         }}
         accessibilityRole="button"
-        accessibilityLabel={`${label} until ${hardOutLabel}. Change when the meeting ends`}
+        accessibilityLabel={`${label} until ${hardOutLabel}.${slidePace && paceTarget ? ` ${slidePace} per slide to ${paceTarget}.` : ''} Change when the meeting ends`}
         hitSlop={8}
-        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, paddingHorizontal: 8 })}
+        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, paddingHorizontal: 8, alignItems: 'center' })}
       >
         <Text
           numberOfLines={1}
@@ -5252,6 +5389,11 @@ export default function MeetingHelperScreen() {
         >
           {label}
         </Text>
+        {slidePace && paceTarget ? (
+          <Text numberOfLines={2} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(11, 8), color: GOLD_DEEP, textAlign: 'center' }}>
+            {slidePace}/slide{'\n'}to {paceTarget}
+          </Text>
+        ) : null}
       </Pressable>
     );
   };
@@ -5341,7 +5483,6 @@ export default function MeetingHelperScreen() {
     const hardOutDate = new Date(clockNow);
     hardOutDate.setHours(hour, minute, 0, 0);
     const minutesLeft = Math.round((hardOutDate.getTime() - clockNow.getTime()) / 60_000);
-    const meetingIsNear = minutesLeft > 0 && minutesLeft <= 180;
     const clockLabel = clockNow.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     const hardOutLabel = hardOutDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     const leftLabel =
@@ -5355,10 +5496,9 @@ export default function MeetingHelperScreen() {
     const minuteAngle = clockNow.getMinutes() * 6;
     const activeKey = activeSlide.key;
     const membersToGo = memberOrder.filter((member) => !hummdingerVisited.has(member.id)).length;
-    const hdPaceMinutes =
-      meetingIsNear && activeKey === 'hummdinger' && membersToGo > 0
-        ? Math.max(1, Math.floor(minutesLeft / membersToGo))
-        : null;
+    const hdPace = paceIsNear && activeKey === 'hummdinger' && membersToGo > 0
+      ? pacePerStop(paceMinutesLeft, membersToGo + slidesLeft - 1)
+      : null;
 
     return (
       <View
@@ -5437,6 +5577,11 @@ export default function MeetingHelperScreen() {
             {leftLabel}
           </Text>
         </Pressable>
+        {slidePace && paceTarget ? (
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), lineHeight: sz(20, 15), color: GOLD_DEEP, textAlign: 'center', marginTop: sz(10, 7) }}>
+            {slidePace}/slide · {slidesLeft} left{'\n'}to {paceTarget}
+          </Text>
+        ) : null}
 
         <View style={{ height: 1, backgroundColor: GOLD_SOFT, marginVertical: sz(18, 11) }} />
 
@@ -5477,9 +5622,9 @@ export default function MeetingHelperScreen() {
                 </Pressable>
                 {item.key === 'hummdinger' ? (
                   <View style={{ paddingLeft: sz(26, 18), paddingBottom: sz(6, 4) }}>
-                    {hdPaceMinutes !== null ? (
+                    {hdPace !== null ? (
                       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 9), color: '#b3261e', marginBottom: sz(4, 3) }}>
-                        {membersToGo} to go · ≈{hdPaceMinutes} min each
+                        {membersToGo} to go · {hdPace} each
                       </Text>
                     ) : null}
                     {memberOrder.map((member) => {
@@ -5859,9 +6004,6 @@ export default function MeetingHelperScreen() {
           const hardOutDate = new Date(clockNow);
           hardOutDate.setHours(hour, minute, 0, 0);
           const minutesLeft = Math.round((hardOutDate.getTime() - clockNow.getTime()) / 60_000);
-          const slidesLeft = Math.max(1, slideCount - clampedIndex);
-          const meetingIsNear = minutesLeft > 0 && minutesLeft <= 180;
-          const paceMinutes = meetingIsNear ? Math.max(1, Math.floor(minutesLeft / slidesLeft)) : null;
           const clockLabel = clockNow.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
           const hardOutLabel = hardOutDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
           const leftLabel =
@@ -5954,9 +6096,9 @@ export default function MeetingHelperScreen() {
               >
                 {leftLabel}
               </Text>
-              {paceMinutes !== null ? (
+              {slidePace && paceTarget ? (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 8), color: MUTED, textAlign: 'center' }}>
-                  ≈{paceMinutes} min each for the{'\n'}{slidesLeft} slide{slidesLeft === 1 ? '' : 's'} left
+                  {slidePace}/slide · {slidesLeft} left{'\n'}to {paceTarget}
                 </Text>
               ) : null}
             </Pressable>
@@ -6208,7 +6350,7 @@ export default function MeetingHelperScreen() {
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: MUTED }}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  onPress={() => {
+                  onPress={async () => {
                     const normalized = normalizeEventTimeInput(hardOutDraft);
                     if (normalized.time) {
                       let [hour, minute] = normalized.time.split(':').map(Number);
@@ -6219,18 +6361,19 @@ export default function MeetingHelperScreen() {
                         if (hardOutMeridiem === 'AM' && hour >= 12) hour -= 12;
                       }
                       const next = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-                      setHardOutTime(next);
-                      // Remembered for the HIVE. A member's personal leaving
-                      // time is a separate check-in answer and never lands here.
                       if (communityId) {
-                        void supabase
+                        const { data, error } = await supabase
                           .from('communities')
                           .update({ meeting_hard_out: next })
                           .eq('id', communityId)
-                          .then(({ error }) => {
-                            if (error) console.warn('Could not remember the official meeting end', error);
-                          });
+                          .select('meeting_hard_out')
+                          .maybeSingle();
+                        if (error || data?.meeting_hard_out !== next) {
+                          showAlert('Meeting end not saved', 'Try setting the time again.');
+                          return;
+                        }
                       }
+                      setHardOutTime(next);
                       setShowHardOutEditor(false);
                     }
                   }}
