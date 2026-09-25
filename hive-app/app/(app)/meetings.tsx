@@ -25,6 +25,7 @@ import { ComposerBar } from '../../components/ui/ComposerBar';
 import { LocationSearchInput } from '../../components/ui/LocationSearchInput';
 import { FIELD_LOOK } from '../../components/ui/Input';
 import { EditButton } from '../../components/ui/EditButton';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { confirmAction, showAlert } from '../../lib/showAlert';
 import { CHECK_INS_COMING_SOON_MESSAGE, checkInDisplayName, hasTailoredCheckIns, hasMeetingDeck, hasEndOfMonthCheckIn, getHalfwayShape, getSeasonCheckInKind, isEndOfMonthCheckInSurvey, isSurveyOnHomeToday, SEASON_CHECK_IN_EMOJI } from '../../lib/checkIns';
 import { useSurveys, isMonthlyCheckInSurvey } from '../../lib/hooks/useSurveys';
@@ -254,6 +255,7 @@ export default function MeetingsScreen() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [removingMeetingId, setRemovingMeetingId] = useState<string | null>(null);
+  const [meetingPendingRemoval, setMeetingPendingRemoval] = useState<Meeting | null>(null);
 
   // Slide deck URL — pulled from community record, editable by admin
   const [slideDeckUrl, setSlideDeckUrl] = useState(community?.slide_deck_url ?? '');
@@ -728,35 +730,31 @@ export default function MeetingsScreen() {
   };
 
   const handleRemoveMeetingSummary = (meeting: Meeting) => {
-    const title = getMeetingCardTitle(meeting);
-    const doRemove = async () => {
-      if (removingMeetingId) return;
-      setRemovingMeetingId(meeting.id);
-      try {
-        const { error } = await (supabase as any).rpc('archive_meeting_summary', {
-          p_meeting_id: meeting.id,
-        });
+    if (removingMeetingId) return;
+    setMeetingPendingRemoval(meeting);
+  };
 
-        if (error) {
-          console.error('Remove meeting summary error:', error);
-          showAlert('Still here', userFacingError(error, 'The summary is still here. Please try again.'));
-          return;
-        }
+  const confirmRemoveMeetingSummary = async () => {
+    if (!meetingPendingRemoval || removingMeetingId) return;
+    const meeting = meetingPendingRemoval;
+    setRemovingMeetingId(meeting.id);
+    try {
+      const { error } = await (supabase as any).rpc('archive_meeting_summary', {
+        p_meeting_id: meeting.id,
+      });
 
-        setMeetings((current) => current.filter((item) => item.id !== meeting.id));
-        showAlert('Removed', 'The summary is off this list, and its record is safely kept.');
-      } finally {
-        setRemovingMeetingId(null);
+      if (error) {
+        console.error('Remove meeting summary error:', error);
+        showAlert('Still here', userFacingError(error, 'The summary is still here. Please try again.'));
+        return;
       }
-    };
 
-    confirmAction({
-      title: 'Remove summary',
-      message: `Remove “${title}” from Meeting Summaries? Its record will be kept for recovery.`,
-      confirmLabel: 'Remove summary',
-      destructive: true,
-      onConfirm: doRemove,
-    });
+      setMeetingPendingRemoval(null);
+      setMeetings((current) => current.filter((item) => item.id !== meeting.id));
+      showAlert('Removed', 'The summary is off this list, and its record is safely kept.');
+    } finally {
+      setRemovingMeetingId(null);
+    }
   };
 
   const handleEditEvent = (event: Event) => {
@@ -2083,6 +2081,19 @@ export default function MeetingsScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+      <ConfirmDialog
+        visible={!!meetingPendingRemoval}
+        title="Remove summary?"
+        body={meetingPendingRemoval
+          ? `Remove “${getMeetingCardTitle(meetingPendingRemoval)}” from Meeting Summaries? Its record will be kept for recovery.`
+          : undefined}
+        confirmLabel={removingMeetingId ? 'Removing…' : 'Remove summary'}
+        destructive
+        onConfirm={() => void confirmRemoveMeetingSummary()}
+        onCancel={() => {
+          if (!removingMeetingId) setMeetingPendingRemoval(null);
+        }}
+      />
       {activeSeasonSurvey ? (
         <SurveyModal
           survey={activeSeasonSurvey}
