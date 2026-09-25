@@ -50,6 +50,11 @@ interface SurveyModalProps {
   draftScope?: string;
   closeLabel?: string;
   introduction?: React.ReactNode;
+  /** Place the shared capacity picker inside the OG arrival sequence. */
+  afterQuestionId?: string;
+  afterQuestion?: React.ReactNode;
+  ideaMeetingId?: string | null;
+  canEditIdeas?: boolean;
   timingLabel?: string;
   /** Only rendered after a successful save and its follow-up writes finish. */
   renderSuccess?: (close: () => void) => React.ReactNode;
@@ -188,6 +193,10 @@ export function SurveyModal({
   draftScope,
   closeLabel = "Back to HIVE",
   introduction,
+  afterQuestionId,
+  afterQuestion,
+  ideaMeetingId,
+  canEditIdeas = false,
   timingLabel,
   renderSuccess,
   isEditingResponse = false,
@@ -375,6 +384,7 @@ export function SurveyModal({
   }, [draftId]);
 
   const isStaple = isPreMeetingCheckInSurvey(survey) || isEndOfMonthCheckInSurvey(survey);
+  const isOgMeeting = hiveSlug === 'default' && isPreMeetingCheckInSurvey(survey);
   const [completedContext, setCompletedContext] = useState<{ id: string; text: string; helperName?: string }[]>([]);
   const [contextState, setContextState] = useState<'loading' | 'ready' | 'error'>('loading');
   useEffect(() => {
@@ -896,21 +906,37 @@ export function SurveyModal({
                 return survey.questions.map((q) => {
                   const redundantHiveHeading = q.type === 'note' && q.id.startsWith('note_hive_') && survey.questions.filter(question => question.type === 'note' && question.id.startsWith('note_hive_')).length === 1 && !!survey.community_id;
                   const drawn = redundantHiveHeading ? null : renderQuestion(q, q.type === 'note' ? -1 : asked++);
+                  const sectionTitle = isOgMeeting ? ({
+                    q_attendance: 'Your plans',
+                    q_feeling_today: 'How you’re arriving',
+                    q_hd_wish: 'What you want to move forward',
+                    q_hive_help_recap: 'How this month went',
+                  } as Record<string, string>)[q.id] : null;
+                  const withHeading = sectionTitle ? <Fragment key={`${q.id}_group`}>
+                    <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 19, color: '#3b3428', marginTop: 16, marginBottom: 10 }}>{sectionTitle}</Text>
+                    {drawn}
+                  </Fragment> : drawn;
+                  if (isOgMeeting && q.type === 'note' && q.id.startsWith('note_hive_')) return drawn;
+                  if (afterQuestion && q.id === afterQuestionId) {
+                    asked += 1;
+                    return <Fragment key={`${q.id}_arrival`}>{withHeading}{afterQuestion}{isOgMeeting && renderCarryForwardContext(carryForwardItems, 'Your open HIVE things')}</Fragment>;
+                  }
                   const mine = carryForwardSections?.[q.id];
-                  if (!mine?.length) return drawn;
+                  if (!mine?.length) return withHeading;
                   // This HIVE's own open things, under this HIVE's heading and
                   // above its own questions.
                   return (
                     <Fragment key={`${q.id}_section`}>
-                      {drawn}
+                      {withHeading}
                       {renderCarryForwardContext(mine)}
                     </Fragment>
                   );
                 });
               })()}
 
-              {draftLoaded && hiveSlug === 'default' && isPreMeetingCheckInSurvey(survey) && answerCommunityId && viewerProfile?.id && (
-                <OgIdeaChoices communityId={answerCommunityId} userId={viewerProfile.id} />
+              {draftLoaded && isOgMeeting && answerCommunityId && ideaMeetingId && (
+                <OgIdeaChoices communityId={answerCommunityId} meetingId={ideaMeetingId}
+                  canEdit={canEditIdeas} answers={answers} onSetAnswer={setAnswer} />
               )}
 
               {error && (

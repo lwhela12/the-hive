@@ -2113,7 +2113,9 @@ export default function MeetingHelperScreen() {
 
   const openNoteEditor = useCallback((key: EditableNoteKey) => {
     const isIdeas = key === 'helpIdeas' || key === 'hangIdeas';
-    setEditDraft(isIdeas && notes.ideasMeetingId !== nextMeeting?.id ? '' : notes[key] ?? '');
+    setEditDraft(isIdeas && notes.ideasMeetingId !== nextMeeting?.id
+      ? (notes[key] ?? '').split('\n').map(line => line.trim()).filter(Boolean).slice(0, 3).join('\n')
+      : notes[key] ?? '');
     setEditKey(key);
   }, [notes, nextMeeting?.id]);
 
@@ -2124,6 +2126,11 @@ export default function MeetingHelperScreen() {
     if (isIdeas && !nextMeeting?.id) {
       setSavingNote(false);
       showAlert('No meeting yet', 'Schedule the next meeting before choosing its ideas.');
+      return;
+    }
+    if (isIdeas && editDraft.split('\n').map(line => line.trim()).filter(Boolean).length > 3) {
+      setSavingNote(false);
+      showAlert('Choose up to three', 'Use one idea per line for this meeting’s check-in.');
       return;
     }
     const nextNotes: MeetingHelperNotes = {
@@ -3201,6 +3208,27 @@ export default function MeetingHelperScreen() {
         .filter((voice) => !!voice.text);
     const underCards = deck.plan.voicesUnderCards;
     const underCardVoices = underCards ? voicesFor(underCards.answerKey) : [];
+    const ideaChoicesFor = (key: 'q_help_idea_choice' | 'q_hang_idea_choice') => {
+      const counts = new Map<string, number>();
+      for (const member of members) {
+        const choice = getTextAnswer(responsesByUser.get(member.id)?.answers ?? {}, key).trim();
+        if (choice) counts.set(choice, (counts.get(choice) ?? 0) + 1);
+      }
+      return [...counts].map(([title, votes]) => ({ title, votes }))
+        .sort((a, b) => b.votes - a.votes || a.title.localeCompare(b.title));
+    };
+    const helpCheckInChoices = ideaChoicesFor('q_help_idea_choice');
+    const hangCheckInChoices = ideaChoicesFor('q_hang_idea_choice');
+    const renderCheckInIdeaChoices = (kind: 'help' | 'hang') => {
+      const choices = kind === 'help' ? helpCheckInChoices : hangCheckInChoices;
+      if (!choices.length) return null;
+      return <View style={{ marginTop: sz(8, 5), gap: sz(4, 3) }}>
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), color: GOLD_DEEP }}>Members’ choices</Text>
+        {choices.map(idea => <Text key={idea.title} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), color: CHARCOAL }}>
+          {idea.title} · {idea.votes} {idea.votes === 1 ? 'person' : 'people'}
+        </Text>)}
+      </View>;
+    };
     const renderNatPicks = (noteKey: 'helpIdeas' | 'hangIdeas') => {
       if (!deckIsOg) return null;
       const value = notes.ideasMeetingId === nextMeeting?.id ? (notes[noteKey] ?? '').trim() : '';
@@ -3627,6 +3655,7 @@ export default function MeetingHelperScreen() {
               </Text>
             )}
             {renderNatPicks('helpIdeas')}
+            {renderCheckInIdeaChoices('help')}
             {reportedHelpIdeas.length > 0 ? (
               <View style={{ marginTop: sz(5, 4), gap: sz(4, 3) }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), color: GOLD_DEEP }}>Ideas shared with admin</Text>
@@ -3639,7 +3668,7 @@ export default function MeetingHelperScreen() {
             ) : null}
             {helpIdeaVotes.length > 0 ? (
               <View style={{ marginTop: sz(5, 4), gap: sz(4, 3) }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), color: GOLD_DEEP }}>Ideas for next time</Text>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), color: GOLD_DEEP }}>More ideas from the board</Text>
                 {helpIdeaVotes.map(idea => <Text key={idea.title} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), color: CHARCOAL }}>
                   {idea.title} · {idea.votes} {idea.votes === 1 ? 'vote' : 'votes'}
                 </Text>)}
@@ -3736,6 +3765,8 @@ export default function MeetingHelperScreen() {
                 <EditPill noteKey="meetups" />
               </View>
               {renderNatPicks('hangIdeas')}
+              {renderCheckInIdeaChoices('hang')}
+              {hangIdeas.length > 0 ? <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: GOLD_DEEP }}>More ideas from the board</Text> : null}
               {hangIdeas.length === 0 ? (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
                   No ideas on the board yet — first to post picks the venue.

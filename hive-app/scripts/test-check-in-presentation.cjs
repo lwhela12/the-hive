@@ -2,8 +2,13 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
 const assert = require('node:assert/strict');
+const dateModule = { exports: {} };
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/dateUtils.ts','utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:dateModule.exports,module:dateModule,Date,Intl});
 const moduleObject = { exports: {} };
-vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/checkInPresentation.ts','utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:moduleObject.exports,module:moduleObject,Date,Set});
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/checkInPresentation.ts','utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:moduleObject.exports,module:moduleObject,Date,Set,require:(id)=>{
+  if(id==='./dateUtils') return dateModule.exports;
+  throw new Error(`Unexpected import: ${id}`);
+}});
 const {checkInQuestions,PLATE_QUESTION,FEELING_QUESTION,FEELING_NOTE_QUESTION,HD_FOCUS_QUESTION,meetingLabel}=moduleObject.exports;
 const questions=[
   {id:'q_energy_level',type:'scale',text:'Energy'},
@@ -33,6 +38,15 @@ assert.deepEqual(Array.from(missingBoth,q=>q.id),['q_feeling_today','q_feeling_n
 const alreadyHasBoth=checkInQuestions([...questions,{id:'q_hd_wish',type:'long',text:'Old HD copy'}]);
 assert.equal(alreadyHasBoth.filter(q=>q.id==='q_hd_wish').length,1,'never show two HD focus pickers');
 assert.equal(alreadyHasBoth.some(q=>q.id==='q_pop_priorities'),false,'HD focus wins over the old priorities essay');
+const og=checkInQuestions([
+  {id:'q_attendance',type:'choice',text:'Coming?'},
+  {id:'q_hard_out',type:'short',text:'Hard out?'},
+  {id:'q_hive_help_recap',type:'focus',text:'Help recap'},
+  {id:'q_hangs_recap',type:'hangs',text:'Hang recap'},
+],false,'default');
+assert.deepEqual(Array.from(og,q=>q.id),[
+  'q_attendance','q_hard_out','q_feeling_today','q_feeling_note','q_hd_wish','q_hive_help_recap','q_hangs_recap',
+], 'OG check-in moves from meeting logistics through arrival and focus to the month recap');
 const production=checkInQuestions([
   {id:'q_attendance',type:'choice',text:'Coming?'},
   {id:'q_hard_out',type:'short',text:'Hard out?'},
@@ -53,7 +67,8 @@ assert.equal([PLATE_QUESTION,...adapted].filter(q=>q.id==='q_plate').length,1);
 assert.equal(meeting.filter(q=>q.id===FEELING_QUESTION.id).length,1,'Before we meet has one feeling choice');
 assert.equal(meeting.filter(q=>q.id===FEELING_NOTE_QUESTION.id).length,1,'Before we meet has one optional context note');
 assert.match(FEELING_QUESTION.options.join(' '),/Overwhelmed.*Under the weather.*Sad or low/);
-assert.match(meetingLabel({id:'a',community_id:'a',event_date:'2026-09-10',event_time:'18:30:00'}),/Sep 10.*6:30 PM PT/);
+assert.match(FEELING_QUESTION.options.join(' '),/Excited.*Hopeful.*Nervous.*Frustrated.*Something else/);
+assert.match(meetingLabel({id:'a',community_id:'a',event_date:'2026-09-10',event_time:'18:30:00'}),/Sept 10.*6:30pm PT/);
 assert.equal(meetingLabel(), 'No meeting scheduled yet');
 assert.match(meetingLabel({event_date:'2026-09-10'}),/Time to be confirmed/);
 const modal=fs.readFileSync('components/surveys/SurveyModal.tsx','utf8');
@@ -77,8 +92,10 @@ assert.ok(meetingHelper.includes('groupProductionJobs'),'shared Production jobs 
 assert.ok(!meetingHelper.includes("{ key: 'q_show_obstacles', label: \"What's stuck\" }"),'Production Meeting Helper does not depend on retired survey homework');
 const carryForward=fs.readFileSync('lib/hooks/useCarryForwardContext.ts','utf8');
 assert.ok(carryForward.includes('related_board_post_id'),'check-in tasks retain their board thread link');
+assert.ok(!carryForward.includes("label: 'Last POP check-in'"),'old survey summaries do not masquerade as actionable tasks');
 const beforeWeMeet=fs.readFileSync('app/(app)/beforewemeet/index.tsx','utf8');
 assert.ok(beforeWeMeet.includes('ProductionProjectOverview'),'the Production manager sees the whole operation even without an assigned job');
+assert.ok(beforeWeMeet.includes("'q_help_idea_choice', 'q_hang_idea_choice'"),'idea choices are saved with the meeting response');
 const scopeBadge=fs.readFileSync('components/ui/ScopeBadge.tsx','utf8');
 const reachPill=fs.readFileSync('components/ui/ReachPill.tsx','utf8');
 assert.ok(scopeBadge.includes('hiveTagMark(owner)'),'board and other HIVE labels use the shared tag-mark colour');

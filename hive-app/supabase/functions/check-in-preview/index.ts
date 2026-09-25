@@ -16,7 +16,8 @@ const PACIFIC = 'America/Los_Angeles';
 
 type EventRow = CheckInMeeting & {
   event_date: string;
-  community?: { name?: string | null; slug?: string | null; accent_color?: string | null } | null;
+  community?: { name?: string | null; slug?: string | null; accent_color?: string | null;
+    meeting_helper_notes?: { ideasMeetingId?: string; helpIdeas?: string; hangIdeas?: string } | null } | null;
 };
 
 type HoldMeta = {
@@ -38,7 +39,8 @@ function escapeHtml(value: string) {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function previewHtml(opts: { hive: string; touch: string; names: string[]; sendHref: string; editHref: string; surveyHref: string; mark: HiveMark }) {
+function previewHtml(opts: { hive: string; touch: string; names: string[]; sendHref: string; editHref: string; surveyHref: string; mark: HiveMark;
+  ideaChoices?: { help: string[]; hang: string[] } }) {
   const count = opts.names.length;
   const when = opts.touch === 'day_of' ? 'today' : 'tomorrow';
   const people = count ? opts.names.map(escapeHtml).join(', ') : 'Nobody — everyone has already filled it in.';
@@ -48,6 +50,10 @@ function previewHtml(opts: { hive: string; touch: string; names: string[]; sendH
     <h1 style="font-size:24px;text-align:center;margin:6px 0;color:${opts.mark.accent}">${escapeHtml(opts.hive)} meets ${when}</h1>
     <p>${count === 1 ? '1 person is' : `${count} people are`} still waiting on <strong>Before we meet</strong>.</p>
     <p style="padding:12px 14px;background:#f6f1e5;border-radius:10px"><strong>Who would receive this:</strong><br>${people}</p>
+    ${opts.ideaChoices ? `<div style="padding:12px 14px;background:#f6f1e5;border-radius:10px"><strong>Your idea choices for this meeting</strong>
+      <p>HIVE Help: ${opts.ideaChoices.help.length ? opts.ideaChoices.help.map(escapeHtml).join(' · ') : 'Choose your options'}</p>
+      <p>HIVE Hang: ${opts.ideaChoices.hang.length ? opts.ideaChoices.hang.map(escapeHtml).join(' · ') : 'Choose your options'}</p>
+      <a href="${escapeHtml(opts.surveyHref)}" style="color:#7c5d29">Edit these choices in the check-in</a></div>` : ''}
     <p><strong>Check the exact form first:</strong><br><a href="${escapeHtml(opts.surveyHref)}" style="color:#7c5d29">Open Before we meet for ${escapeHtml(opts.hive)}</a></p>
     <p>People who finish the check-in before you send are removed automatically.</p>
     ${count ? `<p style="margin:26px 0 12px"><a href="${escapeHtml(opts.sendHref)}" style="display:inline-block;background:${opts.mark.accent};color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-weight:700">Yes, send it to ${count}</a></p>` : ''}
@@ -117,7 +123,7 @@ async function makeScheduledPreviews(admin: { from: (table: string) => any }) {
   const today = pacificDate();
   const tomorrow = pacificDate(new Date(Date.now() + 86400000));
   const { data: events, error } = await admin.from('events')
-    .select('id, event_date, community_id, community:communities!community_id(name, slug, accent_color)')
+    .select('id, event_date, community_id, community:communities!community_id(name, slug, accent_color, meeting_helper_notes)')
     .eq('event_type', 'meeting').eq('status', 'scheduled').in('event_date', [today, tomorrow]);
   if (error) throw new Error('Could not read upcoming meetings.');
   let previews = 0;
@@ -142,7 +148,11 @@ async function makeScheduledPreviews(admin: { from: (table: string) => any }) {
     const holdId = hold.data.id as string;
     const surveyHref = `${APP_URL}/beforewemeet?meeting=${encodeURIComponent(event.id)}`;
     const mark = hiveMark(event.community?.slug, event.community?.accent_color);
-    const html = previewHtml({ hive, touch, names, mark, surveyHref, sendHref: `${APP_URL}/approve-check-in/${encodeURIComponent(holdId)}?action=send`, editHref: `${APP_URL}/admin` });
+    const notes = event.community?.meeting_helper_notes;
+    const ideasFor = (key: 'helpIdeas' | 'hangIdeas') => notes?.ideasMeetingId === event.id
+      ? (notes[key] ?? '').split('\n').map(line => line.trim()).filter(Boolean).slice(0, 3) : [];
+    const ideaChoices = event.community?.slug === 'default' ? { help: ideasFor('helpIdeas'), hang: ideasFor('hangIdeas') } : undefined;
+    const html = previewHtml({ hive, touch, names, mark, surveyHref, ideaChoices, sendHref: `${APP_URL}/approve-check-in/${encodeURIComponent(holdId)}?action=send`, editHref: `${APP_URL}/admin` });
     await sendPreview(nat.email, html, `[Waiting on you] ${hive} · Before we meet`);
     previews += 1;
   }

@@ -13,12 +13,18 @@ export const FEELING_QUESTION: SurveyQuestion = {
   options: [
     '😊 Great — bring it on!',
     '😌 Good & steady',
+    '🙂 Okay — taking it as it comes',
+    '🤩 Excited',
+    '🌱 Hopeful',
     '😴 Tired, but here',
+    '😬 Nervous',
+    '😤 Frustrated',
     '🫠 Overwhelmed — please go gently',
     '🤒 Under the weather — love me from a distance',
     '💛 Sad or low — extra hugs welcome',
     '🖤 Sad or low — love me from a distance',
     '🌀 All over the place',
+    '✍️ Something else — I’ll say below',
   ],
 };
 export const FEELING_NOTE_QUESTION: SurveyQuestion = {
@@ -110,6 +116,18 @@ export function checkInQuestions(questions: SurveyQuestion[], month = false, hiv
   if (!month && !productionMeeting && !presented.some(q => q.id === HD_FOCUS_QUESTION.id)) {
     const hardOutIndex = presented.findIndex(q => q.id === 'q_hard_out');
     presented.splice(hardOutIndex >= 0 ? hardOutIndex + 1 : 0, 0, { ...HD_FOCUS_QUESTION });
+  }
+  if (!month && (hiveSlug ?? '').trim().toLowerCase() === 'default') {
+    // OG's meeting rhythm: logistics, arrival, what needs the room, what
+    // happened this month, then ideas for next month (drawn after the form).
+    // Sort only the presentation; stored question ids and answers stay put.
+    const order = ['q_attendance', 'q_hard_out', FEELING_QUESTION.id, FEELING_NOTE_QUESTION.id,
+      HD_FOCUS_QUESTION.id, 'q_hive_help_recap', 'q_hangs_recap'];
+    presented.sort((a, b) => {
+      const left = order.indexOf(a.id);
+      const right = order.indexOf(b.id);
+      return (left < 0 ? order.length : left) - (right < 0 ? order.length : right);
+    });
   }
   return presented;
 }

@@ -400,7 +400,7 @@ export default function BeforeWeMeetScreen() {
       if (original?.[id] !== undefined) own.answers[id] = original[id];
     }
     if (plate !== undefined) own.answers.q_plate = plate;
-    for (const key of ['q_hd_wish_id', 'q_hd_wish_reach', 'q_hd_wish_mode', 'q_hd_granted_wish_ids']) {
+    for (const key of ['q_hd_wish_id', 'q_hd_wish_reach', 'q_hd_wish_mode', 'q_hd_granted_wish_ids', 'q_help_idea_choice', 'q_hang_idea_choice']) {
       if (answers[key] !== undefined) own.answers[key] = answers[key];
     }
     if (answers[CARRY_FORWARD_ANSWER_KEY]) own.answers[CARRY_FORWARD_ANSWER_KEY] = answers[CARRY_FORWARD_ANSWER_KEY];
@@ -415,7 +415,8 @@ export default function BeforeWeMeetScreen() {
     <Text style={{ color: skin.ink }}>This meeting link is no longer available to you.</Text>
     <CheckInAction title="Open your check-ins" onPress={() => router.replace('/beforewemeet' as never)} />
   </View>;
-  const personalQuestion = <SharedPlate scope={`check-in-plate:${profile?.id}:${row?.id}:${today}`} onChange={setPlate} />;
+  const isOgMeeting = selectedMembership?.community?.slug === 'default';
+  const personalQuestion = <SharedPlate scope={`check-in-plate:${profile?.id}:${row?.id}:${today}`} onChange={setPlate} index={isOgMeeting ? 4 : 0} />;
 
   if (ready && forThisReader && selected) {
     const mine = saved[selected];
@@ -427,7 +428,7 @@ export default function BeforeWeMeetScreen() {
         survey={forThisReader}
         answerCommunityId={selected}
         initialAnswers={mine}
-        introduction={selectedMembership?.community?.slug === 'show' ? <>
+        introduction={isOgMeeting ? undefined : selectedMembership?.community?.slug === 'show' ? <>
           <ProductionProjectOverview
             communityId={selected}
             accent={hiveAccent(selectedMembership.community)}
@@ -435,6 +436,10 @@ export default function BeforeWeMeetScreen() {
           />
           {personalQuestion}
         </> : personalQuestion}
+        afterQuestionId={isOgMeeting ? 'q_feeling_note' : undefined}
+        afterQuestion={isOgMeeting ? personalQuestion : undefined}
+        ideaMeetingId={currentMeetings.find(m => m.community_id === selected)?.id}
+        canEditIdeas={selectedMembership?.role === 'admin' || !!profile?.is_owner}
         timingLabel={meetingLabel(currentMeetings.find(m => m.community_id === selected), today)}
         isEditingResponse={!!mine}
         carryForwardItems={section ? todosByHive[`note_hive_${section.slug}`] ?? [] : []}

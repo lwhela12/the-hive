@@ -1,10 +1,10 @@
 import { fetchCheckInActionItems } from '../checkInActionItems';
 import { hasMeaningfulActionItemText } from '../actionItemDisplay';
 import { useQuery } from '@tanstack/react-query';
-import { CARRY_FORWARD_ANSWER_KEY, type CarryForwardItem } from '../carryForward';
+import type { CarryForwardItem } from '../carryForward';
 import { supabase } from '../supabase';
 import { isEndOfMonthCheckInSurvey } from '../checkIns';
-import { getSurveyResponsePeriod, isMonthlyCheckInSurvey, type Survey } from './useSurveys';
+import { isMonthlyCheckInSurvey, type Survey } from './useSurveys';
 import { formatDateShort } from '../dateUtils';
 
 type CarryForwardHookArgs = {
@@ -44,44 +44,10 @@ type BoardPostRow = {
   last_reply_at?: string | null;
 };
 
-type SurveyResponseRow = {
-  id: string;
-  answers?: Record<string, unknown> | null;
-  submitted_at?: string | null;
-};
-
 function truncate(value?: string | null, max = 120) {
   const clean = value?.replace(/\s+/g, ' ').trim() ?? '';
   if (clean.length <= max) return clean;
   return `${clean.slice(0, max - 1).trim()}...`;
-}
-
-function asText(value: unknown) {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-function buildPreviousPopDetail(answers?: Record<string, unknown> | null) {
-  if (!answers) return '';
-
-  // Two spellings of the same three questions: OG and Tech write `q_pop_*`,
-  // Production's decks write `q_show_*` because its meeting deck reads those
-  // keys onto its slides. First non-empty wins, so one HIVE's wording never
-  // hands another HIVE a blank card.
-  const lines = [
-    ['Progress', asText(answers.q_pop_progress) || asText(answers.q_show_progress)],
-    ['Obstacles', asText(answers.q_pop_obstacles) || asText(answers.q_show_obstacles)],
-    ['Priorities', asText(answers.q_pop_priorities) || asText(answers.q_show_next)],
-    ['Carry-forward', asText(answers.q_carry_forward)],
-  ]
-    .filter(([, value]) => value)
-    .map(([label, value]) => `${label}: ${truncate(value, 90)}`);
-
-  const carryForwardItems = Array.isArray(answers[CARRY_FORWARD_ANSWER_KEY])
-    ? `${(answers[CARRY_FORWARD_ANSWER_KEY] as unknown[]).length} roster item update${(answers[CARRY_FORWARD_ANSWER_KEY] as unknown[]).length === 1 ? '' : 's'}`
-    : '';
-
-  if (carryForwardItems) lines.push(`Roster: ${carryForwardItems}`);
-  return lines.join('\n');
 }
 
 function mergeItems(items: CarryForwardItem[]) {
@@ -99,7 +65,7 @@ function mergeItems(items: CarryForwardItem[]) {
 const EMPTY_ITEMS: CarryForwardItem[] = [];
 
 /**
- * One HIVE's open to-dos, wishes and last POP for this person.
+ * One HIVE's open to-dos, wishes and HD boards for this person.
  *
  * Exported since 2026-09-04 so the merged "Before we meet" can call it once per
  * HIVE and hand the reader ONE roster covering all of them — Nat's *"you can
@@ -142,22 +108,10 @@ export async function fetchCarryForwardItems(
       .order('display_order', { ascending: true })
       .limit(8);
 
-    const responsePeriod = getSurveyResponsePeriod(survey);
-    const previousPopPromise = (supabase as any)
-      .from('survey_responses')
-      .select('id, answers, submitted_at')
-      .eq('community_id', communityId)
-      .eq('user_id', userId)
-      .eq('survey_id', survey.id)
-      .neq('response_period', responsePeriod)
-      .order('submitted_at', { ascending: false })
-      .limit(1);
-
-    const [actionItemsRes, wishesRes, hdBoardsRes, previousPopRes] = await Promise.all([
+    const [actionItemsRes, wishesRes, hdBoardsRes] = await Promise.all([
       actionItemsPromise,
       wishesPromise,
       hdBoardsQuery,
-      previousPopPromise,
     ]);
 
     let hdBoardsData = hdBoardsRes.data as BoardCategoryRow[] | null;
@@ -205,7 +159,6 @@ export async function fetchCarryForwardItems(
     if (actionItemsRes.error) throw new Error('Your to-dos could not load. Please reopen this check-in to try again.');
     if (wishesRes.error) console.warn('Could not load carry-forward wishes', wishesRes.error);
     if (hdBoardsRes.error && !hdBoardsData) console.warn('Could not load carry-forward HD boards', hdBoardsRes.error);
-    if (previousPopRes.error) console.warn('Could not load previous POP response', previousPopRes.error);
 
     const nextItems: CarryForwardItem[] = [];
 
@@ -254,19 +207,6 @@ export async function fetchCarryForwardItems(
         createdAt: post.last_reply_at || post.created_at || null,
       });
     });
-
-    const previousPop = ((previousPopRes.data ?? []) as SurveyResponseRow[])[0];
-    const previousPopDetail = buildPreviousPopDetail(previousPop?.answers);
-    if (previousPop && previousPopDetail) {
-      nextItems.push({
-        id: previousPop.id,
-        type: 'previous_pop',
-        label: 'Last POP check-in',
-        detail: previousPopDetail,
-        sourceLabel: 'Previous notes',
-        createdAt: previousPop.submitted_at ?? null,
-      });
-    }
 
     return mergeItems(nextItems);
 }
