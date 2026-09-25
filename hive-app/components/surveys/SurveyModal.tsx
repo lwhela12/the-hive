@@ -628,14 +628,18 @@ export function SurveyModal({
       const status = carryForwardResponsesByKey.get(carryForwardItemKey(item))?.status;
       return item.type !== 'action_item' || (status !== 'archive' && (!isStaple || status !== 'done'));
     });
-    if (rosterItems.length === 0 && archivedItems.length === 0) return null;
+    const newlyDoneCount = visibleItems.filter(item => item.type === 'action_item'
+      && carryForwardResponsesByKey.get(carryForwardItemKey(item))?.status === 'done'
+      && !completedContext.some(done => done.id === item.id)).length;
+    const doneCount = completedContext.length + newlyDoneCount;
+    if (rosterItems.length === 0 && archivedItems.length === 0 && (!isOgMeeting || doneCount === 0)) return null;
 
     return (
       <View style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: tint.line(0.55), borderRadius: 18, padding: 16, marginBottom: 24 }}>
         {isOgMeeting ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`${heading}: ${rosterItems.length} open things`}
+            accessibilityLabel={`${heading}: ${rosterItems.length} open, ${doneCount} done this cycle`}
             accessibilityState={{ expanded: openHiveThingsExpanded }}
             onPress={() => setOpenHiveThingsExpanded(value => !value)}
             style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 12 }}
@@ -643,7 +647,7 @@ export function SurveyModal({
             <View style={{ flex: 1 }}>
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#2d2d2d' }}>{heading}</Text>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#7f715f', marginTop: 4 }}>
-                {rosterItems.length} open · Tap to {openHiveThingsExpanded ? 'hide' : 'review or mark done'}
+                {rosterItems.length} open · {doneCount} done this cycle · Tap to {openHiveThingsExpanded ? 'hide' : 'review'}
               </Text>
             </View>
             <Ionicons name={openHiveThingsExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={tint.accent} />
@@ -660,6 +664,8 @@ export function SurveyModal({
         )}
 
         {(!isOgMeeting || openHiveThingsExpanded) && <View style={{ gap: 12, marginTop: isOgMeeting ? 14 : 0 }}>
+          {isOgMeeting && (doneCount > 0 ? renderCompletedContext() : <Text style={{ fontFamily: 'Lato_400Regular', color: '#7f715f' }}>Nothing marked done in this meeting cycle yet.</Text>)}
+          {isOgMeeting && rosterItems.length > 0 && <Text style={{ fontFamily: 'Lato_700Bold', color: tint.ink }}>Still to do</Text>}
           {rosterItems.map((item) => {
             const parsed = item.type === 'action_item' ? parseActionItemDescription(item.label) : null;
             const detail = [parsed?.elaboration, parsed?.reLabel, item.detail].filter(Boolean).join(' · ');
@@ -942,7 +948,7 @@ export function SurveyModal({
                   if (isOgMeeting && q.type === 'note' && q.id.startsWith('note_hive_')) return drawn;
                   if (afterQuestion && q.id === afterQuestionId) {
                     asked += 1;
-                    return <Fragment key={`${q.id}_arrival`}>{withHeading}{afterQuestion}{isOgMeeting && <>{renderCompletedContext()}{renderCarryForwardContext(carryForwardItems, 'Your open HIVE things')}</>}</Fragment>;
+                    return <Fragment key={`${q.id}_arrival`}>{withHeading}{afterQuestion}{isOgMeeting && renderCarryForwardContext(carryForwardItems, 'Your HIVE work')}</Fragment>;
                   }
                   if (isOgMeeting && q.id === 'q_hard_out' && answerCommunityId && viewerProfile?.id) {
                     return <Fragment key={`${q.id}_calendar`}>{withHeading}<CheckInCalendar communityId={answerCommunityId} profileId={viewerProfile.id} firstName={(viewerProfile.name ?? 'Member').split(' ')[0]} isOwner={viewerProfile.is_owner === true} /></Fragment>;

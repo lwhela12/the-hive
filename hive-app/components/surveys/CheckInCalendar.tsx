@@ -39,6 +39,7 @@ export function CheckInCalendar({ communityId, profileId, firstName, isOwner }: 
 }) {
   const [expanded, setExpanded] = useState(false);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [showAll, setShowAll] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<CalendarEvent | null>(null);
@@ -108,11 +109,19 @@ export function CheckInCalendar({ communityId, profileId, firstName, isOwner }: 
         await createCalendarEvent({ ...payload, community_id: communityId });
       }
       await refresh();
+      setShowAll(true);
       setFormOpen(false); setEditing(null);
     } catch {
       setError('That date did not save. Your details are still here; please try again.');
     } finally { setSaving(false); }
   };
+
+  // Quarter boundaries and dues reminders remain available under Show all,
+  // while the short preview gives actual plans and away dates the first spots.
+  const previewEvents = events.filter(event => !/^Q[1-4]\s+20\d{2}\s+(begins|ends)$/i.test(event.title)
+    && !/\bdues due$/i.test(event.title)).slice(0, 5);
+  const shownEvents = showAll ? events : previewEvents.length ? previewEvents : events.slice(0, 5);
+  const hasMoreEvents = events.length > (previewEvents.length || Math.min(5, events.length));
 
   return <View style={{ borderWidth: 1, borderColor: '#e8d6b2', borderRadius: 16, padding: 16, backgroundColor: '#fffdf8', marginBottom: 22 }}>
     <Pressable accessibilityRole="button" accessibilityLabel="Calendar and away dates"
@@ -127,7 +136,7 @@ export function CheckInCalendar({ communityId, profileId, firstName, isOwner }: 
       <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} color={gold} size={18} />
     </Pressable>
     {expanded && <View style={{ marginTop: 14, gap: 10 }}>
-      {loading ? <ActivityIndicator color={gold} /> : events.length ? events.map(event => <View key={event.id}
+      {loading ? <ActivityIndicator color={gold} /> : events.length ? shownEvents.map(event => <View key={event.id}
         style={{ borderWidth: 1, borderColor: '#eadfc9', borderRadius: 10, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <View style={{ flex: 1 }}>
           <Text style={{ fontFamily: 'Lato_700Bold', color: ink }}>{event.title}</Text>
@@ -138,6 +147,9 @@ export function CheckInCalendar({ communityId, profileId, firstName, isOwner }: 
         {(event.created_by === profileId || isOwner) && <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${event.title}`}
           onPress={() => startEdit(event)} style={{ padding: 8 }}><Text style={{ fontFamily: 'Lato_700Bold', color: gold }}>Edit</Text></Pressable>}
       </View>) : <Text style={{ fontFamily: 'Lato_400Regular', color: '#665c4b' }}>No upcoming HIVE dates added yet.</Text>}
+      {hasMoreEvents && <Pressable accessibilityRole="button" onPress={() => setShowAll(value => !value)} style={{ alignSelf: 'flex-start', paddingVertical: 7 }}>
+        <Text style={{ fontFamily: 'Lato_700Bold', color: gold }}>{showAll ? 'Show fewer dates' : `Show all ${events.length} dates`}</Text>
+      </Pressable>}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         <Pressable accessibilityRole="button" onPress={() => startNew(false)} style={{ borderWidth: 1, borderColor: gold, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 9 }}>
           <Text style={{ fontFamily: 'Lato_700Bold', color: ink }}>Add an event</Text>
