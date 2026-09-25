@@ -14,12 +14,12 @@ function lines(value: string) {
 }
 
 /** One meeting's choices: Nat curates the short list; each member's answer is saved with that meeting's check-in. */
-export function OgIdeaChoices({ communityId, meetingId, canEdit, answers, onSetAnswer }: {
+export function OgIdeaChoices({ communityId, meetingId, canEdit, answers, onSetAnswers }: {
   communityId: string;
   meetingId: string;
   canEdit: boolean;
   answers: Record<string, unknown>;
-  onSetAnswer: (key: string, value: unknown) => void;
+  onSetAnswers: (patch: Record<string, unknown>) => void;
 }) {
   const [notes, setNotes] = useState<Notes>({});
   const [loading, setLoading] = useState(true);
@@ -94,7 +94,7 @@ export function OgIdeaChoices({ communityId, meetingId, canEdit, answers, onSetA
       const legacyChoice = typeof answers[answerKey[kind]] === 'string' ? answers[answerKey[kind]] as string : '';
       const custom = typeof answers[suggestionKey] === 'string' ? answers[suggestionKey] as string
         : legacyChoice && !options.includes(legacyChoice) ? legacyChoice : '';
-      const rankOption = (option: string) => onSetAnswer(rankingKey, toggleIdeaRank(ranking, option));
+      const rankOption = (option: string) => onSetAnswers({ [rankingKey]: toggleIdeaRank(ranking, option) });
       return <View key={kind} style={{ borderWidth: 1, borderColor: '#e8d6b2', borderRadius: 16, padding: 16, gap: 10, backgroundColor: '#fffdf8' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: '#765b2d' }}>HIVE {kind === 'help' ? 'Help' : 'Hang'}</Text>
@@ -129,10 +129,11 @@ export function OgIdeaChoices({ communityId, meetingId, canEdit, answers, onSetA
           {ranking.length === 3 && <Text style={{ fontFamily: 'Lato_400Regular', color: '#665c4b', fontSize: 12 }}>Three ranked. Tap one to remove it before adding another.</Text>}
           <TextInput accessibilityLabel={`Suggest your own HIVE ${kind} idea`} value={custom}
             onChangeText={value => {
-              onSetAnswer(suggestionKey, value);
-              if (custom && ranking.some(item => item.toLocaleLowerCase() === custom.trim().toLocaleLowerCase())) {
-                onSetAnswer(rankingKey, ranking.map(item => item.toLocaleLowerCase() === custom.trim().toLocaleLowerCase() ? value.trim() : item).filter(Boolean));
-              }
+              const priorWasRanked = custom && ranking.some(item => item.toLocaleLowerCase() === custom.trim().toLocaleLowerCase());
+              onSetAnswers({
+                [suggestionKey]: value,
+                ...(priorWasRanked ? { [rankingKey]: ranking.map(item => item.toLocaleLowerCase() === custom.trim().toLocaleLowerCase() ? value.trim() : item).filter(Boolean) } : {}),
+              });
             }} placeholder="Suggest your own idea"
             style={{ borderWidth: 1, borderColor: '#eadfc9', borderRadius: 10, padding: 11, color: '#3b3428', backgroundColor: '#fff' }} />
           {!!custom.trim() && !options.some(option => option.toLocaleLowerCase() === custom.trim().toLocaleLowerCase()) && <Pressable

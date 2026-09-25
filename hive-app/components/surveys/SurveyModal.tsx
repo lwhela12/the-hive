@@ -424,13 +424,16 @@ export function SurveyModal({
   // Gate synchronously as well as cancelling requests: never flash another HIVE's context.
   const currentActivity = activity?.key === activityKey ? activity : null;
 
-  const setAnswer = useCallback((questionId: string, value: any) => {
+  const setAnswersPatch = useCallback((patch: Record<string, unknown>) => {
     setAnswers(prev => {
-      const next = { ...prev, [questionId]: value };
+      const next = { ...prev, ...patch };
       AsyncStorage.setItem(DRAFT_KEY(draftId), JSON.stringify(next)).catch(() => {});
       return next;
     });
   }, [draftId]);
+  const setAnswer = useCallback((questionId: string, value: any) => {
+    setAnswersPatch({ [questionId]: value });
+  }, [setAnswersPatch]);
 
   const handleSubmit = async () => {
     const missing = survey.questions.filter(q => q.required && !answers[q.id] && answers[q.id] !== 0);
@@ -968,7 +971,7 @@ export function SurveyModal({
 
               {draftLoaded && isOgMeeting && answerCommunityId && ideaMeetingId && (
                 <OgIdeaChoices communityId={answerCommunityId} meetingId={ideaMeetingId}
-                  canEdit={canEditIdeas} answers={answers} onSetAnswer={setAnswer} />
+                  canEdit={canEditIdeas} answers={answers} onSetAnswers={setAnswersPatch} />
               )}
 
               {error && (
