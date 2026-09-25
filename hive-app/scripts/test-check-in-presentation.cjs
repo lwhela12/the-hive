@@ -95,7 +95,20 @@ assert.ok(carryForward.includes('related_board_post_id'),'check-in tasks retain 
 assert.ok(!carryForward.includes("label: 'Last POP check-in'"),'old survey summaries do not masquerade as actionable tasks');
 const beforeWeMeet=fs.readFileSync('app/(app)/beforewemeet/index.tsx','utf8');
 assert.ok(beforeWeMeet.includes('ProductionProjectOverview'),'the Production manager sees the whole operation even without an assigned job');
-assert.ok(beforeWeMeet.includes("'q_help_idea_choice', 'q_hang_idea_choice'"),'idea choices are saved with the meeting response');
+assert.ok(beforeWeMeet.includes("'q_help_idea_ranking', 'q_hang_idea_ranking'"),'rankings are saved with the meeting response');
+const rankingModule={exports:{}};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/ideaRanking.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports:rankingModule.exports,module:rankingModule,Set,Map});
+const {ideaRanking,toggleIdeaRank,tallyIdeaRankings}=rankingModule.exports;
+assert.equal(JSON.stringify(ideaRanking([], 'Old pick')),'[]','an intentionally cleared ranking stays cleared');
+assert.equal(JSON.stringify(ideaRanking(undefined, 'Old pick')),'["Old pick"]','older single votes still count');
+assert.equal(JSON.stringify(toggleIdeaRank(['Yarn','Food'],'Yarn')),'["Food"]','removing a rank closes the gap');
+assert.equal(JSON.stringify(toggleIdeaRank(['Yarn','Food','Meal'],'Camp')),'["Yarn","Food","Meal"]','rankings stop at three');
+const tallied=tallyIdeaRankings([
+  {q_help_idea_ranking:['Yarn','Food']},
+  {q_help_idea_ranking:['Food','Yarn','Meal']},
+  {q_help_idea_choice:'Meal'},
+],'help');
+assert.equal(JSON.stringify(tallied.map(item=>[item.title,item.points,item.first])),JSON.stringify([['Food',5,1],['Yarn',5,1],['Meal',4,1]]),'3-2-1 totals include old single votes and stable ties');
 const scopeBadge=fs.readFileSync('components/ui/ScopeBadge.tsx','utf8');
 const reachPill=fs.readFileSync('components/ui/ReachPill.tsx','utf8');
 assert.ok(scopeBadge.includes('hiveTagMark(owner)'),'board and other HIVE labels use the shared tag-mark colour');

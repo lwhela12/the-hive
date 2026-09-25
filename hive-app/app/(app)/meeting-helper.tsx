@@ -1,4 +1,5 @@
 import { meetingVoteResults } from '../../lib/meetingVoteResults';
+import { ideaRanking, tallyIdeaRankings } from '../../lib/ideaRanking';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Linking,
@@ -3208,25 +3209,26 @@ export default function MeetingHelperScreen() {
         .filter((voice) => !!voice.text);
     const underCards = deck.plan.voicesUnderCards;
     const underCardVoices = underCards ? voicesFor(underCards.answerKey) : [];
-    const ideaChoicesFor = (key: 'q_help_idea_choice' | 'q_hang_idea_choice') => {
-      const counts = new Map<string, number>();
-      for (const member of members) {
-        const choice = getTextAnswer(responsesByUser.get(member.id)?.answers ?? {}, key).trim();
-        if (choice) counts.set(choice, (counts.get(choice) ?? 0) + 1);
-      }
-      return [...counts].map(([title, votes]) => ({ title, votes }))
-        .sort((a, b) => b.votes - a.votes || a.title.localeCompare(b.title));
-    };
-    const helpCheckInChoices = ideaChoicesFor('q_help_idea_choice');
-    const hangCheckInChoices = ideaChoicesFor('q_hang_idea_choice');
+    const memberIdeaAnswers = members.map(member => (responsesByUser.get(member.id)?.answers ?? {}) as Record<string, unknown>);
+    const helpCheckInChoices = tallyIdeaRankings(memberIdeaAnswers, 'help');
+    const hangCheckInChoices = tallyIdeaRankings(memberIdeaAnswers, 'hang');
     const renderCheckInIdeaChoices = (kind: 'help' | 'hang') => {
       const choices = kind === 'help' ? helpCheckInChoices : hangCheckInChoices;
-      if (!choices.length) return null;
+      const suggestions = members.flatMap(member => {
+        const answer = (responsesByUser.get(member.id)?.answers ?? {}) as Record<string, unknown>;
+        const suggestion = typeof answer[`q_${kind}_idea_suggestion`] === 'string' ? String(answer[`q_${kind}_idea_suggestion`]).trim() : '';
+        const ranking = ideaRanking(answer[`q_${kind}_idea_ranking`], answer[`q_${kind}_idea_choice`]);
+        return suggestion && !ranking.some(item => item.toLocaleLowerCase() === suggestion.toLocaleLowerCase())
+          ? [`${getFirstName(member.name)}: ${suggestion}`] : [];
+      });
+      if (!choices.length && !suggestions.length) return null;
       return <View style={{ marginTop: sz(8, 5), gap: sz(4, 3) }}>
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), color: GOLD_DEEP }}>Members’ choices</Text>
+        {choices.length > 0 && <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), color: GOLD_DEEP }}>Members’ ranking · 3–2–1 points</Text>}
         {choices.map(idea => <Text key={idea.title} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), color: CHARCOAL }}>
-          {idea.title} · {idea.votes} {idea.votes === 1 ? 'person' : 'people'}
+          {idea.title} · {idea.points} {idea.points === 1 ? 'point' : 'points'} · {idea.first} first choices
         </Text>)}
+        {suggestions.length > 0 && <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: GOLD_DEEP, marginTop: sz(4, 3) }}>Other suggestions</Text>}
+        {suggestions.map(suggestion => <Text key={suggestion} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(15, 10), color: CHARCOAL }}>{suggestion}</Text>)}
       </View>;
     };
     const renderNatPicks = (noteKey: 'helpIdeas' | 'hangIdeas') => {

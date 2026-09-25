@@ -21,6 +21,7 @@ import {
 import type { Survey, SurveyAnswers, SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { SurveyQuestionField } from './SurveyQuestionField';
 import { OgIdeaChoices } from './OgIdeaChoices';
+import { CheckInCalendar } from './CheckInCalendar';
 import {
   checkInDisplayName,
   getSeasonCheckInKind,
@@ -719,6 +720,29 @@ export function SurveyModal({
     );
   };
 
+  const renderCompletedContext = () => {
+    if (!isStaple) return null;
+    const own = completedContext.filter(item => !item.helperName);
+    const helpers = completedContext.filter(item => !!item.helperName);
+    const newlyDone = carryForwardItems.filter(item => item.type === 'action_item' && carryForwardResponsesByKey.get(carryForwardItemKey(item))?.status === 'done' && !own.some(done => done.id === item.id));
+    return <>
+      {contextState === 'error' && <Text style={{ color: '#92400e', marginBottom: 12 }}>Completed work couldn’t load. Your to-dos are below.</Text>}
+      {(own.length > 0 || newlyDone.length > 0) && <View style={{ backgroundColor: tint.wash, borderRadius: 16, padding: 16, marginBottom: 18, gap: 12 }}>
+        <Text style={{ color: tint.ink, fontFamily: 'LibreBaskerville_700Bold', fontSize: 17 }}>You got this done</Text>
+        {own.map(item => <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 32 }}>
+          <Ionicons name="checkmark-circle" size={24} color={tint.accent} /><Text style={{ color: '#5c5648', flex: 1, lineHeight: 21 }}>{item.text}</Text>
+        </View>)}
+        {newlyDone.map(item => <Pressable key={item.id} accessibilityRole="checkbox" accessibilityState={{ checked: true }} accessibilityLabel={`Mark still to do: ${parseActionItemDescription(item.label).text}`} onPress={() => updateCarryForwardItem(item, { status: 'keep_active' })} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 }}>
+          <Ionicons name="checkmark-circle" size={24} color={tint.accent} /><Text style={{ color: '#5c5648', flex: 1, lineHeight: 21 }}>{parseActionItemDescription(item.label).text}</Text>
+        </Pressable>)}
+      </View>}
+      {helpers.length > 0 && <View style={{ padding: 16, marginBottom: 18, gap: 10 }}>
+        <Text style={{ color: tint.ink, fontFamily: 'Lato_700Bold' }}>A little help from your HIVE</Text>
+        {helpers.map(item => <Text key={item.id} style={{ color: '#5c5648', lineHeight: 21 }}>{item.helperName} · {item.text}</Text>)}
+      </View>}
+    </>;
+  };
+
   const renderQuestion = (q: SurveyQuestion, index: number) => (
     <View key={q.id}>
       {isStaple && q.id === 'q_hive_help_recap' && (
@@ -893,27 +917,7 @@ export function SurveyModal({
                 );
               })()}
 
-              {isStaple && (() => {
-                const own = completedContext.filter(item => !item.helperName);
-                const helpers = completedContext.filter(item => !!item.helperName);
-                const newlyDone = carryForwardItems.filter(item => item.type === 'action_item' && carryForwardResponsesByKey.get(carryForwardItemKey(item))?.status === 'done' && !own.some(done => done.id === item.id));
-                return <>
-                  {contextState === 'error' && <Text style={{ color: '#92400e', marginBottom: 12 }}>Completed work couldn’t load. Your to-dos are below.</Text>}
-                  {(own.length > 0 || newlyDone.length > 0) && <View style={{ backgroundColor: tint.wash, borderRadius: 16, padding: 16, marginBottom: 18, gap: 12 }}>
-                    <Text style={{ color: tint.ink, fontFamily: 'LibreBaskerville_700Bold', fontSize: 17 }}>You got this done</Text>
-                    {own.map(item => <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 32 }}>
-                      <Ionicons name="checkmark-circle" size={24} color={tint.accent} /><Text style={{ color: '#5c5648', flex: 1, lineHeight: 21 }}>{item.text}</Text>
-                    </View>)}
-                    {newlyDone.map(item => <Pressable key={item.id} accessibilityRole="checkbox" accessibilityState={{ checked: true }} accessibilityLabel={`Mark still to do: ${parseActionItemDescription(item.label).text}`} onPress={() => updateCarryForwardItem(item, { status: 'keep_active' })} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 }}>
-                      <Ionicons name="checkmark-circle" size={24} color={tint.accent} /><Text style={{ color: '#5c5648', flex: 1, lineHeight: 21 }}>{parseActionItemDescription(item.label).text}</Text>
-                    </Pressable>)}
-                  </View>}
-                  {helpers.length > 0 && <View style={{ padding: 16, marginBottom: 18, gap: 10 }}>
-                    <Text style={{ color: tint.ink, fontFamily: 'Lato_700Bold' }}>A little help from your HIVE</Text>
-                    {helpers.map(item => <Text key={item.id} style={{ color: '#5c5648', lineHeight: 21 }}>{item.helperName} · {item.text}</Text>)}
-                  </View>}
-                </>;
-              })()}
+              {!isOgMeeting && renderCompletedContext()}
               {/* Grouped? Then each section draws its own, below its heading. */}
               {draftLoaded && (!carryForwardSections || carryForwardLoading || carryForwardError) && renderCarryForwardContext()}
 
@@ -938,7 +942,10 @@ export function SurveyModal({
                   if (isOgMeeting && q.type === 'note' && q.id.startsWith('note_hive_')) return drawn;
                   if (afterQuestion && q.id === afterQuestionId) {
                     asked += 1;
-                    return <Fragment key={`${q.id}_arrival`}>{withHeading}{afterQuestion}{isOgMeeting && renderCarryForwardContext(carryForwardItems, 'Your open HIVE things')}</Fragment>;
+                    return <Fragment key={`${q.id}_arrival`}>{withHeading}{afterQuestion}{isOgMeeting && <>{renderCompletedContext()}{renderCarryForwardContext(carryForwardItems, 'Your open HIVE things')}</>}</Fragment>;
+                  }
+                  if (isOgMeeting && q.id === 'q_hard_out' && answerCommunityId && viewerProfile?.id) {
+                    return <Fragment key={`${q.id}_calendar`}>{withHeading}<CheckInCalendar communityId={answerCommunityId} profileId={viewerProfile.id} firstName={(viewerProfile.name ?? 'Member').split(' ')[0]} isOwner={viewerProfile.is_owner === true} /></Fragment>;
                   }
                   const mine = carryForwardSections?.[q.id];
                   if (!mine?.length) return withHeading;

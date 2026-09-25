@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { showAlert } from '../../lib/showAlert';
+import { ideaRanking, toggleIdeaRank } from '../../lib/ideaRanking';
 
 type Kind = 'help' | 'hang';
 type Notes = Record<string, unknown> & { ideasMeetingId?: string; helpIdeas?: string; hangIdeas?: string };
@@ -18,7 +19,7 @@ export function OgIdeaChoices({ communityId, meetingId, canEdit, answers, onSetA
   meetingId: string;
   canEdit: boolean;
   answers: Record<string, unknown>;
-  onSetAnswer: (key: string, value: string) => void;
+  onSetAnswer: (key: string, value: unknown) => void;
 }) {
   const [notes, setNotes] = useState<Notes>({});
   const [loading, setLoading] = useState(true);
@@ -84,11 +85,16 @@ export function OgIdeaChoices({ communityId, meetingId, canEdit, answers, onSetA
   if (loading) return <ActivityIndicator color="#b58b43" />;
   return <View style={{ gap: 14, marginTop: 12, marginBottom: 20 }}>
     <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 19, color: '#3b3428' }}>Ideas for next month</Text>
-    <Text style={{ fontFamily: 'Lato_400Regular', color: '#665c4b' }}>Choose one in each group, or suggest your own. Your choices save with your check-in.</Text>
+    <Text style={{ fontFamily: 'Lato_400Regular', color: '#665c4b' }}>Tap your favorites in order: 1st, 2nd, then 3rd. Rank fewer if you prefer. You can also suggest your own.</Text>
     {(['help', 'hang'] as Kind[]).map(kind => {
       const options = choicesFor(kind);
-      const selected = typeof answers[answerKey[kind]] === 'string' ? answers[answerKey[kind]] as string : '';
-      const custom = selected && !options.includes(selected) ? selected : '';
+      const rankingKey = `q_${kind}_idea_ranking`;
+      const suggestionKey = `q_${kind}_idea_suggestion`;
+      const ranking = ideaRanking(answers[rankingKey], answers[answerKey[kind]]);
+      const legacyChoice = typeof answers[answerKey[kind]] === 'string' ? answers[answerKey[kind]] as string : '';
+      const custom = typeof answers[suggestionKey] === 'string' ? answers[suggestionKey] as string
+        : legacyChoice && !options.includes(legacyChoice) ? legacyChoice : '';
+      const rankOption = (option: string) => onSetAnswer(rankingKey, toggleIdeaRank(ranking, option));
       return <View key={kind} style={{ borderWidth: 1, borderColor: '#e8d6b2', borderRadius: 16, padding: 16, gap: 10, backgroundColor: '#fffdf8' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: '#765b2d' }}>HIVE {kind === 'help' ? 'Help' : 'Hang'}</Text>
@@ -110,14 +116,33 @@ export function OgIdeaChoices({ communityId, meetingId, canEdit, answers, onSetA
           {options.length === 0 && <Text style={{ fontFamily: 'Lato_400Regular', color: '#665c4b' }}>
             {canEdit ? 'Add your choices for this meeting, or leave the suggestion box open for members.' : 'No choices posted yet. You can suggest one below.'}
           </Text>}
-          {options.map(option => <Pressable key={option} accessibilityRole="radio"
-            accessibilityState={{ checked: selected === option }} onPress={() => onSetAnswer(answerKey[kind], selected === option ? '' : option)}
-            style={{ borderWidth: 1, borderColor: selected === option ? '#b58b43' : '#eadfc9', borderRadius: 12, padding: 11, backgroundColor: selected === option ? '#fff2d9' : '#fff' }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', color: '#51452f' }}>{selected === option ? '✓ ' : '○ '}{option}</Text>
-          </Pressable>)}
+          {options.map(option => {
+            const rank = ranking.findIndex(item => item.toLocaleLowerCase() === option.toLocaleLowerCase());
+            return <Pressable key={option} accessibilityRole="button"
+              accessibilityLabel={`${rank >= 0 ? `Rank ${rank + 1}` : 'Rank'} ${option}`}
+              onPress={() => rankOption(option)}
+              style={{ borderWidth: 1, borderColor: rank >= 0 ? '#b58b43' : '#eadfc9', borderRadius: 12, padding: 11, backgroundColor: rank >= 0 ? '#fff2d9' : '#fff', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', color: '#765b2d', minWidth: 24 }}>{rank >= 0 ? `${rank + 1}.` : '○'}</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold', color: '#51452f', flex: 1 }}>{option}</Text>
+            </Pressable>;
+          })}
+          {ranking.length === 3 && <Text style={{ fontFamily: 'Lato_400Regular', color: '#665c4b', fontSize: 12 }}>Three ranked. Tap one to remove it before adding another.</Text>}
           <TextInput accessibilityLabel={`Suggest your own HIVE ${kind} idea`} value={custom}
-            onChangeText={value => onSetAnswer(answerKey[kind], value)} placeholder="Suggest your own idea"
+            onChangeText={value => {
+              onSetAnswer(suggestionKey, value);
+              if (custom && ranking.some(item => item.toLocaleLowerCase() === custom.trim().toLocaleLowerCase())) {
+                onSetAnswer(rankingKey, ranking.map(item => item.toLocaleLowerCase() === custom.trim().toLocaleLowerCase() ? value.trim() : item).filter(Boolean));
+              }
+            }} placeholder="Suggest your own idea"
             style={{ borderWidth: 1, borderColor: '#eadfc9', borderRadius: 10, padding: 11, color: '#3b3428', backgroundColor: '#fff' }} />
+          {!!custom.trim() && !options.some(option => option.toLocaleLowerCase() === custom.trim().toLocaleLowerCase()) && <Pressable
+            accessibilityRole="button" accessibilityLabel={`Rank your HIVE ${kind} suggestion`}
+            onPress={() => rankOption(custom.trim())}
+            style={{ borderWidth: 1, borderColor: ranking.includes(custom.trim()) ? '#b58b43' : '#eadfc9', borderRadius: 12, padding: 11, backgroundColor: ranking.includes(custom.trim()) ? '#fff2d9' : '#fff' }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', color: '#51452f' }}>
+              {ranking.includes(custom.trim()) ? `${ranking.indexOf(custom.trim()) + 1}. ` : '○ '}{custom.trim()}
+            </Text>
+          </Pressable>}
         </>}
       </View>;
     })}
