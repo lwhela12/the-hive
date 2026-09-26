@@ -1882,7 +1882,10 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         )}
 
         {!manualCorrection && parsedSummary.sections && parsedSummary.sections.length > 0 && (
-          <View className="mb-6 border border-honey-200 rounded-2xl overflow-hidden bg-white">
+          <View
+            className="mb-6 border border-honey-200 rounded-2xl overflow-hidden bg-white"
+            style={{ width: '100%', maxWidth: 880, alignSelf: 'center' }}
+          >
             <View className="bg-honey-50 px-5 py-4 border-b border-honey-200">
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, lineHeight: 29, color: '#2d2d2d' }}>
                 The one-minute recap
@@ -1952,7 +1955,10 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         )}
 
         {isHiveAdmin && confirmedAbsenteeIds.length > 0 && (
-          <View className="mb-6 bg-honey-50 border border-honey-200 rounded-xl p-4">
+          <View
+            className="mb-6 bg-honey-50 border border-honey-200 rounded-xl p-4"
+            style={{ width: '100%', maxWidth: 880, alignSelf: 'center' }}
+          >
             <Text className="text-lg font-semibold text-hive-dark">Send this recap</Text>
             <Text className="text-honey-800 mt-1 leading-5">
               Preview this exact one-minute recap once, confirm who will receive it, then send to everyone together.
@@ -2021,6 +2027,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
             accessibilityState={{ expanded: fullRecordOpen }}
             accessibilityLabel={`${fullRecordOpen ? 'Hide' : 'Open'} full meeting record`}
             className="mb-5 flex-row items-center justify-between border border-gray-200 rounded-xl bg-gray-50 px-4 py-4 active:bg-gray-100"
+            style={{ width: '100%', maxWidth: 880, alignSelf: 'center' }}
           >
             <View className="flex-1 pr-4">
               <Text className="text-gray-800 font-semibold text-lg">Full meeting record</Text>
