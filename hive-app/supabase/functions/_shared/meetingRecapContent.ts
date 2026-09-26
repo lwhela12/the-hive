@@ -59,6 +59,13 @@ export type MeetingRecapContent = {
 
 const clean = (value?: unknown) => typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
 
+function compactLine(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+  const slice = value.slice(0, maxLength - 1).trim();
+  const lastSpace = slice.lastIndexOf(' ');
+  return `${(lastSpace > Math.floor(maxLength * 0.6) ? slice.slice(0, lastSpace) : slice).trim()}…`;
+}
+
 function correctedLine(
   summary: RecapStoredSummary,
   sectionTitle: string,
@@ -96,10 +103,7 @@ function currentWishFor(memberId: string, wishes: RecapWishRow[]) {
   if (!wish) return null;
   const source = clean(wish.title) || clean(wish.description);
   if (!source) return null;
-  if (source.length <= 110) return source;
-  const slice = source.slice(0, 109).trim();
-  const lastSpace = slice.lastIndexOf(' ');
-  return `${(lastSpace > 65 ? slice.slice(0, lastSpace) : slice).trim()}…`;
+  return compactLine(source, 110);
 }
 
 /**
@@ -160,6 +164,7 @@ export function buildMeetingRecapContent(
     // actual announcements.
     news: linesFromSection(summary, 'News from Nat')
       .filter((line) => !/\bHIVE Help\b|\bHIVE hang\b/i.test(line))
+      .map((line) => compactLine(line, 180))
       .slice(0, 5),
     dates,
     helpFocus,

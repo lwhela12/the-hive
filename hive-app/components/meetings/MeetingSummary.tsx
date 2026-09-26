@@ -1545,9 +1545,9 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
             accessibilityRole="button"
             accessibilityLabel="Summary options"
             accessibilityState={{ expanded: summaryToolsOpen }}
-            className="ml-3 px-3 py-2 rounded-lg active:bg-gray-100"
+            className="ml-2 w-11 h-11 rounded-full items-center justify-center active:bg-gray-100"
           >
-            <Text className="text-gray-600 font-semibold text-sm">Summary options</Text>
+            <Text aria-hidden style={{ fontSize: 24, lineHeight: 28, color: '#9a7c42' }}>✎</Text>
           </Pressable>
         )}
       </View>
