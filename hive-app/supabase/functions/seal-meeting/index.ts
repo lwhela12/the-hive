@@ -281,6 +281,7 @@ async function reconcileTranscript(
       'Attendance rule: confirmed absentees are absent. Pre-meeting attendance is an intention; use explicit transcript statements to resolve remote vs in-person, and leave unclear when unsupported.',
       'News highlights are the high-level meaning of Nat\'s authored news plus what she actually said about it. Merge repetition, paraphrase instead of transcribing, keep each bullet under 150 characters, and omit dates, HIVE Help, and individual member wishes because those have their own sections.',
       'Member focuses are only the help, wish, or next focus a person explicitly asked for during this meeting. A duty clearly created to help that person may support the focus. Never carry forward an old profile wish, never turn general biography into a wish, and omit anyone whose focus is not clear.',
+      'If a person explicitly opts out of a full round or says they have no ask, preserve that as a confirmed "No specific ask this month" rather than inventing a need or marking them absent.',
       'Member context should summarize what each person brought or needed, not repeat their assigned duties.',
       'For every CURRENT_DUTIES task, return one duty_labels row. The task key must be exact. The label may repair shorthand into humane English but must preserve the same obligation, specificity, and tone; it must not change owners.',
     ].join('\n'),
