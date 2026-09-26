@@ -263,6 +263,16 @@ const getRecentDailyQuestions = (deck: DailyQuestion[], days = CATCH_UP_BATCH_SI
   });
 };
 
+type DailyQuestionPrompt = ReturnType<typeof getTodayQuestion>;
+
+// A date is normally enough to identify a daily answer, but the question index
+// is the second guard that keeps an old or malformed row from appearing under
+// a different prompt. It also keeps the answer composer from carrying text to
+// the next item in Catch up.
+const dailyAnswerPromptKey = (communityId: string | null | undefined, prompt: DailyQuestionPrompt) => (
+  `${communityId ?? 'unknown'}:${prompt.dateKey}:${prompt.index}`
+);
+
 const formatSurveyDueDate = (dueDate: string) => {
   const parsed = new Date(dueDate);
   if (Number.isNaN(parsed.getTime())) return dueDate;
@@ -963,7 +973,10 @@ export default function HiveScreen() {
   const catchUpReturnRef = useRef<(typeof CATCH_UP_RETURN_PATHS)[string] | null>(null);
   const [catchUpDayCount, setCatchUpDayCount] = useState(CATCH_UP_BATCH_SIZE);
   const [showAddHomeGuide, setShowAddHomeGuide] = useState(false);
-  const [myAnswer, setMyAnswer] = useState('');
+  // One draft belongs to one dated question. A single `myAnswer` value made it
+  // possible for text from one Catch up prompt to remain in the next prompt's
+  // composer while React changed the heading around it.
+  const [answerDraft, setAnswerDraft] = useState<{ key: string; text: string }>({ key: '', text: '' });
   const [mySubmittedAnswer, setMySubmittedAnswer] = useState('');
   const [answerError, setAnswerError] = useState<string | null>(null);
   const [expandedAnswerId, setExpandedAnswerId] = useState<string | null>(null);
@@ -983,6 +996,18 @@ export default function HiveScreen() {
   const questionDeck = deckForCommunity(community?.slug);
   const { question: todayQuestion, index: todayIndex, dateKey: todayDateKey } = getTodayQuestion(questionDeck);
   const currentAnswerPrompt = activeAnswerPrompt ?? { question: todayQuestion, index: todayIndex, dateKey: todayDateKey };
+  const currentAnswerDraftKey = dailyAnswerPromptKey(communityId, currentAnswerPrompt);
+  const todayAnswerDraftKey = dailyAnswerPromptKey(communityId, { question: todayQuestion, index: todayIndex, dateKey: todayDateKey });
+  const myAnswer = answerDraft.key === currentAnswerDraftKey ? answerDraft.text : '';
+  const setMyAnswer = useCallback((next: string | ((previous: string) => string)) => {
+    setAnswerDraft((current) => {
+      const previous = current.key === currentAnswerDraftKey ? current.text : '';
+      return {
+        key: currentAnswerDraftKey,
+        text: typeof next === 'function' ? next(previous) : next,
+      };
+    });
+  }, [currentAnswerDraftKey]);
   const recentDailyQuestions = getRecentDailyQuestions(questionDeck, catchUpDayCount);
   const canShowMoreDailyQuestions = catchUpDayCount < CATCH_UP_MAX_DAYS;
   const nextCatchUpBatchSize = Math.min(CATCH_UP_BATCH_SIZE, CATCH_UP_MAX_DAYS - catchUpDayCount);
@@ -991,7 +1016,7 @@ export default function HiveScreen() {
     if (!communityId) return;
     const { data, error } = await supabase
       .from('daily_question_answers')
-      .select('user_id, answer, created_at, updated_at')
+      .select('user_id, answer, question_index, created_at, updated_at')
       .eq('community_id', communityId)
       .eq('question_date', todayDateKey);
     if (error) {
@@ -1002,6 +1027,10 @@ export default function HiveScreen() {
       const map = new Map<string, string>();
       const timestamps = new Map<string, string>();
       data.forEach((row: any) => {
+        // A row only answers today's prompt when its date AND stored prompt
+        // index agree. The index check is defensive for historic rows created
+        // while the daily-question rotation was being repaired.
+        if (Number(row.question_index) !== todayIndex) return;
         map.set(row.user_id, row.answer);
         const answeredAt = row.updated_at ?? row.created_at;
         if (answeredAt) timestamps.set(row.user_id, answeredAt);
@@ -1010,19 +1039,22 @@ export default function HiveScreen() {
       setAnswerTimestamps(timestamps);
       if (profile?.id && map.has(profile.id)) {
         setMySubmittedAnswer(map.get(profile.id)!);
-        setMyAnswer(map.get(profile.id)!);
+        setAnswerDraft((current) => current.key === todayAnswerDraftKey
+          ? { key: todayAnswerDraftKey, text: map.get(profile.id)! }
+          : current);
       } else if (profile?.id) {
         setMySubmittedAnswer('');
       }
     }
-  }, [communityId, todayDateKey, profile?.id]);
+  }, [communityId, todayDateKey, todayIndex, todayAnswerDraftKey, profile?.id]);
 
   const fetchRecentAnswers = useCallback(async () => {
     if (!communityId) return;
-    const dates = getRecentDailyQuestions(questionDeck, catchUpDayCount).map(item => item.dateKey);
+    const prompts = getRecentDailyQuestions(questionDeck, catchUpDayCount);
+    const dates = prompts.map(item => item.dateKey);
     const { data, error } = await supabase
       .from('daily_question_answers')
-      .select('user_id, answer, question_date')
+      .select('user_id, answer, question_date, question_index')
       .eq('community_id', communityId)
       .in('question_date', dates);
     if (error) {
@@ -1031,9 +1063,11 @@ export default function HiveScreen() {
     }
 
     const next = new Map<string, Map<string, string>>();
+    const expectedQuestionIndexByDate = new Map(prompts.map((prompt) => [prompt.dateKey, prompt.index]));
     dates.forEach(date => next.set(date, new Map()));
     (data ?? []).forEach((row: any) => {
       const date = row.question_date as string;
+      if (Number(row.question_index) !== expectedQuestionIndexByDate.get(date)) return;
       const answersForDate = next.get(date) ?? new Map<string, string>();
       answersForDate.set(row.user_id, row.answer);
       next.set(date, answersForDate);
@@ -1046,7 +1080,7 @@ export default function HiveScreen() {
 
   const openAnswerModal = (prompt: ReturnType<typeof getTodayQuestion>, existingAnswer = '') => {
     setActiveAnswerPrompt(prompt);
-    setMyAnswer(existingAnswer);
+    setAnswerDraft({ key: dailyAnswerPromptKey(communityId, prompt), text: existingAnswer });
     setAnswerError(null);
     setShowAnswerModal(true);
   };
@@ -1072,7 +1106,7 @@ export default function HiveScreen() {
     }
     setCatchUpPosition(nextPosition);
     setActiveAnswerPrompt(next);
-    setMyAnswer(getMyAnswerForPrompt(next));
+    setAnswerDraft({ key: dailyAnswerPromptKey(communityId, next), text: getMyAnswerForPrompt(next) });
     setAnswerError(null);
   };
 
@@ -1096,6 +1130,7 @@ export default function HiveScreen() {
 
   const closeAnswerModal = useCallback(() => {
     setShowAnswerModal(false);
+    setActiveAnswerPrompt(null);
     setCatchUpQueue([]);
     setCatchUpPosition(0);
     retraceFromDailyQuestions();
