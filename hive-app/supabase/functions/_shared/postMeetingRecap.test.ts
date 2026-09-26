@@ -12,6 +12,12 @@ const meeting: RecapMeeting = {
   hiveName: 'OG <HIVE>',
   title: 'August & Friends',
   date: '2026-08-18',
+  recap: {
+    news: ['A useful <update>'],
+    dates: [{ label: 'Next HIVE meeting', date: '2026-09-23', time: '17:00', endTime: '19:00' }],
+    helpFocus: 'Bring containers & labels',
+    wishes: [{ personName: 'Nat Example', wish: 'A calmer launch' }],
+  },
 };
 
 Deno.test('buildPostMeetingRecapLinks deep-links the exact summary and contextual Clive prompt', () => {
@@ -36,10 +42,16 @@ Deno.test('postMeetingRecapHtml has exactly the two required buttons and escapes
   const html = postMeetingRecapHtml('<Nat>', meeting, 'https://app.example');
   const anchors = html.match(/<a\s/gi) ?? [];
   if (anchors.length !== 2) throw new Error(`expected exactly two buttons, got ${anchors.length}`);
-  for (const label of ['Open Meeting Summaries', 'Ask Clive what I missed']) {
+  for (const label of ['Open full meeting record', 'Ask Clive what I missed']) {
     if (!html.includes(`>${label}</a>`)) throw new Error(`missing button: ${label}`);
   }
   if (html.includes('<Nat>') || html.includes('OG <HIVE>')) throw new Error('unescaped HTML reached the email');
+  if (html.includes('A useful <update>') || !html.includes('A useful &lt;update&gt;')) {
+    throw new Error('recap content was not safely rendered');
+  }
+  for (const heading of ['News from Nat', 'Dates to know', 'This month’s HIVE Help', 'Everyone’s current wish']) {
+    if (!html.includes(heading)) throw new Error(`missing recap section: ${heading}`);
+  }
 });
 
 Deno.test('Tech recap buttons use the Tech HIVE brand pair', () => {

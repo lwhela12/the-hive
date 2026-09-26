@@ -1,4 +1,5 @@
 import { hiveMark, hiveSealImg } from './hiveMark.ts';
+import type { MeetingRecapContent } from './meetingRecapContent.ts';
 export interface RecapMeeting {
   id: string;
   communityId: string;
@@ -16,6 +17,8 @@ export interface RecapMeeting {
    */
   hiveSlug?: string | null;
   hiveAccent?: string | null;
+  /** The exact short recap frozen when Nat previews it. */
+  recap?: MeetingRecapContent | null;
 }
 
 export interface RecapRecipient {
@@ -97,6 +100,72 @@ export function postMeetingRecapSubject(meeting: RecapMeeting): string {
   return `${meeting.hiveName} · What you missed at ${meeting.title}`;
 }
 
+function prettyDate(value: string): string {
+  const [year, month, day] = value.split('-').map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return value;
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function prettyTime(value: string): string {
+  const [rawHour, rawMinute = '00'] = value.split(':');
+  const hour = Number(rawHour);
+  if (!Number.isFinite(hour)) return value;
+  const suffix = hour >= 12 ? 'pm' : 'am';
+  const twelve = hour % 12 || 12;
+  return rawMinute === '00' ? `${twelve}${suffix}` : `${twelve}:${rawMinute}${suffix}`;
+}
+
+function prettyTimeRange(start?: string | null, end?: string | null): string {
+  if (!start) return '';
+  const from = prettyTime(start);
+  if (!end) return from;
+  const to = prettyTime(end);
+  return from.slice(-2) === to.slice(-2) ? `${from.slice(0, -2)}-${to}` : `${from}-${to}`;
+}
+
+function recapSection(title: string, body: string): string {
+  return `
+    <div style="border-top:1px solid #eadfcf;padding:16px 0 0;margin-top:16px;">
+      <p style="font-size:11px;letter-spacing:1.3px;text-transform:uppercase;font-weight:700;color:#7d642f;margin:0 0 8px;">${title}</p>
+      ${body}
+    </div>`;
+}
+
+function bulletList(lines: string[]): string {
+  return `<ul style="padding-left:20px;margin:0;color:#2b2b2b;">${lines.map((line) =>
+    `<li style="margin:0 0 6px;font-size:14px;line-height:1.45;">${escapeHtml(line)}</li>`
+  ).join('')}</ul>`;
+}
+
+function postMeetingRecapBody(meeting: RecapMeeting): string {
+  const recap = meeting.recap;
+  if (!recap) return '';
+
+  const news = recap.news.length > 0
+    ? bulletList(recap.news)
+    : '<p style="margin:0;font-size:14px;color:#777;">No News from Nat was recorded.</p>';
+  const dates = recap.dates.length > 0
+    ? `<div>${recap.dates.map((item) => {
+        const when = [
+          prettyDate(item.date),
+          prettyTimeRange(item.time, item.endTime),
+          item.location ?? '',
+        ].filter(Boolean).map(escapeHtml).join(' · ');
+        return `<p style="margin:0 0 8px;font-size:14px;line-height:1.45;"><strong>${escapeHtml(item.label)}</strong><br><span style="color:#6b6b6b;">${when}</span></p>`;
+      }).join('')}</div>`
+    : '<p style="margin:0;font-size:14px;color:#777;">No future dates were recorded.</p>';
+  const help = `<p style="margin:0;font-size:14px;line-height:1.45;">${escapeHtml(recap.helpFocus || 'No HIVE Help focus was recorded.')}</p>`;
+  const wishes = recap.wishes.length > 0
+    ? `<div>${recap.wishes.map((item) => `<p style="margin:0 0 6px;font-size:14px;line-height:1.45;"><strong>${escapeHtml(firstName(item.personName))}:</strong> ${escapeHtml(item.wish || 'No current wish yet')}</p>`).join('')}</div>`
+    : '<p style="margin:0;font-size:14px;color:#777;">No member wishes are available yet.</p>';
+
+  return `${recapSection('📣 News from Nat', news)}${recapSection('🗓️ Dates to know', dates)}${recapSection('🤝 This month’s HIVE Help', help)}${recapSection('💛 Everyone’s current wish', wishes)}`;
+}
+
 /** Member email. Deliberately contains exactly two links/buttons. */
 export function postMeetingRecapHtml(
   rawName: string | null,
@@ -124,9 +193,10 @@ export function postMeetingRecapHtml(
       <h1 style="color:${mark.accent};font-size:22px;text-align:center;margin:8px 0 4px;">What you missed</h1>
       <p style="text-align:center;color:#6b6b6b;font-size:14px;margin:0 0 20px;">${title}</p>
       <p style="font-size:15px;">Hi ${name},</p>
-      <p style="font-size:15px;">We missed you. Tonight&rsquo;s notes are sealed, so you can catch up without hunting through the app.</p>
+      <p style="font-size:15px;">We missed you. Here is the one-minute version of what matters from the meeting.</p>
+      ${postMeetingRecapBody(meeting)}
       <div style="text-align:center;margin:28px 0 12px;">
-        <a href="${summaryUrl}" style="background:${mark.accent};color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-size:15px;font-weight:600;display:inline-block;">Open Meeting Summaries</a>
+        <a href="${summaryUrl}" style="background:${mark.accent};color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-size:15px;font-weight:600;display:inline-block;">Open full meeting record</a>
       </div>
       <div style="text-align:center;margin:12px 0 28px;">
         <a href="${cliveUrl}" style="background:${mark.companion};color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-size:15px;font-weight:600;display:inline-block;">Ask Clive what I missed</a>

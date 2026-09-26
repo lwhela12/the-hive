@@ -26,6 +26,10 @@ import {
 } from './SpeakerNames';
 import type { Meeting, ActionItem, Profile } from '../../types';
 import { BackButton } from '../ui/BackButton';
+import {
+  buildMeetingRecapContent,
+  type RecapWishRow,
+} from '../../supabase/functions/_shared/meetingRecapContent';
 
 interface MeetingSummaryProps {
   meeting: Meeting;
@@ -86,6 +90,9 @@ interface ParsedSummary {
   meeting_helper_snapshot?: {
     confirmed_absentee_ids?: string[];
     confirmed_absentee_names?: string[];
+    next_meeting?: Record<string, unknown> | null;
+    upcoming_hangs?: Record<string, unknown>[];
+    help_focus?: string | null;
   };
   /**
    * Which real `action_items` row(s) a "Confirmed duty" line actually is.
@@ -365,6 +372,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
     recipientNames: string[];
     sentIds: string[];
     recipientCount: number;
+    contentReady: boolean;
   } | null>(null);
   const [recapPreviewSending, setRecapPreviewSending] = useState(false);
   const [approvingRecap, setApprovingRecap] = useState(false);
@@ -378,6 +386,8 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   } | null>(null);
   const [savingGeminiNotes, setSavingGeminiNotes] = useState(false);
   const [taskChecklistOpen, setTaskChecklistOpen] = useState(false);
+  const [fullRecordOpen, setFullRecordOpen] = useState(false);
+  const [recapWishes, setRecapWishes] = useState<RecapWishRow[]>([]);
   const [resolvingConflictId, setResolvingConflictId] = useState<string | null>(null);
 
   const { profile, community, communityId, communityRole } = useAuth();
@@ -410,6 +420,29 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           .map((row) => (row as unknown as { profiles?: SpeakerMember | null }).profiles)
           .filter((person): person is SpeakerMember => !!person && !!person.id);
         setMembers(people);
+      });
+
+    return () => { stale = true; };
+  }, [meeting.community_id]);
+
+  // The recap names each member's one current HD wish. Pull the same live wish
+  // rows the Members and Home screens use; the sealed meeting record remains
+  // untouched, while a reader gets the useful current ask instead of a stale
+  // transcript inference.
+  useEffect(() => {
+    let stale = false;
+    if (!meeting.community_id) return;
+
+    supabase
+      .from('wishes')
+      .select('id, user_id, title, description, status, is_active, is_spotlight, created_at')
+      .eq('community_id', meeting.community_id)
+      .eq('status', 'public')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (stale || error) return;
+        setRecapWishes((data ?? []) as RecapWishRow[]);
       });
 
     return () => { stale = true; };
@@ -497,6 +530,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   };
 
   const parsedSummary = parseSummary(meeting.summary);
+  const conciseRecap = buildMeetingRecapContent(parsedSummary, members, recapWishes);
   const confirmedAbsenteeIds = parsedSummary.meeting_helper_snapshot?.confirmed_absentee_ids ?? [];
   const confirmedAbsenteeNames = parsedSummary.meeting_helper_snapshot?.confirmed_absentee_names ?? [];
   // One preview approves one shared template. Requiring the recipient snapshot
@@ -506,7 +540,9 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
     && confirmedAbsenteeIds.every((id) => recapHold.absenteeIds.includes(id))
     && recapHold.recipientIds.length === recapHold.recipientCount
     && recapHold.recipientNames.length === recapHold.recipientCount;
-  const recapPreviewReady = recapRecipientSnapshotReady && recapHold?.approval === 'pending';
+  const recapPreviewReady = recapRecipientSnapshotReady
+    && recapHold?.approval === 'pending'
+    && recapHold.contentReady;
   const recapDeliveryComplete = recapRecipientSnapshotReady && recapHold?.approval === 'approved';
   const recapPendingRecipientIds = recapHold?.recipientIds
     .filter((id) => !recapHold.sentIds.includes(id)) ?? [];
@@ -1143,6 +1179,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         recipientCount: typeof metadata.post_meeting_recap_preview_recipient_count === 'number'
           ? metadata.post_meeting_recap_preview_recipient_count
           : 0,
+        contentReady: !!metadata.post_meeting_recap_content,
       });
     } else {
       setRecapHold(null);
@@ -1844,46 +1881,81 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           </View>
         )}
 
-        {/* The deck in outline — same renderer the newsletter draft uses. */}
         {!manualCorrection && parsedSummary.sections && parsedSummary.sections.length > 0 && (
-          <View className="mb-2">
-            <SummarySections
-              sections={parsedSummary.sections}
-              lineCorrections={parsedSummary.line_corrections}
-              editable={isHiveAdmin}
-              onSaveLine={saveLineCorrection}
-              dutyIndex={parsedSummary.duty_index}
-              hiddenLines={parsedSummary.hidden_lines}
-              mentionMembers={isHiveAdmin ? mentionableMembers : undefined}
-              onReassignByMention={reassignByMention}
-              onDeleteDuty={deleteDuty}
-              onEditDutyText={editDutyText}
-              onSetDutyOwners={setDutyOwners}
-              hiveName={parsedSummary.title?.replace(/^\S+\s+/, '').replace(/\s+Meeting$/, '') || 'This HIVE'}
-              onHideLine={hideLine}
-              renderReview={(review) => (
-                isHiveAdmin ? (
-                  <MeetingConflictResolver
-                    review={review}
-                    members={members}
-                    saving={resolvingConflictId === review.conflict_id}
-                    onResolve={(input) => resolveSummaryConflict(review, input)}
-                  />
-                ) : (
-                  <Text className="mt-4 text-sm text-amber-800">
-                    A HIVE admin can correct this record here.
-                  </Text>
-                )
-              )}
-            />
+          <View className="mb-6 border border-honey-200 rounded-2xl overflow-hidden bg-white">
+            <View className="bg-honey-50 px-5 py-4 border-b border-honey-200">
+              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, lineHeight: 29, color: '#2d2d2d' }}>
+                The one-minute recap
+              </Text>
+              <Text className="text-honey-800 mt-1 leading-5">
+                The useful parts first. The complete meeting record is still saved below.
+              </Text>
+            </View>
+
+            <View className="px-5 py-5" style={{ gap: 22 }}>
+              <View>
+                <Text className="text-xs font-semibold uppercase tracking-wider text-honey-800">📣 News from Nat</Text>
+                <View className="mt-2" style={{ gap: 7 }}>
+                  {conciseRecap.news.length > 0 ? conciseRecap.news.map((line, index) => (
+                    <View key={`news-${index}`} className="flex-row items-start">
+                      <Text className="text-honey-600 mr-2">•</Text>
+                      <Text className="text-gray-800 flex-1 leading-5">{line}</Text>
+                    </View>
+                  )) : (
+                    <Text className="text-gray-500">No News from Nat was recorded for this meeting.</Text>
+                  )}
+                </View>
+              </View>
+
+              <View>
+                <Text className="text-xs font-semibold uppercase tracking-wider text-honey-800">🗓️ Dates to know</Text>
+                <View className="mt-2" style={{ gap: 9 }}>
+                  {conciseRecap.dates.length > 0 ? conciseRecap.dates.map((item, index) => (
+                    <View key={`${item.label}-${item.date}-${index}`}>
+                      <Text className="text-gray-800 font-semibold">{item.label}</Text>
+                      <Text className="text-gray-600 text-sm mt-0.5 leading-5">
+                        {formatDateShort(item.date)}
+                        {item.time ? ` · ${formatTimeRange(item.time, item.endTime)}` : ''}
+                        {item.location ? ` · ${item.location}` : ''}
+                      </Text>
+                    </View>
+                  )) : (
+                    <Text className="text-gray-500">No future dates were recorded.</Text>
+                  )}
+                </View>
+              </View>
+
+              <View>
+                <Text className="text-xs font-semibold uppercase tracking-wider text-honey-800">🤝 This month’s HIVE Help</Text>
+                <Text className="text-gray-800 mt-2 leading-5">
+                  {conciseRecap.helpFocus || 'No HIVE Help focus was recorded.'}
+                </Text>
+              </View>
+
+              <View>
+                <Text className="text-xs font-semibold uppercase tracking-wider text-honey-800">💛 Everyone’s current wish</Text>
+                <View className="mt-2" style={{ gap: 7 }}>
+                  {conciseRecap.wishes.length > 0 ? conciseRecap.wishes.map((item) => (
+                    <View key={item.personName} className="flex-row items-start">
+                      <Text className="text-gray-800 font-semibold">{firstName(item.personName)}: </Text>
+                      <Text className={`flex-1 leading-5 ${item.wish ? 'text-gray-800' : 'text-gray-500'}`}>
+                        {item.wish || 'No current wish yet'}
+                      </Text>
+                    </View>
+                  )) : (
+                    <Text className="text-gray-500">No member wishes are available yet.</Text>
+                  )}
+                </View>
+              </View>
+            </View>
           </View>
         )}
 
         {isHiveAdmin && confirmedAbsenteeIds.length > 0 && (
           <View className="mb-6 bg-honey-50 border border-honey-200 rounded-xl p-4">
-            <Text className="text-lg font-semibold text-hive-dark">What you missed</Text>
+            <Text className="text-lg font-semibold text-hive-dark">Send this recap</Text>
             <Text className="text-honey-800 mt-1 leading-5">
-              Everyone gets the same email; only their first name changes. Preview it once, check the exact list, then send to everyone together.
+              Preview this exact one-minute recap once, confirm who will receive it, then send to everyone together.
             </Text>
             <View className="mt-3 bg-white border border-honey-200 rounded-lg px-3 py-3">
               <Text className="text-xs font-semibold uppercase tracking-wider text-honey-800">
@@ -1891,7 +1963,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                   ? 'Delivery finished'
                   : recapPreviewReady
                     ? `Will receive (${recapHold?.recipientCount ?? 0})`
-                    : `Confirmed absent (${confirmedAbsenteeIds.length})`}
+                    : `Who missed it (${confirmedAbsenteeIds.length})`}
               </Text>
               <View className="mt-2" style={{ gap: 6 }}>
                 {(recapRecipientSnapshotReady ? recapHold?.recipientNames ?? [] : confirmedAbsenteeNames).map((name, index) => {
@@ -1939,6 +2011,60 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                 ) : null}
               </View>
             ) : null}
+          </View>
+        )}
+
+        {!manualCorrection && (parsedSummary.sections?.length || transcriptLines.length || actionItems.length) ? (
+          <Pressable
+            onPress={() => setFullRecordOpen((open) => !open)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: fullRecordOpen }}
+            accessibilityLabel={`${fullRecordOpen ? 'Hide' : 'Open'} full meeting record`}
+            className="mb-5 flex-row items-center justify-between border border-gray-200 rounded-xl bg-gray-50 px-4 py-4 active:bg-gray-100"
+          >
+            <View className="flex-1 pr-4">
+              <Text className="text-gray-800 font-semibold text-lg">Full meeting record</Text>
+              <Text className="text-gray-500 text-sm mt-1">Roll call, discussion, decisions, tasks, sources and transcript</Text>
+            </View>
+            <Text className="text-honey-800 font-semibold">{fullRecordOpen ? 'Hide' : 'Open'}</Text>
+          </Pressable>
+        ) : null}
+
+        {fullRecordOpen ? (
+          <View>
+
+        {/* The deck in outline — same renderer the newsletter draft uses. */}
+        {!manualCorrection && parsedSummary.sections && parsedSummary.sections.length > 0 && (
+          <View className="mb-2">
+            <SummarySections
+              sections={parsedSummary.sections}
+              lineCorrections={parsedSummary.line_corrections}
+              editable={isHiveAdmin}
+              onSaveLine={saveLineCorrection}
+              dutyIndex={parsedSummary.duty_index}
+              hiddenLines={parsedSummary.hidden_lines}
+              mentionMembers={isHiveAdmin ? mentionableMembers : undefined}
+              onReassignByMention={reassignByMention}
+              onDeleteDuty={deleteDuty}
+              onEditDutyText={editDutyText}
+              onSetDutyOwners={setDutyOwners}
+              hiveName={parsedSummary.title?.replace(/^\S+\s+/, '').replace(/\s+Meeting$/, '') || 'This HIVE'}
+              onHideLine={hideLine}
+              renderReview={(review) => (
+                isHiveAdmin ? (
+                  <MeetingConflictResolver
+                    review={review}
+                    members={members}
+                    saving={resolvingConflictId === review.conflict_id}
+                    onResolve={(input) => resolveSummaryConflict(review, input)}
+                  />
+                ) : (
+                  <Text className="mt-4 text-sm text-amber-800">
+                    A HIVE admin can correct this record here.
+                  </Text>
+                )
+              )}
+            />
           </View>
         )}
 
@@ -2239,6 +2365,8 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
             )}
           </View>
         )}
+          </View>
+        ) : null}
 
         {!hasAnything && (
           <View className="items-center py-8">

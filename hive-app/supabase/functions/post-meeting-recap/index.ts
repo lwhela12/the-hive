@@ -11,6 +11,12 @@ import {
   type RecapMeeting,
   type RecapRecipient,
 } from '../_shared/postMeetingRecap.ts';
+import {
+  buildMeetingRecapContent,
+  type MeetingRecapContent,
+  type RecapStoredSummary,
+  type RecapWishRow,
+} from '../_shared/meetingRecapContent.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'H.I.V.E. <hive@yourdomain.com>';
@@ -33,6 +39,7 @@ type HeldMetadata = {
   post_meeting_recap_recipient_ids?: string[];
   post_meeting_recap_recipient_names?: string[];
   post_meeting_recap_sent_recipient_ids?: string[];
+  post_meeting_recap_content?: MeetingRecapContent;
 };
 
 function asRecipient(profile: ProfileRow): RecapRecipient {
@@ -73,10 +80,40 @@ async function loadMeeting(admin: ReturnType<typeof createClient>, meetingId: st
     community?: { name?: string | null; slug?: string | null; accent_color?: string | null } | null;
   };
   let title = `${row.community?.name || 'HIVE'} Meeting`;
+  let parsedSummary: RecapStoredSummary = {};
   try {
-    const parsed = JSON.parse(row.summary || '{}') as { title?: unknown };
+    const parsed = JSON.parse(row.summary || '{}') as RecapStoredSummary & { title?: unknown };
+    parsedSummary = parsed;
     if (typeof parsed.title === 'string' && parsed.title.trim()) title = parsed.title.trim();
   } catch { /* old plain-text summaries use the fallback title */ }
+
+  const [membersResult, wishesResult] = await Promise.all([
+    admin
+      .from('community_memberships')
+      .select('user_id, profile:profiles!user_id(id, name)')
+      .eq('community_id', row.community_id),
+    admin
+      .from('wishes')
+      .select('id, user_id, title, description, status, is_active, is_spotlight, created_at')
+      .eq('community_id', row.community_id)
+      .eq('status', 'public')
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false }),
+  ]);
+  if (membersResult.error) throw membersResult.error;
+  if (wishesResult.error) throw wishesResult.error;
+  const members = (membersResult.data ?? []).flatMap((membership: {
+    user_id: string;
+    profile?: { id?: string; name?: string | null } | null;
+  }) => membership.profile?.id
+    ? [{ id: membership.profile.id, name: membership.profile.name ?? null }]
+    : []);
+  const recap = buildMeetingRecapContent(
+    parsedSummary,
+    members,
+    (wishesResult.data ?? []) as RecapWishRow[],
+  );
   return {
     id: row.id,
     communityId: row.community_id,
@@ -86,6 +123,7 @@ async function loadMeeting(admin: ReturnType<typeof createClient>, meetingId: st
     hiveAccent: row.community?.accent_color ?? null,
     title,
     date: row.date,
+    recap,
   };
 }
 
@@ -166,10 +204,16 @@ serve(async (req) => {
       if (!previewedRecipientIds) {
         return errorResponse('That recipient list predates group preview. Preview the email once more before sending.', 409);
       }
+      if (!metadata.post_meeting_recap_content) {
+        return errorResponse('That email predates the one-minute recap. Preview it once more before sending.', 409);
+      }
       const meeting = await loadMeeting(admin, meetingId);
       if (!meeting || meeting.communityId !== communityId) {
         return errorResponse('That held recap no longer matches a meeting.', 422);
       }
+      // Approval sends the exact recap Nat previewed, even if a wish or meeting
+      // record changes between Preview and Send.
+      meeting.recap = metadata.post_meeting_recap_content;
 
       // Re-read membership and both settings at approval time. A held preview is
       // never consent frozen in amber: leaving the HIVE or opting out wins.
@@ -286,6 +330,7 @@ serve(async (req) => {
           post_meeting_recap_preview_recipient_count: recipients.length,
           post_meeting_recap_recipient_ids: recipients.map((recipient) => recipient.id),
           post_meeting_recap_recipient_names: recipients.map((recipient) => recipient.name?.trim() || recipient.email || 'Someone'),
+          post_meeting_recap_content: meeting.recap,
         },
       }).eq('id', existingPending.id);
       if (error) throw error;
@@ -307,6 +352,7 @@ serve(async (req) => {
         post_meeting_recap_preview_recipient_count: recipients.length,
         post_meeting_recap_recipient_ids: recipients.map((recipient) => recipient.id),
         post_meeting_recap_recipient_names: recipients.map((recipient) => recipient.name?.trim() || recipient.email || 'Someone'),
+        post_meeting_recap_content: meeting.recap,
       },
     }).select('id').single();
     if (error) throw error;
