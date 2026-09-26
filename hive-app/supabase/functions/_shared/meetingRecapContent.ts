@@ -93,7 +93,13 @@ function currentWishFor(memberId: string, wishes: RecapWishRow[]) {
     .filter((wish) => wish.user_id === memberId && wish.status === 'public' && wish.is_active !== false)
     .sort((a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')));
   const wish = live.find((item) => item.is_spotlight) ?? live[0] ?? null;
-  return wish ? clean(wish.title) || clean(wish.description) || null : null;
+  if (!wish) return null;
+  const source = clean(wish.title) || clean(wish.description);
+  if (!source) return null;
+  if (source.length <= 110) return source;
+  const slice = source.slice(0, 109).trim();
+  const lastSpace = slice.lastIndexOf(' ');
+  return `${(lastSpace > 65 ? slice.slice(0, lastSpace) : slice).trim()}…`;
 }
 
 /**
@@ -149,7 +155,12 @@ export function buildMeetingRecapContent(
     .sort((a, b) => clean(a.name).localeCompare(clean(b.name)));
 
   return {
-    news: linesFromSection(summary, 'News from Nat').slice(0, 5),
+    // HIVE Help and hangs have their own short sections below. Keeping them out
+    // of News avoids saying the same thing twice and leaves room for Nat's
+    // actual announcements.
+    news: linesFromSection(summary, 'News from Nat')
+      .filter((line) => !/\bHIVE Help\b|\bHIVE hang\b/i.test(line))
+      .slice(0, 5),
     dates,
     helpFocus,
     wishes: orderedMembers.map((member) => ({
@@ -158,4 +169,3 @@ export function buildMeetingRecapContent(
     })),
   };
 }
-
