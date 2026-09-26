@@ -15,6 +15,24 @@ export type RecapMeetingSnapshot = {
   next_meeting?: Record<string, unknown> | null;
   upcoming_hangs?: Record<string, unknown>[];
   help_focus?: string | null;
+  confirmed_absentee_ids?: string[];
+  confirmed_absentee_names?: string[];
+};
+
+export type RecapFocusStatus = 'confirmed' | 'absent' | 'unclear';
+
+export type RecapStoredFocus = {
+  person_name: string;
+  focus?: string | null;
+  status: RecapFocusStatus;
+};
+
+export type RecapStoredOneMinute = {
+  news?: string[];
+  dates?: RecapDateItem[];
+  help_focus?: string | null;
+  member_focuses?: RecapStoredFocus[];
+  generated_at?: string;
 };
 
 export type RecapStoredSummary = {
@@ -23,18 +41,7 @@ export type RecapStoredSummary = {
   line_corrections?: Record<string, string>;
   hidden_lines?: Record<string, true>;
   meeting_helper_snapshot?: RecapMeetingSnapshot;
-};
-
-export type RecapWishRow = {
-  id?: string;
-  user_id: string;
-  title?: string | null;
-  description?: string | null;
-  status?: string | null;
-  is_active?: boolean | null;
-  is_spotlight?: boolean | null;
-  created_at?: string | null;
-  user_name?: string | null;
+  one_minute_recap?: RecapStoredOneMinute;
 };
 
 export type RecapMember = {
@@ -54,7 +61,7 @@ export type MeetingRecapContent = {
   news: string[];
   dates: RecapDateItem[];
   helpFocus: string | null;
-  wishes: { personName: string; wish: string | null }[];
+  wishes: { personName: string; wish: string | null; status: RecapFocusStatus }[];
 };
 
 const clean = (value?: unknown) => typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
@@ -95,29 +102,48 @@ function stringField(row: Record<string, unknown> | null | undefined, key: strin
   return clean(row?.[key]);
 }
 
-function currentWishFor(memberId: string, wishes: RecapWishRow[]) {
-  const live = wishes
-    .filter((wish) => wish.user_id === memberId && wish.status === 'public' && wish.is_active !== false)
-    .sort((a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')));
-  const wish = live.find((item) => item.is_spotlight) ?? live[0] ?? null;
-  if (!wish) return null;
-  const source = clean(wish.title) || clean(wish.description);
-  if (!source) return null;
-  return compactLine(source, 110);
-}
-
 /**
  * The one-minute member recap. It is intentionally derived from the sealed
- * record rather than saved as a second competing summary, so the app and the
- * email always speak from the same facts while the complete record remains
- * available underneath.
+ * meeting record, never from a member's live profile wish. A profile wish can
+ * be useful elsewhere in HIVE, but it cannot answer what somebody actually
+ * asked for during this particular meeting. The app and the email therefore
+ * read the same stored one-minute recap, while the complete source record
+ * remains available underneath.
  */
 export function buildMeetingRecapContent(
   summary: RecapStoredSummary,
   members: RecapMember[],
-  wishes: RecapWishRow[],
 ): MeetingRecapContent {
   const snapshot = summary.meeting_helper_snapshot ?? {};
+  const stored = summary.one_minute_recap;
+
+  if (stored) {
+    return {
+      news: (stored.news ?? []).map(clean).filter(Boolean),
+      dates: (stored.dates ?? []).flatMap((item) => {
+        const label = clean(item.label);
+        const date = clean(item.date);
+        return label && date ? [{
+          label,
+          date,
+          time: clean(item.time) || null,
+          endTime: clean(item.endTime) || null,
+          location: clean(item.location) || null,
+        }] : [];
+      }),
+      helpFocus: clean(stored.help_focus) || null,
+      wishes: (stored.member_focuses ?? []).flatMap((item) => {
+        const personName = clean(item.person_name);
+        if (!personName) return [];
+        return [{
+          personName,
+          wish: clean(item.focus) || null,
+          status: item.status === 'confirmed' || item.status === 'absent' ? item.status : 'unclear',
+        }];
+      }),
+    };
+  }
+
   const nextMeeting = snapshot.next_meeting ?? null;
   const dates: RecapDateItem[] = [];
 
@@ -157,6 +183,8 @@ export function buildMeetingRecapContent(
   const orderedMembers = [...members]
     .filter((member) => !!member.id && !!clean(member.name))
     .sort((a, b) => clean(a.name).localeCompare(clean(b.name)));
+  const absentIds = new Set(snapshot.confirmed_absentee_ids ?? []);
+  const absentNames = new Set((snapshot.confirmed_absentee_names ?? []).map(clean));
 
   return {
     // HIVE Help and hangs have their own short sections below. Keeping them out
@@ -168,9 +196,16 @@ export function buildMeetingRecapContent(
       .slice(0, 5),
     dates,
     helpFocus,
-    wishes: orderedMembers.map((member) => ({
-      personName: clean(member.name),
-      wish: currentWishFor(member.id, wishes),
-    })),
+    // Older records did not store a meeting-specific focus. Say so plainly;
+    // silently substituting a profile wish made old requests look current.
+    wishes: orderedMembers.map((member) => {
+      const personName = clean(member.name);
+      const absent = absentIds.has(member.id) || absentNames.has(personName);
+      return {
+        personName,
+        wish: null,
+        status: absent ? 'absent' as const : 'unclear' as const,
+      };
+    }),
   };
 }

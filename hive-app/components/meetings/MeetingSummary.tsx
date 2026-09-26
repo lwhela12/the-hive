@@ -28,7 +28,6 @@ import type { Meeting, ActionItem, Profile } from '../../types';
 import { BackButton } from '../ui/BackButton';
 import {
   buildMeetingRecapContent,
-  type RecapWishRow,
 } from '../../supabase/functions/_shared/meetingRecapContent';
 
 interface MeetingSummaryProps {
@@ -93,6 +92,13 @@ interface ParsedSummary {
     next_meeting?: Record<string, unknown> | null;
     upcoming_hangs?: Record<string, unknown>[];
     help_focus?: string | null;
+  };
+  one_minute_recap?: {
+    news?: string[];
+    dates?: { label: string; date: string; time?: string | null; endTime?: string | null; location?: string | null }[];
+    help_focus?: string | null;
+    member_focuses?: { person_name: string; focus?: string | null; status: 'confirmed' | 'absent' | 'unclear' }[];
+    generated_at?: string;
   };
   /**
    * Which real `action_items` row(s) a "Confirmed duty" line actually is.
@@ -387,7 +393,6 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   const [savingGeminiNotes, setSavingGeminiNotes] = useState(false);
   const [taskChecklistOpen, setTaskChecklistOpen] = useState(false);
   const [fullRecordOpen, setFullRecordOpen] = useState(false);
-  const [recapWishes, setRecapWishes] = useState<RecapWishRow[]>([]);
   const [resolvingConflictId, setResolvingConflictId] = useState<string | null>(null);
 
   const { profile, community, communityId, communityRole } = useAuth();
@@ -420,29 +425,6 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           .map((row) => (row as unknown as { profiles?: SpeakerMember | null }).profiles)
           .filter((person): person is SpeakerMember => !!person && !!person.id);
         setMembers(people);
-      });
-
-    return () => { stale = true; };
-  }, [meeting.community_id]);
-
-  // The recap names each member's one current HD wish. Pull the same live wish
-  // rows the Members and Home screens use; the sealed meeting record remains
-  // untouched, while a reader gets the useful current ask instead of a stale
-  // transcript inference.
-  useEffect(() => {
-    let stale = false;
-    if (!meeting.community_id) return;
-
-    supabase
-      .from('wishes')
-      .select('id, user_id, title, description, status, is_active, is_spotlight, created_at')
-      .eq('community_id', meeting.community_id)
-      .eq('status', 'public')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (stale || error) return;
-        setRecapWishes((data ?? []) as RecapWishRow[]);
       });
 
     return () => { stale = true; };
@@ -530,7 +512,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   };
 
   const parsedSummary = parseSummary(meeting.summary);
-  const conciseRecap = buildMeetingRecapContent(parsedSummary, members, recapWishes);
+  const conciseRecap = buildMeetingRecapContent(parsedSummary, members);
   const confirmedAbsenteeIds = parsedSummary.meeting_helper_snapshot?.confirmed_absentee_ids ?? [];
   const confirmedAbsenteeNames = parsedSummary.meeting_helper_snapshot?.confirmed_absentee_names ?? [];
   // One preview approves one shared template. Requiring the recipient snapshot
@@ -1936,13 +1918,15 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
               </View>
 
               <View>
-                <Text className="text-xs font-semibold uppercase tracking-wider text-honey-800">💛 Everyone’s current wish</Text>
+                <Text className="text-xs font-semibold uppercase tracking-wider text-honey-800">💛 What everyone wants help with</Text>
                 <View className="mt-2" style={{ gap: 7 }}>
                   {conciseRecap.wishes.length > 0 ? conciseRecap.wishes.map((item) => (
                     <View key={item.personName} className="flex-row items-start">
                       <Text className="text-gray-800 font-semibold">{firstName(item.personName)}: </Text>
-                      <Text className={`flex-1 leading-5 ${item.wish ? 'text-gray-800' : 'text-gray-500'}`}>
-                        {item.wish || 'No current wish yet'}
+                      <Text className={`flex-1 leading-5 ${item.status === 'confirmed' ? 'text-gray-800' : 'text-gray-500'}`}>
+                        {item.wish || (item.status === 'absent'
+                          ? 'Not at this meeting — wish not confirmed.'
+                          : 'Wish not confirmed in this meeting.')}
                       </Text>
                     </View>
                   )) : (

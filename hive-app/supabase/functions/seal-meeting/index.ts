@@ -52,6 +52,8 @@ type SummarySection = {
 
 type TranscriptReconciliation = {
   overview: string;
+  news_highlights: string[];
+  member_focuses: { person: string; focus: string }[];
   attendance: {
     in_person: string[];
     remote: string[];
@@ -275,8 +277,10 @@ async function reconcileTranscript(
       'If confirmed_absentee_names is non-empty, never say everyone or all members attended. Missing pre-meeting input is not itself a conflict.',
       'If sources disagree, put the discrepancy in conflicts. Do not guess. Use first names from the roster exactly.',
       'Return only valid JSON with this shape:',
-      '{"overview":"2-4 humane sentences","attendance":{"in_person":[],"remote":[],"absent":[],"unclear":[]},"decisions":[{"section":"treasurer|meetups|hummdinger|wrapup","text":"..."}],"member_context":[{"person":"First","context":"1-2 concise sentences"}],"duty_labels":[{"task":"exact CURRENT_DUTIES task","label":"humane concise wording"}],"conflicts":[{"topic":"...","helper_record":"...","transcript_evidence":"...","action_item_id":"exact id when this conflict concerns a current duty, otherwise empty"}]}',
+      '{"overview":"2-4 humane sentences","news_highlights":["3-5 short paraphrased bullets"],"member_focuses":[{"person":"First","focus":"the help or focus explicitly requested in this meeting"}],"attendance":{"in_person":[],"remote":[],"absent":[],"unclear":[]},"decisions":[{"section":"treasurer|meetups|hummdinger|wrapup","text":"..."}],"member_context":[{"person":"First","context":"1-2 concise sentences"}],"duty_labels":[{"task":"exact CURRENT_DUTIES task","label":"humane concise wording"}],"conflicts":[{"topic":"...","helper_record":"...","transcript_evidence":"...","action_item_id":"exact id when this conflict concerns a current duty, otherwise empty"}]}',
       'Attendance rule: confirmed absentees are absent. Pre-meeting attendance is an intention; use explicit transcript statements to resolve remote vs in-person, and leave unclear when unsupported.',
+      'News highlights are the high-level meaning of Nat\'s authored news plus what she actually said about it. Merge repetition, paraphrase instead of transcribing, keep each bullet under 150 characters, and omit dates, HIVE Help, and individual member wishes because those have their own sections.',
+      'Member focuses are only the help, wish, or next focus a person explicitly asked for during this meeting. A duty clearly created to help that person may support the focus. Never carry forward an old profile wish, never turn general biography into a wish, and omit anyone whose focus is not clear.',
       'Member context should summarize what each person brought or needed, not repeat their assigned duties.',
       'For every CURRENT_DUTIES task, return one duty_labels row. The task key must be exact. The label may repair shorthand into humane English but must preserve the same obligation, specificity, and tone; it must not change owners.',
     ].join('\n'),
@@ -305,6 +309,7 @@ async function reconcileTranscript(
   const keepNames = (value: unknown) => stringArray(value).filter((name) => allowedNames.has(firstName(name))).map(firstName);
   const decisions = Array.isArray(parsed.decisions) ? parsed.decisions : [];
   const memberContext = Array.isArray(parsed.member_context) ? parsed.member_context : [];
+  const memberFocuses = Array.isArray(parsed.member_focuses) ? parsed.member_focuses : [];
   const dutyLabels = Array.isArray(parsed.duty_labels) ? parsed.duty_labels : [];
   const conflicts = Array.isArray(parsed.conflicts) ? parsed.conflicts : [];
   const exactTasks = new Set(duties.map((duty) => duty.task));
@@ -313,6 +318,14 @@ async function reconcileTranscript(
     evidence,
     result: {
       overview: typeof parsed.overview === 'string' ? parsed.overview.trim() : '',
+      news_highlights: stringArray(parsed.news_highlights).slice(0, 5),
+      member_focuses: memberFocuses.flatMap((entry) => {
+        if (!entry || typeof entry !== 'object') return [];
+        const row = entry as Record<string, unknown>;
+        const person = typeof row.person === 'string' ? firstName(row.person) : '';
+        const focus = typeof row.focus === 'string' ? row.focus.trim() : '';
+        return allowedNames.has(person) && focus ? [{ person, focus }] : [];
+      }),
       attendance: {
         in_person: keepNames(attendance.in_person),
         remote: keepNames(attendance.remote),
@@ -888,6 +901,17 @@ serve(async (req) => {
       groups: newsGroups,
       source_label: 'Meeting Helper authored notes',
     });
+    const compactRecapBullet = (value: string, max = 150) => {
+      const line = value.replace(/\s+/g, ' ').trim();
+      if (line.length <= max) return line;
+      const slice = line.slice(0, max - 1);
+      const lastSpace = slice.lastIndexOf(' ');
+      return `${(lastSpace > Math.floor(max * 0.6) ? slice.slice(0, lastSpace) : slice).trim()}…`;
+    };
+    const fallbackNewsHighlights = bulletsFrom(helperNotes.news)
+      .filter((line) => !/\bHIVE Help\b|\bHIVE hang\b/i.test(line))
+      .map((line) => compactRecapBullet(line))
+      .slice(0, 5);
 
     const prettyDate = (value: string) => {
       const [year, month, day] = value.split('-').map(Number);
@@ -1077,6 +1101,62 @@ serve(async (req) => {
     const narrative = transcriptResult?.overview
       || `${isRebuild ? 'Rebuilt' : 'Sealed'} from the Meeting Helper and ${todoGroups.size} current dut${todoGroups.size === 1 ? 'y' : 'ies'}.${tally ? ` ${tally}.` : ''}`;
 
+    const recapDates = [
+      helperSnapshot.next_meeting,
+      ...helperSnapshot.upcoming_hangs,
+    ].flatMap((item) => {
+      if (!item || typeof item !== 'object') return [];
+      const row = item as Record<string, unknown>;
+      const label = typeof row.title === 'string' ? row.title.trim() : '';
+      const eventDate = typeof row.event_date === 'string' ? row.event_date.trim() : '';
+      // Quarter markers and dues still belong on the calendar, but they are not
+      // upcoming social activities and made the one-minute recap feel like an
+      // accounting export.
+      if (!label || !eventDate || /\bdues\b|\bQ[1-4]\b.*\b(?:begins|ends)\b/i.test(label)) return [];
+      return [{
+        label,
+        date: eventDate,
+        time: typeof row.event_time === 'string' ? row.event_time : null,
+        endTime: typeof row.end_time === 'string' ? row.end_time : null,
+        location: typeof row.location === 'string' ? row.location : null,
+      }];
+    });
+    const dedupedRecapDates = Array.from(
+      new Map(recapDates.map((item) => [`${item.date}:${item.label.toLowerCase()}`, item])).values(),
+    ).sort((a, b) => a.date.localeCompare(b.date));
+
+    const focusByPerson = new Map(
+      (transcriptResult?.member_focuses ?? []).map((item) => [firstName(item.person), compactRecapBullet(item.focus, 120)]),
+    );
+    const generatedOneMinuteRecap = {
+      news: transcriptResult?.news_highlights?.length
+        ? transcriptResult.news_highlights.map((line) => compactRecapBullet(line))
+        : fallbackNewsHighlights,
+      dates: dedupedRecapDates,
+      help_focus: helperSnapshot.help_focus
+        || wrapDecisions.find((line) => /\bHIVE Help\b/i.test(line))
+        || null,
+      member_focuses: helperSnapshot.roster.map((person) => {
+        const shortName = firstName(person.name);
+        const absent = helperSnapshot.confirmed_absentee_ids.includes(person.id)
+          || helperSnapshot.confirmed_absentee_names.some((name) => firstName(name) === shortName);
+        const focus = absent ? null : focusByPerson.get(shortName) ?? null;
+        return {
+          person_name: person.name,
+          focus,
+          status: absent ? 'absent' as const : focus ? 'confirmed' as const : 'unclear' as const,
+        };
+      }),
+      generated_at: rebuiltAt,
+    };
+    const priorOneMinuteRecap = previous.one_minute_recap as ({ curated_at?: string } & typeof generatedOneMinuteRecap) | undefined;
+    // A human-curated correction outranks another automatic rebuild. The full
+    // source record can still be rebuilt without reintroducing facts Nat has
+    // already marked stale or uncertain.
+    const oneMinuteRecap = priorOneMinuteRecap?.curated_at
+      ? priorOneMinuteRecap
+      : generatedOneMinuteRecap;
+
     const summaryPayload = {
       ...(isRebuild ? previousGeneratedFields : previous),
       source: 'live_meeting',
@@ -1102,6 +1182,7 @@ serve(async (req) => {
       events_created: events.length,
       live_sealed_at: rebuiltAt,
       meeting_helper_snapshot: helperSnapshot,
+      one_minute_recap: oneMinuteRecap,
       duty_index: dutyIndex,
       ...(isRebuild
         ? {

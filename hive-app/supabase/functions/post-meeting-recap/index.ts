@@ -15,7 +15,6 @@ import {
   buildMeetingRecapContent,
   type MeetingRecapContent,
   type RecapStoredSummary,
-  type RecapWishRow,
 } from '../_shared/meetingRecapContent.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
@@ -87,22 +86,11 @@ async function loadMeeting(admin: ReturnType<typeof createClient>, meetingId: st
     if (typeof parsed.title === 'string' && parsed.title.trim()) title = parsed.title.trim();
   } catch { /* old plain-text summaries use the fallback title */ }
 
-  const [membersResult, wishesResult] = await Promise.all([
-    admin
-      .from('community_memberships')
-      .select('user_id, profile:profiles!user_id(id, name)')
-      .eq('community_id', row.community_id),
-    admin
-      .from('wishes')
-      .select('id, user_id, title, description, status, is_active, is_spotlight, created_at')
-      .eq('community_id', row.community_id)
-      .eq('status', 'public')
-      .eq('is_active', true)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false }),
-  ]);
+  const membersResult = await admin
+    .from('community_memberships')
+    .select('user_id, profile:profiles!user_id(id, name)')
+    .eq('community_id', row.community_id);
   if (membersResult.error) throw membersResult.error;
-  if (wishesResult.error) throw wishesResult.error;
   const members = (membersResult.data ?? []).flatMap((membership: {
     user_id: string;
     profile?: { id?: string; name?: string | null } | null;
@@ -112,7 +100,6 @@ async function loadMeeting(admin: ReturnType<typeof createClient>, meetingId: st
   const recap = buildMeetingRecapContent(
     parsedSummary,
     members,
-    (wishesResult.data ?? []) as RecapWishRow[],
   );
   return {
     id: row.id,

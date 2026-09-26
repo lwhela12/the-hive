@@ -160,10 +160,16 @@ function postMeetingRecapBody(meeting: RecapMeeting): string {
     : '<p style="margin:0;font-size:14px;color:#777;">No future dates were recorded.</p>';
   const help = `<p style="margin:0;font-size:14px;line-height:1.45;">${escapeHtml(recap.helpFocus || 'No HIVE Help focus was recorded.')}</p>`;
   const wishes = recap.wishes.length > 0
-    ? `<div>${recap.wishes.map((item) => `<p style="margin:0 0 6px;font-size:14px;line-height:1.45;"><strong>${escapeHtml(firstName(item.personName))}:</strong> ${escapeHtml(item.wish || 'No current wish yet')}</p>`).join('')}</div>`
+    ? `<div>${recap.wishes.map((item) => {
+        const focus = item.wish || (item.status === 'absent'
+          ? 'Not at this meeting — wish not confirmed.'
+          : 'Wish not confirmed in this meeting.');
+        const color = item.status === 'confirmed' ? '#2b2b2b' : '#777';
+        return `<p style="margin:0 0 6px;font-size:14px;line-height:1.45;color:${color};"><strong>${escapeHtml(firstName(item.personName))}:</strong> ${escapeHtml(focus)}</p>`;
+      }).join('')}</div>`
     : '<p style="margin:0;font-size:14px;color:#777;">No member wishes are available yet.</p>';
 
-  return `${recapSection('📣 News from Nat', news)}${recapSection('🗓️ Dates to know', dates)}${recapSection('🤝 This month’s HIVE Help', help)}${recapSection('💛 Everyone’s current wish', wishes)}`;
+  return `${recapSection('📣 News from Nat', news)}${recapSection('🗓️ Dates to know', dates)}${recapSection('🤝 This month’s HIVE Help', help)}${recapSection('💛 What everyone wants help with', wishes)}`;
 }
 
 /** Member email. Deliberately contains exactly two links/buttons. */
