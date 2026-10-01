@@ -1221,7 +1221,12 @@ export interface Database {
         Relationships: [];
       };
     };
-    Views: {};
+    Views: {
+      member_meetings: {
+        Row: Meeting;
+        Relationships: [];
+      };
+    };
     Functions: {
       survey_submission_counts: {
         Args: { p_survey_id: string; p_community_id: string | null; p_period: string };

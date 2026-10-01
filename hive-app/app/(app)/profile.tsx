@@ -341,7 +341,7 @@ export default function ProfileScreen() {
   const loadMeetingDesires = useCallback(async () => {
     if (!profile?.id || !communityId) return;
     const { data, error } = await supabase
-      .from('meetings')
+      .from('member_meetings')
       .select('id, summary')
       .eq('community_id', communityId)
       .not('summary', 'is', null)
@@ -374,7 +374,7 @@ export default function ProfileScreen() {
     value: Record<string, unknown>,
   ) => {
     const { data } = await supabase
-      .from('meetings')
+      .from('member_meetings')
       .select('summary')
       .eq('id', meetingId)
       .maybeSingle();

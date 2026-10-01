@@ -279,6 +279,12 @@ serve(async (req) => {
       if (targetError || !targetMeeting) {
         return errorResponse('That meeting summary was not found in this HIVE.', 404);
       }
+      // This endpoint reads with the service key and returns the updated row.
+      // A HIVE admin must not retrieve or rewrite an owner-only historical
+      // summary by attaching notes to its id.
+      if (targetMeeting.summary !== null && ownerProfile?.is_owner !== true) {
+        return errorResponse('Only a HIVE owner can edit this meeting summary.', 403);
+      }
 
       let previousSummary: Record<string, unknown> = {};
       if (typeof targetMeeting.summary === 'string' && targetMeeting.summary.trim()) {

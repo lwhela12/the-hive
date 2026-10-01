@@ -157,7 +157,7 @@ export async function summarizeMeetings(
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
   const { data: meetings } = await supabase
-    .from('meetings')
+    .from('member_meetings')
     .select('date, summary')
     .eq('community_id', communityId)
     .is('archived_at', null)

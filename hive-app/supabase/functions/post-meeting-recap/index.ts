@@ -39,6 +39,7 @@ type HeldMetadata = {
   post_meeting_recap_recipient_names?: string[];
   post_meeting_recap_sent_recipient_ids?: string[];
   post_meeting_recap_content?: MeetingRecapContent;
+  post_meeting_recap_privacy_version?: number;
 };
 
 function asRecipient(profile: ProfileRow): RecapRecipient {
@@ -81,7 +82,13 @@ async function loadMeeting(admin: ReturnType<typeof createClient>, meetingId: st
   let title = `${row.community?.name || 'HIVE'} Meeting`;
   let parsedSummary: RecapStoredSummary = {};
   try {
-    const parsed = JSON.parse(row.summary || '{}') as RecapStoredSummary & { title?: unknown };
+    // Member mail gets the same safe projection as the member meeting page.
+    // The full stored recap can contain submitted answers and model paraphrases.
+    const { data: safeSummary, error: safeError } = await admin.rpc('member_safe_meeting_summary', {
+      p_summary: row.summary ?? null,
+    });
+    if (safeError) throw safeError;
+    const parsed = JSON.parse(safeSummary || '{}') as RecapStoredSummary & { title?: unknown };
     parsedSummary = parsed;
     if (typeof parsed.title === 'string' && parsed.title.trim()) title = parsed.title.trim();
   } catch { /* old plain-text summaries use the fallback title */ }
@@ -194,9 +201,15 @@ serve(async (req) => {
       if (!metadata.post_meeting_recap_content) {
         return errorResponse('That email predates the one-minute recap. Preview it once more before sending.', 409);
       }
+      if (metadata.post_meeting_recap_privacy_version !== 1) {
+        return errorResponse('This recap needs a new privacy-safe preview before sending.', 409);
+      }
       const meeting = await loadMeeting(admin, meetingId);
       if (!meeting || meeting.communityId !== communityId) {
         return errorResponse('That held recap no longer matches a meeting.', 422);
+      }
+      if (JSON.stringify(metadata.post_meeting_recap_content) !== JSON.stringify(meeting.recap)) {
+        return errorResponse('This recap changed. Preview it again before sending.', 409);
       }
       // Approval sends the exact recap Nat previewed, even if a wish or meeting
       // record changes between Preview and Send.
@@ -318,6 +331,7 @@ serve(async (req) => {
           post_meeting_recap_recipient_ids: recipients.map((recipient) => recipient.id),
           post_meeting_recap_recipient_names: recipients.map((recipient) => recipient.name?.trim() || recipient.email || 'Someone'),
           post_meeting_recap_content: meeting.recap,
+          post_meeting_recap_privacy_version: 1,
         },
       }).eq('id', existingPending.id);
       if (error) throw error;
@@ -340,6 +354,7 @@ serve(async (req) => {
         post_meeting_recap_recipient_ids: recipients.map((recipient) => recipient.id),
         post_meeting_recap_recipient_names: recipients.map((recipient) => recipient.name?.trim() || recipient.email || 'Someone'),
         post_meeting_recap_content: meeting.recap,
+        post_meeting_recap_privacy_version: 1,
       },
     }).select('id').single();
     if (error) throw error;
