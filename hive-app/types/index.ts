@@ -1221,8 +1221,21 @@ export interface Database {
         Relationships: [];
       };
     };
-    Views: {};
+    Views: {
+      member_meetings: {
+        Row: Meeting;
+        Relationships: [];
+      };
+    };
     Functions: {
+      survey_submission_counts: {
+        Args: { p_survey_id: string; p_community_id: string | null; p_period: string };
+        Returns: { period_count: number; default_count: number; total_count: number };
+      };
+      quarter_pulse_summary: {
+        Args: { p_community_id: string; p_period: string };
+        Returns: { question_id: string; option: string; response_count: number }[];
+      };
       set_meeting_duty_owners: {
         Args: { p_meeting_id: string; p_action_item_ids: string[]; p_owner_ids: string[] };
         Returns: { action_item_ids: string[]; owner_ids: (string | null)[] };

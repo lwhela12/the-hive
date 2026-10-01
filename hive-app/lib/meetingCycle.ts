@@ -37,7 +37,7 @@ export async function getCycleStart(communityId: string, beforeDate: string): Pr
       .order('event_date', { ascending: false })
       .limit(1),
     supabase
-      .from('meetings')
+      .from('member_meetings')
       .select('date')
       .eq('community_id', communityId)
       .is('archived_at', null)

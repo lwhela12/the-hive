@@ -746,6 +746,7 @@ export default function AdminScreen() {
   // them is gone (see the removal note by MONTHLY_CHECK_IN_PATTERN above).
   const [surveyEditorQuestions, setSurveyEditorQuestions] = useState<SurveyQuestion[]>([]);
   const [surveyResponses, setSurveyResponses] = useState<SurveySubmissionReceipt[]>([]);
+  const [surveyAggregateCount, setSurveyAggregateCount] = useState<number | null>(null);
   const [surveyResponsesLoading, setSurveyResponsesLoading] = useState(false);
   const [surveyResponsesError, setSurveyResponsesError] = useState<string | null>(null);
   const [selectedSurveyResponsePeriod, setSelectedSurveyResponsePeriod] = useState<string | null>(null);
@@ -852,10 +853,22 @@ export default function AdminScreen() {
     if (!communityId) return;
 
     setSurveyResponses([]);
+    setSurveyAggregateCount(null);
     setSurveyResponsesLoading(true);
     setSurveyResponsesError(null);
 
     try {
+      if (!isOwner) {
+        const period = getSurveyResponsePeriodForSurvey(survey);
+        const { data: counts, error: countError } = await supabase.rpc('survey_submission_counts', {
+          p_survey_id: survey.id,
+          p_community_id: survey.community_id,
+          p_period: period,
+        });
+        if (countError || !counts) throw countError ?? new Error('Could not count submissions');
+        setSurveyAggregateCount(counts.default_count > 0 ? counts.total_count : counts.period_count);
+        return;
+      }
       let { data, error } = await (supabase as any)
         .from('survey_responses')
         // Admin only needs submission coverage. Answers stay out of this
@@ -887,14 +900,21 @@ export default function AdminScreen() {
         return;
       }
 
-      setSurveyResponses((data ?? []) as SurveySubmissionReceipt[]);
+      // HIVE-Wide rows include people in other HIVEs. Count each person once
+      // within the HIVE shown here, even when a legacy scoped row also exists.
+      const eligible = new Set(members.map(member => member.profiles.id));
+      const unique = new Map<string, SurveySubmissionReceipt>();
+      for (const row of (data ?? []) as SurveySubmissionReceipt[]) {
+        if (eligible.has(row.user_id)) unique.set(`${row.user_id}:${row.response_period ?? ''}`, row);
+      }
+      setSurveyResponses([...unique.values()]);
     } catch (error) {
       console.warn('Could not load survey responses', error);
       setSurveyResponsesError('Could not load responses for this survey.');
     } finally {
       setSurveyResponsesLoading(false);
     }
-  }, [communityId]);
+  }, [communityId, isOwner, members]);
 
   const showHoneyPotFeedback = useCallback((
     tone: HoneyPotFeedback['tone'],
@@ -1426,7 +1446,7 @@ export default function AdminScreen() {
                       Responses
                     </Text>
                     <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#7f715f', lineHeight: 17, marginTop: 2 }}>
-                      See who filled this out and what their answers said.
+                      {isOwner ? 'See who filled this out.' : 'See how many members filled this out.'}
                     </Text>
                   </View>
                   <Pressable
@@ -1500,10 +1520,10 @@ export default function AdminScreen() {
                       }}
                     >
                       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30', marginBottom: 4 }}>
-                        {activeSurveyResponses.length} of {members.length} member{members.length === 1 ? '' : 's'} submitted
+                        {isOwner ? activeSurveyResponses.length : (surveyAggregateCount ?? 0)} of {members.length} member{members.length === 1 ? '' : 's'} submitted
                         {activeSurveyResponsePeriod ? ` for ${formatSurveyResponsePeriod(activeSurveyResponsePeriod)}` : ''}
                       </Text>
-                      {missingSurveyMembers.length > 0 ? (
+                      {!isOwner ? null : missingSurveyMembers.length > 0 ? (
                         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#7f715f', lineHeight: 17 }}>
                           Waiting on {formatMemberList(missingSurveyMembers.map(member => member.profiles.name))}.
                         </Text>
@@ -1519,7 +1539,7 @@ export default function AdminScreen() {
                         Results go to Meeting Helper
                       </Text>
                       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#7f715f', lineHeight: 17 }}>
-                        Admin shows who submitted. Meeting Helper turns the useful choices into the meeting view, totals and percentages.
+                        {isOwner ? 'Admin shows who submitted. Meeting Helper turns the useful choices into totals and percentages.' : 'Meeting Helper shows totals and percentages without individual answers.'}
                       </Text>
                       <Pressable
                         onPress={() => router.push('/meeting-helper' as never)}

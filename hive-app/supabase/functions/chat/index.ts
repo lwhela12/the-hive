@@ -1695,7 +1695,7 @@ serve(async (req) => {
             const limit = Math.min(Math.max(Number(input.limit) || 1, 1), 5);
             const includeTranscript = input.include_transcript !== false;
             const { data: meetingRows } = await supabaseClient
-              .from('meetings')
+              .from('member_meetings')
               .select('id, date, summary, transcript_attributed, transcript_raw, processing_status')
               .eq('community_id', communityId)
               .is('archived_at', null)

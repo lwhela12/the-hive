@@ -1,5 +1,5 @@
 import { meetingVoteResults } from '../../lib/meetingVoteResults';
-import { OG_QUARTER_PULSE_QUESTIONS, SHARED_QUARTER_PULSE_QUESTION, quarterAnswersForMembers, recentQuarterPulsePeriod, tallyQuarterPulse } from '../../lib/quarterPulse';
+import { quarterPulseQuestionsForDeck, quarterPulseTalkingPoints, recentQuarterPulsePeriod, type QuarterPulseCount } from '../../lib/quarterPulse';
 import { pacificCalendarDate } from '../../lib/endOfMonthPeriod';
 import { ideaRanking, tallyIdeaRankings } from '../../lib/ideaRanking';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -1053,6 +1053,8 @@ export default function MeetingHelperScreen() {
     responsePeriod,
     members,
     responsesByUser,
+    submissionCount,
+    canViewIndividualCheckIns,
     reportsByUser,
     nextMeeting,
     lastUpdatedAt,
@@ -1060,29 +1062,28 @@ export default function MeetingHelperScreen() {
   } = useArrivalBoard({ pollingEnabled: true });
   const [arrivalMemberToEdit, setArrivalMemberToEdit] = useState<string | null>(null);
   const quarterPulsePeriod = deckIsOg || deckSlug === 'tech' ? recentQuarterPulsePeriod(pacificCalendarDate(new Date())) : null;
-  type QuarterRow = { user_id: string; answers: Record<string, unknown> };
-  const [quarterPulseRows, setQuarterPulseRows] = useState<{ hive: QuarterRow[]; shared: QuarterRow[] | null } | null>(null);
+  const [quarterPulseSummary, setQuarterPulseSummary] = useState<{
+    communityId: string; period: string; counts: QuarterPulseCount[];
+  } | null>(null);
+  const quarterPulseCounts = quarterPulseSummary?.communityId === communityId
+    && quarterPulseSummary.period === quarterPulsePeriod ? quarterPulseSummary.counts : null;
   useEffect(() => {
-    if (!communityId || !quarterPulsePeriod) { setQuarterPulseRows(null); return; }
+    if (!communityId || !quarterPulsePeriod) { setQuarterPulseSummary(null); return; }
     let cancelled = false;
     (async () => {
-      const { data: survey, error: surveyError } = await supabase.from('surveys').select('id')
-        .is('community_id', null).eq('is_active', true).ilike('title', '%end of the month%').limit(1).maybeSingle();
-      if (surveyError || !survey) throw surveyError ?? new Error('Check-in unavailable');
-      const [hive, shared] = await Promise.all([
-        deckIsOg ? supabase.from('survey_responses').select('user_id, answers')
-          .eq('survey_id', survey.id).eq('community_id', communityId).eq('response_period', quarterPulsePeriod)
-          : Promise.resolve({ data: [], error: null }),
-        profile?.is_owner ? supabase.from('survey_responses').select('user_id, answers')
-          .eq('survey_id', survey.id).is('community_id', null).eq('response_period', quarterPulsePeriod)
-          : Promise.resolve({ data: null, error: null }),
-      ]);
-      if (hive.error || shared.error) throw hive.error ?? shared.error;
-      if (!cancelled) setQuarterPulseRows({ hive: (hive.data ?? []) as QuarterRow[],
-        shared: profile?.is_owner ? (shared.data ?? []) as QuarterRow[] : null });
-    })().catch(() => { if (!cancelled) setQuarterPulseRows(null); });
+      const { data, error } = await supabase.rpc('quarter_pulse_summary', {
+        p_community_id: communityId,
+        p_period: quarterPulsePeriod,
+      });
+      if (error) throw error;
+      if (!cancelled) setQuarterPulseSummary({ communityId, period: quarterPulsePeriod,
+        counts: (data ?? []) as QuarterPulseCount[] });
+    })().catch((error) => {
+      console.warn('Could not load HIVE check-in summary', error);
+      if (!cancelled) setQuarterPulseSummary(null);
+    });
     return () => { cancelled = true; };
-  }, [communityId, deckIsOg, profile?.is_owner, quarterPulsePeriod, lastUpdatedAt]);
+  }, [communityId, quarterPulsePeriod, lastUpdatedAt]);
 
   // A meeting is one HIVE in one room, and a to-do jotted here lands on that
   // HIVE's lists — so "@all" is this HIVE, and the picker says its name.
@@ -2232,7 +2233,8 @@ export default function MeetingHelperScreen() {
   const meetingYear = periodMatch ? periodMatch[1] : String(new Date().getFullYear());
   const meetingLine = formatMeetingDate(nextMeeting)
     || new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-  const checkedInCount = members.filter((member) => responsesByUser.has(member.id)).length;
+  const checkedInCount = submissionCount ?? (canViewIndividualCheckIns
+    ? members.filter((member) => responsesByUser.has(member.id)).length : null);
 
   // ---- Small presentational pieces ----
   const Kicker = useCallback(({ children }: { children: string }) => (
@@ -2387,7 +2389,7 @@ export default function MeetingHelperScreen() {
           </Text>
           <Text style={{ fontSize: sz(22, 13) }}>🍯</Text>
         </View>
-        {survey ? (
+        {survey && checkedInCount !== null ? (
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 11), color: MUTED, marginTop: sz(10, 6) }}>
             {checkedInCount} of {members.length} checked in{lastUpdatedAt ? '  ·  live' : ''}
           </Text>
@@ -2404,6 +2406,15 @@ export default function MeetingHelperScreen() {
         <EmptyNote>
           No check-in is live right now — once one opens, arrivals will glow here.
         </EmptyNote>
+      ) : !canViewIndividualCheckIns ? (
+        <View style={{ backgroundColor: CARD, borderWidth: 1, borderColor: GOLD_SOFT,
+          borderRadius: sz(16, 12), padding: sz(24, 16) }}>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(19, 13), color: CHARCOAL }}>
+            {checkedInCount === null
+              ? 'Individual check-in answers are private. The room count is unavailable right now.'
+              : 'Individual check-in answers are private. The room count is above.'}
+          </Text>
+        </View>
       ) : (
         <View>
           {(() => {
@@ -2650,6 +2661,20 @@ export default function MeetingHelperScreen() {
             emptyText={deckSlug === 'show' ? '' : "Nat hasn't dropped the news yet — drumroll, please."}
           />
         </View>
+        {quarterPulseCounts && quarterPulsePeriod && (deckIsOg || deckSlug === 'tech') ? (() => {
+          const points = quarterPulseQuestionsForDeck(deckSlug)
+            .flatMap(question => quarterPulseTalkingPoints(quarterPulseCounts, question).map(point => ({ question, point })));
+          if (!points.length) return null;
+          return <View style={{ backgroundColor: CARD, borderWidth: 1, borderColor: GOLD_SOFT,
+            borderRadius: sz(16, 12), paddingHorizontal: sz(20, 13), paddingVertical: sz(15, 10), gap: sz(8, 5) }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), letterSpacing: 1.4,
+              textTransform: 'uppercase', color: GOLD_DEEP }}>What members said in the {getMonthNameFromPeriod(quarterPulsePeriod)} check-in</Text>
+            {points.map(({ question, point }) => <Text key={`${question.id}:${point.option}`}
+              style={{ fontFamily: 'Lato_400Regular', fontSize: sz(18, 12), lineHeight: sz(27, 19), color: CHARCOAL }}>
+              {question.id === 'q_quarter_helping' ? 'HIVE helping with goals' : 'Support for 3MIQ and other goals'}: {point.percent}% chose “{point.option}” ({point.answered} answered).
+            </Text>)}
+          </View>;
+        })() : null}
         {/* Production skips this card. Nat, 2026-08-14: *"news from Nat, new in
             the app — we don't need new tech in the app."* That room is about the
             show, not the software carrying it. */}
@@ -2768,6 +2793,7 @@ export default function MeetingHelperScreen() {
    * preview; the configured full answers get their space in a bounded sheet.
    */
   const renderCheckInSays = (slide: DeckSlideKey) => {
+    if (!canViewIndividualCheckIns) return null;
     const blocks = (deck.checkInSays ?? []).filter((entry) => entry.slide === slide);
     if (blocks.length === 0) return null;
 
@@ -2963,6 +2989,7 @@ export default function MeetingHelperScreen() {
    * that said no — which is the opposite of "nobody has answered yet".
    */
   const renderVoteTally = (vote: VoteTally, compact = false) => {
+    if (!canViewIndividualCheckIns) return null;
     const { voted, total, rows } = meetingVoteResults(members.map(member => member.id), responsesByUser, vote.answerKey, vote.options);
     if (voted === 0) return <Text style={{ color: MUTED, fontSize: compact ? sz(15, 11) : sz(20, 13), marginTop: 10 }}>{vote.heading} · No votes yet</Text>;
     const leader = Math.max(...rows.map(row => row.count));
@@ -3264,6 +3291,7 @@ export default function MeetingHelperScreen() {
     const helpCheckInChoices = tallyIdeaRankings(memberIdeaAnswers, 'help');
     const hangCheckInChoices = tallyIdeaRankings(memberIdeaAnswers, 'hang');
     const renderCheckInIdeaChoices = (kind: 'help' | 'hang') => {
+      if (!canViewIndividualCheckIns) return null;
       const choices = kind === 'help' ? helpCheckInChoices : hangCheckInChoices;
       const suggestions = members.flatMap(member => {
         const answer = (responsesByUser.get(member.id)?.answers ?? {}) as Record<string, unknown>;
@@ -3683,27 +3711,7 @@ export default function MeetingHelperScreen() {
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
               HIVE Help · from the check-ins
             </Text>
-            {quarterPulseRows && quarterPulsePeriod && (deckIsOg || quarterPulseRows.shared !== null) && <View style={{ gap: sz(10, 6), marginBottom: sz(8, 5) }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), color: GOLD_DEEP }}>
-                Quarter review · {quarterPulsePeriod}
-              </Text>
-              {[...(deckIsOg ? OG_QUARTER_PULSE_QUESTIONS : []), ...(quarterPulseRows.shared ? [SHARED_QUARTER_PULSE_QUESTION] : [])].map(question => {
-                const eligible = new Set(members.map(member => member.id));
-                const answers = question.id === SHARED_QUARTER_PULSE_QUESTION.id
-                  ? quarterAnswersForMembers([...eligible], question, quarterPulseRows.shared ?? [], deckIsOg ? quarterPulseRows.hive : [])
-                  : quarterPulseRows.hive.filter(row => eligible.has(row.user_id)).map(row => row.answers);
-                const tally = tallyQuarterPulse(answers, question);
-                return <View key={question.id} style={{ gap: sz(3, 2) }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: CHARCOAL }}>
-                    {question.text} · {tally.answered} answered
-                  </Text>
-                  {tally.rows.map(row => <Text key={row.option} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(14, 10), color: CHARCOAL }}>
-                    {row.option}: {row.count} ({row.percent}%)
-                  </Text>)}
-                </View>;
-              })}
-            </View>}
-            {focusTally.answered > 0 ? (
+            {!canViewIndividualCheckIns ? null : focusTally.answered > 0 ? (
               <View style={{ gap: sz(4, 3) }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(19, 13), color: GOLD_DEEP }}>
                   🙌 {focusTally.did} of {members.length} did it
@@ -3732,7 +3740,7 @@ export default function MeetingHelperScreen() {
             )}
             {renderNatPicks('helpIdeas')}
             {renderCheckInIdeaChoices('help')}
-            {reportedHelpIdeas.length > 0 ? (
+            {canViewIndividualCheckIns && reportedHelpIdeas.length > 0 ? (
               <View style={{ marginTop: sz(5, 4), gap: sz(4, 3) }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), color: GOLD_DEEP }}>Ideas shared with admin</Text>
                 {reportedHelpIdeas.map((item) => (
@@ -3755,7 +3763,7 @@ export default function MeetingHelperScreen() {
 
         {/* What people wrote in their check-in, for a card that doesn't open a
             panel of its own. Tech's networking answers live here. */}
-        {underCards && underCardVoices.length > 0 ? (
+        {canViewIndividualCheckIns && underCards && underCardVoices.length > 0 ? (
           <View style={{ marginTop: sz(14, 8), gap: sz(4, 3) }}>
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
               {underCards.heading}
@@ -3787,7 +3795,7 @@ export default function MeetingHelperScreen() {
               gap: sz(32, 14),
             }}
           >
-            <View style={{ flex: isTV ? 1 : undefined, gap: sz(10, 7) }}>
+            {canViewIndividualCheckIns ? <View style={{ flex: isTV ? 1 : undefined, gap: sz(10, 7) }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(8, 5) }}>
                 <Text style={{ fontSize: sz(16, 12) }}>📊</Text>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
@@ -3824,7 +3832,7 @@ export default function MeetingHelperScreen() {
                   </View>
                 ))
               )}
-            </View>
+            </View> : null}
 
             {/* One question, one answer box: the ideas, then the plan you
                 write. The "how" line lives in the note's empty state instead

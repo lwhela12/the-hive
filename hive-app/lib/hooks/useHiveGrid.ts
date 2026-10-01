@@ -94,12 +94,14 @@ export function useHiveGrid(): Grid & { refresh: () => Promise<void> } {
       // answers carry 'default' is a one-off and every row on it counts.
       const counted = new Map<string, number>();
       await Promise.all(surveyRows.map(async (survey) => {
-        const { data } = await supabase
-          .from('survey_responses').select('response_period').eq('survey_id', survey.id);
-        const rows = (data ?? []) as { response_period: string | null }[];
-        const oneOff = rows.some((r) => r.response_period === 'default');
-        const period = String(survey.due_date).slice(0, 7);
-        counted.set(survey.id, oneOff ? rows.length : rows.filter((r) => r.response_period === period).length);
+        const period = survey.due_date ? String(survey.due_date).slice(0, 7) : 'default';
+        const { data, error } = await supabase.rpc('survey_submission_counts', {
+          p_survey_id: survey.id,
+          p_community_id: survey.community_id,
+          p_period: period,
+        });
+        if (error || !data) throw error ?? new Error('Could not count survey submissions');
+        counted.set(survey.id, data.default_count > 0 ? data.total_count : data.period_count);
       }));
 
       /**

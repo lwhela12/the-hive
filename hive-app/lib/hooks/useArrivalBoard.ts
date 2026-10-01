@@ -132,23 +132,26 @@ export function getLocalIsoDate(date: Date) {
 
 /**
  * Live data behind the Arrival Board: community members, the active monthly
- * check-in survey, everyone's response for the current period, and the next
- * scheduled meeting. Shared by the Arrival Board screen and the Meeting
+ * check-in survey, a private submission count, and the next scheduled meeting.
+ * Owners also load individual responses for the room. Shared by the Arrival Board screen and the Meeting
  * Helper deck. Polls every ~20s while `pollingEnabled` (default true) and
  * refreshes when the browser tab regains focus (the TV use case).
  */
 export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
   const { pollingEnabled = true } = options;
-  const { communityId } = useAuth();
+  const { communityId, profile } = useAuth();
+  const canViewIndividualCheckIns = profile?.is_owner === true;
 
   const [loading, setLoading] = useState(true);
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [responsePeriod, setResponsePeriod] = useState<string | null>(null);
   const [members, setMembers] = useState<ArrivalBoardMember[]>([]);
   const [responsesByUser, setResponsesByUser] = useState<Map<string, SurveyResponse>>(new Map());
+  const [submissionCount, setSubmissionCount] = useState<number | null>(null);
   const [reportsByUser, setReportsByUser] = useState<Map<string, MeetingAttendanceReport>>(new Map());
   const [nextMeeting, setNextMeeting] = useState<ArrivalBoardMeeting | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [loadedCommunityId, setLoadedCommunityId] = useState<string | null>(null);
   const loadingCommunityRef = useRef<string | null>(null);
   const requestSequenceRef = useRef(0);
   const activeCommunityRef = useRef(communityId);
@@ -179,10 +182,8 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
            * there. That is the failure this file already carries a scar from
            * once, in the comment above.
            *
-           * The RESPONSE query below needs no change at all, which is the whole
-           * point of the merged check-in writing one row per HIVE: it still
-           * asks for this HIVE's answers by `community_id` and still gets a
-           * whole person back.
+           * The response count and owner-only details both filter to this
+           * HIVE, including for the merged check-in's per-HIVE receipts.
            */
           .or(`community_id.eq.${communityId},community_id.is.null`)
           .eq('is_active', true)
@@ -250,6 +251,7 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
         : (!!meetingDayIso && today > meetingDayIso);
 
       const byUser = new Map<string, SurveyResponse>();
+      let nextSubmissionCount: number | null = null;
       const reports = new Map<string, MeetingAttendanceReport>();
       const meetingId = meetingRes.data?.[0]?.id;
       if (meetingId) {
@@ -261,11 +263,22 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
         ((reportRows ?? []) as MeetingAttendanceReport[]).forEach((report) => reports.set(report.user_id, report));
       }
       if (activeCheckIn && period && !cycleOver) {
-        const { data: responseRows } = await supabase
+        const { data: counts, error: countError } = await supabase.rpc('survey_submission_counts', {
+          p_survey_id: activeCheckIn.id,
+          p_community_id: communityId,
+          p_period: period,
+        });
+        if (countError) console.warn('Could not count check-ins', countError);
+        else nextSubmissionCount = counts?.period_count ?? null;
+        let responseQuery = supabase
           .from('survey_responses')
           .select('*')
           .eq('survey_id', activeCheckIn.id)
           .eq('community_id', communityId);
+        // A member may load their own answer. Only an owner can load the
+        // room's individual answers; the tally above is for everyone.
+        if (!canViewIndividualCheckIns) responseQuery = responseQuery.eq('user_id', profile?.id ?? '00000000-0000-0000-0000-000000000000');
+        const { data: responseRows } = await responseQuery;
 
         // Legacy responses may not carry a response_period; count them for this
         // period only if they were submitted after the check-in window opened.
@@ -291,9 +304,11 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
       setResponsePeriod(period);
       setMembers(memberRows);
       setResponsesByUser(byUser);
+      setSubmissionCount(nextSubmissionCount);
       setReportsByUser(reports);
       setNextMeeting((meetingRes.data?.[0] as ArrivalBoardMeeting | undefined) ?? null);
       setLastUpdatedAt(new Date());
+      setLoadedCommunityId(requestedCommunityId);
     } catch (error) {
       if (isCurrentArrivalRequest(requestedCommunityId, activeCommunityRef.current, requestId, requestSequenceRef.current)) {
         console.warn('Could not load the Arrival Board', error);
@@ -306,7 +321,7 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
         setLoading(false);
       }
     }
-  }, [communityId]);
+  }, [communityId, canViewIndividualCheckIns, profile?.id]);
 
   useEffect(() => {
     // The header changes HIVE immediately. Clear the old room in the same
@@ -316,9 +331,11 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
     setResponsePeriod(null);
     setMembers([]);
     setResponsesByUser(new Map());
+    setSubmissionCount(null);
     setReportsByUser(new Map());
     setNextMeeting(null);
     setLastUpdatedAt(null);
+    setLoadedCommunityId(null);
     void refresh();
   }, [refresh]);
 
@@ -342,15 +359,18 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
     return () => window.removeEventListener('focus', onFocus);
   }, [refresh]);
 
+  const current = loadedCommunityId === communityId;
   return {
-    loading,
-    survey,
-    responsePeriod,
-    members,
-    responsesByUser,
-    reportsByUser,
-    nextMeeting,
-    lastUpdatedAt,
+    loading: loading || !current,
+    survey: current ? survey : null,
+    responsePeriod: current ? responsePeriod : null,
+    members: current ? members : [],
+    responsesByUser: current ? responsesByUser : new Map<string, SurveyResponse>(),
+    submissionCount: current ? submissionCount : null,
+    canViewIndividualCheckIns,
+    reportsByUser: current ? reportsByUser : new Map<string, MeetingAttendanceReport>(),
+    nextMeeting: current ? nextMeeting : null,
+    lastUpdatedAt: current ? lastUpdatedAt : null,
     refresh,
   };
 }

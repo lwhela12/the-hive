@@ -395,16 +395,11 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   const [fullRecordOpen, setFullRecordOpen] = useState(false);
   const [resolvingConflictId, setResolvingConflictId] = useState<string | null>(null);
 
-  const { profile, community, communityId, communityRole } = useAuth();
+  const { profile, community, communityId } = useAuth();
 
-  /**
-   * Naming the voices is a HIVE admin's job, and an owner may do it anywhere.
-   * The role is held per HIVE, so it only counts when the meeting you are
-   * reading belongs to the HIVE you are standing in.
-   */
-  const isHiveAdmin =
-    (communityId === meeting.community_id && communityRole === 'admin')
-    || profile?.is_owner === true;
+  // Until member-safe historical recaps are reviewed, only owners can use
+  // editing controls that read back or rewrite the stored meeting record.
+  const isHiveAdmin = profile?.is_owner === true;
 
   useEffect(() => { setMeeting(initialMeeting); }, [initialMeeting]);
 
@@ -622,7 +617,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   };
 
   const reloadMeeting = async () => {
-    const { data } = await supabase.from('meetings').select('*').eq('id', meeting.id).single();
+    const { data } = await supabase.from('member_meetings').select('*').eq('id', meeting.id).single();
     if (data) {
       setMeeting(data as Meeting);
       onMeetingUpdated?.(data as Meeting);

@@ -470,7 +470,7 @@ export default function MeetingsScreen() {
 
     // Fetch imported meeting summaries and historical recordings.
     const { data, error } = await supabase
-      .from('meetings')
+      .from('member_meetings')
       .select('*')
       .eq('community_id', communityId)
       .is('archived_at', null)
@@ -1776,7 +1776,7 @@ export default function MeetingsScreen() {
                     </Text>
                   </Text>
                 </Pressable>
-                {isAdmin && (
+                {isAdmin && (profile?.is_owner === true || meeting.summary === null) && (
                   <EditButton
                     onPress={() => handleRemoveMeetingSummary(meeting)}
                     accessibilityLabel={`Manage ${getMeetingCardTitle(meeting)} summary`}
@@ -1789,7 +1789,8 @@ export default function MeetingsScreen() {
                 )}
               </View>
               {/* Show Mark Complete button for non-complete meetings */}
-              {meeting.processing_status !== 'complete' && (
+              {meeting.processing_status !== 'complete' &&
+                (profile?.is_owner === true || meeting.summary === null) && (
                 <Pressable
                   onPress={() => handleMarkComplete(meeting.id)}
                   className="mt-3 bg-gray-100 py-2 px-4 rounded-lg active:bg-gray-200 self-start"
