@@ -18,7 +18,7 @@ import { MentionSuggestions } from './MentionSuggestions';
 import { SelectedFilePreview } from './SelectedFilePreview';
 import { VoiceMicButton } from './VoiceMicButton';
 import { MentionBubbles } from './MentionBubbles';
-import { getMentionSuggestions } from '../../lib/mentions';
+import { getMentionSuggestions, isMentionTargetSelected } from '../../lib/mentions';
 
 /**
  * The one message bar. Every box you write into is this.
@@ -427,10 +427,10 @@ export function ComposerBar({
   const groupMentionLabel = mention.groupMentionLabel;
 
   const taggedPills = mentionsOn && (groupMentionLabel || mention.mentionedMembers.length > 0) ? (
-    <View className={`flex-row flex-wrap ${isChat ? 'mb-2' : 'mt-2'}`} style={{ gap: 6 }}>
+    <View className={`flex-row flex-wrap ${isChat ? 'mb-2' : 'mt-2'}`} style={{ gap: 6, maxWidth: '100%', minWidth: 0 }}>
       {groupMentionLabel ? (
-        <View className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
-          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-blue-700 text-xs">
+        <View className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1" style={{ maxWidth: '100%', minWidth: 0, flexShrink: 1 }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', flexShrink: 1 }} className="text-blue-700 text-xs">
             {groupMentionLabel}
           </Text>
         </View>
@@ -450,9 +450,8 @@ export function ComposerBar({
     <MentionBubbles suggestions={getMentionSuggestions(mention.mentionQuery ?? '', mentionMembers, currentUserId, mentionMembers.length + 10, mentionReach)}
       members={mentionMembers} query={mention.mentionQuery} loading={mentionsLoading} disabled={submitting || !editable}
       selectedIds={getMentionSuggestions('', mentionMembers, currentUserId, mentionMembers.length + 10, mentionReach)
-        .filter(target => target.isBroadcast ? mention.mentionedGroups.some(group => group.kind === target.group &&
-          (group.kind !== 'hive' || group.id === target.communityId)) : mention.mentionedMembers.some(member => member.id === target.id)).map(target => target.id)}
-      onSelect={target => { mention.selectMention(target); inputRef.current?.focus(); }} />
+        .filter(target => isMentionTargetSelected(value, target, mentionReach)).map(target => target.id)}
+      onSelect={target => { mention.toggleMention(target); inputRef.current?.focus(); }} />
   ) : mentionsOn ? (
     <MentionSuggestions
       active={mention.mentionQuery !== null}

@@ -8,6 +8,7 @@ import {
   getMentionSuggestions,
   hasBroadcastMention,
   insertMention,
+  toggleMentionTarget,
   type MentionReach,
   type MentionTarget,
 } from '../mentions';
@@ -97,6 +98,14 @@ export function useMentionInput({
     setSelectionOverride(nextSelection);
   };
 
+  const handleToggleMention = (target: MentionTarget) => {
+    const changed = toggleMentionTarget(value, cursorIndex, target, reach);
+    const nextSelection = { start: changed.cursorIndex, end: changed.cursorIndex };
+    onChangeText(changed.text);
+    setSelection(nextSelection);
+    setSelectionOverride(nextSelection);
+  };
+
   const resetMentionSelection = () => {
     setSelection({ start: 0, end: 0 });
     setSelectionOverride(null);
@@ -112,6 +121,7 @@ export function useMentionInput({
     groupMentionLabel,
     resetMentionSelection,
     selectMention: handleSelectMention,
+    toggleMention: handleToggleMention,
     textInputMentionProps: {
       onChangeText: handleChangeText,
       onSelectionChange: (event: any) => setSelection(event.nativeEvent.selection),

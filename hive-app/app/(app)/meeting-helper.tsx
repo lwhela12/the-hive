@@ -1,5 +1,5 @@
 import { meetingVoteResults } from '../../lib/meetingVoteResults';
-import { QUARTER_PULSE_QUESTIONS, recentQuarterPulsePeriod, tallyQuarterPulse } from '../../lib/quarterPulse';
+import { OG_QUARTER_PULSE_QUESTIONS, SHARED_QUARTER_PULSE_QUESTION, quarterAnswersForMembers, recentQuarterPulsePeriod, tallyQuarterPulse } from '../../lib/quarterPulse';
 import { pacificCalendarDate } from '../../lib/endOfMonthPeriod';
 import { ideaRanking, tallyIdeaRankings } from '../../lib/ideaRanking';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -1059,8 +1059,9 @@ export default function MeetingHelperScreen() {
     refresh: refreshArrivals,
   } = useArrivalBoard({ pollingEnabled: true });
   const [arrivalMemberToEdit, setArrivalMemberToEdit] = useState<string | null>(null);
-  const quarterPulsePeriod = deckIsOg ? recentQuarterPulsePeriod(pacificCalendarDate(new Date())) : null;
-  const [quarterPulseRows, setQuarterPulseRows] = useState<{ user_id: string; answers: Record<string, unknown> }[] | null>(null);
+  const quarterPulsePeriod = deckIsOg || deckSlug === 'tech' ? recentQuarterPulsePeriod(pacificCalendarDate(new Date())) : null;
+  type QuarterRow = { user_id: string; answers: Record<string, unknown> };
+  const [quarterPulseRows, setQuarterPulseRows] = useState<{ hive: QuarterRow[]; shared: QuarterRow[] | null } | null>(null);
   useEffect(() => {
     if (!communityId || !quarterPulsePeriod) { setQuarterPulseRows(null); return; }
     let cancelled = false;
@@ -1068,13 +1069,20 @@ export default function MeetingHelperScreen() {
       const { data: survey, error: surveyError } = await supabase.from('surveys').select('id')
         .is('community_id', null).eq('is_active', true).ilike('title', '%end of the month%').limit(1).maybeSingle();
       if (surveyError || !survey) throw surveyError ?? new Error('Check-in unavailable');
-      const { data, error } = await supabase.from('survey_responses').select('user_id, answers')
-        .eq('survey_id', survey.id).eq('community_id', communityId).eq('response_period', quarterPulsePeriod);
-      if (error) throw error;
-      if (!cancelled) setQuarterPulseRows((data ?? []) as { user_id: string; answers: Record<string, unknown> }[]);
+      const [hive, shared] = await Promise.all([
+        deckIsOg ? supabase.from('survey_responses').select('user_id, answers')
+          .eq('survey_id', survey.id).eq('community_id', communityId).eq('response_period', quarterPulsePeriod)
+          : Promise.resolve({ data: [], error: null }),
+        profile?.is_owner ? supabase.from('survey_responses').select('user_id, answers')
+          .eq('survey_id', survey.id).is('community_id', null).eq('response_period', quarterPulsePeriod)
+          : Promise.resolve({ data: null, error: null }),
+      ]);
+      if (hive.error || shared.error) throw hive.error ?? shared.error;
+      if (!cancelled) setQuarterPulseRows({ hive: (hive.data ?? []) as QuarterRow[],
+        shared: profile?.is_owner ? (shared.data ?? []) as QuarterRow[] : null });
     })().catch(() => { if (!cancelled) setQuarterPulseRows(null); });
     return () => { cancelled = true; };
-  }, [communityId, quarterPulsePeriod, lastUpdatedAt]);
+  }, [communityId, deckIsOg, profile?.is_owner, quarterPulsePeriod, lastUpdatedAt]);
 
   // A meeting is one HIVE in one room, and a to-do jotted here lands on that
   // HIVE's lists — so "@all" is this HIVE, and the picker says its name.
@@ -3675,13 +3683,16 @@ export default function MeetingHelperScreen() {
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
               HIVE Help · from the check-ins
             </Text>
-            {quarterPulseRows && quarterPulsePeriod && <View style={{ gap: sz(10, 6), marginBottom: sz(8, 5) }}>
+            {quarterPulseRows && quarterPulsePeriod && (deckIsOg || quarterPulseRows.shared !== null) && <View style={{ gap: sz(10, 6), marginBottom: sz(8, 5) }}>
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), color: GOLD_DEEP }}>
                 Quarter review · {quarterPulsePeriod}
               </Text>
-              {QUARTER_PULSE_QUESTIONS.map(question => {
+              {[...(deckIsOg ? OG_QUARTER_PULSE_QUESTIONS : []), ...(quarterPulseRows.shared ? [SHARED_QUARTER_PULSE_QUESTION] : [])].map(question => {
                 const eligible = new Set(members.map(member => member.id));
-                const tally = tallyQuarterPulse(quarterPulseRows.filter(row => eligible.has(row.user_id)).map(row => row.answers), question);
+                const answers = question.id === SHARED_QUARTER_PULSE_QUESTION.id
+                  ? quarterAnswersForMembers([...eligible], question, quarterPulseRows.shared ?? [], deckIsOg ? quarterPulseRows.hive : [])
+                  : quarterPulseRows.hive.filter(row => eligible.has(row.user_id)).map(row => row.answers);
+                const tally = tallyQuarterPulse(answers, question);
                 return <View key={question.id} style={{ gap: sz(3, 2) }}>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: CHARCOAL }}>
                     {question.text} · {tally.answered} answered

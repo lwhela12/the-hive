@@ -652,3 +652,47 @@ export function insertMention(
     cursorIndex: mentionStart + handle.length,
   };
 }
+
+/** Bubble chips reflect explicit tags in the text, not members reached by @wide. */
+export function isMentionTargetSelected(text: string, target: MentionTarget, reach?: MentionReach | null): boolean {
+  return Array.from(text.matchAll(/(^|\s)@([a-z0-9._-]+)/gi)).some(match => {
+    const token = match[2];
+    if (target.isBroadcast) {
+      return getMentionedGroups(`@${token}`, reach).some(group =>
+        group.kind === target.group && (group.kind !== 'hive' || group.id === target.communityId));
+    }
+    const candidate = getMentionQueryHandles(token);
+    return !candidate.some(handle => BROADCAST_MENTION_HANDLES.has(handle))
+      && candidate.some(handle => getMemberMentionHandles(target.name).includes(handle));
+  });
+}
+
+/** Remove only this chip's mention tokens. Other tags and authored prose stay. */
+export function removeMentionTarget(text: string, cursorIndex: number, target: MentionTarget, reach?: MentionReach | null) {
+  let next = text;
+  let nextCursor = cursorIndex;
+  let previous: string;
+  do {
+    previous = next;
+    let removedBeforeCursor = 0;
+    next = previous.replace(/(^|\s)@([a-z0-9._-]+)([ \t]*)/gi, (match, prefix: string, token: string, suffix: string, offset: number) => {
+      if (!isMentionTargetSelected(`@${token}`, target, reach)) return match;
+      const nextChar = previous[offset + match.length] ?? '';
+      const sentenceMark = token.match(/\.+$/)?.[0] ?? '';
+      const replacement = sentenceMark && isMentionTargetSelected(`@${token.slice(0, -sentenceMark.length)}`, target, reach)
+        ? `${sentenceMark}${suffix}`
+        : !nextChar || /[,!?;:.]/.test(nextChar) ? '' : prefix;
+      if (offset < nextCursor) removedBeforeCursor += match.length - replacement.length;
+      return replacement;
+    });
+    nextCursor = Math.max(0, Math.min(next.length, nextCursor - removedBeforeCursor));
+  } while (next !== previous && isMentionTargetSelected(next, target, reach));
+  return { text: next, cursorIndex: nextCursor };
+}
+
+/** A second tap undoes a tag, including one entered by typing @. */
+export function toggleMentionTarget(text: string, cursorIndex: number, target: MentionTarget, reach?: MentionReach | null) {
+  return isMentionTargetSelected(text, target, reach)
+    ? removeMentionTarget(text, cursorIndex, target, reach)
+    : insertMention(text, cursorIndex, target);
+}

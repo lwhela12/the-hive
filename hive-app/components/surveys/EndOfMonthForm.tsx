@@ -15,13 +15,17 @@ import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import type { Community, SurveyQuestion } from '../../types';
 import type { SurveyAnswerValue } from '../../lib/hooks/useSurveys';
 
-export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraftKeys, readOnly, showQuarterAnnouncements = false, onSave, onDone, doneLabel, onEmailSettings, onEmailMe, emailingMe = false }: {
+export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraftKeys, readOnly, showQuarterAnnouncements = false, showNewsletterDeadline = false, sharedQuarterQuestion, finalQuarter = false, onOpen3Miq, onSave, onDone, doneLabel, onEmailSettings, onEmailMe, emailingMe = false }: {
   sections: { community: Community; todos: CarryForwardItem[]; questions: SurveyQuestion[] }[];
   initialAnswers: EndOfMonthAnswers;
   draftKey: string;
   legacyDraftKeys: string[];
   readOnly: boolean;
   showQuarterAnnouncements?: boolean;
+  showNewsletterDeadline?: boolean;
+  sharedQuarterQuestion?: SurveyQuestion | null;
+  finalQuarter?: boolean;
+  onOpen3Miq?: () => void;
   onSave: (answers: EndOfMonthAnswers) => Promise<{ error: string | null }>;
   onDone: () => void;
   doneLabel: string;
@@ -37,6 +41,7 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
   const [showTop, setShowTop] = useState(false);
   const scroll = useRef<ScrollView>(null);
   const draftQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const draftWriteFailed = useRef(false);
   const submitting = useRef(false);
   const answerRef = useRef(answers);
   const update = (next: EndOfMonthAnswers) => {
@@ -44,7 +49,16 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
     answerRef.current = next;
     setAnswers(next); setSaved(false); setError(null); setDraftState('saving');
     draftQueue.current = draftQueue.current.catch(() => {}).then(() => AsyncStorage.setItem(draftKey, JSON.stringify(next)))
-      .then(() => setDraftState('saved'), () => setDraftState('error'));
+      .then(() => { draftWriteFailed.current = false; setDraftState('saved'); },
+        () => { draftWriteFailed.current = true; setDraftState('error'); });
+  };
+  const open3Miq = async () => {
+    await draftQueue.current;
+    if (draftWriteFailed.current) {
+      setError('Could not keep your draft on this device. Please try again before leaving this check-in.');
+      return;
+    }
+    onOpen3Miq?.();
   };
   const updateHive = (id: string, key: string, value: SurveyAnswerValue) => update({
     ...answerRef.current, hives: { ...answerRef.current.hives, [id]: { ...answerRef.current.hives[id], [key]: value } },
@@ -122,9 +136,6 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
                 </View>
               </View>;
             })}
-            {showQuarterAnnouncements && community.slug === 'tech' && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#5c5648' }}>
-              If you want to revisit your 3 Most Important Questions, you can update them on your profile.
-            </Text>}
             {section.questions.map((question, index) => readOnly
               ? <View key={question.id} style={{ gap: 6 }}><Text style={{ ...buttonText, color: '#313130' }}>{question.text}</Text>
                   {question.options?.map(option => <Text key={option} style={{ fontFamily: 'Lato_400Regular', color: '#5c5648' }}>{option}</Text>)}</View>
@@ -133,20 +144,44 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
                   accent={tint.accent} answers={own} onSetAnswer={(id, value) => updateHive(community.id, id, value)} />)}
           </View>;
         })}
-        {showQuarterAnnouncements && <View style={{ backgroundColor: '#fffdf5', borderRadius: 16, padding: 16, gap: 8, borderWidth: 1, borderColor: skin.borderStrong }}>
-          <Text accessibilityRole="header" style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: '#313130' }}>From Nat</Text>
-          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
-            Nat is scheduling virtual and in-person times to design and order HIVE hoodies. Joining an order is optional for members outside OG HIVE, at cost.
-          </Text>
-          {sections.some(section => section.community.slug === 'default') && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
-            OG HIVE hoodies are covered by quarterly dues in the Honey Pot. The remainder is for January’s Bumblebee Ball.
+        {sharedQuarterQuestion && <View style={{ backgroundColor: '#fffdf5', borderRadius: 16, padding: 16, gap: 12, borderWidth: 2, borderColor: skin.gold }}>
+          <Text accessibilityRole="header" style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#313130' }}>HIVE-Wide · looking ahead</Text>
+          {finalQuarter && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
+            We’re moving into the final quarter of the year!
           </Text>}
+          {readOnly
+            ? <View style={{ gap: 6 }}><Text style={{ ...buttonText, color: '#313130' }}>{sharedQuarterQuestion.text}</Text>
+                {sharedQuarterQuestion.options?.map(option => <Text key={option} style={{ fontFamily: 'Lato_400Regular', color: '#5c5648' }}>{option}</Text>)}</View>
+            : <SurveyQuestionField question={sharedQuarterQuestion} index={0} value={answers.month[sharedQuarterQuestion.id]}
+                onChange={value => update({ ...answerRef.current, month: { ...answerRef.current.month, [sharedQuarterQuestion.id]: value } })}
+                answers={answers.month} />}
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#5c5648' }}>
+            Haven’t done your 3MIQ, or want to revisit them? You can find them in your profile later, or open them now.
+          </Text>
+          {!readOnly && onOpen3Miq && <Pressable accessibilityRole="link" accessibilityLabel="Explore my 3MIQ on my profile"
+            disabled={saving} onPress={() => { void open3Miq(); }} style={{ minHeight: 44, alignSelf: 'flex-start', justifyContent: 'center', paddingHorizontal: 14,
+              borderRadius: 999, borderWidth: 1, borderColor: skin.borderStrong }}>
+            <Text style={{ ...buttonText, color: skin.ink }}>Explore my 3MIQ</Text>
+          </Pressable>}
+        </View>}
+        {showQuarterAnnouncements && <View style={{ backgroundColor: '#fffdf5', borderRadius: 16, padding: 16, gap: 8, borderWidth: 1, borderColor: skin.borderStrong }}>
+          <Text accessibilityRole="header" style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: '#313130' }}>It’s hoodie season!</Text>
+          {sections.some(section => section.community.slug === 'default')
+            ? <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
+                OG HIVE members: we’re using part of our Honey Pot dues to cover our hoodies and the rest for the Bumblebee Ball. Please reach out to Nat to schedule a time to design and order your hoodie, virtually or in person.
+              </Text>
+            : <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
+                Not in OG? You can still get a hoodie at cost from our shop. Reach out to Nat with questions.
+              </Text>}
         </View>}
         <View style={{ backgroundColor: '#fffdf5', borderRadius: 16, padding: 16, gap: 16, borderWidth: 2, borderColor: skin.gold }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <Image source={hiveSeal(null)} accessibilityLabel="HIVE-Wide logo" contentFit="contain" style={{ width: 48, height: 48 }} />
             <Text accessibilityRole="header" style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#313130' }}>For the Buzz</Text>
           </View>
+          {showNewsletterDeadline && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
+            The newsletter goes out tomorrow, October 2! Anything you’d like to mention or add? Please send your shout-outs and event plugs today.
+          </Text>}
           <BuzzCalendarPreview />
           {([{ id: 'q_shoutout', label: 'A shout-out for someone', placeholder: 'Who deserves a shout-out, and why?' },
             { id: 'q_newsletter', label: 'A plug or an event', placeholder: 'Include names, dates and links.' }] as const).map(field => <View key={field.id}>

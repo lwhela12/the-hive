@@ -78,9 +78,16 @@ export const TEMPLATE_BUTTONS: Record<Reach, string> = {
 
 /** Hash the actual rendered words, not branding, recipients or destination IDs. */
 export async function templateRevision(kind: Reach): Promise<string> {
-  const letter = genericLetter(kind, { buttonLabel: TEMPLATE_BUTTONS[kind], href: '__destination__', hiveId: null });
-  const words = plainTextFrom(reachEmailHtml({ ...letter, toName: '__reader__' }));
-  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(letter.subject + '\n' + words));
+  const render = (at?: Date) => {
+    const letter = genericLetter(kind, { buttonLabel: TEMPLATE_BUTTONS[kind], href: '__destination__', hiveId: null, at });
+    return letter.subject + '\n' + plainTextFrom(reachEmailHtml({ ...letter, toName: '__reader__' }));
+  };
+  // One review covers both exact monthly variants. The seasonal sentence is
+  // shown in the approval panel, and the revision stays valid after October 1.
+  const words = kind === 'monthCheckIn'
+    ? render(new Date('2026-10-01T19:00:00Z')) + '\n' + render(new Date('2026-10-02T19:00:00Z'))
+    : render();
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(words));
   return Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('');
 }
 
@@ -131,9 +138,19 @@ const GENERIC_LINE: Record<Reach, { line: string; said: string }> = {
   },
   monthCheckIn: {
     line: 'Your end of the month check-in is open',
-    said: 'It takes about two minutes.',
+    said: "It's our end-of-month check-in, roughly halfway between meetings. Take a moment to see where you are, where you want to be, and what still needs doing. Let us know how HIVE can help, and add any shout-outs or people, places, and events you'd like to plug. Takes about 2 minutes.",
   },
 };
+
+const OCTOBER_NEWSLETTER_DEADLINE = 'The newsletter goes out tomorrow, October 2! Please add your contributions today.';
+
+function isOctoberNewsletterDeadlineDay(at: Date): boolean {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(at);
+  const value = (part: string) => parts.find(item => item.type === part)?.value;
+  return value('year') === '2026' && value('month') === '10' && value('day') === '01';
+}
 
 /**
  * The whole letter for one kind, with nothing in it that could name anybody.
@@ -145,9 +162,12 @@ const GENERIC_LINE: Record<Reach, { line: string; said: string }> = {
  */
 export function genericLetter(
   kind: Reach,
-  opts: { buttonLabel: string; href: string; hiveId: string | null },
+  opts: { buttonLabel: string; href: string; hiveId: string | null; at?: Date },
 ): Omit<Parameters<typeof reachEmailHtml>[0], 'toName'> & { subject: string } {
-  const { line, said } = GENERIC_LINE[kind];
+  const { line, said: standardSaid } = GENERIC_LINE[kind];
+  const said = kind === 'monthCheckIn' && isOctoberNewsletterDeadlineDay(opts.at ?? new Date())
+    ? standardSaid.replace(' Takes about 2 minutes.', ` ${OCTOBER_NEWSLETTER_DEADLINE} Takes about 2 minutes.`)
+    : standardSaid;
   return {
     subject: `HIVE \u00b7 ${line}`,
     hiveName: 'HIVE',

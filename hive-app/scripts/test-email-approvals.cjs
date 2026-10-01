@@ -11,6 +11,13 @@ const db = row => ({ from: () => ({ select() { return this; }, eq() { return thi
   const revisions = {};
   for (const kind of Object.keys(mail.REACH_COLUMNS)) revisions[kind] = await mail.templateRevision(kind);
   if (process.argv.includes('--revisions')) { console.log(JSON.stringify(revisions)); return; }
+  const monthOpts = { buttonLabel: 'Open the check-in', href: '/fixture', hiveId: null };
+  const deadline = mail.genericLetter('monthCheckIn', { ...monthOpts, at: new Date('2026-10-02T06:59:00Z') });
+  const after = mail.genericLetter('monthCheckIn', { ...monthOpts, at: new Date('2026-10-02T07:00:00Z') });
+  assert.match(deadline.said, /newsletter goes out tomorrow, October 2/);
+  assert.doesNotMatch(after.said, /tomorrow, October 2/);
+  assert.match(after.said, /roughly halfway between meetings/);
+  assert.equal(await mail.templateRevision('monthCheckIn'), revisions.monthCheckIn);
   for (const kind of Object.keys(revisions)) {
     assert.equal(await mail.templateIsApproved(db(null), kind), false);
     assert.equal(await mail.templateIsApproved(db({ approved: true, revision: 'old' }), kind), false);

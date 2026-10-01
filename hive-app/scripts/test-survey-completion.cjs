@@ -5,8 +5,8 @@ const ts = require('typescript');
 const jsx = require('react/jsx-runtime');
 
 // Exercise the real form's save/exit handlers without writing member data.
-function harness(result, withTask = false) {
-  const slots = []; let cursor = 0; let saves = 0; let exits = 0; let removed = 0; let savedAnswers;
+function harness(result, withTask = false, announcementHives = [], draftFailure = false, showDeadline = false) {
+  const slots = []; let cursor = 0; let saves = 0; let exits = 0; let removed = 0; let miqOpens = 0; let savedAnswers;
   const drafts = [];
   const react = {
     useState: initial => { const i = cursor++; if (!(i in slots)) slots[i] = initial;
@@ -18,7 +18,8 @@ function harness(result, withTask = false) {
     'react-native': Object.fromEntries(['ActivityIndicator', 'Pressable', 'ScrollView', 'Text', 'View'].map(n => [n, n])),
     'expo-image': { Image: 'Image' }, '@expo/vector-icons': { Ionicons: 'Ionicons' },
     '@react-native-async-storage/async-storage': { __esModule: true, default: {
-      setItem: async (key, value) => { drafts.push([key, JSON.parse(value)]); }, multiRemove: async () => { removed++; },
+      setItem: async (key, value) => { if (draftFailure) throw new Error('device storage unavailable'); drafts.push([key, JSON.parse(value)]); },
+      multiRemove: async () => { removed++; },
     } },
     '../../lib/pageSkin': { SPACE_SKIN: {} },
     '../../lib/hiveBrand': { hiveSeal: () => 1, hiveAccent: () => '#bb9445', hiveDisplayName: name => name,
@@ -45,14 +46,23 @@ function harness(result, withTask = false) {
   mocks['./SurveyCompletion'] = { SurveyCompletion };
   const { EndOfMonthForm } = load('components/surveys/EndOfMonthForm.tsx');
   const task = { id: 'task', type: 'action_item', sourceLabel: 'To-do', label: 'Complete the full event brief and share accessibility notes', detail: 'Assigned to Nat · Due Oct 5' };
-  const props = { sections: withTask ? [{ community: { id: 'og', slug: 'default', name: 'OG HIVE' }, todos: [task], questions: [] }] : [],
+  const announcementSections = announcementHives.map(slug => ({
+    community: { id: slug, slug, name: slug === 'default' ? 'OG HIVE' : 'Tech HIVE' }, todos: [], questions: [],
+  }));
+  const props = { sections: announcementSections.length ? announcementSections
+    : withTask ? [{ community: { id: 'og', slug: 'default', name: 'OG HIVE' }, todos: [task], questions: [] }] : [],
     initialAnswers: { hives: withTask ? { og: {} } : {}, month: { q_shoutout: 'Keep my words' } },
     draftKey: withTask ? 'survey-draft:member:survey:2026-09:continuous' : 'test', legacyDraftKeys: [], readOnly: false, doneLabel: 'Back to Home',
+    showQuarterAnnouncements: announcementSections.length > 0,
+    showNewsletterDeadline: showDeadline,
+    sharedQuarterQuestion: announcementSections.length ? { id: 'q_quarter_help_next', text: 'What would help?', type: 'choice', options: ['A gentle nudge'] } : null,
+    onOpen3Miq: () => { miqOpens++; },
     onSave: async answers => { saves++; savedAnswers = answers; assert.equal(answers.month.q_shoutout, 'Keep my words'); return await result(); },
     onDone: () => { exits++; }, onEmailSettings: () => {},
   };
   function render() { cursor = 0; return EndOfMonthForm(props); }
-  return { render, SurveyCompletion, counts: () => ({ saves, exits, removed }), drafts, savedAnswers: () => savedAnswers };
+  return { render, SurveyCompletion, counts: () => ({ saves, exits, removed }), drafts, savedAnswers: () => savedAnswers,
+    miqOpens: () => miqOpens };
 }
 function walk(node) {
   if (!node || typeof node !== 'object') return [];
@@ -119,5 +129,31 @@ function button(tree, label) { return walk(tree).find(n => n.type === 'Pressable
   walk(archivedForm.render()).find(n => n.props?.accessibilityLabel?.startsWith('Archive:')).props.onPress();
   await button(archivedForm.render(), 'Save check-in').props.onPress();
   assert.equal(archivedForm.savedAnswers().hives.og.q_carry_forward_items[0].status, 'archive');
+  const ogWithTech = harness(async () => ({ error: null }), false, ['default', 'tech']);
+  const ogAnnouncementTree = ogWithTech.render();
+  const ogAnnouncement = text(ogAnnouncementTree);
+  assert.match(ogAnnouncement, /It’s hoodie season!/);
+  assert.match(ogAnnouncement, /Honey Pot dues.*Bumblebee Ball.*reach out to Nat.*virtually or in person/);
+  assert.doesNotMatch(ogAnnouncement, /Not in OG\?/);
+  const sharedQuestion = walk(ogAnnouncementTree).filter(node => node.type === 'Question' && node.props.question.id === 'q_quarter_help_next');
+  assert.equal(sharedQuestion.length, 1, 'a member in OG and Tech answers the support choice once');
+  sharedQuestion[0].props.onChange('A gentle nudge');
+  button(ogWithTech.render(), 'Explore my 3MIQ').props.onPress();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(ogWithTech.miqOpens(), 1);
+  assert.equal(ogWithTech.drafts.at(-1)[1].month.q_quarter_help_next, 'A gentle nudge', 'the shared choice drafts before leaving for Profile');
+  const failedDraftLink = harness(async () => ({ error: null }), false, ['tech'], true);
+  walk(failedDraftLink.render()).find(node => node.type === 'Question').props.onChange('A gentle nudge');
+  button(failedDraftLink.render(), 'Explore my 3MIQ').props.onPress();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(failedDraftLink.miqOpens(), 0, 'a failed device draft keeps the member on the check-in');
+  assert.ok(walk(failedDraftLink.render()).some(node => node.props?.accessibilityRole === 'alert'));
+  const techAnnouncement = text(harness(async () => ({ error: null }), false, ['tech']).render());
+  assert.match(techAnnouncement, /Not in OG\?.*at cost from our shop.*Reach out to Nat with questions/);
+  assert.doesNotMatch(techAnnouncement, /Honey Pot dues/);
+  assert.doesNotMatch(techAnnouncement, /https?:\/\//, 'the homework does not invent a shop link');
+  const deadline = text(harness(async () => ({ error: null }), false, ['tech'], false, true).render());
+  assert.match(deadline, /newsletter goes out tomorrow, October 2!.*shout-outs and event plugs today/);
+  assert.doesNotMatch(techAnnouncement, /newsletter goes out tomorrow/, 'the dated prompt is hidden outside its Pacific day');
   console.log('Survey completion: compact task Archive/Undo, scoped drafts, retry, and explicit save/exit passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

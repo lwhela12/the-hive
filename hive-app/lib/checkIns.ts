@@ -1,6 +1,6 @@
 import type { Community, SurveyQuestion } from '../types';
 import { hiveDisplayName } from './hiveBrand';
-import { QUARTER_PULSE_QUESTIONS } from './quarterPulse';
+import { OG_QUARTER_PULSE_QUESTIONS } from './quarterPulse';
 
 /**
  * OG HIVE's tune-ups were designed around OG's monthly rhythm. Other HIVEs get
@@ -373,7 +373,7 @@ export function getUpcomingSeasonOccurrence(kind: SeasonKind, today: Date): Seas
  * original words and answers; no migration rewrites them.
  */
 
-const QUARTER_DESCRIPTION = 'Two optional choices for OG HIVE.';
+const QUARTER_DESCRIPTION = 'One optional choice for OG HIVE.';
 const YEAR_DESCRIPTION =
   'The year is wrapping up. Look back with us, celebrate a little, and point at what comes next. Short answers are perfect.';
 
@@ -385,8 +385,9 @@ const q = (
 
 const QUARTER_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
   // Existing survey rows and responses retain their original questions. New
-  // quarter reviews ask these choices once in the shared End of the month form.
-  default: QUARTER_PULSE_QUESTIONS,
+  // OG keeps its value question; next-quarter support is answered once in the
+  // shared End of the month row for every active HIVE member.
+  default: OG_QUARTER_PULSE_QUESTIONS,
 };
 
 const YEAR_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {

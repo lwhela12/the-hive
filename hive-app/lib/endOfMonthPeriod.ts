@@ -17,3 +17,9 @@ export function endOfMonthContext(instant: Date) {
   const period = `${reviewDate.getFullYear()}-${String(reviewDate.getMonth() + 1).padStart(2, '0')}`;
   return { period, reviewDate };
 }
+
+/** A one-day deadline message for the October 2, 2026 newsletter. */
+export function isOctoberNewsletterDeadlineDay(instant: Date): boolean {
+  const today = pacificCalendarDate(instant);
+  return today.getFullYear() === 2026 && today.getMonth() === 9 && today.getDate() === 1;
+}

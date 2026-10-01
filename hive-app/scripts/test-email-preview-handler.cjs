@@ -19,6 +19,10 @@ new Function('require','exports',ts.transpileModule(fs.readFileSync(path.join(ba
 const request = method => new Request('https://offline.invalid/email-preview?hive=fixture-scope', { method, ...(method === 'POST' ? { body: JSON.stringify({ send:true,to:'attacker@example.invalid' }) } : {}) });
 (async()=>{
  const templates = (await (await handler(request('GET'))).json()).templates;
+ const monthTemplate = templates.find(t => t.key === 'monthCheckIn');
+ assert.ok(monthTemplate?.otherHtml);
+ assert.match(monthTemplate.html + monthTemplate.otherHtml, /newsletter goes out tomorrow, October 2/);
+ assert.match(monthTemplate.html + monthTemplate.otherHtml, /roughly halfway between meetings/);
  approvals = templates.map((t,i)=>({template_key:t.key,revision:t.revision,approved:i<3}));
  let r = await (await handler(request('POST'))).json();
  assert.deepEqual(r.results.map(t=>t.key),['checkIn','monthCheckIn']); assert.equal(r.of,2);

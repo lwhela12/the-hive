@@ -188,6 +188,7 @@ function readAllPieceReach(profile: Profile | null): Record<string, PieceReach> 
 const EXITS = {
   members: { route: '/members', label: 'Members' },
   meetings: { route: '/meetings', label: 'Meetings' },
+  endofmonth: { route: '/endofmonth', label: 'End of the month' },
   admin: { route: '/admin', label: 'Admin' },
   hive: { route: '/hive', label: 'Home' },
 } as const;
@@ -979,12 +980,17 @@ export default function ProfileScreen() {
   // Acting on ?focus= waits for the profile to load, and runs once per value
   // so a re-render doesn't yank the page back or reopen the editor.
   useEffect(() => {
-    if (!focus || !profile || handledFocusRef.current === focus) return;
+    if (!focus || !profile || initialLoading || handledFocusRef.current === focus) return;
     handledFocusRef.current = focus;
 
     if (focus === 'about') {
       startEditing();
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+
+    if (focus === 'miq') {
+      startDeepQuiz(3, true);
       return;
     }
 
@@ -998,7 +1004,7 @@ export default function ProfileScreen() {
       }, 260);
       return () => clearTimeout(timer);
     }
-  }, [focus, profile?.id]);
+  }, [focus, profile?.id, initialLoading]);
 
   const cancelEditing = () => {
     setIsEditing(false);
@@ -1006,7 +1012,7 @@ export default function ProfileScreen() {
     clearProfileFormDraft();
   };
 
-  const startDeepQuiz = (step = 0) => {
+  const startDeepQuiz = (step = 0, directStep = false) => {
     const savedDraft = readProfileFormDraft();
     if (savedDraft) {
       applyProfileDraftFields(savedDraft.fields);
@@ -1014,7 +1020,7 @@ export default function ProfileScreen() {
       resetProfileDrafts();
     }
     setIsEditing(false);
-    const nextStep = savedDraft?.activeSurface === 'deepQuiz'
+    const nextStep = !directStep && savedDraft?.activeSurface === 'deepQuiz'
       ? savedDraft.deepQuizStep
       : step;
     setDeepQuizStep(Math.max(0, Math.min(DEEP_PROFILE_STEPS.length - 1, nextStep)));

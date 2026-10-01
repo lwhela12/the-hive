@@ -202,6 +202,21 @@ serve(async (req) => {
     return {
       key: sample.key, name: sample.name, when: sample.when,
       subject: letter.subject, html: reachEmailHtml({ ...letter, toName }),
+      // The October 1 deadline sentence has its own exact rendering. Both
+      // versions are covered by one revision and visible before approval.
+      otherHtml: sample.kind === 'monthCheckIn'
+        ? reachEmailHtml({
+            ...genericLetter('monthCheckIn', {
+              buttonLabel: 'Open the check-in', href: letter.href, hiveId: null,
+              at: letter.said.includes('tomorrow, October 2')
+                ? new Date('2026-10-02T19:00:00Z')
+                : new Date('2026-10-01T19:00:00Z'),
+            }), toName,
+          })
+        : null,
+      otherWhen: sample.kind === 'monthCheckIn'
+        ? (letter.said.includes('tomorrow, October 2') ? 'Other months' : 'October 1, 2026')
+        : null,
       revision: await templateRevision(sample.kind), approved: false,
     };
   }));

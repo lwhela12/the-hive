@@ -34,6 +34,8 @@ type Template = {
   when: string;
   subject: string;
   html: string;
+  otherHtml?: string | null;
+  otherWhen?: string | null;
   approved: boolean;
   revision: string;
 };
@@ -217,6 +219,14 @@ export function EmailTemplatesPanel({
                           {template.subject}
                         </Text>
                         <LetterFrame html={template.html} />
+                        {template.otherHtml ? (
+                          <View style={{ paddingTop: 16 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#fffdf5', paddingBottom: 8 }}>
+                              Also covered by this approval: {template.otherWhen}
+                            </Text>
+                            <LetterFrame html={template.otherHtml} />
+                          </View>
+                        ) : null}
                       </View>
                     ) : null}
                   </View>

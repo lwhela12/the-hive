@@ -6,8 +6,16 @@ export type EndOfMonthAnswers = { hives: Record<string, SurveyAnswers>; month: S
 /** Keep saved answers and older per-section drafts when moving to one form. */
 export function restoreEndOfMonthAnswers(
   communityIds: string[], receipts: Record<string, SurveyAnswers>, drafts: Record<string, SurveyAnswers>,
+  legacyQuarterHiveId?: string,
 ): EndOfMonthAnswers {
   const month = { ...receipts.month, ...drafts.month };
+  // The support choice used to live in OG's row. Bring that answer forward
+  // only when no shared answer exists; keep the old row as history.
+  if (month.q_quarter_help_next == null && legacyQuarterHiveId) {
+    const old = drafts[legacyQuarterHiveId]?.q_quarter_help_next
+      ?? receipts[legacyQuarterHiveId]?.q_quarter_help_next;
+    if (typeof old === 'string') month.q_quarter_help_next = old;
+  }
   // Both legacy newsletter keys are read by The Buzz. Consolidate the old
   // combined box into the current plug/event field so it is not read twice.
   const newsletter = [month.q_newsletter, month.q_eom_newsletter]

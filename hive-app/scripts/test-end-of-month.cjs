@@ -18,14 +18,23 @@ assert.match(monthRoute, /draftKey=\{`survey-draft:\$\{profile!\.id\}:\$\{curren
   'the draft key includes member, survey, and reviewed period');
 assert.ok(monthRoute.indexOf('<AppHeader') < monthRoute.indexOf('<EndOfMonthForm'), 'the page header remains outside the form');
 assert.equal((monthRoute.match(/<EndOfMonthForm\b/g) ?? []).length, 1, 'one form contains all HIVE sections and the shared contribution');
+assert.match(monthRoute, /focus: 'miq', from: 'endofmonth'/, 'the shared 3MIQ link names a safe return route');
+const profileRoute = fs.readFileSync('app/(app)/profile.tsx', 'utf8');
+assert.match(profileRoute, /endofmonth: \{ route: '\/endofmonth'/, 'closing Profile returns to the draft check-in');
+assert.match(profileRoute, /focus === 'miq'[\s\S]*?startDeepQuiz\(3, true\)/, '3MIQ link opens the existing profile step directly');
 const task = { id: 'task', type: 'action_item', label: 'Bring props', sourceLabel: 'To-do' };
 const answers = restoreEndOfMonthAnswers(['og', 'tech', 'production'], {
-  og: { quarterly: 'keep this', q_newsletter: 'legacy' }, month: { q_eom_newsletter: 'My event', q_shoutout: 'Thank you' },
-}, { og: { quarterly: 'new draft' }, month: { q_newsletter: 'My event' } });
+  og: { quarterly: 'keep this', q_newsletter: 'legacy', q_quarter_help_next: 'A gentle nudge' }, month: { q_eom_newsletter: 'My event', q_shoutout: 'Thank you' },
+}, { og: { quarterly: 'new draft' }, month: { q_newsletter: 'My event' } }, 'og');
 assert.equal(answers.hives.og.quarterly, 'new draft');
 assert.equal(answers.month.q_newsletter, 'My event');
 assert.equal(answers.month.q_eom_newsletter, undefined);
 assert.equal(answers.month.q_shoutout, 'Thank you');
+assert.equal(answers.month.q_quarter_help_next, 'A gentle nudge', 'old OG answer appears in the one shared question');
+assert.equal(answers.hives.og.q_quarter_help_next, 'A gentle nudge', 'old OG answer remains in its original row');
+assert.equal(restoreEndOfMonthAnswers(['og'], { og: { q_quarter_help_next: 'A gentle nudge' },
+  month: { q_quarter_help_next: 'More connection and fun' } }, {}, 'og').month.q_quarter_help_next,
+  'More connection and fun', 'new shared answer takes precedence');
 answers.hives.production.q_carry_forward_items = [{ ...task, status: 'done' }, { ...task, id: 'stale', status: 'archive' }];
 const tasks = endOfMonthTaskResponses([task, { ...task, id: 'wish', type: 'wish' }], answers.hives.production);
 assert.equal(tasks.length, 1);

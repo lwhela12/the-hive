@@ -18,8 +18,9 @@ import { applyCarryForwardStatuses, type CarryForwardItem } from '../../../lib/c
 import { restoreEndOfMonthAnswers, saveEndOfMonth, type EndOfMonthAnswers } from '../../../lib/endOfMonth';
 import { queryClient } from '../../../lib/queryClient';
 import { formatDateShort } from '../../../lib/dateUtils';
-import { endOfMonthContext } from '../../../lib/endOfMonthPeriod';
+import { endOfMonthContext, isOctoberNewsletterDeadlineDay } from '../../../lib/endOfMonthPeriod';
 import { isOwnMonthEmailPreview, wasOwnMonthEmailSent } from '../../../lib/ownMonthEmail';
+import { isQuarterPulseOpen, SHARED_QUARTER_PULSE_QUESTION } from '../../../lib/quarterPulse';
 import { showAlert } from '../../../lib/showAlert';
 import type { Survey } from '../../../types';
 
@@ -36,7 +37,12 @@ export default function EndOfMonthScreen() {
   const returnTo = from === 'meetings' ? '/meetings' : from === 'hive' ? '/hive' : '/hive-wide';
   const { loading: authLoading, profile, communityId, memberships } = useAuth();
   const { submitCheckInOccurrence } = useSurveys(communityId ?? undefined, profile?.id);
-  const { period: month, reviewDate } = endOfMonthContext(new Date());
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  const { period: month, reviewDate } = endOfMonthContext(now);
   const activeMemberships = memberships.filter(m => m.community.slug === 'default' || m.community.slug === 'tech');
   const memberKey = activeMemberships.map(m => m.community_id).join(',');
   const scope = `${profile?.id ?? ''}:${month}:${askedDate ?? ''}:${memberKey}`;
@@ -61,6 +67,7 @@ export default function EndOfMonthScreen() {
       const survey = data?.[0] as Survey | undefined;
       if (!survey) throw new Error('End of the month has not been set up yet.');
       const ids = activeMemberships.map(m => m.community_id);
+      const ogId = activeMemberships.find(m => m.community.slug === 'default')?.community_id;
       const legacyDraftKeys = [...ids, 'month'].map(id => `survey-draft:${profile.id}:${survey.id}:${month}:${id}`);
       const draftKey = `survey-draft:${profile.id}:${survey.id}:${month}:continuous`;
       const [receipts, rosters, storedDrafts, combined] = await Promise.all([
@@ -87,12 +94,12 @@ export default function EndOfMonthScreen() {
         if (!raw) return;
         try { drafts[[...ids, 'month'][index]] = JSON.parse(raw); } catch { /* Preserve a corrupt legacy draft on disk. */ }
       });
-      let initialAnswers = restoreEndOfMonthAnswers(ids, saved, drafts);
+      let initialAnswers = restoreEndOfMonthAnswers(ids, saved, drafts, ogId);
       if (combined) {
         try {
           const draft = JSON.parse(combined) as EndOfMonthAnswers;
           if (draft.hives && draft.month) initialAnswers = restoreEndOfMonthAnswers(ids,
-            { ...initialAnswers.hives, month: initialAnswers.month }, { ...draft.hives, month: draft.month });
+            { ...initialAnswers.hives, month: initialAnswers.month }, { ...draft.hives, month: draft.month }, ogId);
         } catch { /* Saved answers remain the fallback. */ }
       }
       if (!cancelled) setLoaded({ scope, survey, todos: Object.fromEntries(rosters), initialAnswers, legacyDraftKeys });
@@ -160,7 +167,12 @@ export default function EndOfMonthScreen() {
       : current ? <EndOfMonthForm key={`${scope}:${current.survey.id}`} sections={activeMemberships.map(m => ({
       community: m.community, todos: current.todos[m.community_id] ?? [],
       questions: seasonal.filter(section => section.communityId === m.community_id).flatMap(section => section.questions),
-    }))} initialAnswers={current.initialAnswers} showQuarterAnnouncements={month === '2026-09'} draftKey={`survey-draft:${profile!.id}:${current.survey.id}:${month}:continuous`}
+    }))} initialAnswers={current.initialAnswers} showQuarterAnnouncements={month === '2026-09'}
+      showNewsletterDeadline={isOctoberNewsletterDeadlineDay(now)}
+      sharedQuarterQuestion={isQuarterPulseOpen(reviewDate) ? SHARED_QUARTER_PULSE_QUESTION : null}
+      finalQuarter={reviewDate.getMonth() === 8}
+      onOpen3Miq={() => router.push({ pathname: '/profile', params: { focus: 'miq', from: 'endofmonth' } })}
+      draftKey={`survey-draft:${profile!.id}:${current.survey.id}:${month}:continuous`}
       legacyDraftKeys={current.legacyDraftKeys} readOnly={!!askedDate}
       onSave={async answers => {
         if (askedDate || currentScope.current !== scope || !profile) return { error: 'Please reopen this check-in before saving.' };
