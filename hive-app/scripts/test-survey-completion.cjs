@@ -6,7 +6,7 @@ const jsx = require('react/jsx-runtime');
 
 // Exercise the real form's save/exit handlers without writing member data.
 function harness(result, withTask = false, announcementHives = [], draftFailure = false, showDeadline = false) {
-  const slots = []; let cursor = 0; let saves = 0; let exits = 0; let removed = 0; let miqOpens = 0; let savedAnswers;
+  const slots = []; let cursor = 0; let saves = 0; let exits = 0; let removed = 0; let miqOpens = 0; let helpOpens = 0; let savedAnswers;
   const drafts = [];
   const react = {
     useState: initial => { const i = cursor++; if (!(i in slots)) slots[i] = initial;
@@ -31,6 +31,7 @@ function harness(result, withTask = false, announcementHives = [], draftFailure 
     './SurveyQuestionField': { SurveyQuestionField: 'Question' },
     './BuzzContributionInput': { BuzzContributionInput: 'Input' },
     './BuzzCalendarPreview': { BuzzCalendarPreview: 'Calendar' },
+    './HiveHelpPreview': { HiveHelpPreview: 'HiveHelp' },
   };
   function load(file) {
     const module = { exports: {} };
@@ -57,12 +58,13 @@ function harness(result, withTask = false, announcementHives = [], draftFailure 
     showNewsletterDeadline: showDeadline,
     sharedQuarterQuestion: announcementSections.length ? { id: 'q_quarter_help_next', text: 'What would help?', type: 'choice', options: ['A gentle nudge'] } : null,
     onOpen3Miq: () => { miqOpens++; },
+    onOpenHiveHelp: () => { helpOpens++; },
     onSave: async answers => { saves++; savedAnswers = answers; assert.equal(answers.month.q_shoutout, 'Keep my words'); return await result(); },
     onDone: () => { exits++; }, onEmailSettings: () => {},
   };
   function render() { cursor = 0; return EndOfMonthForm(props); }
   return { render, SurveyCompletion, counts: () => ({ saves, exits, removed }), drafts, savedAnswers: () => savedAnswers,
-    miqOpens: () => miqOpens };
+    miqOpens: () => miqOpens, helpOpens: () => helpOpens };
 }
 function walk(node) {
   if (!node || typeof node !== 'object') return [];
@@ -134,14 +136,22 @@ function button(tree, label) { return walk(tree).find(n => n.type === 'Pressable
   const ogAnnouncement = text(ogAnnouncementTree);
   assert.match(ogAnnouncement, /It’s hoodie season!/);
   assert.match(ogAnnouncement, /Honey Pot dues.*Bumblebee Ball.*reach out to Nat.*virtually or in person/);
-  assert.doesNotMatch(ogAnnouncement, /Not in OG\?/);
+  assert.match(ogAnnouncement, /Not in OG\?.*at cost from our shop.*virtually or in person/);
   const sharedQuestion = walk(ogAnnouncementTree).filter(node => node.type === 'Question' && node.props.question.id === 'q_quarter_help_next');
+  const miqLink = button(ogAnnouncementTree, 'Explore my 3MIQ');
+  assert.equal(miqLink.props.style.minHeight, 44, 'phone tap target');
+  assert.equal(miqLink.props.style.backgroundColor, '#f5eddc');
+  assert.equal(walk(miqLink).find(node => node.type === 'Text')?.props.style.color, '#313130', 'dark ink on cream');
   assert.equal(sharedQuestion.length, 1, 'a member in OG and Tech answers the support choice once');
   sharedQuestion[0].props.onChange('A gentle nudge');
   button(ogWithTech.render(), 'Explore my 3MIQ').props.onPress();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(ogWithTech.miqOpens(), 1);
   assert.equal(ogWithTech.drafts.at(-1)[1].month.q_quarter_help_next, 'A gentle nudge', 'the shared choice drafts before leaving for Profile');
+  const helpLink = walk(ogWithTech.render()).find(node => node.type === 'HiveHelp');
+  helpLink.props.onOpenBoard('board-id');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(ogWithTech.helpOpens(), 1, 'Help board opens after the same draft barrier');
   const failedDraftLink = harness(async () => ({ error: null }), false, ['tech'], true);
   walk(failedDraftLink.render()).find(node => node.type === 'Question').props.onChange('A gentle nudge');
   button(failedDraftLink.render(), 'Explore my 3MIQ').props.onPress();
@@ -149,7 +159,7 @@ function button(tree, label) { return walk(tree).find(n => n.type === 'Pressable
   assert.equal(failedDraftLink.miqOpens(), 0, 'a failed device draft keeps the member on the check-in');
   assert.ok(walk(failedDraftLink.render()).some(node => node.props?.accessibilityRole === 'alert'));
   const techAnnouncement = text(harness(async () => ({ error: null }), false, ['tech']).render());
-  assert.match(techAnnouncement, /Not in OG\?.*at cost from our shop.*Reach out to Nat with questions/);
+  assert.match(techAnnouncement, /Not in OG\?.*at cost from our shop.*virtually or in person/);
   assert.doesNotMatch(techAnnouncement, /Honey Pot dues/);
   assert.doesNotMatch(techAnnouncement, /https?:\/\//, 'the homework does not invent a shop link');
   const deadline = text(harness(async () => ({ error: null }), false, ['tech'], false, true).render());

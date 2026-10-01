@@ -2,13 +2,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const ts = require('typescript');
 const vm = require('node:vm');
+const path = require('node:path');
 
 function load(file) {
   const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
   const exports = {};
-  vm.runInNewContext(source, { exports, require });
+  vm.runInNewContext(source, { exports, require: name => name.startsWith('.')
+    ? load(path.resolve(path.dirname(file), `${name}.ts`)) : require(name) });
   return exports;
 }
 

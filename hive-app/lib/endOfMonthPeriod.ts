@@ -18,6 +18,14 @@ export function endOfMonthContext(instant: Date) {
   return { period, reviewDate };
 }
 
+/** The attention window opens for the final three days and stays through grace. */
+export function isEndOfMonthReviewOpen(instant: Date): boolean {
+  const today = pacificCalendarDate(instant);
+  if (today.getDate() <= 7) return true;
+  const last = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  return today.getDate() >= last - 2;
+}
+
 /** A one-day deadline message for the October 2, 2026 newsletter. */
 export function isOctoberNewsletterDeadlineDay(instant: Date): boolean {
   const today = pacificCalendarDate(instant);

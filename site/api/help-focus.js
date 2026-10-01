@@ -4,7 +4,7 @@
 // a HIVE can still drop off a donation or turn up on the day.
 //
 // Reads public.public_help_focus, a view that returns at most one row — the
-// newest focus somebody marked public — and only its title, body and date.
+// current owner focus only when explicitly marked public — and only its title, body and date.
 // Replies stay inside the HIVE: members logging their own acts of kindness is
 // their business. See migration 119 in the app repo.
 //

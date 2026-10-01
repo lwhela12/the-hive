@@ -7,25 +7,34 @@ import { SurveyCompletion } from './SurveyCompletion';
 import { SurveyQuestionField } from './SurveyQuestionField';
 import { BuzzContributionInput } from './BuzzContributionInput';
 import { BuzzCalendarPreview } from './BuzzCalendarPreview';
+import { HiveHelpPreview } from './HiveHelpPreview';
 import { hiveAccent, hiveDisplayName, hiveSeal, accentPalette } from '../../lib/hiveBrand';
 import { SPACE_SKIN } from '../../lib/pageSkin';
-import { CARRY_FORWARD_ANSWER_KEY, type CarryForwardItem, type CarryForwardStatus } from '../../lib/carryForward';
+import { CARRY_FORWARD_ANSWER_KEY, getCarryForwardStatusLabel, normalizeCarryForwardResponse, type CarryForwardItem, type CarryForwardStatus } from '../../lib/carryForward';
 import { endOfMonthTaskResponses, type EndOfMonthAnswers } from '../../lib/endOfMonth';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import type { Community, SurveyQuestion } from '../../types';
 import type { SurveyAnswerValue } from '../../lib/hooks/useSurveys';
 
-export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraftKeys, readOnly, showQuarterAnnouncements = false, showNewsletterDeadline = false, sharedQuarterQuestion, finalQuarter = false, onOpen3Miq, onSave, onDone, doneLabel, onEmailSettings, onEmailMe, emailingMe = false }: {
+function savedAnswer(value: SurveyAnswerValue | undefined): string {
+  if (value == null || value === '') return 'No answer saved';
+  if (Array.isArray(value)) return value.map(String).join(', ') || 'No answer saved';
+  return typeof value === 'object' ? 'Saved' : String(value);
+}
+
+export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraftKeys, readOnly, completedReview = false, showQuarterAnnouncements = false, showNewsletterDeadline = false, sharedQuarterQuestion, finalQuarter = false, onOpen3Miq, onOpenHiveHelp, onSave, onDone, doneLabel, onEmailSettings, onEmailMe, emailingMe = false }: {
   sections: { community: Community; todos: CarryForwardItem[]; questions: SurveyQuestion[] }[];
   initialAnswers: EndOfMonthAnswers;
   draftKey: string;
   legacyDraftKeys: string[];
   readOnly: boolean;
+  completedReview?: boolean;
   showQuarterAnnouncements?: boolean;
   showNewsletterDeadline?: boolean;
   sharedQuarterQuestion?: SurveyQuestion | null;
   finalQuarter?: boolean;
   onOpen3Miq?: () => void;
+  onOpenHiveHelp?: (categoryId: string) => void;
   onSave: (answers: EndOfMonthAnswers) => Promise<{ error: string | null }>;
   onDone: () => void;
   doneLabel: string;
@@ -52,13 +61,13 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
       .then(() => { draftWriteFailed.current = false; setDraftState('saved'); },
         () => { draftWriteFailed.current = true; setDraftState('error'); });
   };
-  const open3Miq = async () => {
+  const leaveWithDraft = async (open: () => void) => {
     await draftQueue.current;
     if (draftWriteFailed.current) {
       setError('Could not keep your draft on this device. Please try again before leaving this check-in.');
       return;
     }
-    onOpen3Miq?.();
+    open();
   };
   const updateHive = (id: string, key: string, value: SurveyAnswerValue) => update({
     ...answerRef.current, hives: { ...answerRef.current.hives, [id]: { ...answerRef.current.hives[id], [key]: value } },
@@ -95,21 +104,26 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
       keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 88 }}>
       <View style={{ width: '100%', maxWidth: 880, alignSelf: 'center', gap: 18 }}>
         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: skin.inkBody }}>
-          {readOnly ? 'Date preview · read only' : 'Review your to-dos, then add anything for the Buzz.'}
+          {completedReview ? 'Your saved check-in · read only' : readOnly ? 'Date preview · read only' : 'Review your to-dos, then add anything for the Buzz.'}
         </Text>
         {sections.map(section => {
           const community = section.community;
           const tint = accentPalette(hiveAccent(community));
           const own = answers.hives[community.id] ?? {};
-          const tasks = endOfMonthTaskResponses(section.todos, own);
+          const tasks = completedReview ? normalizeCarryForwardResponse(own[CARRY_FORWARD_ANSWER_KEY]).filter(item => item.type === 'action_item')
+            : endOfMonthTaskResponses(section.todos, own);
           return <View key={community.id} style={{ backgroundColor: '#fffdf5', borderWidth: 2, borderColor: tint.accent, borderRadius: 16, padding: 16, gap: 12 }}>
             <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
               <Image source={hiveSeal(community.slug)} accessibilityLabel={`${hiveDisplayName(community.name)} logo`} contentFit="contain" style={{ width: 48, height: 48 }} />
               <Text accessibilityRole="header" style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: 18, color: '#313130' }}>{hiveDisplayName(community.name)}</Text>
             </View>
-            {tasks.length === 0 && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#5c5648' }}>No open to-dos.</Text>}
+            {tasks.length === 0 && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#5c5648' }}>{completedReview ? 'No to-do decisions saved.' : 'No open to-dos.'}</Text>}
             {tasks.map(item => {
               const parsed = parseActionItemDescription(item.label);
+              if (completedReview) return <View key={item.id} style={{ borderTopWidth: 1, borderColor: tint.line(0.2), paddingTop: 8, gap: 3 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, lineHeight: 19, color: '#313130' }}>{parsed.text}</Text>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#5c5648' }}>{getCarryForwardStatusLabel(item.status)}</Text>
+              </View>;
               const done = item.status === 'done';
               const archived = item.status === 'archive';
               const setStatus = (status: CarryForwardStatus) => updateHive(community.id, CARRY_FORWARD_ANSWER_KEY,
@@ -138,7 +152,7 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
             })}
             {section.questions.map((question, index) => readOnly
               ? <View key={question.id} style={{ gap: 6 }}><Text style={{ ...buttonText, color: '#313130' }}>{question.text}</Text>
-                  {question.options?.map(option => <Text key={option} style={{ fontFamily: 'Lato_400Regular', color: '#5c5648' }}>{option}</Text>)}</View>
+                  <Text style={{ fontFamily: 'Lato_400Regular', color: '#5c5648' }}>{completedReview ? savedAnswer(own[question.id]) : question.options?.join(' · ')}</Text></View>
               : <SurveyQuestionField key={question.id} question={question} index={index} value={own[question.id]}
                   onChange={value => updateHive(community.id, question.id, value)} communityId={community.id}
                   accent={tint.accent} answers={own} onSetAnswer={(id, value) => updateHive(community.id, id, value)} />)}
@@ -151,7 +165,7 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
           </Text>}
           {readOnly
             ? <View style={{ gap: 6 }}><Text style={{ ...buttonText, color: '#313130' }}>{sharedQuarterQuestion.text}</Text>
-                {sharedQuarterQuestion.options?.map(option => <Text key={option} style={{ fontFamily: 'Lato_400Regular', color: '#5c5648' }}>{option}</Text>)}</View>
+                <Text style={{ fontFamily: 'Lato_400Regular', color: '#5c5648' }}>{completedReview ? savedAnswer(answers.month[sharedQuarterQuestion.id]) : sharedQuarterQuestion.options?.join(' · ')}</Text></View>
             : <SurveyQuestionField question={sharedQuarterQuestion} index={0} value={answers.month[sharedQuarterQuestion.id]}
                 onChange={value => update({ ...answerRef.current, month: { ...answerRef.current.month, [sharedQuarterQuestion.id]: value } })}
                 answers={answers.month} />}
@@ -159,21 +173,24 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
             Haven’t done your 3MIQ, or want to revisit them? You can find them in your profile later, or open them now.
           </Text>
           {!readOnly && onOpen3Miq && <Pressable accessibilityRole="link" accessibilityLabel="Explore my 3MIQ on my profile"
-            disabled={saving} onPress={() => { void open3Miq(); }} style={{ minHeight: 44, alignSelf: 'flex-start', justifyContent: 'center', paddingHorizontal: 14,
-              borderRadius: 999, borderWidth: 1, borderColor: skin.borderStrong }}>
-            <Text style={{ ...buttonText, color: skin.ink }}>Explore my 3MIQ</Text>
+            disabled={saving} onPress={() => { void leaveWithDraft(onOpen3Miq); }} style={{ minHeight: 44, alignSelf: 'flex-start', justifyContent: 'center', paddingHorizontal: 14,
+              borderRadius: 999, borderWidth: 1, borderColor: '#8a652f', backgroundColor: '#f5eddc' }}>
+            <Text style={{ ...buttonText, color: '#313130' }}>Explore my 3MIQ</Text>
           </Pressable>}
         </View>}
         {showQuarterAnnouncements && <View style={{ backgroundColor: '#fffdf5', borderRadius: 16, padding: 16, gap: 8, borderWidth: 1, borderColor: skin.borderStrong }}>
           <Text accessibilityRole="header" style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: '#313130' }}>It’s hoodie season!</Text>
-          {sections.some(section => section.community.slug === 'default')
-            ? <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
+          {sections.some(section => section.community.slug === 'default') &&
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
                 OG HIVE members: we’re using part of our Honey Pot dues to cover our hoodies and the rest for the Bumblebee Ball. Please reach out to Nat to schedule a time to design and order your hoodie, virtually or in person.
-              </Text>
-            : <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
-                Not in OG? You can still get a hoodie at cost from our shop. Reach out to Nat with questions.
               </Text>}
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
+            Not in OG? You can still get a hoodie at cost from our shop. Reach out to Nat to schedule a time to design and order yours, virtually or in person.
+          </Text>
         </View>}
+        {!completedReview && <HiveHelpPreview disabled={saving} onOpenBoard={categoryId => {
+          if (onOpenHiveHelp) void leaveWithDraft(() => onOpenHiveHelp(categoryId));
+        }} />}
         <View style={{ backgroundColor: '#fffdf5', borderRadius: 16, padding: 16, gap: 16, borderWidth: 2, borderColor: skin.gold }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <Image source={hiveSeal(null)} accessibilityLabel="HIVE-Wide logo" contentFit="contain" style={{ width: 48, height: 48 }} />
@@ -182,12 +199,13 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
           {showNewsletterDeadline && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
             The newsletter goes out tomorrow, October 2! Anything you’d like to mention or add? Please send your shout-outs and event plugs today.
           </Text>}
-          <BuzzCalendarPreview />
+          {!completedReview && <BuzzCalendarPreview />}
           {([{ id: 'q_shoutout', label: 'A shout-out for someone', placeholder: 'Who deserves a shout-out, and why?' },
             { id: 'q_newsletter', label: 'A plug or an event', placeholder: 'Include names, dates and links.' }] as const).map(field => <View key={field.id}>
               <Text style={{ ...buttonText, color: '#313130' }}>{field.label} <Text style={{ fontFamily: 'Lato_400Regular', color: '#5c5648' }}>(optional)</Text></Text>
               {!readOnly && <BuzzContributionInput disabled={saving} value={String(answers.month[field.id] ?? '')} placeholder={field.placeholder}
                 onChangeText={value => update({ ...answerRef.current, month: { ...answerRef.current.month, [field.id]: value } })} />}
+              {completedReview && <Text style={{ fontFamily: 'Lato_400Regular', color: '#5c5648' }}>{String(answers.month[field.id] ?? 'No answer saved')}</Text>}
             </View>)}
         </View>
         {error && <Text accessibilityRole="alert" style={{ fontFamily: 'Lato_400Regular', color: '#ffb8b8', lineHeight: 21 }}>{error}</Text>}

@@ -21,6 +21,8 @@ import { useAppNews } from '../../lib/hooks/useAppNews';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 import { getHiveWideActivityAuthorName } from '../../lib/hiveWideIdentity';
+import { isEndOfMonthCheckInSurvey } from '../../lib/checkIns';
+import { wideCompletedMonthTodo, wideMonthTodo, type MonthReceipt, type MonthResponse } from '../../lib/wideCheckInTodos';
 
 /**
  * HIVE-Wide is a Home, not a separate orientation product. Its layout is the
@@ -58,6 +60,7 @@ type WideTodo = {
   title: string;
   due_date: string | null;
   done: boolean;
+  destination: '/meetings' | '/endofmonth' | `/endofmonth?review=${string}`;
 };
 
 function HomePanel({ title, wide, children }: { title: string; wide: boolean; children: React.ReactNode }) {
@@ -147,7 +150,7 @@ function AppNewsStrip({ entries, onOpen, onDismiss }: { entries: AppNewsEntry[];
 export default function HiveWideScreen() {
   const router = useRouter();
   const openFeedback = useOpenFeedback();
-  const { profile, wholeHive, enterWholeHive, refreshProfile } = useAuth();
+  const { profile, memberships, wholeHive, enterWholeHive, refreshProfile } = useAuth();
   const { appNews } = useAppNews();
   const { width } = useWindowDimensions();
   const wide = width >= 900;
@@ -187,26 +190,40 @@ export default function HiveWideScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [wishResult, postsResult, todoResult] = await Promise.all([
+      const [wishResult, postsResult, todoResult, completionResult] = await Promise.all([
         supabase.from('wishes').select('id, title, description, created_at, user:profiles!user_id(name, avatar_url), community:communities(name, slug, accent_color)').eq('share_scope', 'all_hives').eq('status', 'public').or('is_active.is.true,is_active.is.null').order('created_at', { ascending: false }).limit(12),
         supabase.from('board_posts').select('id, title, created_at, author:profiles!author_id(id, name, profile_scope), category:board_categories!inner(reach)').eq('category.reach', 'all_hives').or('status.is.null,status.neq.archived').order('created_at', { ascending: false }).limit(12),
         supabase.from('surveys').select('id, title, due_date').is('community_id', null).eq('is_active', true).order('due_date', { ascending: true }),
+        profile?.id ? supabase.from('check_in_completions').select('survey_id, community_id, occurrence').eq('user_id', profile.id)
+          : Promise.resolve({ data: [], error: null }),
       ]);
       if (wishResult.error) throw wishResult.error;
       if (postsResult.error) throw postsResult.error;
       if (todoResult.error) throw todoResult.error;
+      if (completionResult.error) throw completionResult.error;
 
       const wishes = (wishResult.data ?? []) as unknown as WideWish[];
       const surveyRows = (todoResult.data ?? []) as Array<{ id: string; title: string; due_date: string | null }>;
+      const monthSurvey = surveyRows.find(row => isEndOfMonthCheckInSurvey(row));
+      const otherSurveys = surveyRows.filter(row => !isEndOfMonthCheckInSurvey(row));
       const completedSurveyIds = new Set<string>();
+      let responseRows: MonthResponse[] = [];
       if (profile?.id && surveyRows.length > 0) {
-        const { data: responseRows, error: responseError } = await supabase.from('survey_responses').select('survey_id').eq('user_id', profile.id).in('survey_id', surveyRows.map((survey) => survey.id));
+        const { data, error: responseError } = await supabase.from('survey_responses').select('survey_id, community_id, response_period').eq('user_id', profile.id).in('survey_id', surveyRows.map((survey) => survey.id));
         if (responseError) throw responseError;
-        (responseRows ?? []).forEach((row) => completedSurveyIds.add((row as { survey_id: string }).survey_id));
+        responseRows = (data ?? []) as MonthResponse[];
+        responseRows.forEach(row => completedSurveyIds.add(row.survey_id));
       }
 
       setWideWishes(wishes);
-      setTodos(surveyRows.map((survey) => ({ ...survey, done: completedSurveyIds.has(survey.id) })));
+      const eligibleForMonth = memberships.some(m => m.community.slug === 'default' || m.community.slug === 'tech');
+      const checkInReceipts = (completionResult.data ?? []) as MonthReceipt[];
+      const today = new Date();
+      const monthTodo = monthSurvey ? wideMonthTodo(monthSurvey, checkInReceipts, eligibleForMonth, today, responseRows) : null;
+      const previousTodo = monthSurvey && monthTodo?.destination === '/endofmonth'
+        ? wideCompletedMonthTodo(monthSurvey, checkInReceipts, eligibleForMonth, today, responseRows) : null;
+      setTodos([...otherSurveys.map((survey) => ({ ...survey, done: completedSurveyIds.has(survey.id), destination: '/meetings' as const })),
+        ...(monthTodo ? [monthTodo] : []), ...(previousTodo ? [previousTodo] : [])]);
       const wishActivity: WideActivity[] = wishes.map((wish) => ({ id: `wish:${wish.id}`, emoji: '⭐', text: `${wish.user?.name ?? 'Someone'} shared a wish with HIVE-Wide`, timestamp: wish.created_at, destination: '/members' }));
       const postActivity: WideActivity[] = (postsResult.data ?? []).map((post: any) => ({ id: `post:${post.id}`, emoji: '📋', text: `${getHiveWideActivityAuthorName(post.author)} posted: ${post.title}`, timestamp: post.created_at, destination: '/hive-wide-boards' }));
       setActivity([...wishActivity, ...postActivity].sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 12));
@@ -215,7 +232,7 @@ export default function HiveWideScreen() {
     } finally {
       setLoading(false);
     }
-  }, [profile?.id]);
+  }, [profile?.id, memberships]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   const onRefresh = useCallback(async () => { setRefreshing(true); await load(); setRefreshing(false); }, [load]);
@@ -265,7 +282,7 @@ export default function HiveWideScreen() {
             </View>
             {visibleTodos.length === 0 ? <EmptyPanel>{todoTab === 'done' ? 'No completed HIVE-Wide to-dos yet.' : 'All clear! HIVE-Wide check-ins will appear here when they are open.'}</EmptyPanel> : (
               <BounceScrollView nestedScrollEnabled showsVerticalScrollIndicator style={{ flex: 1 }}>
-                {visibleTodos.map((todo, index) => <Pressable key={todo.id} onPress={() => router.push('/meetings' as never)} style={({ pressed }) => ({ paddingHorizontal: 13, paddingVertical: 12, borderBottomWidth: index === visibleTodos.length - 1 ? 0 : 1, borderBottomColor: EDGE, backgroundColor: pressed ? 'rgba(255,248,233,0.08)' : 'transparent' })}><Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13.5, color: INK }} numberOfLines={2}>{todo.title}</Text><Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: INK_SOFT, marginTop: 2 }}>{todo.due_date ? `Due ${formatDateShort(todo.due_date)}` : 'Open now'}</Text></Pressable>)}
+                {visibleTodos.map((todo, index) => <Pressable key={todo.id} onPress={() => router.push(todo.destination as never)} style={({ pressed }) => ({ paddingHorizontal: 13, paddingVertical: 12, borderBottomWidth: index === visibleTodos.length - 1 ? 0 : 1, borderBottomColor: EDGE, backgroundColor: pressed ? 'rgba(255,248,233,0.08)' : 'transparent' })}><Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13.5, color: INK }} numberOfLines={2}>{todo.title}</Text><Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: INK_SOFT, marginTop: 2 }}>{todo.due_date ? `Due ${formatDateShort(todo.due_date)}` : 'Open now'}</Text></Pressable>)}
               </BounceScrollView>
             )}
           </HomePanel>

@@ -11,16 +11,18 @@ export async function fetchCheckInActivityContext(communityId: string): Promise<
   const today = new Date().toISOString().slice(0, 10);
   const since = await getCycleStart(communityId, today);
   const [boards, nextMeeting] = await Promise.all([
-    supabase.from('board_categories').select('id, name, status, topic_kind')
+    supabase.from('board_categories').select('id, name, status, topic_kind, reach')
       .eq('community_id', communityId).or('topic_kind.eq.helper_log,name.ilike.%HIVE Helpers%'),
     supabase.from('events').select('event_date').eq('community_id', communityId)
       .eq('event_type', 'meeting').gte('event_date', today).order('event_date', { ascending: true }).limit(1),
   ]);
   if (boards.error || nextMeeting.error) throw boards.error || nextMeeting.error;
   const candidates = (boards.data ?? []).filter(row => !row.status || row.status === 'active')
-    .sort((a, b) => Number(b.topic_kind === 'helper_log') - Number(a.topic_kind === 'helper_log'));
+    .sort((a, b) => Number(b.reach === 'all_hives') - Number(a.reach === 'all_hives')
+      || Number(b.topic_kind === 'helper_log') - Number(a.topic_kind === 'helper_log'));
   const month = new Date().toLocaleDateString('en-US', { month: 'long' }).toLowerCase();
-  const board = candidates.find(row => row.name.toLowerCase().includes(month)) ?? candidates[0];
+  const board = candidates.find(row => row.reach === 'all_hives')
+    ?? candidates.find(row => row.name.toLowerCase().includes(month)) ?? candidates[0];
   const fallback = new Date(); fallback.setDate(fallback.getDate() + 35);
   const until = nextMeeting.data?.[0]?.event_date ?? fallback.toISOString().slice(0, 10);
   const [posts, events] = await Promise.all([

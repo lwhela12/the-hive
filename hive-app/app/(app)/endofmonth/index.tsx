@@ -32,7 +32,7 @@ export default function EndOfMonthScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
   useDeepTrail([{ label: 'End of the month' }]);
-  const { on, from } = useLocalSearchParams<{ on?: string | string[]; from?: string }>();
+  const { on, from, review } = useLocalSearchParams<{ on?: string | string[]; from?: string; review?: string }>();
   const askedDate = Array.isArray(on) ? on[0] : on;
   const returnTo = from === 'meetings' ? '/meetings' : from === 'hive' ? '/hive' : '/hive-wide';
   const { loading: authLoading, profile, communityId, memberships } = useAuth();
@@ -42,10 +42,13 @@ export default function EndOfMonthScreen() {
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
   }, []);
-  const { period: month, reviewDate } = endOfMonthContext(now);
+  const currentPeriod = endOfMonthContext(now);
+  const historicalReview = typeof review === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(review) && review < currentPeriod.period;
+  const month = historicalReview ? review : currentPeriod.period;
+  const reviewDate = historicalReview ? new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0, 12) : currentPeriod.reviewDate;
   const activeMemberships = memberships.filter(m => m.community.slug === 'default' || m.community.slug === 'tech');
   const memberKey = activeMemberships.map(m => m.community_id).join(',');
-  const scope = `${profile?.id ?? ''}:${month}:${askedDate ?? ''}:${memberKey}`;
+  const scope = `${profile?.id ?? ''}:${month}:${askedDate ?? ''}:${historicalReview}:${memberKey}`;
   const currentScope = useRef(scope);
   currentScope.current = scope;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -70,10 +73,10 @@ export default function EndOfMonthScreen() {
       const ogId = activeMemberships.find(m => m.community.slug === 'default')?.community_id;
       const legacyDraftKeys = [...ids, 'month'].map(id => `survey-draft:${profile.id}:${survey.id}:${month}:${id}`);
       const draftKey = `survey-draft:${profile.id}:${survey.id}:${month}:continuous`;
-      const [receipts, rosters, storedDrafts, combined] = await Promise.all([
+      const [receipts, rosters, storedDrafts, combined, oldResponses] = await Promise.all([
         supabase.from('check_in_completions').select('community_id, answers').eq('survey_id', survey.id)
           .eq('user_id', profile.id).eq('occurrence', `month:${month}`),
-        Promise.all(ids.map(async id => {
+        historicalReview ? Promise.resolve(ids.map(id => [id, []] as const)) : Promise.all(ids.map(async id => {
           const result = await fetchCheckInActionItems<TaskRow>(() => supabase.from('action_items')
             .select('id, description, due_date, related_board_post_id').eq('community_id', id).eq('assigned_to', profile.id)
             .or('completed.is.false,completed.is.null').is('archived_at', null).order('created_at', { ascending: false }).order('id'));
@@ -84,11 +87,16 @@ export default function EndOfMonthScreen() {
             relatedBoardPostId: item.related_board_post_id,
           }))] as const;
         })),
-        askedDate ? Promise.resolve([]) : AsyncStorage.multiGet(legacyDraftKeys),
-        askedDate ? Promise.resolve(null) : AsyncStorage.getItem(draftKey),
+        askedDate || historicalReview ? Promise.resolve([]) : AsyncStorage.multiGet(legacyDraftKeys),
+        askedDate || historicalReview ? Promise.resolve(null) : AsyncStorage.getItem(draftKey),
+        historicalReview ? supabase.from('survey_responses').select('community_id, answers').eq('survey_id', survey.id)
+          .eq('user_id', profile.id).eq('response_period', month) : Promise.resolve({ data: [], error: null }),
       ]);
       if (receipts.error) throw receipts.error;
-      const saved = Object.fromEntries((receipts.data ?? []).map(row => [row.community_id ?? 'month', row.answers as SurveyAnswers]));
+      if (oldResponses.error) throw oldResponses.error;
+      const saved = Object.fromEntries((oldResponses.data ?? []).map(row => [row.community_id ?? 'month', row.answers as SurveyAnswers]));
+      for (const row of receipts.data ?? []) saved[row.community_id ?? 'month'] = row.answers as SurveyAnswers;
+      if (historicalReview && !saved.month) throw new Error('This completed review is unavailable. Please reopen Home.');
       const drafts: Record<string, SurveyAnswers> = {};
       storedDrafts.forEach(([, raw], index) => {
         if (!raw) return;
@@ -107,7 +115,7 @@ export default function EndOfMonthScreen() {
       if (!cancelled) setFailure(error instanceof Error ? error.message : 'Your check-in could not load. Please try again.');
     });
     return () => { cancelled = true; };
-  }, [authLoading, profile?.id, memberKey, month, askedDate, attempt]);
+  }, [authLoading, profile?.id, memberKey, month, askedDate, historicalReview, attempt]);
 
   const current = loaded?.scope === scope ? loaded : null;
   const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(askedDate ?? '');
@@ -115,7 +123,7 @@ export default function EndOfMonthScreen() {
   const seasonal = openSeasonSections(activeMemberships.map(m => ({ id: m.community_id, slug: m.community.slug, name: m.community.name })), previewDate);
 
   const previewOwnMail = async () => {
-    if (mailBusy.current || !profile?.is_owner || !current || askedDate) return;
+    if (mailBusy.current || !profile?.is_owner || !current || askedDate || historicalReview) return;
     mailBusy.current = true; setMailState('checking');
     try {
       const { data, error } = await supabase.functions.invoke('open-check-in', {
@@ -172,10 +180,11 @@ export default function EndOfMonthScreen() {
       sharedQuarterQuestion={isQuarterPulseOpen(reviewDate) ? SHARED_QUARTER_PULSE_QUESTION : null}
       finalQuarter={reviewDate.getMonth() === 8}
       onOpen3Miq={() => router.push({ pathname: '/profile', params: { focus: 'miq', from: 'endofmonth' } })}
+      onOpenHiveHelp={categoryId => router.push({ pathname: '/hive-wide-boards', params: { categoryId, from: 'endofmonth', open: String(Date.now()) } })}
       draftKey={`survey-draft:${profile!.id}:${current.survey.id}:${month}:continuous`}
-      legacyDraftKeys={current.legacyDraftKeys} readOnly={!!askedDate}
+      legacyDraftKeys={current.legacyDraftKeys} readOnly={!!askedDate || historicalReview} completedReview={historicalReview}
       onSave={async answers => {
-        if (askedDate || currentScope.current !== scope || !profile) return { error: 'Please reopen this check-in before saving.' };
+        if (askedDate || historicalReview || currentScope.current !== scope || !profile) return { error: 'Please reopen this check-in before saving.' };
         const result = await saveEndOfMonth({ answers, communityIds: activeMemberships.map(m => m.community_id), todos: current.todos,
           applyTasks: items => applyCarryForwardStatuses(supabase as never, profile.id, items),
           save: (id, own) => submitCheckInOccurrence(current.survey.id, own, id, `month:${month}`),
@@ -183,7 +192,7 @@ export default function EndOfMonthScreen() {
         if (!result.error) void queryClient.invalidateQueries({ queryKey: ['carryForwardContext'] });
         return result;
       }} onDone={() => router.replace(returnTo as never)} doneLabel={from === 'meetings' ? 'Back to Meetings' : 'Back to Home'} onEmailSettings={() => router.push('/settings' as never)}
-      onEmailMe={profile?.is_owner && !askedDate ? previewOwnMail : undefined} emailingMe={mailState !== 'idle'} />
+      onEmailMe={profile?.is_owner && !askedDate && !historicalReview ? previewOwnMail : undefined} emailingMe={mailState !== 'idle'} />
       : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 }}>
           {failure ? <><Text style={{ fontFamily: 'Lato_400Regular', color: skin.ink, lineHeight: 21 }}>{failure}</Text>
             <Pressable accessibilityRole="button" onPress={() => setAttempt(value => value + 1)} style={{ backgroundColor: skin.gold, padding: 14, borderRadius: 999 }}>

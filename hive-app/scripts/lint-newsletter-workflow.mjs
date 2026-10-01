@@ -66,8 +66,9 @@ if (!draftFunction.includes('Never mention Production HIVE')
   || !draftFunction.includes('exact number of HIVEs')) {
   failures.push('The newsletter writer must never expose Production HIVE or an exact HIVE count.');
 }
-if (!draftFunction.includes(".eq('visibility', 'public').eq('invited_scope', 'public')")
-  || draftFunction.includes(".in('visibility', ['all_hives', 'public'])")) {
+const upcomingQuery = draftFunction.slice(draftFunction.indexOf("supabaseAdmin.from('events')"), draftFunction.indexOf('// Counted, never named'));
+if (!upcomingQuery.includes(".eq('visibility', 'public').eq('invited_scope', 'public')")
+  || upcomingQuery.includes(".in('visibility', ['all_hives', 'public'])")) {
   failures.push('The public newsletter event list must accept public/public events only, never member-only HIVE-Wide events.');
 }
 if (!draftFunction.includes('This is one sealed event block')

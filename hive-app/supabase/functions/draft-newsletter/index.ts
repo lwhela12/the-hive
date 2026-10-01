@@ -4,6 +4,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { recordAssistantUsage } from '../_shared/metering.ts';
+import { eligibleUpcomingEvent, pacificDay, upcomingWindow } from '../_shared/upcomingEvents.ts';
 
 // The newsletter and the meeting summary are the SAME artifact pointed at
 // different dates, so this returns the same `sections[]` shape seal-meeting
@@ -47,7 +48,7 @@ type EditorialLead = {
 };
 
 function pacificToday() {
-  return new Date(Date.now() - 7 * 3600_000).toISOString().slice(0, 10);
+  return pacificDay(new Date());
 }
 
 function prettyDate(value: string) {
@@ -81,8 +82,8 @@ function prettyTimeRange(start: string, end?: string | null) {
  * ranges ("mid-August to mid-September") rather than pretending the handoff
  * always happens on the 15th.
  *
- * The date boundary below is only the database lookup window for the two focus
- * cards. It must never become reader-facing copy.
+ * The date boundary below is only for the previous cycle and legacy focus
+ * cards. The shared board's latest focus stays current until Nat changes it.
  */
 function hiveHelpCycle(date: string) {
   const [year, month, day] = date.split('-').map(Number);
@@ -375,8 +376,8 @@ serve(async (req) => {
     // button produced the July recap on Friday and an August fragment on
     // Saturday, without saying so. The month is now stated, and only defaults.
     const [thisYear, thisMonth] = date.split('-').map(Number);
-    const newsletterMonthStart = `${thisYear}-${String(thisMonth).padStart(2, '0')}-01`;
-    const newsletterMonthEnd = new Date(Date.UTC(thisYear, thisMonth, 1)).toISOString().slice(0, 10);
+    // Upcoming events follow the draft date, even while the issue recaps last month.
+    const eventWindow = upcomingWindow(date);
     const requested = /^\d{4}-\d{2}$/.test(body.month ?? '') ? body.month! : null;
     const startYear = requested
       ? Number(requested.slice(0, 4))
@@ -403,17 +404,15 @@ serve(async (req) => {
       helperFocusRows,
       lastLiveSendRows,
     ] = await Promise.all([
-      // The newsletter is public, so its calendar is narrower than the signed-in
-      // HIVE-Wide Home calendar. A September issue names every PUBLIC September
-      // event and no members-only/HIVE-Wide event. Both visibility fields must
-      // agree; an old half-migrated row stays private. `publicHiveIds` is another
-      // guard against a private HIVE leaking through a malformed event record.
+      // The issue's recap month does not limit its upcoming calendar. Both
+      // public scope fields and the public-HIVE allowlist protect the draft.
       supabaseAdmin.from('events')
-        .select('title, event_date, end_date, event_time, end_time, event_type, location, description, meet_link, visibility, invited_scope, community:communities(name)')
+        .select('title, event_date, end_date, event_time, end_time, event_type, location, description, meet_link, visibility, invited_scope, community:communities(name,slug)')
         .in('community_id', publicHiveIds)
         .eq('visibility', 'public').eq('invited_scope', 'public')
-        .gte('event_date', newsletterMonthStart)
-        .lt('event_date', newsletterMonthEnd)
+        .or(`event_date.gte.${eventWindow.start},end_date.gte.${eventWindow.start}`)
+        .lte('event_date', eventWindow.end)
+        .or('status.is.null,status.eq.scheduled,status.eq.completed')
         .order('event_date', { ascending: true }).order('event_time', { ascending: true }),
       // Counted, never named — how many wishes came true is a fact about the
       // HIVE, not about anybody in it.
@@ -449,12 +448,17 @@ serve(async (req) => {
       supabaseAdmin.from('survey_responses')
         .select('answers, submitted_at, created_at, survey:surveys!survey_id(title)')
         .order('created_at', { ascending: false }).limit(160),
-      // A HIVE Help title is the shared focus, not somebody's contribution.
-      // Read only that title and its date; never pull the private board body.
+      // Read the owner focus regardless of member scope, so a newer HIVE-Wide
+      // focus supersedes an old public one. Only public focus enters the draft.
       supabaseAdmin.from('board_posts')
-        .select('title, created_at, category:board_categories!inner(topic_kind)')
+        .select('title, created_at, visibility, category:board_categories!inner(topic_kind,name,reach,status), community:communities!inner(slug), author:profiles!inner(is_owner)')
         .in('community_id', publicHiveIds)
         .eq('category.topic_kind', 'helper_log')
+        .eq('category.name', 'HIVE Help').eq('category.status', 'active')
+        .eq('community.slug', 'default')
+        .eq('author.is_owner', true)
+        .in('visibility', ['all_hives', 'public'])
+        .eq('status', 'active')
         .is('archived_at', null)
         .order('created_at', { ascending: false }).limit(24),
       // Once a live issue has gone, the next issue starts with a fresh
@@ -468,11 +472,8 @@ serve(async (req) => {
     // Meetings and birthdays are never newsletter filler. The travel exclusion
     // is defence in depth for stale rows while the database migration lands.
     const upcoming = (upcomingRows.data ?? []) as any[];
-    const upcomingEvents = upcoming.filter((event) => (
-      event.event_type !== 'meeting'
-      && event.event_type !== 'birthday'
-      && !/\b(out of town|away|trip|travel|galavant)/i.test(event.title ?? '')
-    ));
+    const upcomingEvents = upcoming.filter((event) =>
+      eligibleUpcomingEvent(event, 'public', eventWindow.start, eventWindow.end));
     const { start: helpStart, end: helpEnd, previousStart: previousHelpStart } = hiveHelpCycle(date);
     const helperPosts = ((helperFocusRows.data ?? []) as any[]).filter((row) => (
       row.category?.topic_kind === 'helper_log'
@@ -480,8 +481,12 @@ serve(async (req) => {
       && /HIVE Help(?:ers)?\s*[—–-]+/i.test(row.title ?? '')
     ));
     const focusText = (row: any) => String(row.title).replace(/^.*HIVE Help(?:ers)?\s*[—–-]+\s*/i, '').trim();
-    const currentHelp = helperPosts.find((row) => row.created_at >= `${helpStart}T00:00:00Z` && row.created_at < `${helpEnd}T00:00:00Z`);
-    const previousHelp = helperPosts.find((row) => row.created_at >= `${previousHelpStart}T00:00:00Z` && row.created_at < `${helpStart}T00:00:00Z`);
+    // The owner-maintained shared board stays current until its next focus is posted.
+    const latestFocus = helperPosts.find((row) => row.category?.reach === 'all_hives')
+      ?? helperPosts.find((row) => row.created_at >= `${helpStart}T00:00:00Z` && row.created_at < `${helpEnd}T00:00:00Z`);
+    const currentHelp = latestFocus?.visibility === 'public' ? latestFocus : null;
+    const previousHelp = helperPosts.find((row) => row.visibility === 'public'
+      && row.created_at >= `${previousHelpStart}T00:00:00Z` && row.created_at < `${helpStart}T00:00:00Z`);
     const ownerNotes = ((thoughtRows.data ?? []) as any[])
       .map((row) => String(row.content ?? '').trim()).filter(Boolean);
     const newsletterAnswerIds = ['q_eom_newsletter', 'q_newsletter', 'q_shoutout'];
@@ -509,7 +514,7 @@ serve(async (req) => {
     if (previousHelp || currentHelp) {
       const lines: string[] = [];
       if (previousHelp) lines.push(`Previous HIVE Help (${midMonthSpan(previousHelpStart, helpStart)}): ${focusText(previousHelp)}`);
-      if (currentHelp) lines.push(`Current HIVE Help (${midMonthSpan(helpStart, helpEnd)}): ${focusText(currentHelp)}`);
+      if (currentHelp) lines.push(`Current HIVE Help: ${focusText(currentHelp)}`);
       sections.push({ title: 'HIVE Help cycle', lines });
     }
 

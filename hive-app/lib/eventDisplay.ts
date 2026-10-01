@@ -1,3 +1,5 @@
+import { isHiveWideEventScope } from '../supabase/functions/_shared/upcomingEvents';
+
 // Smart event icons (Nat's moonshot): the emoji reads the event instead of
 // defaulting to a pushpin. Types win first, then title keywords.
 export function getEventEmoji(event: {
@@ -80,7 +82,7 @@ export function isInvitedToEvent(
 export function isUpcomingEventVisibleOnHiveWide(event: {
   visibility?: string | null;
 }): boolean {
-  return event.visibility === 'all_hives' || event.visibility === 'public';
+  return isHiveWideEventScope(event);
 }
 
 /**
