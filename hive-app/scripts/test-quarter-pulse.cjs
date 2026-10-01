@@ -20,7 +20,7 @@ const { openSeasonSections, isSurveyOnHomeToday } = load(path.resolve('lib/check
 const { endOfMonthContext, isOctoberNewsletterDeadlineDay } = load(path.resolve('lib/endOfMonthPeriod.ts'));
 const { QUARTER_PULSE_QUESTIONS, OG_QUARTER_PULSE_QUESTIONS, SHARED_QUARTER_PULSE_QUESTION,
   isQuarterPulseOpen, quarterAnswersForMembers, tallyQuarterPulse, quarterPulseTalkingPoints,
-  quarterPulseQuestionsForDeck, recentQuarterPulsePeriod } = load(path.resolve('lib/quarterPulse.ts'));
+  quarterPulseQuestionsForDeck, quarterPulseDeckLines, recentQuarterPulsePeriod } = load(path.resolve('lib/quarterPulse.ts'));
 const { monthEndReviewPeriod } = load(path.resolve('supabase/functions/_shared/checkInSession.ts'));
 const hives = [
   { id: 'og', slug: 'default', name: 'OG HIVE' },
@@ -82,6 +82,14 @@ const scopedCounts = [
 assert.equal(quarterPulseTalkingPoints(scopedCounts, OG_QUARTER_PULSE_QUESTIONS[0])[0].percent, 75);
 assert.equal(quarterPulseTalkingPoints(scopedCounts, SHARED_QUARTER_PULSE_QUESTION)[0].answered, 3);
 assert.equal(quarterPulseTalkingPoints([], SHARED_QUARTER_PULSE_QUESTION).length, 0, 'zero answers produce no talking point');
+assert.deepEqual(Array.from(quarterPulseDeckLines([], 'default'), line => [line.question.id, line.point]),
+  [['q_quarter_helping', null], ['q_quarter_help_next', null]], 'OG shows both unanswered questions');
+assert.deepEqual(Array.from(quarterPulseDeckLines([], 'tech'), line => line.question.id),
+  ['q_quarter_help_next'], 'Tech shows only its shared question');
+assert.equal(quarterPulseDeckLines([], 'show').length, 0, 'Production remains outside the pulse summary');
+const mixedLines = quarterPulseDeckLines([{ question_id: 'q_quarter_helping', option: 'Yes', response_count: 1 }], 'default');
+assert.equal(mixedLines[0].point.percent, 100);
+assert.equal(mixedLines[1].point, null, 'one answered question does not hide the other empty question');
 assert.deepEqual(Array.from(quarterPulseTalkingPoints([
   { question_id: 'q_quarter_helping', option: 'Yes', response_count: 1 },
   { question_id: 'q_quarter_helping', option: 'A little', response_count: 1 },
