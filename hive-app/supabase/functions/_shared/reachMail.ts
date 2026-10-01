@@ -176,6 +176,7 @@ export function genericLetter(
     hiveId: opts.hiveId,
     heading: line,
     said,
+    greeting: kind === 'monthCheckIn' ? 'Yellow, HIVErs!' : undefined,
     buttonLabel: TEMPLATE_BUTTONS[kind],
     href: opts.href,
   };
@@ -361,6 +362,7 @@ export function reachEmailHtml(opts: {
    * filled more carefully.
    */
   said: string;
+  greeting?: string;
   buttonLabel: string;
   href: string;
 }): string {
@@ -371,7 +373,7 @@ export function reachEmailHtml(opts: {
       <div style="text-align: center; padding: 8px 0 4px;">${hiveSealImg(mark)}</div>
       <p style="text-align: center; color: ${mark.accent}; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 0 0 2px;">${escapeHtml(opts.hiveName)}</p>
       <h1 style="color: ${mark.accent}; font-size: 21px; text-align: center; margin: 8px 0 18px;">${escapeHtml(opts.heading)}</h1>
-      <p style="font-size: 15px;">Hi ${name},</p>
+      <p style="font-size: 15px;">${opts.greeting ? escapeHtml(opts.greeting) : `Hi ${name},`}</p>
       <div style="border-left: 3px solid ${mark.accent}; padding: 4px 0 4px 14px; margin: 14px 0; color: #4a4a4a; font-size: 15px; font-style: italic;">
         ${escapeHtml(opts.said)}
       </div>
@@ -399,7 +401,7 @@ export async function sendReachEmail(
   if (kind === 'checkIn' && !letter.hiveId) return { sent: false, reason: 'No meeting HIVE' };
   // Refuse altered prose even when a caller passes a hand-built letter.
   const expected = genericLetter(kind, { buttonLabel: TEMPLATE_BUTTONS[kind], href: letter.href, hiveId: letter.hiveId });
-  if (letter.subject !== expected.subject || letter.heading !== expected.heading || letter.said !== expected.said || letter.buttonLabel !== expected.buttonLabel || letter.hiveName !== expected.hiveName) {
+  if (letter.subject !== expected.subject || letter.heading !== expected.heading || letter.said !== expected.said || letter.greeting !== expected.greeting || letter.buttonLabel !== expected.buttonLabel || letter.hiveName !== expected.hiveName) {
     return { sent: false, reason: 'template words changed' };
   }
   let scoped;

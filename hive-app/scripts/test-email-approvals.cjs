@@ -17,6 +17,9 @@ const db = row => ({ from: () => ({ select() { return this; }, eq() { return thi
   assert.match(deadline.said, /newsletter goes out tomorrow, October 2/);
   assert.doesNotMatch(after.said, /tomorrow, October 2/);
   assert.match(after.said, /roughly halfway between meetings/);
+  assert.match(mail.reachEmailHtml({ ...deadline, toName: 'Nat' }), /Yellow, HIVErs!/);
+  assert.doesNotMatch(mail.reachEmailHtml({ ...deadline, toName: 'Nat' }), /Hi Nat,/);
+  assert.match(mail.reachEmailHtml({ ...mail.genericLetter('message', { ...monthOpts, at: new Date('2026-10-01T19:00:00Z') }), toName: 'Nat' }), /Hi Nat,/);
   assert.equal(await mail.templateRevision('monthCheckIn'), revisions.monthCheckIn);
   for (const kind of Object.keys(revisions)) {
     assert.equal(await mail.templateIsApproved(db(null), kind), false);
@@ -32,6 +35,7 @@ const db = row => ({ from: () => ({ select() { return this; }, eq() { return thi
     if (kind !== 'checkIn') assert.equal(mail.plainTextFrom(mail.reachEmailHtml({ ...pro, toName: '' })), mail.plainTextFrom(mail.reachEmailHtml({ ...wide, toName: '' })));
     assert.equal((await mail.sendReachEmail(db(null), 'fixture', kind, letter)).reason, 'template not approved');
     assert.equal((await mail.sendReachEmail(db({ approved: true, revision: revisions[kind] }), 'fixture', kind, { ...letter, said: 'private post' })).reason, 'template words changed');
+    if (kind === 'monthCheckIn') assert.equal((await mail.sendReachEmail(db({ approved: true, revision: revisions[kind] }), 'fixture', kind, { ...letter, greeting: 'Hi Nat,' })).reason, 'template words changed');
   }
   // Exercise the actual sending door, including scope lookup and provider payload.
   for (const [kind, hiveId] of [['message', 'pro'], ['mention', null], ['checkIn', 'pro']]) {
