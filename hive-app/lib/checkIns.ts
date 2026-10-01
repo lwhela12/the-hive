@@ -1,5 +1,6 @@
 import type { Community, SurveyQuestion } from '../types';
 import { hiveDisplayName } from './hiveBrand';
+import { QUARTER_PULSE_QUESTIONS } from './quarterPulse';
 
 /**
  * OG HIVE's tune-ups were designed around OG's monthly rhythm. Other HIVEs get
@@ -229,17 +230,9 @@ export function isInHalfwayWindow(
  * two were listed in italics as coming soon until 2026-08-12, when they
  * became real. The italics did not outlive the promise.
  *
- * How they work, decided 2026-08-12:
- *
- * - Each occurrence is its own row in `surveys` — "Quarterly Check-in · Q3
- *   2026", "End-of-Year Check-in · 2026" — launched from Admin (the first
- *   occurrences, Q3 2026 and year-end 2026, were seeded for all three HIVEs
- *   by migration 172 so the rhythm starts without waiting). That reuses
- *   the whole existing survey machinery: members answer through the same
- *   card on Home and the same answer sheet as any survey, and the
- *   `check-in-reminder` cron only ever mails a HIVE that actually holds the
- *   active survey (the property that made the cron safe to leave running).
- *   No new table, no new column, no migration.
+ * Legacy season survey rows and responses remain in storage and Admin history.
+ * The current quarter choices live inside the shared End of the month form,
+ * once for an OG member; Tech and paused Production get no quarter questions.
  *
  * - **December belongs to the year, not the quarter.** Q4's quarter-end and
  *   the year-end are the same three days, and asking somebody to reflect on
@@ -248,10 +241,9 @@ export function isInHalfwayWindow(
  *   end-of-year check-in takes December's slot. During Q4 the next
  *   quarterly is Q1 of the new year.
  *
- * - The card appears on Home three days before the quarter (or year) ends —
- *   Mar 28, Jun 27, Sep 27, Dec 28, computed from the calendar, never
- *   hardcoded — however early Nat launched the survey from Admin. Launching
- *   early is how she reads the questions in the app before members do.
+ * - The OG quarter choices open on the last three days of March, June and
+ *   September and remain available through the first week of the next month.
+ *   The year section keeps its existing timing.
  * ------------------------------------------------------------------------- */
 
 export type SeasonKind = 'quarter' | 'year';
@@ -377,17 +369,11 @@ export function getUpcomingSeasonOccurrence(kind: SeasonKind, today: Date): Seas
  * never a fourth slug check. A HIVE with no entry simply has no season
  * check-in yet, and Admin says so in italics.
  *
- * ALL WORDING BELOW IS A DRAFT (2026-08-12) FOR NAT TO READ IN THE RUNNING
- * APP — launch one from Admin and open it. Rewording happens by asking in
- * chat (the survey builder was killed the same day, Nat: "Survey builder?
- * kill it. We'll just chat here"); a launched row gets its words changed in
- * the database, and the next occurrence picks up whatever this table says at
- * launch time. Nothing is required: the monthly check-in made every question
- * optional and people finish it more, not less.
+ * The quarter choices are optional. Existing launched survey rows keep their
+ * original words and answers; no migration rewrites them.
  */
 
-const QUARTER_DESCRIPTION =
-  'Three months went by — take five quiet minutes to look back before the next ones start. Short answers are perfect.';
+const QUARTER_DESCRIPTION = 'Two optional choices for OG HIVE.';
 const YEAR_DESCRIPTION =
   'The year is wrapping up. Look back with us, celebrate a little, and point at what comes next. Short answers are perfect.';
 
@@ -398,72 +384,9 @@ const q = (
 ): SurveyQuestion => ({ id, text, type, required: false });
 
 const QUARTER_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
-  // OG HIVE — lives and friendships, so the quarter is a chapter of life.
-  default: [
-    q('q_quarter_story', 'How did the last three months — {months} — go? Tell it however it comes: highlights, lowlights, plot twists.'),
-    q('q_quarter_proud', 'What are you proudest of from this quarter?'),
-    q('q_quarter_heavy', 'What took more out of you than it should have?'),
-    q('q_quarter_unsaid', "What did you struggle with this quarter that you didn't mention at the time?"),
-    q('q_quarter_next', 'What do you want the next three months to hold?'),
-    q('q_quarter_hive', 'Anything HIVE can do to make next quarter easier — or more fun?'),
-    // Borrowed with love (Nat, 2026-08-13): the first three from The Culture
-    // Code (belonging, shared struggle, after-action review), the brule from
-    // Vishen Lakhiani — explained in the question because Nat is the only one
-    // who read the book ("ahhaahha").
-    q('q_quarter_belong', 'When did you feel most part of the HIVE this quarter?'),
-    // Spelled out as three blanks (Nat 8/13: "Keep: ___, Change: ___, Try: ___").
-    q('q_quarter_keep', 'Keep: one thing that worked — keep doing it.', 'short'),
-    q('q_quarter_change', 'Change: one thing that needs to be different.', 'short'),
-    q('q_quarter_try', 'Try: one new thing for next quarter.', 'short'),
-    q('q_quarter_brule', 'A "brule" is a rule we follow without ever asking why — a bullshit rule (an idea from Vishen Lakhiani\'s The Code of the Extraordinary Mind). What brule are you ready to break next quarter?'),
-    // The app prints the member's own 3MIQ under this question — never homework.
-    q('q_quarter_miq', 'Your 3 Most Important Questions, as you wrote them, are below. Did this quarter move any of them? What changed?'),
-    q('q_quarter_word', 'One word for the quarter.', 'short'),
-  ],
-  // Tech HIVE — building and learning, so the quarter is measured in what got made.
-  tech: [
-    q('q_quarter_shipped', 'What did you build, ship, or learn this quarter ({months})?'),
-    q('q_quarter_proud', "What are you proudest of — even if nobody else saw it?"),
-    q('q_quarter_stuck', 'Where did you stay stuck the longest, and what would have helped?'),
-    q('q_quarter_unsaid', "What did you struggle with this quarter that you didn't mention at the time?"),
-    q('q_quarter_next', 'What do you want to be true by the end of next quarter?'),
-    q('q_quarter_hive', 'What could this HIVE do for you next quarter — an intro, a second pair of eyes, a nudge?'),
-    // Borrowed with love (Nat, 2026-08-13): the first three from The Culture
-    // Code (belonging, shared struggle, after-action review), the brule from
-    // Vishen Lakhiani — explained in the question because Nat is the only one
-    // who read the book ("ahhaahha").
-    q('q_quarter_belong', 'When did you feel most part of the HIVE this quarter?'),
-    // Spelled out as three blanks (Nat 8/13: "Keep: ___, Change: ___, Try: ___").
-    q('q_quarter_keep', 'Keep: one thing that worked — keep doing it.', 'short'),
-    q('q_quarter_change', 'Change: one thing that needs to be different.', 'short'),
-    q('q_quarter_try', 'Try: one new thing for next quarter.', 'short'),
-    q('q_quarter_brule', 'A "brule" is a rule we follow without ever asking why — a bullshit rule (an idea from Vishen Lakhiani\'s The Code of the Extraordinary Mind). What brule are you ready to break next quarter?'),
-    // The app prints the member's own 3MIQ under this question — never homework.
-    q('q_quarter_miq', 'Your 3 Most Important Questions, as you wrote them, are below. Did this quarter move any of them? What changed?'),
-    q('q_quarter_word', 'One word for the quarter.', 'short'),
-  ],
-  // Production HIVE keeps the database slug `show`.
-  show: [
-    q('q_quarter_stage', 'What did you perform, book, or bring to life this quarter ({months})?'),
-    q('q_quarter_proud', 'What moment are you proudest of — on stage or behind the scenes?'),
-    q('q_quarter_wings', "What's been waiting in the wings that didn't get its moment yet?"),
-    q('q_quarter_unsaid', "What did you struggle with this quarter that you didn't mention at the time?"),
-    q('q_quarter_next', 'What are you building toward for the next three months?'),
-    q('q_quarter_hive', 'How can this HIVE help you get there?'),
-    // Borrowed with love (Nat, 2026-08-13): the first three from The Culture
-    // Code (belonging, shared struggle, after-action review), the brule from
-    // Vishen Lakhiani — explained in the question because Nat is the only one
-    // who read the book ("ahhaahha").
-    q('q_quarter_belong', 'When did you feel most part of the HIVE this quarter?'),
-    // Spelled out as three blanks (Nat 8/13: "Keep: ___, Change: ___, Try: ___").
-    q('q_quarter_keep', 'Keep: one thing that worked — keep doing it.', 'short'),
-    q('q_quarter_change', 'Change: one thing that needs to be different.', 'short'),
-    q('q_quarter_try', 'Try: one new thing for next quarter.', 'short'),
-    q('q_quarter_brule', 'A "brule" is a rule we follow without ever asking why — a bullshit rule (an idea from Vishen Lakhiani\'s The Code of the Extraordinary Mind). What brule are you ready to break next quarter?'),
-    // The app prints the member's own 3MIQ under this question — never homework.
-    q('q_quarter_miq', 'Your 3 Most Important Questions, as you wrote them, are below. Did this quarter move any of them? What changed?'),
-    q('q_quarter_word', 'One word for the quarter.', 'short'),
-  ],
+  // Existing survey rows and responses retain their original questions. New
+  // quarter reviews ask these choices once in the shared End of the month form.
+  default: QUARTER_PULSE_QUESTIONS,
 };
 
 const YEAR_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
@@ -512,14 +435,12 @@ const YEAR_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
   ],
 };
 
-/** Whether this HIVE has a season deck designed at all. All three current
- *  HIVEs do (Nat named all three on the Trello card, 2026-08-12) — this
- *  exists so a brand-new HIVE fails closed into italics, not into OG's deck. */
+/** Whether this HIVE has any season deck designed. */
 export function hasSeasonCheckIns(
   community: Pick<Community, 'slug'> | null | undefined,
 ): boolean {
   const slug = community?.slug ?? '';
-  return slug in QUARTER_QUESTIONS_BY_SLUG && slug in YEAR_QUESTIONS_BY_SLUG;
+  return slug in QUARTER_QUESTIONS_BY_SLUG || slug in YEAR_QUESTIONS_BY_SLUG;
 }
 
 /** Everything Admin needs to insert one occurrence as a `surveys` row. */
@@ -1051,6 +972,9 @@ export function isSurveyOnHomeToday(
     return startOfToday >= opens && startOfToday <= lingersUntil;
   }
 
+  // The new quarter pulse lives in the shared form. Legacy quarter rows remain
+  // in storage and Admin history, but do not create a second member prompt.
+  if (getSeasonCheckInKind(survey) === 'quarter') return false;
   if (!getSeasonCheckInKind(survey)) return true;
   if (!survey.due_date) return true;
 
@@ -1525,19 +1449,8 @@ export function readMergedAnswerKey(key: string): { communityId: string | null; 
  * A seasonal section appears inside its window and falls away after, and
  * nothing has to be launched, retired, or remembered.
  *
- * ## Why the season is per HIVE and not one block
- *
- * Because the three HIVEs ask different questions and reuse the same ids. OG
- * opens its quarter with `q_quarter_story`, Tech with `q_quarter_shipped`,
- * Production with `q_quarter_stage` — and all three then share
- * `q_quarter_proud`, `q_quarter_next`, `q_quarter_hive` and six more. Folded
- * into one flat answer, a member of three HIVEs would have their OG answer
- * overwritten by their Tech one, silently, and only the last would survive.
- *
- * So a season rides the machinery the pre-meeting merge already has: one
- * section per HIVE, one `survey_responses` row per HIVE, each answer under its
- * bare id inside its own row. Every reader that filters by `community_id` — the
- * deck, the Arrival Board, `seal-meeting` — keeps working with no change.
+ * The OG quarter section uses the existing per-HIVE answer row. There is no
+ * repeated block for each HIVE, and older per-HIVE answers remain readable.
  *
  * ## What this replaces
  *
@@ -1550,22 +1463,25 @@ export function openSeasonSections(
 ): MergedCheckInSection[] {
   const sections: MergedCheckInSection[] = [];
   for (const kind of ['quarter', 'year'] as SeasonKind[]) {
-    const occurrence = getUpcomingSeasonOccurrence(kind, today);
-    // The same window the season check-in has always had: it opens three days
-    // before the season ends and closes with it. Not a day of it is invented
-    // here — `getUpcomingSeasonOccurrence` is the one calendar.
+    const quarterReference = kind === 'quarter'
+      ? new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7)
+      : today;
+    const occurrence = getUpcomingSeasonOccurrence(kind, quarterReference);
+    // The quarter opens for the last three days and stays available for seven
+    // more. End of the month keeps its receipt on that same reviewed month.
     const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    if (startOfToday < occurrence.opensDate || startOfToday > occurrence.endDate) continue;
+    const closes = kind === 'quarter'
+      ? new Date(occurrence.endDate.getFullYear(), occurrence.endDate.getMonth(), occurrence.endDate.getDate() + 7)
+      : occurrence.endDate;
+    if (startOfToday < occurrence.opensDate || startOfToday > closes) continue;
 
     for (const hive of hives) {
-      const deck = buildSeasonCheckIn({ slug: hive.slug ?? '' }, kind, today);
+      const deck = buildSeasonCheckIn({ slug: hive.slug ?? '' }, kind, quarterReference);
       if (!deck || !deck.questions.length) continue;
       sections.push({
         communityId: hive.id,
         slug: (hive.slug ?? '').trim().toLowerCase(),
-        // The section header says which HIVE AND which season, because in the
-        // three days a quarter is open a member of two HIVEs is looking at four
-        // sections and needs to know which is which.
+        // Name the HIVE and the reviewed period without repeating questions.
         name: `${hiveDisplayName(hive.name)} · ${deck.occurrence.label}`,
         questions: deck.questions,
         seasonKind: kind,
@@ -1623,7 +1539,7 @@ export function mergedPreMeetingQuestions(
     out.push({
       question: note(key, section.name, [
         section.seasonKind === 'quarter'
-          ? 'Just this HIVE. These come round once a quarter, then they are gone again.'
+          ? 'Two optional choices for this quarter.'
           : section.seasonKind === 'year'
             ? 'Just this HIVE. Once a year, then they are gone again.'
             : 'Just this HIVE, for the next few.',

@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { sendReachEmail, genericLetter, deepLink, hiveIsMeetingNow, templateIsApproved } from '../_shared/reachMail.ts';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
-import { waitingForCheckIn, reminderKey, type CheckInMeeting } from '../_shared/checkInSession.ts';
+import { waitingForCheckIn, reminderKey, monthEndReviewPeriod, type CheckInMeeting } from '../_shared/checkInSession.ts';
 import { deliverCheckIn } from '../_shared/checkInDelivery.ts';
 import { MONTHLY_CHECK_IN_PATTERN, PRE_MEETING_CHECK_IN_PATTERN, END_OF_MONTH_CHECK_IN_PATTERN } from '../_shared/checkInPatterns.ts';
 import { hiveMark } from '../_shared/hiveMark.ts';
@@ -37,8 +37,8 @@ import { hiveMark } from '../_shared/hiveMark.ts';
  * ## The rules this door keeps
  *
  * - **Only an owner may open one.** Same bar as the approval screen it replaces.
- * - **Only people who have not answered.** Nobody is nudged about a form they
- *   have already filled in.
+ * - **Only people who have not answered in a campaign.** An owner may send
+ *   themselves the normal month letter to revisit an existing answer.
  * - **Every member's own switch decides**, through `sendReachEmail` — Nat never
  *   chooses on somebody's behalf. `email_meeting_checkin_enabled` for a
  *   before-we-meet, `email_midpoint_checkin_enabled` for an end-of-the-month.
@@ -54,6 +54,8 @@ interface OpenCheckInPayload {
   survey_id: string;
   /** Answer with who would get it and send nothing. */
   dry_run?: boolean;
+  /** Owner may send their own normal check-in email without opening a campaign. */
+  self_only?: boolean;
 }
 
 /** How the two check-ins are told apart, in the same words the app uses. */
@@ -119,9 +121,8 @@ serve(async (req) => {
    * A survey belonging to a HIVE reaches that HIVE. A survey belonging to none
    * is one of the two merged check-ins, and the two do NOT reach the same room:
    *
-   *   End of the month   everybody, in every HIVE, once however many they are
-   *                      in. It counts to the end of the calendar month, so it
-   *                      is the same question for all of them on the same day.
+   *   End of the month   active OG and Tech members, once however many of
+   *                      those HIVEs they are in. Production is paused.
    *
    *   Before we meet     the members of whichever HIVE meets TOMORROW, minus
    *                      anyone who has already answered that HIVE's part.
@@ -203,10 +204,21 @@ serve(async (req) => {
    *
    * For a merged pre-meeting this is asked per HIVE — a member of two HIVEs who
    * answered one of them is done for that one and still waiting on the other.
+   * An owner-only self-send can reopen their own completed month; it never
+   * changes who is pending for the ordinary campaign.
    */
-  const scopeIds = survey.community_id
+  let scopeIds = survey.community_id
     ? [survey.community_id]
     : meetingTomorrow.map((h) => h.id);
+  if (shape.kind === 'monthCheckIn') {
+    // Production is paused for this rollout. Resolve active HIVE IDs without
+    // ever putting another HIVE's name or content in a member letter.
+    const { data: activeHives, error: activeError } = await admin.from('communities')
+      .select('id').in('slug', ['default', 'tech']);
+    if (activeError) return errorResponse('Could not resolve check-in scope. Nothing sent.', 503);
+    scopeIds = (activeHives ?? []).map((hive: { id: string }) => hive.id);
+    if (!scopeIds.length) return errorResponse('No active HIVE is available for this check-in.', 409);
+  }
 
   const membershipQuery = admin
     .from('community_memberships')
@@ -224,13 +236,21 @@ serve(async (req) => {
     .eq('survey_id', survey.id);
   if (completionError) return errorResponse('Could not verify completed check-ins. Nothing sent.', 503);
   const day = pacificDate(new Date());
-  const pending = waitingForCheckIn(memberships, dueMeetings, answeredRows ?? [], day.slice(0, 7));
+  const reviewPeriod = shape.kind === 'monthCheckIn' ? monthEndReviewPeriod(day) : day.slice(0, 7);
+  const selfOnly = body.self_only === true;
+  const eligible = selfOnly ? everyone.filter(id => id === auth.userId) : everyone;
+  const unanswered = waitingForCheckIn(memberships, dueMeetings, answeredRows ?? [], reviewPeriod);
+  // An owner can ask for their own normal month letter even after an earlier
+  // answer. The form loads that answer for review; the campaign still skips it.
+  const pending = selfOnly && shape.kind === 'monthCheckIn' && eligible.length
+    ? [auth.userId]
+    : unanswered.filter(id => !selfOnly || id === auth.userId);
   const { data: prior, error: receiptError } = await admin.from('check_in_reminder_receipts')
     .select('dedupe_key').in('dedupe_key', pending.map(id => reminderKey(shape.kind, id, day)));
   if (receiptError) return errorResponse('Could not verify reminder receipts. Nothing sent.', 503);
   const claimed = new Set((prior ?? []).map((r: { dedupe_key: string }) => r.dedupe_key));
   const waiting = pending.filter(id => !claimed.has(reminderKey(shape.kind, id, day)));
-  const answeredAnywhere = new Set(everyone.filter(id => !pending.includes(id)));
+  const answeredAnywhere = new Set(eligible.filter(id => !unanswered.includes(id)));
 
   let hiveName = 'HIVE';
   let hiveSlug: string | null = null;
@@ -254,6 +274,8 @@ serve(async (req) => {
     return jsonResponse({
       survey_id: survey.id,
       check_in: shape.name,
+      mode: selfOnly ? 'self_only' : 'all_eligible',
+      review_period: reviewPeriod,
       // A NAME, not a sentence — the app puts this inside "16 people in ___
       // get an email". This one is read by an owner, inside Admin, so it may
       // name the HIVE meeting tomorrow; the LETTER below may not.
@@ -261,8 +283,8 @@ serve(async (req) => {
         ? hiveName
         : meetingTomorrow.length
           ? meetingTomorrow.map((h) => h.name).join(' and ')
-          : 'every HIVE',
-      members: everyone.length,
+          : 'active HIVEs',
+      members: eligible.length,
       answered: answeredAnywhere.size,
       already_claimed: pending.length - waiting.length,
       would_reach: waiting.length,
@@ -312,6 +334,8 @@ serve(async (req) => {
   return jsonResponse({
     survey_id: survey.id,
     check_in: shape.name,
+    mode: selfOnly ? 'self_only' : 'all_eligible',
+    review_period: reviewPeriod,
     reached: delivery.notified,
     already_claimed: pending.length - waiting.length,
     ...delivery,

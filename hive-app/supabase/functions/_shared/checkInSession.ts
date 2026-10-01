@@ -4,6 +4,12 @@ export type CheckInCompletion = { user_id: string; community_id: string | null; 
 export const meetingOccurrence = (eventId: string) => `meeting:${eventId}`;
 export const nextMeetingOccurrence = (communityId: string) => `next:${communityId}`;
 export const reminderKey = (_kind: string, userId: string, day: string) => `check-in:${userId}:${day}`;
+/** Use the reviewed Pacific month during the seven-day month-end grace. */
+export function monthEndReviewPeriod(pacificDay: string): string {
+  const [year, month, day] = pacificDay.split('-').map(Number);
+  if (day <= 7) return new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
+  return pacificDay.slice(0, 7);
+}
 export function scopeAnswers(answers: Record<string, unknown>, communityId: string) {
   return Object.fromEntries(Object.entries(answers).filter(([key]) => key.startsWith(`${communityId}:`)).map(([key, value]) => [key.slice(communityId.length + 1), value]));
 }

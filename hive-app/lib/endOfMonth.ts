@@ -36,12 +36,15 @@ export async function saveEndOfMonth({ answers, communityIds, todos, applyTasks,
 }): Promise<{ error: string | null }> {
   try {
     const perHive = communityIds.map(id => {
-      const own: SurveyAnswers = { ...answers.hives[id], [CARRY_FORWARD_ANSWER_KEY]: endOfMonthTaskResponses(todos[id] ?? [], answers.hives[id] ?? {}).map(item => ({ ...item })) };
+      const currentTasks = endOfMonthTaskResponses(todos[id] ?? [], answers.hives[id] ?? {});
+      const previousTasks = normalizeCarryForwardResponse(answers.hives[id]?.[CARRY_FORWARD_ANSWER_KEY]);
+      const historicalTasks = previousTasks.filter(previous => !currentTasks.some(current => current.type === previous.type && current.id === previous.id));
+      const own: SurveyAnswers = { ...answers.hives[id], [CARRY_FORWARD_ANSWER_KEY]: [...currentTasks, ...historicalTasks].map(item => ({ ...item })) };
       // Newsletter material belongs in the one shared row, never once per HIVE.
       for (const key of ['q_newsletter', 'q_eom_newsletter', 'q_shoutout']) delete own[key];
-      return { id, answers: own };
+      return { id, answers: own, currentTasks };
     });
-    const tasks = await applyTasks(perHive.flatMap(hive => normalizeCarryForwardResponse(hive.answers[CARRY_FORWARD_ANSWER_KEY])));
+    const tasks = await applyTasks(perHive.flatMap(hive => hive.currentTasks));
     if (tasks.error) return { error: 'Your to-do updates could not be confirmed. Your draft is still here; please try again.' };
     for (const hive of perHive) {
       const result = await save(hive.id, hive.answers);

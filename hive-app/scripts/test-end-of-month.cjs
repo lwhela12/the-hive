@@ -11,6 +11,13 @@ function load(file) {
   return module.exports;
 }
 const { restoreEndOfMonthAnswers, endOfMonthTaskResponses, saveEndOfMonth } = load(path.resolve('lib/endOfMonth.ts'));
+const monthRoute = fs.readFileSync('app/(app)/endofmonth/index.tsx', 'utf8');
+assert.match(monthRoute, /memberships\.filter\(m => m\.community\.slug === 'default' \|\| m\.community\.slug === 'tech'\)/,
+  'only active HIVE memberships reach the month form');
+assert.match(monthRoute, /draftKey=\{`survey-draft:\$\{profile!\.id\}:\$\{current\.survey\.id\}:\$\{month\}:continuous`\}/,
+  'the draft key includes member, survey, and reviewed period');
+assert.ok(monthRoute.indexOf('<AppHeader') < monthRoute.indexOf('<EndOfMonthForm'), 'the page header remains outside the form');
+assert.equal((monthRoute.match(/<EndOfMonthForm\b/g) ?? []).length, 1, 'one form contains all HIVE sections and the shared contribution');
 const task = { id: 'task', type: 'action_item', label: 'Bring props', sourceLabel: 'To-do' };
 const answers = restoreEndOfMonthAnswers(['og', 'tech', 'production'], {
   og: { quarterly: 'keep this', q_newsletter: 'legacy' }, month: { q_eom_newsletter: 'My event', q_shoutout: 'Thank you' },
@@ -31,6 +38,8 @@ async function run() {
   assert.equal((await saveEndOfMonth(options)).error, null);
   assert.equal(calls.map(call => call[0]).join(','), 'tasks,og,tech,production,');
   assert.equal(calls[0][1].length, 1);
+  assert.equal(calls[3][1].q_carry_forward_items.length, 2, 'a repeated save preserves archived task history');
+  assert.equal(calls[3][1].q_carry_forward_items[1].id, 'stale');
   assert.equal(calls[1][1].quarterly, 'new draft');
   assert.equal(calls[1][1].q_newsletter, undefined);
   assert.equal(calls.at(-1)[1].q_newsletter, 'My event');
@@ -45,6 +54,7 @@ async function run() {
   assert.ok((await saveEndOfMonth({ ...options, save: async id => ({ error: id === null ? 'offline' : null }) })).error);
   assert.ok((await saveEndOfMonth({ ...options, save: async () => { throw new Error('network'); } })).error);
   assert.equal((await saveEndOfMonth(options)).error, null, 'the same draft remains retryable');
+  assert.equal(calls[0][1].length, 1, 'a retry never reapplies stale archived tasks');
   assert.equal(answers.hives.og.q_newsletter, 'legacy', 'save does not mutate the draft');
   console.log('One-page check-in: scoped tasks, draft migration, shared Buzz save, and failure/retry paths passed.');
 }

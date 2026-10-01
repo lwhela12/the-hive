@@ -15,12 +15,13 @@ import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import type { Community, SurveyQuestion } from '../../types';
 import type { SurveyAnswerValue } from '../../lib/hooks/useSurveys';
 
-export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraftKeys, readOnly, onSave, onDone, doneLabel, onEmailSettings }: {
+export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraftKeys, readOnly, showQuarterAnnouncements = false, onSave, onDone, doneLabel, onEmailSettings }: {
   sections: { community: Community; todos: CarryForwardItem[]; questions: SurveyQuestion[] }[];
   initialAnswers: EndOfMonthAnswers;
   draftKey: string;
   legacyDraftKeys: string[];
   readOnly: boolean;
+  showQuarterAnnouncements?: boolean;
   onSave: (answers: EndOfMonthAnswers) => Promise<{ error: string | null }>;
   onDone: () => void;
   doneLabel: string;
@@ -97,23 +98,31 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
               const archived = item.status === 'archive';
               const setStatus = (status: CarryForwardStatus) => updateHive(community.id, CARRY_FORWARD_ANSWER_KEY,
                 endOfMonthTaskResponses(section.todos, answerRef.current.hives[community.id] ?? {}).map(task => ({ ...task, status: task.id === item.id ? status : task.status })));
-              return <View key={item.id} style={{ borderTopWidth: 1, borderColor: tint.line(0.2), paddingTop: 8, gap: 2 }}>
-                <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: done, disabled: readOnly || saving }}
-                  accessibilityLabel={`${done ? 'Mark still to do' : 'Mark done'}: ${parsed.text}`}
-                  disabled={readOnly || saving} onPress={() => setStatus(done ? 'keep_active' : 'done')}
-                  style={({ pressed }) => ({ flexDirection: 'row', gap: 10, alignItems: 'center', minHeight: 44, opacity: pressed ? 0.7 : 1 })}>
-                  <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={tint.accent} />
-                  <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: 14, lineHeight: 21, color: '#313130', textDecorationLine: done || archived ? 'line-through' : 'none' }}>{parsed.text}</Text>
-                </Pressable>
-                {!!(parsed.context || item.detail) && <Text style={{ marginLeft: 34, fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#5c5648' }}>
-                  {[parsed.context, item.detail].filter(Boolean).join(' · ')}
-                </Text>}
-                <Pressable accessibilityRole="button" disabled={readOnly || saving} onPress={() => setStatus(archived ? 'keep_active' : 'archive')}
-                  style={({ pressed }) => ({ alignSelf: 'flex-start', marginLeft: 24, minHeight: 44, paddingHorizontal: 10, justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
-                  <Text style={{ ...buttonText, fontSize: 12, color: tint.ink }}>{archived ? 'Undo archive' : 'Archive'}</Text>
-                </Pressable>
+              return <View key={item.id} style={{ borderTopWidth: 1, borderColor: tint.line(0.2), paddingTop: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 4 }}>
+                  <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: done, disabled: readOnly || saving }}
+                    accessibilityLabel={`${done ? 'Mark still to do' : 'Mark done'}: ${parsed.text}`}
+                    disabled={readOnly || saving} onPress={() => setStatus(done ? 'keep_active' : 'done')}
+                    style={({ pressed }) => ({ flex: 1, minWidth: 0, flexDirection: 'row', gap: 8, alignItems: 'flex-start', minHeight: 44, paddingVertical: 8, opacity: pressed ? 0.7 : 1 })}>
+                    <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={tint.accent} />
+                    <View style={{ flex: 1, gap: 1 }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, lineHeight: 19, color: '#313130', textDecorationLine: done || archived ? 'line-through' : 'none' }}>{parsed.text}</Text>
+                      {!!(parsed.context || item.detail) && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 17, color: '#5c5648' }}>
+                        {[parsed.context, item.detail].filter(Boolean).join(' · ')}
+                      </Text>}
+                    </View>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`${archived ? 'Undo archive' : 'Archive'}: ${parsed.text}`}
+                    disabled={readOnly || saving} onPress={() => setStatus(archived ? 'keep_active' : 'archive')}
+                    style={({ pressed }) => ({ minHeight: 44, minWidth: 68, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
+                    <Text style={{ ...buttonText, fontSize: 12, color: tint.ink }}>{archived ? 'Undo' : 'Archive'}</Text>
+                  </Pressable>
+                </View>
               </View>;
             })}
+            {showQuarterAnnouncements && community.slug === 'tech' && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#5c5648' }}>
+              If you want to revisit your 3 Most Important Questions, you can update them on your profile.
+            </Text>}
             {section.questions.map((question, index) => readOnly
               ? <View key={question.id} style={{ gap: 6 }}><Text style={{ ...buttonText, color: '#313130' }}>{question.text}</Text>
                   {question.options?.map(option => <Text key={option} style={{ fontFamily: 'Lato_400Regular', color: '#5c5648' }}>{option}</Text>)}</View>
@@ -122,6 +131,15 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
                   accent={tint.accent} answers={own} onSetAnswer={(id, value) => updateHive(community.id, id, value)} />)}
           </View>;
         })}
+        {showQuarterAnnouncements && <View style={{ backgroundColor: '#fffdf5', borderRadius: 16, padding: 16, gap: 8, borderWidth: 1, borderColor: skin.borderStrong }}>
+          <Text accessibilityRole="header" style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: '#313130' }}>From Nat</Text>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
+            Nat is scheduling virtual and in-person times to design and order HIVE hoodies. Joining an order is optional for members outside OG HIVE, at cost.
+          </Text>
+          {sections.some(section => section.community.slug === 'default') && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
+            OG HIVE hoodies are covered by quarterly dues in the Honey Pot. The remainder is for January’s Bumblebee Ball.
+          </Text>}
+        </View>}
         <View style={{ backgroundColor: '#fffdf5', borderRadius: 16, padding: 16, gap: 16, borderWidth: 2, borderColor: skin.gold }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <Image source={hiveSeal(null)} accessibilityLabel="HIVE-Wide logo" contentFit="contain" style={{ width: 48, height: 48 }} />

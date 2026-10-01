@@ -5,8 +5,9 @@ const ts = require('typescript');
 const jsx = require('react/jsx-runtime');
 
 // Exercise the real form's save/exit handlers without writing member data.
-function harness(result) {
-  const slots = []; let cursor = 0; let saves = 0; let exits = 0; let removed = 0;
+function harness(result, withTask = false) {
+  const slots = []; let cursor = 0; let saves = 0; let exits = 0; let removed = 0; let savedAnswers;
+  const drafts = [];
   const react = {
     useState: initial => { const i = cursor++; if (!(i in slots)) slots[i] = initial;
       return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next; }]; },
@@ -17,11 +18,15 @@ function harness(result) {
     'react-native': Object.fromEntries(['ActivityIndicator', 'Pressable', 'ScrollView', 'Text', 'View'].map(n => [n, n])),
     'expo-image': { Image: 'Image' }, '@expo/vector-icons': { Ionicons: 'Ionicons' },
     '@react-native-async-storage/async-storage': { __esModule: true, default: {
-      setItem: async () => {}, multiRemove: async () => { removed++; },
+      setItem: async (key, value) => { drafts.push([key, JSON.parse(value)]); }, multiRemove: async () => { removed++; },
     } },
     '../../lib/pageSkin': { SPACE_SKIN: {} },
-    '../../lib/hiveBrand': { hiveSeal: () => 1, hiveAccent: () => '#bb9445', accentPalette: () => ({}) },
-    '../../lib/carryForward': {}, '../../lib/endOfMonth': {}, '../../lib/actionItemDisplay': {},
+    '../../lib/hiveBrand': { hiveSeal: () => 1, hiveAccent: () => '#bb9445', hiveDisplayName: name => name,
+      accentPalette: () => ({ accent: '#bb9445', ink: '#815e25', line: () => '#ded3ba' }) },
+    '../../lib/carryForward': { CARRY_FORWARD_ANSWER_KEY: 'q_carry_forward_items' },
+    '../../lib/endOfMonth': { endOfMonthTaskResponses: (items, answers) => items.map(item => ({ ...item,
+      status: answers.q_carry_forward_items?.find(saved => saved.id === item.id)?.status ?? 'keep_active' })) },
+    '../../lib/actionItemDisplay': { parseActionItemDescription: label => ({ text: label, context: null }) },
     './SurveyQuestionField': { SurveyQuestionField: 'Question' },
     './BuzzContributionInput': { BuzzContributionInput: 'Input' },
     './BuzzCalendarPreview': { BuzzCalendarPreview: 'Calendar' },
@@ -39,13 +44,15 @@ function harness(result) {
   const { SurveyCompletion } = load('components/surveys/SurveyCompletion.tsx');
   mocks['./SurveyCompletion'] = { SurveyCompletion };
   const { EndOfMonthForm } = load('components/surveys/EndOfMonthForm.tsx');
-  const props = { sections: [], initialAnswers: { hives: {}, month: { q_shoutout: 'Keep my words' } },
-    draftKey: 'test', legacyDraftKeys: [], readOnly: false, doneLabel: 'Back to Home',
-    onSave: async answers => { saves++; assert.equal(answers.month.q_shoutout, 'Keep my words'); return await result(); },
+  const task = { id: 'task', type: 'action_item', sourceLabel: 'To-do', label: 'Complete the full event brief and share accessibility notes', detail: 'Assigned to Nat · Due Oct 5' };
+  const props = { sections: withTask ? [{ community: { id: 'og', slug: 'default', name: 'OG HIVE' }, todos: [task], questions: [] }] : [],
+    initialAnswers: { hives: withTask ? { og: {} } : {}, month: { q_shoutout: 'Keep my words' } },
+    draftKey: withTask ? 'survey-draft:member:survey:2026-09:continuous' : 'test', legacyDraftKeys: [], readOnly: false, doneLabel: 'Back to Home',
+    onSave: async answers => { saves++; savedAnswers = answers; assert.equal(answers.month.q_shoutout, 'Keep my words'); return await result(); },
     onDone: () => { exits++; }, onEmailSettings: () => {},
   };
   function render() { cursor = 0; return EndOfMonthForm(props); }
-  return { render, SurveyCompletion, counts: () => ({ saves, exits, removed }) };
+  return { render, SurveyCompletion, counts: () => ({ saves, exits, removed }), drafts, savedAnswers: () => savedAnswers };
 }
 function walk(node) {
   if (!node || typeof node !== 'object') return [];
@@ -63,7 +70,7 @@ function button(tree, label) { return walk(tree).find(n => n.type === 'Pressable
   const h = harness(() => new Promise(resolve => { finish = resolve; }));
   let tree = h.render();
   const saving = button(tree, 'Save check-in').props.onPress();
-  await Promise.resolve();
+  await new Promise(resolve => setImmediate(resolve));
   tree = h.render();
   assert.equal(button(tree, 'Done for now').props.disabled, true, 'cannot exit mid-save');
   assert.ok(!walk(tree).some(n => n.type === h.SurveyCompletion), 'no success before save resolves');
@@ -86,5 +93,31 @@ function button(tree, label) { return walk(tree).find(n => n.type === 'Pressable
     assert.ok(button(failed, 'Save check-in'), 'retry remains available');
     assert.deepEqual(bad.counts(), { saves: 1, exits: 0, removed: 0 }, 'failure retains draft and does not exit');
   }
-  console.log('Survey completion: success replaces form, explicit exit, review preserves answers, pending/error saves remain safe.');
+  const taskForm = harness(async () => ({ error: null }), true);
+  let taskTree = taskForm.render();
+  const checkbox = walk(taskTree).find(n => n.props?.accessibilityRole === 'checkbox');
+  const archive = walk(taskTree).find(n => n.props?.accessibilityLabel?.startsWith('Archive:'));
+  assert.ok(walk(taskTree).some(n => n.type === 'View' && Array.isArray(n.props?.children)
+    && n.props.children[0] === checkbox && n.props.children[1] === archive), 'Archive sits beside the full task');
+  assert.match(text(checkbox), /full event brief.*accessibility notes/);
+  assert.match(text(checkbox), /Assigned to Nat · Due Oct 5/);
+  const taskLabel = walk(checkbox).find(n => n.type === 'Text' && n.props?.children === 'Complete the full event brief and share accessibility notes');
+  assert.equal(taskLabel?.props.numberOfLines, undefined, 'task text is not truncated');
+  archive.props.onPress();
+  taskTree = taskForm.render();
+  const undo = walk(taskTree).find(n => n.props?.accessibilityLabel?.startsWith('Undo archive:'));
+  assert.ok(undo, 'Archive can be undone before saving');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(taskForm.drafts.at(-1)[0], 'survey-draft:member:survey:2026-09:continuous', 'draft stays scoped to member, survey and month');
+  undo.props.onPress();
+  taskTree = taskForm.render();
+  assert.ok(walk(taskTree).some(n => n.props?.accessibilityLabel?.startsWith('Archive:')));
+  await button(taskTree, 'Save check-in').props.onPress();
+  assert.equal(taskForm.savedAnswers().hives.og.q_carry_forward_items[0].status, 'keep_active');
+  assert.equal(taskForm.counts().removed, 1, 'successful save clears the scoped draft');
+  const archivedForm = harness(async () => ({ error: null }), true);
+  walk(archivedForm.render()).find(n => n.props?.accessibilityLabel?.startsWith('Archive:')).props.onPress();
+  await button(archivedForm.render(), 'Save check-in').props.onPress();
+  assert.equal(archivedForm.savedAnswers().hives.og.q_carry_forward_items[0].status, 'archive');
+  console.log('Survey completion: compact task Archive/Undo, scoped drafts, retry, and explicit save/exit passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

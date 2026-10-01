@@ -17,6 +17,7 @@ import { applyCarryForwardStatuses, type CarryForwardItem } from '../../../lib/c
 import { restoreEndOfMonthAnswers, saveEndOfMonth, type EndOfMonthAnswers } from '../../../lib/endOfMonth';
 import { queryClient } from '../../../lib/queryClient';
 import { formatDateShort } from '../../../lib/dateUtils';
+import { endOfMonthContext } from '../../../lib/endOfMonthPeriod';
 import type { Survey } from '../../../types';
 
 type TaskRow = { id: string; description: string; due_date: string | null; related_board_post_id: string | null };
@@ -32,8 +33,9 @@ export default function EndOfMonthScreen() {
   const returnTo = from === 'meetings' ? '/meetings' : from === 'hive' ? '/hive' : '/hive-wide';
   const { loading: authLoading, profile, communityId, memberships } = useAuth();
   const { submitCheckInOccurrence } = useSurveys(communityId ?? undefined, profile?.id);
-  const month = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }).slice(0, 7);
-  const memberKey = memberships.map(m => m.community_id).join(',');
+  const { period: month, reviewDate } = endOfMonthContext(new Date());
+  const activeMemberships = memberships.filter(m => m.community.slug === 'default' || m.community.slug === 'tech');
+  const memberKey = activeMemberships.map(m => m.community_id).join(',');
   const scope = `${profile?.id ?? ''}:${month}:${askedDate ?? ''}:${memberKey}`;
   const currentScope = useRef(scope);
   currentScope.current = scope;
@@ -43,7 +45,7 @@ export default function EndOfMonthScreen() {
   const skin = SPACE_SKIN;
 
   useEffect(() => {
-    if (authLoading || !profile || !memberships.length) return;
+    if (authLoading || !profile || !activeMemberships.length) return;
     let cancelled = false;
     setLoaded(null); setFailure(null);
     (async () => {
@@ -52,7 +54,7 @@ export default function EndOfMonthScreen() {
       if (error) throw error;
       const survey = data?.[0] as Survey | undefined;
       if (!survey) throw new Error('End of the month has not been set up yet.');
-      const ids = memberships.map(m => m.community_id);
+      const ids = activeMemberships.map(m => m.community_id);
       const legacyDraftKeys = [...ids, 'month'].map(id => `survey-draft:${profile.id}:${survey.id}:${month}:${id}`);
       const draftKey = `survey-draft:${profile.id}:${survey.id}:${month}:continuous`;
       const [receipts, rosters, storedDrafts, combined] = await Promise.all([
@@ -65,7 +67,8 @@ export default function EndOfMonthScreen() {
           if (result.error) throw new Error('Your to-dos could not load. Please try again.');
           return [id, result.data.filter(item => hasMeaningfulActionItemText(item.description)).map(item => ({
             id: item.id, type: 'action_item' as const, label: item.description, sourceLabel: 'To-do',
-            detail: item.due_date ? `Due ${formatDateShort(item.due_date)}` : null, relatedBoardPostId: item.related_board_post_id,
+            detail: [`Assigned to ${profile.name}`, item.due_date ? `Due ${formatDateShort(item.due_date)}` : null].filter(Boolean).join(' · '),
+            relatedBoardPostId: item.related_board_post_id,
           }))] as const;
         })),
         askedDate ? Promise.resolve([]) : AsyncStorage.multiGet(legacyDraftKeys),
@@ -95,20 +98,22 @@ export default function EndOfMonthScreen() {
 
   const current = loaded?.scope === scope ? loaded : null;
   const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(askedDate ?? '');
-  const previewDate = dateMatch ? new Date(Number(dateMatch[1]), Number(dateMatch[2]) - 1, Number(dateMatch[3])) : new Date();
-  const seasonal = openSeasonSections(memberships.map(m => ({ id: m.community_id, slug: m.community.slug, name: m.community.name })), previewDate);
+  const previewDate = dateMatch ? new Date(Number(dateMatch[1]), Number(dateMatch[2]) - 1, Number(dateMatch[3]), 12) : reviewDate;
+  const seasonal = openSeasonSections(activeMemberships.map(m => ({ id: m.community_id, slug: m.community.slug, name: m.community.name })), previewDate);
   if (!isFocused) return null;
 
   return <View style={{ flex: 1, backgroundColor: skin.page }}>
     <AppHeader title="End of the month" onBackPress={() => router.replace(returnTo as never)} />
-    {current ? <EndOfMonthForm key={`${scope}:${current.survey.id}`} sections={memberships.map(m => ({
+    {!authLoading && activeMemberships.length === 0
+      ? <Text style={{ margin: 24, fontFamily: 'Lato_400Regular', color: skin.ink }}>This check-in is paused for your HIVE.</Text>
+      : current ? <EndOfMonthForm key={`${scope}:${current.survey.id}`} sections={activeMemberships.map(m => ({
       community: m.community, todos: current.todos[m.community_id] ?? [],
       questions: seasonal.filter(section => section.communityId === m.community_id).flatMap(section => section.questions),
-    }))} initialAnswers={current.initialAnswers} draftKey={`survey-draft:${profile!.id}:${current.survey.id}:${month}:continuous`}
+    }))} initialAnswers={current.initialAnswers} showQuarterAnnouncements={month === '2026-09'} draftKey={`survey-draft:${profile!.id}:${current.survey.id}:${month}:continuous`}
       legacyDraftKeys={current.legacyDraftKeys} readOnly={!!askedDate}
       onSave={async answers => {
         if (askedDate || currentScope.current !== scope || !profile) return { error: 'Please reopen this check-in before saving.' };
-        const result = await saveEndOfMonth({ answers, communityIds: memberships.map(m => m.community_id), todos: current.todos,
+        const result = await saveEndOfMonth({ answers, communityIds: activeMemberships.map(m => m.community_id), todos: current.todos,
           applyTasks: items => applyCarryForwardStatuses(supabase as never, profile.id, items),
           save: (id, own) => submitCheckInOccurrence(current.survey.id, own, id, `month:${month}`),
         });

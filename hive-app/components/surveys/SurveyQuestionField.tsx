@@ -44,7 +44,7 @@ export function ScaleInput({ value, onChange, accent = HIVE_GOLD }: { value: num
   );
 }
 
-export function ChoiceInput({ options, value, onChange, multi, accent = HIVE_GOLD }: { options: string[]; value: string | string[]; onChange: (v: string | string[]) => void; multi?: boolean; accent?: string }) {
+export function ChoiceInput({ options, value, onChange, multi, compact = false, accent = HIVE_GOLD }: { options: string[]; value: string | string[]; onChange: (v: string | string[]) => void; multi?: boolean; compact?: boolean; accent?: string }) {
   const tint = accentPalette(accent);
   const selected = multi ? (value as string[]) : [value as string];
   const toggle = (opt: string) => {
@@ -52,22 +52,26 @@ export function ChoiceInput({ options, value, onChange, multi, accent = HIVE_GOL
       const arr = selected.includes(opt) ? selected.filter(s => s !== opt) : [...selected, opt];
       onChange(arr);
     } else {
-      onChange(opt);
+      onChange(compact && selected.includes(opt) ? '' : opt);
     }
   };
   return (
-    <View style={{ gap: 8, marginTop: 8 }}>
+    <View style={{ gap: compact ? 6 : 8, marginTop: 8, flexDirection: compact ? 'row' : 'column', flexWrap: compact ? 'wrap' : 'nowrap' }}>
       {options.map(opt => {
         const active = selected.includes(opt);
         return (
           <Pressable
             key={opt}
             onPress={() => toggle(opt)}
+            accessibilityRole={multi ? 'checkbox' : 'radio'}
+            accessibilityState={{ checked: active }}
+            accessibilityLabel={opt}
             style={{
-              flexDirection: 'row', alignItems: 'center', gap: 12,
+              flexDirection: 'row', alignItems: 'center', gap: compact ? 7 : 12,
+              ...(compact ? { flexBasis: '48%', flexGrow: 1, minHeight: 44 } : {}),
               backgroundColor: active ? tint.wash : '#faf8f3',
               borderWidth: 1, borderColor: active ? tint.line(0.6) : tint.line(0.2),
-              borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+              borderRadius: 12, paddingHorizontal: compact ? 9 : 14, paddingVertical: compact ? 8 : 12,
             }}
           >
             <View style={{
@@ -816,7 +820,7 @@ export function SurveyQuestionField({
         <ScaleInput value={value ?? null} onChange={onChange} accent={accent} />
       )}
       {question.type === 'choice' && question.options && (
-        <ChoiceInput options={question.options} value={choiceValue ?? ''} onChange={onChange} accent={accent} />
+        <ChoiceInput options={question.options} value={choiceValue ?? ''} onChange={onChange} accent={accent} compact={question.id.startsWith('q_quarter_')} />
       )}
       {question.type === 'hangs' && (
         <HangsRecapInput value={textValue} onChange={onChange} hangs={hangEvents ?? []} accent={accent} />
