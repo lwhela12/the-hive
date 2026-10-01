@@ -10,6 +10,7 @@ import { SPACE_SKIN } from '../../../lib/pageSkin';
 import { useSurveys, type SurveyAnswers } from '../../../lib/hooks/useSurveys';
 import { AppHeader } from '../../../components/navigation/AppHeader';
 import { EndOfMonthForm } from '../../../components/surveys/EndOfMonthForm';
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { openSeasonSections } from '../../../lib/checkIns';
 import { fetchCheckInActionItems } from '../../../lib/checkInActionItems';
 import { hasMeaningfulActionItemText } from '../../../lib/actionItemDisplay';
@@ -18,6 +19,8 @@ import { restoreEndOfMonthAnswers, saveEndOfMonth, type EndOfMonthAnswers } from
 import { queryClient } from '../../../lib/queryClient';
 import { formatDateShort } from '../../../lib/dateUtils';
 import { endOfMonthContext } from '../../../lib/endOfMonthPeriod';
+import { isOwnMonthEmailPreview, wasOwnMonthEmailSent } from '../../../lib/ownMonthEmail';
+import { showAlert } from '../../../lib/showAlert';
 import type { Survey } from '../../../types';
 
 type TaskRow = { id: string; description: string; due_date: string | null; related_board_post_id: string | null };
@@ -42,6 +45,9 @@ export default function EndOfMonthScreen() {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [mailState, setMailState] = useState<'idle' | 'checking' | 'sending'>('idle');
+  const [confirmOwnMail, setConfirmOwnMail] = useState<{ surveyId: string; reviewPeriod: string } | null>(null);
+  const mailBusy = useRef(false);
   const skin = SPACE_SKIN;
 
   useEffect(() => {
@@ -100,6 +106,51 @@ export default function EndOfMonthScreen() {
   const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(askedDate ?? '');
   const previewDate = dateMatch ? new Date(Number(dateMatch[1]), Number(dateMatch[2]) - 1, Number(dateMatch[3]), 12) : reviewDate;
   const seasonal = openSeasonSections(activeMemberships.map(m => ({ id: m.community_id, slug: m.community.slug, name: m.community.name })), previewDate);
+
+  const previewOwnMail = async () => {
+    if (mailBusy.current || !profile?.is_owner || !current || askedDate) return;
+    mailBusy.current = true; setMailState('checking');
+    try {
+      const { data, error } = await supabase.functions.invoke('open-check-in', {
+        body: { survey_id: current.survey.id, dry_run: true, self_only: true },
+      });
+      if (error || !isOwnMonthEmailPreview(data, current.survey.id, month)) {
+        showAlert('Nothing sent', 'Your private check-in email is not ready. Please try again later.');
+        return;
+      }
+      setConfirmOwnMail({ surveyId: current.survey.id, reviewPeriod: month });
+    } catch {
+      showAlert('Nothing sent', 'Could not check your private email right now.');
+    } finally {
+      mailBusy.current = false; setMailState('idle');
+    }
+  };
+
+  const sendOwnMail = async () => {
+    const target = confirmOwnMail;
+    setConfirmOwnMail(null);
+    if (!target || mailBusy.current || !profile?.is_owner || !current
+      || current.survey.id !== target.surveyId || currentScope.current !== scope
+      || endOfMonthContext(new Date()).period !== target.reviewPeriod) {
+      showAlert('Nothing sent', 'Please reopen this check-in before sending your email.');
+      return;
+    }
+    mailBusy.current = true; setMailState('sending');
+    try {
+      const { data, error } = await supabase.functions.invoke('open-check-in', {
+        body: { survey_id: target.surveyId, dry_run: false, self_only: true },
+      });
+      if (error || !wasOwnMonthEmailSent(data, target.surveyId, target.reviewPeriod)) {
+        showAlert('Email not confirmed', 'Check your inbox before trying again.');
+        return;
+      }
+      showAlert('Email sent', 'The End of the month check-in is on its way to your inbox.');
+    } catch {
+      showAlert('Email not confirmed', 'Check your inbox before trying again.');
+    } finally {
+      mailBusy.current = false; setMailState('idle');
+    }
+  };
   if (!isFocused) return null;
 
   return <View style={{ flex: 1, backgroundColor: skin.page }}>
@@ -119,12 +170,16 @@ export default function EndOfMonthScreen() {
         });
         if (!result.error) void queryClient.invalidateQueries({ queryKey: ['carryForwardContext'] });
         return result;
-      }} onDone={() => router.replace(returnTo as never)} doneLabel={from === 'meetings' ? 'Back to Meetings' : 'Back to Home'} onEmailSettings={() => router.push('/settings' as never)} />
+      }} onDone={() => router.replace(returnTo as never)} doneLabel={from === 'meetings' ? 'Back to Meetings' : 'Back to Home'} onEmailSettings={() => router.push('/settings' as never)}
+      onEmailMe={profile?.is_owner && !askedDate ? previewOwnMail : undefined} emailingMe={mailState !== 'idle'} />
       : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 }}>
           {failure ? <><Text style={{ fontFamily: 'Lato_400Regular', color: skin.ink, lineHeight: 21 }}>{failure}</Text>
             <Pressable accessibilityRole="button" onPress={() => setAttempt(value => value + 1)} style={{ backgroundColor: skin.gold, padding: 14, borderRadius: 999 }}>
               <Text style={{ fontFamily: 'Lato_700Bold', color: '#313130' }}>Try again</Text>
             </Pressable></> : <><ActivityIndicator color={skin.gold} /><Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }}>Opening End of the month…</Text></>}
         </View>}
+    <ConfirmDialog visible={!!confirmOwnMail} title="Email your check-in?"
+      body={`Send one End of the month email to ${profile?.email ?? 'your account address'}. Its button opens this check-in.`}
+      confirmLabel="Email me" onConfirm={() => { void sendOwnMail(); }} onCancel={() => setConfirmOwnMail(null)} />
   </View>;
 }

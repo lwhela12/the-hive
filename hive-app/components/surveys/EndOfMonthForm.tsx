@@ -15,7 +15,7 @@ import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import type { Community, SurveyQuestion } from '../../types';
 import type { SurveyAnswerValue } from '../../lib/hooks/useSurveys';
 
-export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraftKeys, readOnly, showQuarterAnnouncements = false, onSave, onDone, doneLabel, onEmailSettings }: {
+export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraftKeys, readOnly, showQuarterAnnouncements = false, onSave, onDone, doneLabel, onEmailSettings, onEmailMe, emailingMe = false }: {
   sections: { community: Community; todos: CarryForwardItem[]; questions: SurveyQuestion[] }[];
   initialAnswers: EndOfMonthAnswers;
   draftKey: string;
@@ -26,6 +26,8 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
   onDone: () => void;
   doneLabel: string;
   onEmailSettings: () => void;
+  onEmailMe?: () => void;
+  emailingMe?: boolean;
 }) {
   const [answers, setAnswers] = useState(initialAnswers);
   const [saving, setSaving] = useState(false);
@@ -169,6 +171,13 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
           <Pressable accessibilityRole="link" disabled={saving} onPress={onEmailSettings} style={{ minHeight: 44, paddingHorizontal: 16, paddingVertical: 12 }}>
             <Text style={{ ...buttonText, color: skin.ink }}>Email settings</Text>
           </Pressable>
+          {!readOnly && onEmailMe && <Pressable accessibilityRole="button" accessibilityLabel="Email me this check-in"
+            disabled={saving || emailingMe} onPress={onEmailMe}
+            style={({ pressed }) => ({ minHeight: 44, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 999,
+              borderWidth: 1, borderColor: skin.borderStrong, backgroundColor: skin.card,
+              opacity: pressed || saving || emailingMe ? 0.7 : 1 })}>
+            <Text style={{ ...buttonText, color: skin.ink }}>{emailingMe ? 'Checking email…' : 'Email me this check-in'}</Text>
+          </Pressable>}
         </View>
       </View>
     </ScrollView>
