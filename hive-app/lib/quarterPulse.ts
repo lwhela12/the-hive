@@ -69,6 +69,18 @@ export function quarterPulseTalkingPoints(counts: QuarterPulseCount[], question:
   }));
 }
 
+/** Keep unanswered questions visible in the meeting, without inventing a percentage. */
+export function quarterPulseDeckLines(counts: QuarterPulseCount[], slug: string): {
+  question: SurveyQuestion; point: ReturnType<typeof quarterPulseTalkingPoints>[number] | null;
+}[] {
+  return quarterPulseQuestionsForDeck(slug).flatMap((question): {
+    question: SurveyQuestion; point: ReturnType<typeof quarterPulseTalkingPoints>[number] | null;
+  }[] => {
+    const points = quarterPulseTalkingPoints(counts, question);
+    return points.length ? points.map(point => ({ question, point })) : [{ question, point: null }];
+  });
+}
+
 /** Show the latest quarter's counts at its meeting, without an old tally lingering. */
 export function recentQuarterPulsePeriod(pacificDate: Date): string | null {
   const month = pacificDate.getMonth() + 1;

@@ -1,5 +1,5 @@
 import { meetingVoteResults } from '../../lib/meetingVoteResults';
-import { quarterPulseQuestionsForDeck, quarterPulseTalkingPoints, recentQuarterPulsePeriod, type QuarterPulseCount } from '../../lib/quarterPulse';
+import { quarterPulseDeckLines, recentQuarterPulsePeriod, type QuarterPulseCount } from '../../lib/quarterPulse';
 import { pacificCalendarDate } from '../../lib/endOfMonthPeriod';
 import { ideaRanking, tallyIdeaRankings } from '../../lib/ideaRanking';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -1063,13 +1063,14 @@ export default function MeetingHelperScreen() {
   const [arrivalMemberToEdit, setArrivalMemberToEdit] = useState<string | null>(null);
   const quarterPulsePeriod = deckIsOg || deckSlug === 'tech' ? recentQuarterPulsePeriod(pacificCalendarDate(new Date())) : null;
   const [quarterPulseSummary, setQuarterPulseSummary] = useState<{
-    communityId: string; period: string; counts: QuarterPulseCount[];
+    communityId: string; period: string; status: 'loading' | 'ready' | 'error'; counts: QuarterPulseCount[];
   } | null>(null);
-  const quarterPulseCounts = quarterPulseSummary?.communityId === communityId
-    && quarterPulseSummary.period === quarterPulsePeriod ? quarterPulseSummary.counts : null;
+  const quarterPulseResult = quarterPulseSummary?.communityId === communityId
+    && quarterPulseSummary.period === quarterPulsePeriod ? quarterPulseSummary : null;
   useEffect(() => {
     if (!communityId || !quarterPulsePeriod) { setQuarterPulseSummary(null); return; }
     let cancelled = false;
+    setQuarterPulseSummary({ communityId, period: quarterPulsePeriod, status: 'loading', counts: [] });
     (async () => {
       const { data, error } = await supabase.rpc('quarter_pulse_summary', {
         p_community_id: communityId,
@@ -1077,10 +1078,11 @@ export default function MeetingHelperScreen() {
       });
       if (error) throw error;
       if (!cancelled) setQuarterPulseSummary({ communityId, period: quarterPulsePeriod,
-        counts: (data ?? []) as QuarterPulseCount[] });
+        status: 'ready', counts: (data ?? []) as QuarterPulseCount[] });
     })().catch((error) => {
       console.warn('Could not load HIVE check-in summary', error);
-      if (!cancelled) setQuarterPulseSummary(null);
+      if (!cancelled) setQuarterPulseSummary({ communityId, period: quarterPulsePeriod,
+        status: 'error', counts: [] });
     });
     return () => { cancelled = true; };
   }, [communityId, quarterPulsePeriod, lastUpdatedAt]);
@@ -2661,17 +2663,23 @@ export default function MeetingHelperScreen() {
             emptyText={deckSlug === 'show' ? '' : "Nat hasn't dropped the news yet — drumroll, please."}
           />
         </View>
-        {quarterPulseCounts && quarterPulsePeriod && (deckIsOg || deckSlug === 'tech') ? (() => {
-          const points = quarterPulseQuestionsForDeck(deckSlug)
-            .flatMap(question => quarterPulseTalkingPoints(quarterPulseCounts, question).map(point => ({ question, point })));
-          if (!points.length) return null;
+        {quarterPulseResult && quarterPulsePeriod && (deckIsOg || deckSlug === 'tech') ? (() => {
+          const points = quarterPulseDeckLines(quarterPulseResult.counts, deckSlug);
           return <View style={{ backgroundColor: CARD, borderWidth: 1, borderColor: GOLD_SOFT,
             borderRadius: sz(16, 12), paddingHorizontal: sz(20, 13), paddingVertical: sz(15, 10), gap: sz(8, 5) }}>
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), letterSpacing: 1.4,
-              textTransform: 'uppercase', color: GOLD_DEEP }}>What members said in the {getMonthNameFromPeriod(quarterPulsePeriod)} check-in</Text>
-            {points.map(({ question, point }) => <Text key={`${question.id}:${point.option}`}
+              textTransform: 'uppercase', color: GOLD_DEEP }}>{getMonthNameFromPeriod(quarterPulsePeriod)} check-in · member choices</Text>
+            {quarterPulseResult.status === 'loading' && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(18, 12), lineHeight: sz(27, 19), color: CHARCOAL }}>
+              Loading member choices…
+            </Text>}
+            {quarterPulseResult.status === 'error' && <Text accessibilityRole="alert" style={{ fontFamily: 'Lato_400Regular', fontSize: sz(18, 12), lineHeight: sz(27, 19), color: CHARCOAL }}>
+              Couldn’t load the member choices. Refresh this meeting to try again.
+            </Text>}
+            {quarterPulseResult.status === 'ready' && points.map(({ question, point }) => <Text key={`${question.id}:${point?.option ?? 'empty'}`}
               style={{ fontFamily: 'Lato_400Regular', fontSize: sz(18, 12), lineHeight: sz(27, 19), color: CHARCOAL }}>
-              {question.id === 'q_quarter_helping' ? 'HIVE helping with goals' : 'Support for 3MIQ and other goals'}: {point.percent}% chose “{point.option}” ({point.answered} answered).
+              {question.id === 'q_quarter_helping' ? 'HIVE helping with goals' : 'Support for 3MIQ and other goals'}: {point
+                ? `${point.percent}% chose “${point.option}” (${point.answered} answered).`
+                : 'No choices saved yet.'}
             </Text>)}
           </View>;
         })() : null}

@@ -52,6 +52,16 @@ async function run() {
   assert.equal(calls[1][1].quarterly, 'new draft');
   assert.equal(calls[1][1].q_newsletter, undefined);
   assert.equal(calls.at(-1)[1].q_newsletter, 'My event');
+  const quarterCalls = [];
+  assert.equal((await saveEndOfMonth({ ...options,
+    answers: { hives: { og: { q_quarter_helping: 'Yes' }, tech: {} }, month: { q_quarter_help_next: 'Nothing extra right now' } },
+    communityIds: ['og', 'tech'], todos: {},
+    save: async (id, value) => { quarterCalls.push([id, value]); return { error: null }; },
+  })).error, null);
+  assert.equal(quarterCalls[0][1].q_quarter_helping, 'Yes', 'OG choice is saved in OG scope');
+  assert.equal(quarterCalls.at(-1)[0], null);
+  assert.equal(quarterCalls.at(-1)[1].q_quarter_help_next, 'Nothing extra right now', 'support choice is saved once in shared scope');
+  assert.equal(quarterCalls[1][1].q_quarter_helping, undefined, 'Tech never receives the OG choice');
   calls.length = 0;
   assert.ok((await saveEndOfMonth({ ...options, applyTasks: async () => ({ error: 'offline' }) })).error);
   assert.equal(calls.length, 0, 'task failure must not write completion receipts');
