@@ -3,6 +3,7 @@ import { View, Text, FlatList, RefreshControl, Pressable, ActivityIndicator, Tex
 import { SafeAreaView } from '../../components/ui/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useBoardCategoriesQuery, useBoardPostsQuery, useBoardPostCountsQuery, useBoardSearchIndexQuery, type BoardSearchThreadMatch, type BoardReach } from '../../lib/hooks/useBoardQuery';
@@ -25,6 +26,7 @@ import { useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { markBoardThreadGranted } from '../../lib/boardThreadCompletion';
 import { setBoardThreadArchiveState } from '../../lib/boardThreadArchive';
 import { BOARD_HOME_EVENT } from '../../lib/boardNavigation';
+import { shouldReturnToCheckIn } from '../../lib/boardCheckInReturn';
 import {
   BOARD_SORT_OPTIONS,
   normalizeBoardSort,
@@ -160,6 +162,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   // reads as "that's all of them" instead of "this is stuck".
   const threadListBounceRef = useEndBounce();
   const router = useRouter();
+  const boardFocused = useIsFocused();
   const routeParams = useLocalSearchParams<{
     categoryId?: string | string[];
     postId?: string | string[];
@@ -243,6 +246,11 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
 
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [checkInVisitActive, setCheckInVisitActive] = useState(true);
+  useEffect(() => setCheckInVisitActive(true), [routeOpenKey]);
+  const shouldReturnToCheckInFromRoute = shouldReturnToCheckIn(
+    routeOrigin, routeCategoryId, selectedCategoryId, routeOpenKey, checkInVisitActive,
+  );
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [showComposer, setShowComposer] = useState(false);
   const [editingPost, setEditingPost] = useState<BoardPost | null>(null);
@@ -410,6 +418,25 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     if (boardPostStorageKey) removeStoredItem(boardPostStorageKey);
   }, [boardPostStorageKey]);
 
+  const returnToCheckInFromRoute = useCallback(() => {
+    setCheckInVisitActive(false);
+    resetBoardToList();
+    router.replace('/endofmonth');
+  }, [resetBoardToList, router]);
+
+  // Tabs do not reliably leave the check-in in browser history. Catch Back
+  // only while the linked board is still the focused page; another board or
+  // destination ends this visit's return intent.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !boardFocused || !shouldReturnToCheckInFromRoute || selectedPostId) return;
+    const onPopState = (event: PopStateEvent) => {
+      event.stopImmediatePropagation();
+      returnToCheckInFromRoute();
+    };
+    window.addEventListener('popstate', onPopState, true);
+    return () => window.removeEventListener('popstate', onPopState, true);
+  }, [boardFocused, returnToCheckInFromRoute, selectedPostId, shouldReturnToCheckInFromRoute]);
+
   useDeepTrail(
     trailCategoryName && !placingRoutePost
       ? [{
@@ -429,7 +456,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     // That reset must also forget the stored board. Clearing only React state
     // painted the grid for one frame, then the restore effect below reopened
     // the remembered board — Nat's 2026-09-06 "it just blinked here" report.
-    selectedCategory ? resetBoardToList : undefined,
+    selectedCategory ? (shouldReturnToCheckInFromRoute ? returnToCheckInFromRoute : resetBoardToList) : undefined,
   );
 
   const canManageThread = useCallback((post: Pick<BoardPost, 'author_id'>) => {
@@ -888,6 +915,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   }, [communityId]);
 
   const handleCategorySelect = useCallback((category: BoardCategory) => {
+    if (routeOrigin === 'endofmonth' && category.id !== routeCategoryId) setCheckInVisitActive(false);
     setSelectedCategoryId(category.id);
     const searchMatch = boardSearchQuery ? boardSearchMatchesByCategory[category.id] : null;
     setThreadListView(searchMatch?.archivedOnly ? 'archive' : 'active');
@@ -895,7 +923,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     if (boardCategoryStorageKey) {
       setStoredItem(boardCategoryStorageKey, category.id);
     }
-  }, [boardCategoryStorageKey, boardSearch, boardSearchMatchesByCategory, boardSearchQuery]);
+  }, [boardCategoryStorageKey, boardSearch, boardSearchMatchesByCategory, boardSearchQuery, routeCategoryId, routeOrigin]);
 
   const returnHomeFromRouteTarget = useCallback(() => {
     resetBoardToList();
@@ -903,13 +931,17 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   }, [resetBoardToList, router]);
 
   const handleBack = useCallback(() => {
+    if (shouldReturnToCheckInFromRoute) {
+      returnToCheckInFromRoute();
+      return;
+    }
     if (shouldReturnHomeFromRoute) {
       returnHomeFromRouteTarget();
       return;
     }
 
     resetBoardToList();
-  }, [resetBoardToList, returnHomeFromRouteTarget, shouldReturnHomeFromRoute]);
+  }, [resetBoardToList, returnHomeFromRouteTarget, returnToCheckInFromRoute, shouldReturnHomeFromRoute, shouldReturnToCheckInFromRoute]);
 
   const handleOpenComposer = useCallback(() => {
     setEditingPost(null);

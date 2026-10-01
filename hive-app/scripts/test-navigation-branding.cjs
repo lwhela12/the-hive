@@ -28,8 +28,8 @@ assert.ok(
   'the current crumb stays clickable when its screen gives it a handler',
 );
 assert.ok(
-  boards.includes('selectedCategory ? resetBoardToList : undefined'),
-  'Back to Boards clears the remembered board instead of reopening it after one frame',
+  boards.includes('selectedCategory ? (shouldReturnToCheckInFromRoute ? returnToCheckInFromRoute : resetBoardToList) : undefined'),
+  'a check-in board returns to the survey while ordinary Back clears the remembered board',
 );
 assert.ok(
   boards.includes('selectedCategory && selectedPostId ? resetThreadToBoard : undefined'),

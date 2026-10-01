@@ -6,13 +6,21 @@ export type BuzzCalendarItem = {
   invited_scope?: string | null; community?: { slug?: string | null } | null;
 };
 
-/** One shared check-in: stop at the earliest meeting of this member's eligible HIVEs. */
-export function surveyCalendarWindow(today: string, eligibleCommunityIds: string[], meetings: { community_id: string; event_date: string }[]) {
-  const ids = new Set(eligibleCommunityIds);
-  const nextMeeting = meetings.filter(row => ids.has(row.community_id) && row.event_date >= today)
+/** One shared check-in: include the next visible OG meeting day. */
+export function surveyCalendarWindow(today: string, meetings: BuzzCalendarItem[]) {
+  const nextMeeting = meetings.filter(row => row.community?.slug === 'default' && row.event_date >= today)
     .sort((a, b) => a.event_date.localeCompare(b.event_date))[0];
   const fallback = upcomingWindow(today);
   return { start: today, end: nextMeeting?.event_date ?? fallback.end, meetingDate: nextMeeting?.event_date ?? null };
+}
+
+/** Shared meetings and one's own OG/Tech meetings can appear in the personal survey. */
+export function eligibleSurveyMeeting(event: BuzzCalendarItem, memberCommunityIds: string[], today: string, end: string): boolean {
+  return event.event_type === 'meeting'
+    && (event.community?.slug === 'default' || event.community?.slug === 'tech')
+    && event.event_date >= today && event.event_date <= end
+    && ((!!event.community_id && memberCommunityIds.includes(event.community_id))
+      || event.visibility === 'all_hives' || event.visibility === 'public');
 }
 
 /** Calendar context is a suggestion, never a claim that an item was approved. */
