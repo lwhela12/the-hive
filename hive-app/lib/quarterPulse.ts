@@ -20,6 +20,12 @@ export const QUARTER_PULSE_QUESTIONS: SurveyQuestion[] = [
 export const OG_QUARTER_PULSE_QUESTIONS = QUARTER_PULSE_QUESTIONS.filter(question => question.id === 'q_quarter_helping');
 export const SHARED_QUARTER_PULSE_QUESTION = QUARTER_PULSE_QUESTIONS.find(question => question.id === 'q_quarter_help_next')!;
 
+export function quarterPulseQuestionsForDeck(slug: string): SurveyQuestion[] {
+  if (slug === 'default') return [...OG_QUARTER_PULSE_QUESTIONS, SHARED_QUARTER_PULSE_QUESTION];
+  if (slug === 'tech') return [SHARED_QUARTER_PULSE_QUESTION];
+  return [];
+}
+
 /** The reviewed month is already moved back during the first seven Pacific days. */
 export function isQuarterPulseOpen(reviewDate: Date): boolean {
   const month = reviewDate.getMonth();
@@ -44,6 +50,23 @@ export function tallyQuarterPulse(answers: Record<string, unknown>[], question: 
   const counts = (question.options ?? []).map(option => ({ option, count: answers.filter(answer => answer[question.id] === option).length }));
   const answered = counts.reduce((sum, row) => sum + row.count, 0);
   return { answered, rows: counts.map(row => ({ ...row, percent: answered ? Math.round(row.count * 100 / answered) : 0 })) };
+}
+
+/** Counts returned by the membership-checked RPC. No response or member IDs reach the client. */
+export type QuarterPulseCount = { question_id: string; option: string; response_count: number };
+
+export function quarterPulseTalkingPoints(counts: QuarterPulseCount[], question: SurveyQuestion) {
+  const rows = (question.options ?? []).map(option => {
+    const value = Number(counts.find(row => row.question_id === question.id && row.option === option)?.response_count ?? 0);
+    return { option, count: Number.isFinite(value) ? Math.max(0, value) : 0 };
+  });
+  const answered = rows.reduce((total, row) => total + row.count, 0);
+  const lead = Math.max(...rows.map(row => row.count));
+  return answered === 0 ? [] : rows.filter(row => row.count === lead).map(row => ({
+    option: row.option,
+    answered,
+    percent: Math.round(row.count * 100 / answered),
+  }));
 }
 
 /** Show the latest quarter's counts at its meeting, without an old tally lingering. */

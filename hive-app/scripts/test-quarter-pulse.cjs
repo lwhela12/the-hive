@@ -19,7 +19,8 @@ function load(file) {
 const { openSeasonSections, isSurveyOnHomeToday } = load(path.resolve('lib/checkIns.ts'));
 const { endOfMonthContext, isOctoberNewsletterDeadlineDay } = load(path.resolve('lib/endOfMonthPeriod.ts'));
 const { QUARTER_PULSE_QUESTIONS, OG_QUARTER_PULSE_QUESTIONS, SHARED_QUARTER_PULSE_QUESTION,
-  isQuarterPulseOpen, quarterAnswersForMembers, tallyQuarterPulse, recentQuarterPulsePeriod } = load(path.resolve('lib/quarterPulse.ts'));
+  isQuarterPulseOpen, quarterAnswersForMembers, tallyQuarterPulse, quarterPulseTalkingPoints,
+  quarterPulseQuestionsForDeck, recentQuarterPulsePeriod } = load(path.resolve('lib/quarterPulse.ts'));
 const { monthEndReviewPeriod } = load(path.resolve('supabase/functions/_shared/checkInSession.ts'));
 const hives = [
   { id: 'og', slug: 'default', name: 'OG HIVE' },
@@ -49,6 +50,9 @@ assert.equal(monthEndReviewPeriod('2026-10-08'), '2026-10');
 assert.equal(monthEndReviewPeriod('2027-01-01'), '2026-12');
 assert.equal(recentQuarterPulsePeriod(new Date(2026, 9, 15)), '2026-09');
 assert.equal(recentQuarterPulsePeriod(new Date(2026, 10, 1)), null);
+assert.deepEqual(Array.from(quarterPulseQuestionsForDeck('default'), question => question.id), ['q_quarter_helping', 'q_quarter_help_next']);
+assert.deepEqual(Array.from(quarterPulseQuestionsForDeck('tech'), question => question.id), ['q_quarter_help_next']);
+assert.deepEqual(Array.from(quarterPulseQuestionsForDeck('show'), question => question.id), [], 'Production has no pulse talking points');
 assert.equal(isQuarterPulseOpen(new Date(2026, 8, 26, 12)), false);
 assert.equal(isQuarterPulseOpen(new Date(2026, 8, 27, 12)), true);
 assert.equal(isQuarterPulseOpen(endOfMonthContext(new Date('2026-10-07T19:00:00Z')).reviewDate), true);
@@ -69,5 +73,20 @@ assert.equal(result.answered, 3);
 assert.equal(result.rows[0].count, 2);
 assert.equal(result.rows[0].percent, 67);
 assert.equal(result.rows[1].percent, 33);
+const scopedCounts = [
+  { question_id: 'q_quarter_helping', option: 'Yes', response_count: 3 },
+  { question_id: 'q_quarter_helping', option: 'A little', response_count: 1 },
+  { question_id: 'q_quarter_help_next', option: 'A gentle nudge', response_count: 2 },
+  { question_id: 'q_quarter_help_next', option: 'Time to work together', response_count: 1 },
+];
+assert.equal(quarterPulseTalkingPoints(scopedCounts, OG_QUARTER_PULSE_QUESTIONS[0])[0].percent, 75);
+assert.equal(quarterPulseTalkingPoints(scopedCounts, SHARED_QUARTER_PULSE_QUESTION)[0].answered, 3);
+assert.equal(quarterPulseTalkingPoints([], SHARED_QUARTER_PULSE_QUESTION).length, 0, 'zero answers produce no talking point');
+assert.deepEqual(Array.from(quarterPulseTalkingPoints([
+  { question_id: 'q_quarter_helping', option: 'Yes', response_count: 1 },
+  { question_id: 'q_quarter_helping', option: 'A little', response_count: 1 },
+], OG_QUARTER_PULSE_QUESTIONS[0]), row => row.percent), [50, 50], 'ties show both choices with the same denominator');
+assert.equal(quarterPulseTalkingPoints(scopedCounts, { ...SHARED_QUARTER_PULSE_QUESTION, id: 'private_production_question' }).length, 0,
+  'an unreturned question cannot become a talking point');
 assert.equal(isSurveyOnHomeToday({ title: 'Quarterly Check-in · Q3 2026', due_date: '2026-10-01T00:00:00Z' }, new Date(2026, 8, 30)), false);
 console.log('Quarter pulse: OG value choice, one shared support choice, Pacific month grace, legacy fallback, and tally passed.');

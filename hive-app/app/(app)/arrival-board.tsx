@@ -47,6 +47,8 @@ export default function ArrivalBoardScreen() {
     responsePeriod,
     members,
     responsesByUser,
+    submissionCount,
+    canViewIndividualCheckIns,
     reportsByUser,
     nextMeeting,
     lastUpdatedAt,
@@ -74,7 +76,8 @@ export default function ArrivalBoardScreen() {
 
   const monthName = getMonthNameFromPeriod(responsePeriod);
   const meetingLine = formatMeetingDate(nextMeeting);
-  const checkedInCount = members.filter((member) => responsesByUser.has(member.id)).length;
+  const checkedInCount = submissionCount ?? (canViewIndividualCheckIns
+    ? members.filter((member) => responsesByUser.has(member.id)).length : null);
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
@@ -120,7 +123,7 @@ export default function ArrivalBoardScreen() {
                   {meetingLine}
                 </Text>
               ) : null}
-              {survey ? (
+              {survey && checkedInCount !== null ? (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: isTV ? 18 : 13, color: '#9a8060' }}>
                   {checkedInCount} of {members.length} checked in
                 </Text>
@@ -162,6 +165,20 @@ export default function ArrivalBoardScreen() {
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: isTV ? 17 : 14, color: '#9a8060', textAlign: 'center', marginTop: 8, lineHeight: 22 }}>
               Once a check-in is open, arrivals will glow here.
             </Text>
+          </View>
+        ) : !canViewIndividualCheckIns ? (
+          <View style={{ backgroundColor: '#fffdf5', borderRadius: 20, borderWidth: 1,
+            borderColor: 'rgba(222,193,129,0.5)', padding: 24, gap: 12 }}>
+            <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 19, color: '#2d2d2d' }}>
+              {checkedInCount === null ? 'Check-in count unavailable' : `${checkedInCount} of ${members.length} checked in`}
+            </Text>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#5f4b27' }}>
+              Individual check-in answers stay with each member and the HIVE owners.
+            </Text>
+            {members.filter(member => member.id === profile?.id).map(member => (
+              <ArrivalMemberCard key={member.id} member={member} response={responsesByUser.get(member.id)}
+                report={reportsByUser.get(member.id)} isTV={false} showLegacyEnergy={!!survey && surveyUsesLegacyEnergy(survey)} />
+            ))}
           </View>
         ) : (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: isTV ? -10 : -6 }}>
