@@ -13,9 +13,10 @@ function load(file) {
 }
 
 const events = load(path.resolve('supabase/functions/_shared/upcomingEvents.ts'));
-const { surveyCalendarWindow, eligibleSurveyMeeting, buzzCalendarItems } = load(path.resolve('lib/buzzCalendar.ts'));
+const { surveyCalendarWindow, eligibleSurveyEvent, surveyEventVisibilityLabel, buzzCalendarItems } = load(path.resolve('lib/buzzCalendar.ts'));
 const { shouldReturnToCheckIn } = load(path.resolve('lib/boardCheckInReturn.ts'));
 const { isInvitedToEvent, canShareEventDetailsOnHiveWide } = load(path.resolve('lib/eventDisplay.ts'));
+const { currentMonthlyHelpPost, monthlyHelpWindow, quarterHelpContext } = load(path.resolve('lib/monthlyHiveHelp.ts'));
 const { wideMonthTodo, wideCompletedMonthTodo } = load(path.resolve('lib/wideCheckInTodos.ts'));
 const at = iso => new Date(iso);
 assert.equal(events.pacificDay(at('2026-10-01T06:59:00Z')), '2026-09-30');
@@ -36,17 +37,27 @@ assert.equal(surveyCalendarWindow('2026-10-29', [{ ...meetingDates[0], event_dat
 assert.equal(surveyCalendarWindow(start, [meetingDates[1], meetingDates[2]]).meetingDate, null,
   'Tech and secret Production do not set the OG window');
 assert.equal(surveyCalendarWindow(start, []).end, end, 'invisible OG meeting uses labeled 45-day fallback');
-assert.equal(eligibleSurveyMeeting(meetingDates[0], ['og'], start, '2026-10-28'), true, 'OG member sees own private meeting');
-assert.equal(eligibleSurveyMeeting(meetingDates[0], ['tech'], start, '2026-10-28'), false, 'Tech-only member sees no OG-private name');
-assert.equal(eligibleSurveyMeeting(meetingDates[1], ['og'], start, '2026-10-28'), true, 'shared Tech meeting appears beside OG');
-assert.equal(eligibleSurveyMeeting(meetingDates[1], ['og'], start, '2026-10-07'), false);
-assert.equal(eligibleSurveyMeeting(meetingDates[2], ['production'], start, '2026-10-28'), false, 'Production stays out of survey');
-assert.equal(buzzCalendarItems(meetingDates.filter(meeting => eligibleSurveyMeeting(meeting, ['og'], start, '2026-10-28')), []).length, 2);
+assert.equal(eligibleSurveyEvent(meetingDates[0], ['og'], start, '2026-10-28'), true, 'OG member sees own private meeting');
+assert.equal(eligibleSurveyEvent(meetingDates[0], ['tech'], start, '2026-10-28'), false, 'Tech-only member sees no OG-private name');
+assert.equal(eligibleSurveyEvent(meetingDates[1], ['og'], start, '2026-10-28'), true, 'shared Tech meeting appears beside OG');
+assert.equal(eligibleSurveyEvent(meetingDates[1], ['og'], start, '2026-10-07'), false);
+assert.equal(eligibleSurveyEvent(meetingDates[2], ['production'], start, '2026-10-28'), false, 'Production stays out of survey');
+assert.equal(buzzCalendarItems(meetingDates.filter(meeting => eligibleSurveyEvent(meeting, ['og'], start, '2026-10-28')), []).length, 2);
+const privateOgBirthday = { ...meetingDates[0], id: 'og-birthday', title: 'OG birthday', event_type: 'birthday', event_date: '2026-10-20' };
+const privateTechEvent = { ...meetingDates[1], id: 'tech-hang', title: 'Tech hang', event_type: 'custom', event_date: '2026-10-24', visibility: 'members' };
+assert.equal(eligibleSurveyEvent(privateOgBirthday, ['og', 'tech'], start, '2026-10-28'), true, 'canonical OG birthday appears for OG member');
+assert.equal(eligibleSurveyEvent(privateOgBirthday, ['tech'], start, '2026-10-28'), false, 'OG birthday stays private');
+assert.equal(eligibleSurveyEvent(privateTechEvent, ['og', 'tech'], start, '2026-10-28'), true, 'Tech member sees private Tech event');
+assert.equal(eligibleSurveyEvent(privateTechEvent, ['og'], start, '2026-10-28'), false, 'OG-only member cannot see private Tech event');
+assert.equal(surveyEventVisibilityLabel(meetingDates[0]), 'OG HIVE');
+assert.equal(surveyEventVisibilityLabel(meetingDates[1]), 'HIVE-Wide', 'visibility label does not imply Tech invites everyone');
+assert.equal(surveyEventVisibilityLabel(privateTechEvent), 'Tech HIVE');
 assert.equal(isInvitedToEvent(meetingDates[0], ['og']), true, 'OG member can see own meeting time');
 assert.equal(isInvitedToEvent(meetingDates[1], ['og']), false, 'Tech meeting invitation is not expanded to OG');
 assert.equal(canShareEventDetailsOnHiveWide(meetingDates[1]), false, 'Tech meeting time stays private on the shared view');
 const wide = { title: 'October First Friday', event_date: '2026-10-02', event_type: 'custom', visibility: 'all_hives', invited_scope: 'all_hives', community: { slug: 'default' } };
 const publicEvent = { ...wide, title: 'Open art walk', visibility: 'public', invited_scope: 'public' };
+assert.equal(surveyEventVisibilityLabel(publicEvent), 'Public');
 for (const day of ['02', '09', '10', '12', '24', '31']) {
   assert.equal(events.eligibleUpcomingEvent({ ...wide, event_date: `2026-10-${day}` }, 'hive_wide', start, end), true);
 }
@@ -64,6 +75,32 @@ assert.equal(events.eligibleUpcomingEvent({ ...wide, event_date: '2026-10-31' },
   'Oct 31 falls beyond the real next OG meeting cutoff');
 assert.equal(events.eligibleUpcomingEvent({ ...wide, event_type: 'meeting', visibility: 'members', event_date: '2026-10-12' }, 'hive_wide', start, '2026-10-12'), false);
 assert.equal(buzzCalendarItems([{ ...wide, id: 'same' }, { ...wide, id: 'same' }], []).length, 1, 'one shared event appears once');
+const surveyCalendarSource = fs.readFileSync(path.resolve('components/surveys/BuzzCalendarPreview.tsx'), 'utf8');
+assert.ok(surveyCalendarSource.includes('>Upcoming events:</Text>'));
+assert.ok(!surveyCalendarSource.includes('Show all ') && !surveyCalendarSource.includes('rows.slice(0, 5)'), 'the full qualifying list renders without a toggle');
+
+const helpPosts = [
+  { id: 'quarter', title: 'HIVE Help — Meals for our neighbors', content: 'Quarter overview', created_at: '2026-10-01T19:00:00Z', visibility: 'all_hives' },
+  { id: 'oct', title: 'October HIVE Help — collect your plastic to-go containers', content: 'Existing October thread', created_at: '2026-09-23T18:00:00Z', visibility: 'members' },
+  { id: 'nov', title: 'November HIVE Help — collect food', content: 'November plan', created_at: '2026-10-01T18:00:00Z', visibility: 'all_hives' },
+  { id: 'dec', title: 'December HIVE Help — cook and distribute meals', content: 'December plan', created_at: '2026-10-01T18:00:00Z', visibility: 'all_hives' },
+];
+assert.equal(monthlyHelpWindow('2026-10').earliest, '2026-09-01');
+assert.equal(currentMonthlyHelpPost(helpPosts, events.pacificDay(at('2026-10-01T18:00:00Z')).slice(0, 7))?.id, 'oct',
+  'September review opened October 1 uses October, not September or the newest quarter post');
+assert.equal(currentMonthlyHelpPost(helpPosts, '2026-11')?.id, 'nov');
+assert.equal(currentMonthlyHelpPost(helpPosts, '2026-12')?.id, 'dec', 'a December plan posted at quarter start becomes current only in December');
+assert.equal(currentMonthlyHelpPost(helpPosts, '2027-01'), null, 'a prior quarter cannot linger as current');
+assert.equal(currentMonthlyHelpPost(helpPosts.filter(post => post.id !== 'oct'), '2026-10'), null,
+  'future month and quarter posts do not substitute for a missing October focus');
+assert.equal(currentMonthlyHelpPost([helpPosts[1]], '2027-10'), null, 'last year’s October thread is stale');
+assert.equal(currentMonthlyHelpPost([], '2026-10'), null, 'RLS-hidden private posts do not appear for other HIVEs');
+const nonOgVisiblePosts = helpPosts.filter(post => post.visibility !== 'members');
+assert.equal(currentMonthlyHelpPost(nonOgVisiblePosts, '2026-10'), null, 'non-OG member needs the existing October thread shared');
+assert.equal(currentMonthlyHelpPost([...nonOgVisiblePosts, { ...helpPosts[1], visibility: 'all_hives' }], '2026-10')?.id, 'oct',
+  'sharing only the existing October thread makes it readable without duplicating it');
+assert.equal(quarterHelpContext('Right now, collect plastic to-go containers. Later, collect canned goods. Then cook and deliver meals locally.'),
+  'Later, collect canned goods. Then cook and deliver meals locally.', 'owner-written future plan remains without repeating October');
 
 const survey = { id: 'survey', title: 'End of the month' };
 const sept = at('2026-10-01T18:00:00Z');

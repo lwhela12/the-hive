@@ -1,4 +1,4 @@
-import { upcomingWindow } from '../supabase/functions/_shared/upcomingEvents';
+import { eligibleUpcomingEvent, upcomingWindow } from '../supabase/functions/_shared/upcomingEvents';
 
 export type BuzzCalendarItem = {
   id: string; title: string; event_date: string; event_time?: string | null; end_time?: string | null;
@@ -14,13 +14,19 @@ export function surveyCalendarWindow(today: string, meetings: BuzzCalendarItem[]
   return { start: today, end: nextMeeting?.event_date ?? fallback.end, meetingDate: nextMeeting?.event_date ?? null };
 }
 
-/** Shared meetings and one's own OG/Tech meetings can appear in the personal survey. */
-export function eligibleSurveyMeeting(event: BuzzCalendarItem, memberCommunityIds: string[], today: string, end: string): boolean {
-  return event.event_type === 'meeting'
-    && (event.community?.slug === 'default' || event.community?.slug === 'tech')
-    && event.event_date >= today && event.event_date <= end
-    && ((!!event.community_id && memberCommunityIds.includes(event.community_id))
-      || event.visibility === 'all_hives' || event.visibility === 'public');
+/** Shared events and canonical private events from one's own OG/Tech HIVE. */
+export function eligibleSurveyEvent(event: BuzzCalendarItem, memberCommunityIds: string[], today: string, end: string): boolean {
+  if (event.community?.slug !== 'default' && event.community?.slug !== 'tech') return false;
+  if (eligibleUpcomingEvent(event, 'hive_wide', today, end)) return true;
+  return event.visibility === 'members' && !!event.community_id && memberCommunityIds.includes(event.community_id)
+    && eligibleUpcomingEvent({ ...event, visibility: 'all_hives' }, 'hive_wide', today, end);
+}
+
+/** Visibility is not an invitation: a HIVE-Wide meeting may invite only Tech. */
+export function surveyEventVisibilityLabel(event: BuzzCalendarItem): string {
+  if (event.visibility === 'public') return 'Public';
+  if (event.visibility === 'all_hives') return 'HIVE-Wide';
+  return event.community?.slug === 'tech' ? 'Tech HIVE' : 'OG HIVE';
 }
 
 /** Calendar context is a suggestion, never a claim that an item was approved. */

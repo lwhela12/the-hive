@@ -1,11 +1,21 @@
+import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
+import { pacificDay } from '../../supabase/functions/_shared/upcomingEvents';
+import { currentMonthlyHelpPost, monthlyHelpWindow, quarterHelpContext } from '../../lib/monthlyHiveHelp';
 
 /** The owner-maintained board focus, read fresh each month. */
 export function HiveHelpPreview({ onOpenBoard, disabled = false }: { onOpenBoard: (categoryId: string) => void; disabled?: boolean }) {
+  // The September review opened on October 1 shows October's active focus.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  const month = pacificDay(now).slice(0, 7);
   const query = useQuery({
-    queryKey: ['monthlyHiveHelpFocus'], staleTime: 60_000,
+    queryKey: ['monthlyHiveHelpFocus', month], staleTime: 60_000,
     queryFn: async () => {
       const board = await supabase.from('board_categories')
         .select('id,created_by,community:communities!inner(slug)')
@@ -14,14 +24,22 @@ export function HiveHelpPreview({ onOpenBoard, disabled = false }: { onOpenBoard
         .eq('community.slug', 'default').order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (board.error) throw board.error;
       if (!board.data?.created_by) return null;
+      const { earliest, label } = monthlyHelpWindow(month);
       const focus = await supabase.from('board_posts')
-        .select('title,content,category_id').eq('category_id', board.data.id)
-        .eq('author_id', board.data.created_by).in('visibility', ['all_hives', 'public'])
-        .ilike('title', '%HIVE Help%').eq('status', 'active').is('archived_at', null)
+        .select('title,content,category_id,created_at').eq('category_id', board.data.id)
+        .eq('author_id', board.data.created_by).gte('created_at', `${earliest}T00:00:00Z`)
+        .ilike('title', `${label} HIVE Help%`).eq('status', 'active').is('archived_at', null)
         .order('created_at', { ascending: false }).limit(24);
       if (focus.error) throw focus.error;
-      const latest = focus.data?.find(row => /HIVE Help(?:ers)?\s*[—–-]+/i.test(row.title ?? '') && !/ideas/i.test(row.title ?? ''));
-      return { title: latest?.title ?? null, content: latest?.content ?? null, category_id: board.data.id };
+      const quarter = await supabase.from('board_posts')
+        .select('content').eq('category_id', board.data.id)
+        .eq('author_id', board.data.created_by).eq('title', 'HIVE Help — Meals for our neighbors')
+        .in('visibility', ['all_hives', 'public']).eq('status', 'active').is('archived_at', null)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (quarter.error) throw quarter.error;
+      const current = currentMonthlyHelpPost(focus.data ?? [], month);
+      return { title: current?.title ?? null, content: current?.content ?? null,
+        quarterContext: quarterHelpContext(quarter.data?.content ?? null), category_id: board.data.id };
     },
   });
   const focus = query.data?.title ? query.data : null;
@@ -31,6 +49,9 @@ export function HiveHelpPreview({ onOpenBoard, disabled = false }: { onOpenBoard
     {focus ? <>
       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, lineHeight: 20, color: '#313130' }}>{focus.title}</Text>
       {!!focus.content && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#4b4740' }}>{focus.content}</Text>}
+      {!!focus.quarterContext && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 20, color: '#4b4740' }}>
+        Quarter plan: {focus.quarterContext}
+      </Text>}
     </> : <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#4b4740' }}>
       {query.isLoading ? 'Loading the current focus…' : query.isError ? 'The current focus could not load.' : 'The next focus is being planned.'}
     </Text>}
