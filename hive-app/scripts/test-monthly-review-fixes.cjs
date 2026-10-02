@@ -102,13 +102,51 @@ assert.equal(currentMonthlyHelpPost([...nonOgVisiblePosts, { ...helpPosts[1], vi
 assert.equal(quarterHelpContext('Right now, collect plastic to-go containers. Later, collect canned goods. Then cook and deliver meals locally.'),
   'Right now, collect plastic to-go containers. Later, collect canned goods. Then cook and deliver meals locally.',
   'the owner-written plan stays intact ahead of the bold monthly focus');
-assert.deepEqual(JSON.parse(JSON.stringify(monthlyHelpFocusCopy('October HIVE Help — collect your plastic to-go containers',
-  'October’s HIVE Help focus: collect your plastic to-go containers.\n\n(Decided together at the meeting — log your helps in this thread!)'))), {
+const canonicalHelpContent = 'October’s HIVE Help focus: collect your plastic to-go containers.\n\n'
+  + '(Decided together at the meeting — log your helps in this thread!)\n\n'
+  + 'We’re doing a three-part HIVE Help: containers in October, canned goods in November, then cooking and delivering warm meals to people experiencing homelessness in Las Vegas in December.\n\n'
+  + 'If you’re in Vegas, join the group plan. Elsewhere? Do this in parallel locally. Share your wins here — we celebrate every win, no matter how small.';
+const canonicalHelpCopy = monthlyHelpFocusCopy('October HIVE Help — collect your plastic to-go containers',
+  canonicalHelpContent, null);
+assert.deepEqual(JSON.parse(JSON.stringify(canonicalHelpCopy)), {
   heading: 'October focus: Collect your plastic to-go containers',
-  details: '(Decided together at the meeting — log your helps in this thread!)',
-}, 'the canonical October action appears once while the owner’s extra context remains');
-assert.equal(monthlyHelpFocusCopy('November HIVE Help — collect canned goods', 'Bring cans to the next meeting.').details,
+  introduction: 'We’re doing a three-part HIVE Help: containers in October, canned goods in November, then cooking and delivering warm meals to people experiencing homelessness in Las Vegas in December.',
+  details: '(Decided together at the meeting — log your helps in this thread!)\n\nIf you’re in Vegas, join the group plan. Elsewhere? Do this in parallel locally. Share your wins here — we celebrate every win, no matter how small.',
+}, 'the live October board text yields explanation, focus, then participation without the duplicate action');
+assert.equal(monthlyHelpFocusCopy('November HIVE Help — collect canned goods', 'Bring cans to the next meeting.', null).details,
   'Bring cans to the next meeting.', 'a distinct future focus detail is preserved');
+assert.equal(monthlyHelpFocusCopy('November HIVE Help — collect canned goods', 'Bring cans to the next meeting.', 'Quarter plan').introduction,
+  'Quarter plan', 'the separate initiative post remains the fallback explanation');
+
+const helpModule = { exports: {} };
+const helpJs = ts.transpileModule(fs.readFileSync(path.resolve('components/surveys/HiveHelpPreview.tsx'), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+}).outputText;
+vm.runInNewContext(helpJs, { module: helpModule, exports: helpModule.exports, require: name => ({
+  react: { useState: initial => [initial], useEffect: () => {} },
+  'react/jsx-runtime': require('react/jsx-runtime'),
+  'react-native': { Pressable: 'Pressable', Text: 'Text', View: 'View' },
+  '@tanstack/react-query': { useQuery: () => ({ data: {
+    title: 'October HIVE Help — collect your plastic to-go containers', content: canonicalHelpContent,
+    quarterContext: null, category_id: 'board-id',
+  }, isLoading: false, isError: false }) },
+  '../../lib/supabase': { supabase: {} },
+  '../../supabase/functions/_shared/upcomingEvents': { pacificDay: () => '2026-10-02' },
+  '../../lib/monthlyHiveHelp': { currentMonthlyHelpPost, monthlyHelpFocusCopy, monthlyHelpWindow, quarterHelpContext },
+})[name] });
+const renderedHelp = helpModule.exports.HiveHelpPreview({ onOpenBoard: () => {} });
+const textInOrder = node => typeof node === 'string' ? node : Array.isArray(node)
+  ? node.map(textInOrder).join(' ') : node?.props ? textInOrder(node.props.children) : '';
+const helpText = textInOrder(renderedHelp);
+const explanationAt = helpText.indexOf('We’re doing a three-part HIVE Help');
+const focusAt = helpText.indexOf('October focus: Collect your plastic to-go containers');
+const noteAt = helpText.indexOf('(Decided together at the meeting');
+const localAt = helpText.indexOf('If you’re in Vegas');
+const boardAt = helpText.indexOf('Share a win on HIVE Help');
+assert.ok(explanationAt >= 0 && explanationAt < focusAt && focusAt < noteAt && noteAt < localAt && localAt < boardAt,
+  'the rendered card follows the owner-approved explanation, focus, note, local invitation, and board link order');
+assert.doesNotMatch(helpText, /neighbors/i, 'the card does not invent a different audience');
+assert.equal((helpText.match(/October’s HIVE Help focus:/g) ?? []).length, 0, 'the duplicate focus sentence is hidden');
 
 const survey = { id: 'survey', title: 'End of the month' };
 const sept = at('2026-10-01T18:00:00Z');
