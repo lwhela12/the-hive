@@ -204,7 +204,7 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
             <Text accessibilityRole="header" style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#313130' }}>For the Buzz</Text>
           </View>
           {showNewsletterDeadline && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
-            The newsletter goes out tomorrow, October 2! Anything you’d like to mention or add? Please send your shout-outs and event plugs today.
+            The newsletter goes out tomorrow. Please add your shout-outs and event plugs today.
           </Text>}
           {!completedReview && <BuzzCalendarPreview />}
           {([{ id: 'q_shoutout', label: 'A shout-out for someone', placeholder: 'Who deserves a shout-out, and why?' },

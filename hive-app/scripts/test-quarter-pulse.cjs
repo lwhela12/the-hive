@@ -17,7 +17,7 @@ function load(file) {
 }
 
 const { openSeasonSections, isSurveyOnHomeToday } = load(path.resolve('lib/checkIns.ts'));
-const { endOfMonthContext, isOctoberNewsletterDeadlineDay } = load(path.resolve('lib/endOfMonthPeriod.ts'));
+const { endOfMonthContext, isSeptemberNewsletterTomorrowWindow } = load(path.resolve('lib/endOfMonthPeriod.ts'));
 const { QUARTER_PULSE_QUESTIONS, OG_QUARTER_PULSE_QUESTIONS, SHARED_QUARTER_PULSE_QUESTION,
   isQuarterPulseOpen, quarterAnswersForMembers, tallyQuarterPulse, quarterPulseTalkingPoints,
   quarterPulseQuestionsForDeck, quarterPulseDeckLines, recentQuarterPulsePeriod } = load(path.resolve('lib/quarterPulse.ts'));
@@ -39,10 +39,12 @@ assert.equal(openSeasonSections(hives, new Date(2026, 11, 29, 12)).length, 3, 'y
 assert.equal(endOfMonthContext(new Date('2026-10-01T06:59:00Z')).period, '2026-09');
 assert.equal(endOfMonthContext(new Date('2026-10-01T07:01:00Z')).period, '2026-09');
 assert.equal(endOfMonthContext(new Date('2026-10-08T19:00:00Z')).period, '2026-10');
-assert.equal(isOctoberNewsletterDeadlineDay(new Date('2026-10-01T06:59:00Z')), false, 'September 30 Pacific is not tomorrow');
-assert.equal(isOctoberNewsletterDeadlineDay(new Date('2026-10-01T07:01:00Z')), true, 'October 1 Pacific shows the deadline');
-assert.equal(isOctoberNewsletterDeadlineDay(new Date('2026-10-02T06:59:00Z')), true, 'the deadline remains through October 1 Pacific');
-assert.equal(isOctoberNewsletterDeadlineDay(new Date('2026-10-02T07:01:00Z')), false, 'October 2 Pacific hides the stale tomorrow');
+assert.equal(isSeptemberNewsletterTomorrowWindow(new Date('2026-10-01T06:59:00Z')), false, 'September 30 Pacific has no launch reminder');
+assert.equal(isSeptemberNewsletterTomorrowWindow(new Date('2026-10-01T07:01:00Z')), true, 'October 1 Pacific has the launch reminder');
+assert.equal(isSeptemberNewsletterTomorrowWindow(new Date('2026-10-02T06:59:00Z')), true, 'the reminder remains through October 1 Pacific');
+assert.equal(isSeptemberNewsletterTomorrowWindow(new Date('2026-10-02T07:01:00Z')), true, 'October 2 Pacific keeps the relative reminder for a delayed invitation');
+assert.equal(isSeptemberNewsletterTomorrowWindow(new Date('2026-10-03T06:59:00Z')), true, 'the reminder remains through October 2 Pacific');
+assert.equal(isSeptemberNewsletterTomorrowWindow(new Date('2026-10-03T07:01:00Z')), false, 'October 3 Pacific hides the stale reminder');
 for (const day of ['2026-10-01', '2026-10-07']) assert.equal(monthEndReviewPeriod(day), '2026-09');
 assert.equal(monthEndReviewPeriod('2026-10-08'), '2026-10');
 assert.equal(monthEndReviewPeriod('2027-01-01'), '2026-12');

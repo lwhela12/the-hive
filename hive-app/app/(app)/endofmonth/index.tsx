@@ -18,7 +18,7 @@ import { applyCarryForwardStatuses, type CarryForwardItem } from '../../../lib/c
 import { restoreEndOfMonthAnswers, saveEndOfMonth, type EndOfMonthAnswers } from '../../../lib/endOfMonth';
 import { queryClient } from '../../../lib/queryClient';
 import { formatDateShort } from '../../../lib/dateUtils';
-import { endOfMonthContext, isOctoberNewsletterDeadlineDay } from '../../../lib/endOfMonthPeriod';
+import { endOfMonthContext, isSeptemberNewsletterTomorrowWindow } from '../../../lib/endOfMonthPeriod';
 import { isOwnMonthEmailPreview, wasOwnMonthEmailSent } from '../../../lib/ownMonthEmail';
 import { isQuarterPulseOpen, QUARTER_PULSE_QUESTIONS } from '../../../lib/quarterPulse';
 import { showAlert } from '../../../lib/showAlert';
@@ -176,7 +176,7 @@ export default function EndOfMonthScreen() {
       community: m.community, todos: current.todos[m.community_id] ?? [],
       questions: seasonal.filter(section => section.communityId === m.community_id).flatMap(section => section.questions),
     }))} initialAnswers={current.initialAnswers} showQuarterAnnouncements={month === '2026-09'}
-      showNewsletterDeadline={isOctoberNewsletterDeadlineDay(now)}
+      showNewsletterDeadline={!askedDate && !historicalReview && month === '2026-09' && isSeptemberNewsletterTomorrowWindow(now)}
       sharedQuarterQuestions={isQuarterPulseOpen(reviewDate) ? QUARTER_PULSE_QUESTIONS : []}
       finalQuarter={reviewDate.getMonth() === 8}
       onOpen3Miq={() => router.push({ pathname: '/profile', params: { focus: 'miq', from: 'endofmonth' } })}
