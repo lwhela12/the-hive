@@ -37,9 +37,11 @@ assert.equal(splitMergedAnswers(ordinary, {}, []).map(r => r.communityId).join('
 assert.equal(JSON.stringify(ordinary), original, 'rendering does not remove storage sections');
 
 const seasonal = buildMergedEndOfMonth(personal, hives, new Date(2026, 8, 29));
-assert.ok(seasonal.sections.length > 0, 'quarter preview includes real questions');
-for (const section of seasonal.sections) {
-  const fields = mergedPreMeetingQuestions({ ...seasonal, personal: [], sections: [section] });
+assert.equal(seasonal.sections.length, 0, 'quarter choices live once in the shared month section');
+const year = buildMergedEndOfMonth(personal, hives, new Date(2026, 11, 29));
+assert.ok(year.sections.length > 0, 'year preview retains its HIVE sections');
+for (const section of year.sections) {
+  const fields = mergedPreMeetingQuestions({ ...year, personal: [], sections: [section] });
   assert.equal(fields.length, section.questions.length + 1, 'real sections retain their introduction');
   assert.equal(fields[0].question.type, 'note');
   assert.equal(fields[1].key, `${section.communityId}:${section.questions[0].id}`,

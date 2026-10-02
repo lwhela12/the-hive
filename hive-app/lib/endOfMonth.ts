@@ -9,12 +9,14 @@ export function restoreEndOfMonthAnswers(
   legacyQuarterHiveId?: string,
 ): EndOfMonthAnswers {
   const month = { ...receipts.month, ...drafts.month };
-  // The support choice used to live in OG's row. Bring that answer forward
+  // Both quarter choices have lived in OG's row. Bring an old answer forward
   // only when no shared answer exists; keep the old row as history.
-  if (month.q_quarter_help_next == null && legacyQuarterHiveId) {
-    const old = drafts[legacyQuarterHiveId]?.q_quarter_help_next
-      ?? receipts[legacyQuarterHiveId]?.q_quarter_help_next;
-    if (typeof old === 'string') month.q_quarter_help_next = old;
+  if (legacyQuarterHiveId) {
+    for (const key of ['q_quarter_helping', 'q_quarter_help_next'] as const) {
+      if (month[key] != null) continue;
+      const old = drafts[legacyQuarterHiveId]?.[key] ?? receipts[legacyQuarterHiveId]?.[key];
+      if (typeof old === 'string') month[key] = old;
+    }
   }
   // Both legacy newsletter keys are read by The Buzz. Consolidate the old
   // combined box into the current plug/event field so it is not read twice.

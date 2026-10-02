@@ -21,8 +21,7 @@ export const OG_QUARTER_PULSE_QUESTIONS = QUARTER_PULSE_QUESTIONS.filter(questio
 export const SHARED_QUARTER_PULSE_QUESTION = QUARTER_PULSE_QUESTIONS.find(question => question.id === 'q_quarter_help_next')!;
 
 export function quarterPulseQuestionsForDeck(slug: string): SurveyQuestion[] {
-  if (slug === 'default') return [...OG_QUARTER_PULSE_QUESTIONS, SHARED_QUARTER_PULSE_QUESTION];
-  if (slug === 'tech') return [SHARED_QUARTER_PULSE_QUESTION];
+  if (slug === 'default' || slug === 'tech') return QUARTER_PULSE_QUESTIONS;
   return [];
 }
 

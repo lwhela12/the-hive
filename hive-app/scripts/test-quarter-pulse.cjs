@@ -29,15 +29,13 @@ const hives = [
 ];
 for (const day of [27, 30]) {
   const sections = openSeasonSections(hives, new Date(2026, 8, day, 12));
-  assert.equal(sections.length, 1);
-  assert.equal(sections[0].communityId, 'og');
-  assert.equal(sections[0].name, 'OG HIVE · Q3 2026');
-  assert.deepEqual(Array.from(sections[0].questions, question => question.text), Array.from(OG_QUARTER_PULSE_QUESTIONS, question => question.text));
+  assert.equal(sections.length, 0, 'quarter choices no longer repeat in an OG section');
 }
 for (const day of [1, 7]) {
-  assert.equal(openSeasonSections(hives, new Date(2026, 9, day, 12))[0]?.name, 'OG HIVE · Q3 2026');
+  assert.equal(openSeasonSections(hives, new Date(2026, 9, day, 12)).length, 0);
 }
 assert.equal(openSeasonSections(hives, new Date(2026, 9, 8, 12)).length, 0);
+assert.equal(openSeasonSections(hives, new Date(2026, 11, 29, 12)).length, 3, 'year sections retain their HIVE scopes');
 assert.equal(endOfMonthContext(new Date('2026-10-01T06:59:00Z')).period, '2026-09');
 assert.equal(endOfMonthContext(new Date('2026-10-01T07:01:00Z')).period, '2026-09');
 assert.equal(endOfMonthContext(new Date('2026-10-08T19:00:00Z')).period, '2026-10');
@@ -51,7 +49,7 @@ assert.equal(monthEndReviewPeriod('2027-01-01'), '2026-12');
 assert.equal(recentQuarterPulsePeriod(new Date(2026, 9, 15)), '2026-09');
 assert.equal(recentQuarterPulsePeriod(new Date(2026, 10, 1)), null);
 assert.deepEqual(Array.from(quarterPulseQuestionsForDeck('default'), question => question.id), ['q_quarter_helping', 'q_quarter_help_next']);
-assert.deepEqual(Array.from(quarterPulseQuestionsForDeck('tech'), question => question.id), ['q_quarter_help_next']);
+assert.deepEqual(Array.from(quarterPulseQuestionsForDeck('tech'), question => question.id), ['q_quarter_helping', 'q_quarter_help_next']);
 assert.deepEqual(Array.from(quarterPulseQuestionsForDeck('show'), question => question.id), [], 'Production has no pulse talking points');
 assert.equal(isQuarterPulseOpen(new Date(2026, 8, 26, 12)), false);
 assert.equal(isQuarterPulseOpen(new Date(2026, 8, 27, 12)), true);
@@ -85,7 +83,7 @@ assert.equal(quarterPulseTalkingPoints([], SHARED_QUARTER_PULSE_QUESTION).length
 assert.deepEqual(Array.from(quarterPulseDeckLines([], 'default'), line => [line.question.id, line.point]),
   [['q_quarter_helping', null], ['q_quarter_help_next', null]], 'OG shows both unanswered questions');
 assert.deepEqual(Array.from(quarterPulseDeckLines([], 'tech'), line => line.question.id),
-  ['q_quarter_help_next'], 'Tech shows only its shared question');
+  ['q_quarter_helping', 'q_quarter_help_next'], 'Tech shows both choices for its own member roster');
 assert.equal(quarterPulseDeckLines([], 'show').length, 0, 'Production remains outside the pulse summary');
 const mixedLines = quarterPulseDeckLines([{ question_id: 'q_quarter_helping', option: 'Yes', response_count: 1 }], 'default');
 assert.equal(mixedLines[0].point.percent, 100);
@@ -97,4 +95,4 @@ assert.deepEqual(Array.from(quarterPulseTalkingPoints([
 assert.equal(quarterPulseTalkingPoints(scopedCounts, { ...SHARED_QUARTER_PULSE_QUESTION, id: 'private_production_question' }).length, 0,
   'an unreturned question cannot become a talking point');
 assert.equal(isSurveyOnHomeToday({ title: 'Quarterly Check-in · Q3 2026', due_date: '2026-10-01T00:00:00Z' }, new Date(2026, 8, 30)), false);
-console.log('Quarter pulse: OG value choice, one shared support choice, Pacific month grace, legacy fallback, and tally passed.');
+console.log('Quarter pulse: two shared choices, separate OG and Tech decks, Pacific month grace, legacy fallback, and tally passed.');

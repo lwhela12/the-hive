@@ -56,7 +56,10 @@ function harness(result, withTask = false, announcementHives = [], draftFailure 
     draftKey: withTask ? 'survey-draft:member:survey:2026-09:continuous' : 'test', legacyDraftKeys: [], readOnly: false, doneLabel: 'Back to Home',
     showQuarterAnnouncements: announcementSections.length > 0,
     showNewsletterDeadline: showDeadline,
-    sharedQuarterQuestion: announcementSections.length ? { id: 'q_quarter_help_next', text: 'What would help?', type: 'choice', options: ['A gentle nudge'] } : null,
+    sharedQuarterQuestions: announcementSections.length ? [
+      { id: 'q_quarter_helping', text: 'Is HIVE helping?', type: 'choice', options: ['Yes'] },
+      { id: 'q_quarter_help_next', text: 'What would help?', type: 'choice', options: ['A gentle nudge'] },
+    ] : [],
     onOpen3Miq: () => { miqOpens++; },
     onOpenHiveHelp: () => { helpOpens++; },
     onSave: async answers => { saves++; savedAnswers = answers; assert.equal(answers.month.q_shoutout, 'Keep my words'); return await result(); },
@@ -134,26 +137,31 @@ function button(tree, label) { return walk(tree).find(n => n.type === 'Pressable
   const ogWithTech = harness(async () => ({ error: null }), false, ['default', 'tech']);
   const ogAnnouncementTree = ogWithTech.render();
   const ogAnnouncement = text(ogAnnouncementTree);
+  assert.match(ogAnnouncement, /Your to-do list.*to-dos already assigned to you in each HIVE/);
   assert.match(ogAnnouncement, /It’s hoodie season!/);
   assert.match(ogAnnouncement, /Honey Pot dues.*Bumblebee Ball.*reach out to Nat.*virtually or in person/);
   assert.match(ogAnnouncement, /Not in OG\?.*at cost from our shop.*virtually or in person/);
   const sharedQuestion = walk(ogAnnouncementTree).filter(node => node.type === 'Question' && node.props.question.id === 'q_quarter_help_next');
+  const helpingQuestion = walk(ogAnnouncementTree).filter(node => node.type === 'Question' && node.props.question.id === 'q_quarter_helping');
   const miqLink = button(ogAnnouncementTree, 'Explore my 3MIQ');
   assert.equal(miqLink.props.style.minHeight, 44, 'phone tap target');
   assert.equal(miqLink.props.style.backgroundColor, '#f5eddc');
   assert.equal(walk(miqLink).find(node => node.type === 'Text')?.props.style.color, '#313130', 'dark ink on cream');
   assert.equal(sharedQuestion.length, 1, 'a member in OG and Tech answers the support choice once');
+  assert.equal(helpingQuestion.length, 1, 'a member in OG and Tech answers the helping choice once');
+  helpingQuestion[0].props.onChange('Yes');
   sharedQuestion[0].props.onChange('A gentle nudge');
   button(ogWithTech.render(), 'Explore my 3MIQ').props.onPress();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(ogWithTech.miqOpens(), 1);
   assert.equal(ogWithTech.drafts.at(-1)[1].month.q_quarter_help_next, 'A gentle nudge', 'the shared choice drafts before leaving for Profile');
+  assert.equal(ogWithTech.drafts.at(-1)[1].month.q_quarter_helping, 'Yes', 'the helping choice drafts in the shared section');
   const helpLink = walk(ogWithTech.render()).find(node => node.type === 'HiveHelp');
   helpLink.props.onOpenBoard('board-id');
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(ogWithTech.helpOpens(), 1, 'Help board opens after the same draft barrier');
   const failedDraftLink = harness(async () => ({ error: null }), false, ['tech'], true);
-  walk(failedDraftLink.render()).find(node => node.type === 'Question').props.onChange('A gentle nudge');
+  walk(failedDraftLink.render()).find(node => node.type === 'Question').props.onChange('Yes');
   button(failedDraftLink.render(), 'Explore my 3MIQ').props.onPress();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(failedDraftLink.miqOpens(), 0, 'a failed device draft keeps the member on the check-in');

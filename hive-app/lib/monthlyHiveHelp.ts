@@ -18,8 +18,24 @@ export function currentMonthlyHelpPost<T extends HelpPost>(posts: T[], month: st
     .sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null;
 }
 
-/** Keep the owner-written future plan without repeating the current action. */
+/** The board's owner-written plan explains the focus before the current action. */
 export function quarterHelpContext(content: string | null): string | null {
   if (!content) return null;
-  return content.replace(/^Right now,[^.]*\.\s*/i, '').trim() || null;
+  return content.trim() || null;
+}
+
+/** Use the board post's action once, while keeping any extra owner-written detail. */
+export function monthlyHelpFocusCopy(title: string, content: string | null) {
+  const match = title.match(/^([A-Za-z]+)\s+HIVE Help(?:ers)?\s*[—–-]+\s*(.+)$/i);
+  const action = match?.[2]?.trim() ?? '';
+  const heading = match ? `${match[1]} focus: ${action.charAt(0).toUpperCase()}${action.slice(1)}` : title;
+  const normalize = (value: string) => value.toLowerCase().replace(/[’']/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+  const normalizedAction = normalize(action);
+  const details = (content ?? '').split(/\n\s*\n/).map(part => part.trim()).filter(part => {
+    if (!part || !normalizedAction) return !!part;
+    const text = normalize(part);
+    return !(text.endsWith(normalizedAction) && text.length - normalizedAction.length <= 45);
+  }).join('\n\n');
+  return { heading, details };
 }
