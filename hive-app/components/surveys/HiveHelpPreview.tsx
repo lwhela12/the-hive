@@ -44,12 +44,12 @@ export function HiveHelpPreview({ onOpenBoard, disabled = false }: { onOpenBoard
   });
   const focus = query.data?.title ? query.data : null;
   const boardId = query.data?.category_id;
-  const focusCopy = focus?.title ? monthlyHelpFocusCopy(focus.title, focus.content) : null;
+  const focusCopy = focus?.title ? monthlyHelpFocusCopy(focus.title, focus.content, focus.quarterContext) : null;
   return <View style={{ backgroundColor: '#fffdf5', borderRadius: 16, padding: 16, gap: 8, borderWidth: 1, borderColor: '#bd9348' }}>
     <Text accessibilityRole="header" style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: '#313130' }}>This month’s HIVE Help</Text>
-    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#4b4740' }}>
-      {query.data?.quarterContext || 'HIVE Help is our shared plan to help neighbors. Each month has one focus from the HIVE Help board.'}
-    </Text>
+    {!!(focusCopy?.introduction || query.data?.quarterContext) && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#4b4740' }}>
+      {focusCopy?.introduction || query.data?.quarterContext}
+    </Text>}
     {focus ? <>
       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, lineHeight: 22, color: '#313130' }}>{focusCopy?.heading}</Text>
       {!!focusCopy?.details && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#4b4740' }}>{focusCopy.details}</Text>}
