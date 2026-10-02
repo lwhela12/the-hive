@@ -24,17 +24,21 @@ assert.match(profileRoute, /endofmonth: \{ route: '\/endofmonth'/, 'closing Prof
 assert.match(profileRoute, /focus === 'miq'[\s\S]*?startDeepQuiz\(3, true\)/, '3MIQ link opens the existing profile step directly');
 const task = { id: 'task', type: 'action_item', label: 'Bring props', sourceLabel: 'To-do' };
 const answers = restoreEndOfMonthAnswers(['og', 'tech', 'production'], {
-  og: { quarterly: 'keep this', q_newsletter: 'legacy', q_quarter_help_next: 'A gentle nudge' }, month: { q_eom_newsletter: 'My event', q_shoutout: 'Thank you' },
+  og: { quarterly: 'keep this', q_newsletter: 'legacy', q_quarter_helping: 'A little', q_quarter_help_next: 'A gentle nudge' }, month: { q_eom_newsletter: 'My event', q_shoutout: 'Thank you' },
 }, { og: { quarterly: 'new draft' }, month: { q_newsletter: 'My event' } }, 'og');
 assert.equal(answers.hives.og.quarterly, 'new draft');
 assert.equal(answers.month.q_newsletter, 'My event');
 assert.equal(answers.month.q_eom_newsletter, undefined);
 assert.equal(answers.month.q_shoutout, 'Thank you');
 assert.equal(answers.month.q_quarter_help_next, 'A gentle nudge', 'old OG answer appears in the one shared question');
+assert.equal(answers.month.q_quarter_helping, 'A little', 'old OG helping choice appears in the shared section');
 assert.equal(answers.hives.og.q_quarter_help_next, 'A gentle nudge', 'old OG answer remains in its original row');
 assert.equal(restoreEndOfMonthAnswers(['og'], { og: { q_quarter_help_next: 'A gentle nudge' },
   month: { q_quarter_help_next: 'More connection and fun' } }, {}, 'og').month.q_quarter_help_next,
   'More connection and fun', 'new shared answer takes precedence');
+assert.equal(restoreEndOfMonthAnswers(['og'], { og: { q_quarter_helping: 'A little' },
+  month: { q_quarter_helping: 'Yes' } }, {}, 'og').month.q_quarter_helping,
+  'Yes', 'new shared helping answer takes precedence over saved OG history');
 answers.hives.production.q_carry_forward_items = [{ ...task, status: 'done' }, { ...task, id: 'stale', status: 'archive' }];
 const tasks = endOfMonthTaskResponses([task, { ...task, id: 'wish', type: 'wish' }], answers.hives.production);
 assert.equal(tasks.length, 1);
@@ -54,14 +58,15 @@ async function run() {
   assert.equal(calls.at(-1)[1].q_newsletter, 'My event');
   const quarterCalls = [];
   assert.equal((await saveEndOfMonth({ ...options,
-    answers: { hives: { og: { q_quarter_helping: 'Yes' }, tech: {} }, month: { q_quarter_help_next: 'Nothing extra right now' } },
+    answers: { hives: { og: {}, tech: {} }, month: { q_quarter_helping: 'Yes', q_quarter_help_next: 'Nothing extra right now' } },
     communityIds: ['og', 'tech'], todos: {},
     save: async (id, value) => { quarterCalls.push([id, value]); return { error: null }; },
   })).error, null);
-  assert.equal(quarterCalls[0][1].q_quarter_helping, 'Yes', 'OG choice is saved in OG scope');
+  assert.equal(quarterCalls[0][1].q_quarter_helping, undefined, 'new helping choice is not saved per HIVE');
   assert.equal(quarterCalls.at(-1)[0], null);
+  assert.equal(quarterCalls.at(-1)[1].q_quarter_helping, 'Yes', 'helping choice is saved once in shared scope');
   assert.equal(quarterCalls.at(-1)[1].q_quarter_help_next, 'Nothing extra right now', 'support choice is saved once in shared scope');
-  assert.equal(quarterCalls[1][1].q_quarter_helping, undefined, 'Tech never receives the OG choice');
+  assert.equal(quarterCalls[1][1].q_quarter_helping, undefined, 'the Tech row does not duplicate the shared choice');
   calls.length = 0;
   assert.ok((await saveEndOfMonth({ ...options, applyTasks: async () => ({ error: 'offline' }) })).error);
   assert.equal(calls.length, 0, 'task failure must not write completion receipts');

@@ -231,8 +231,8 @@ export function isInHalfwayWindow(
  * became real. The italics did not outlive the promise.
  *
  * Legacy season survey rows and responses remain in storage and Admin history.
- * The current quarter choices live inside the shared End of the month form,
- * once for an OG member; Tech and paused Production get no quarter questions.
+ * The current quarter choices live once in the shared End of the month form
+ * for active OG and Tech members. Paused Production gets no month form.
  *
  * - **December belongs to the year, not the quarter.** Q4's quarter-end and
  *   the year-end are the same three days, and asking somebody to reflect on
@@ -241,7 +241,7 @@ export function isInHalfwayWindow(
  *   end-of-year check-in takes December's slot. During Q4 the next
  *   quarterly is Q1 of the new year.
  *
- * - The OG quarter choices open on the last three days of March, June and
+ * - The shared quarter choices open on the last three days of March, June and
  *   September and remain available through the first week of the next month.
  *   The year section keeps its existing timing.
  * ------------------------------------------------------------------------- */
@@ -1450,8 +1450,9 @@ export function readMergedAnswerKey(key: string): { communityId: string | null; 
  * A seasonal section appears inside its window and falls away after, and
  * nothing has to be launched, retired, or remembered.
  *
- * The OG quarter section uses the existing per-HIVE answer row. There is no
- * repeated block for each HIVE, and older per-HIVE answers remain readable.
+ * Quarter choices now live together in the shared HIVE-Wide Looking ahead
+ * section. Only the year retains a per-HIVE seasonal section here; older
+ * quarter answers remain readable through the month form's restore path.
  *
  * ## What this replaces
  *
@@ -1463,31 +1464,19 @@ export function openSeasonSections(
   today: Date,
 ): MergedCheckInSection[] {
   const sections: MergedCheckInSection[] = [];
-  for (const kind of ['quarter', 'year'] as SeasonKind[]) {
-    const quarterReference = kind === 'quarter'
-      ? new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7)
-      : today;
-    const occurrence = getUpcomingSeasonOccurrence(kind, quarterReference);
-    // The quarter opens for the last three days and stays available for seven
-    // more. End of the month keeps its receipt on that same reviewed month.
-    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const closes = kind === 'quarter'
-      ? new Date(occurrence.endDate.getFullYear(), occurrence.endDate.getMonth(), occurrence.endDate.getDate() + 7)
-      : occurrence.endDate;
-    if (startOfToday < occurrence.opensDate || startOfToday > closes) continue;
-
-    for (const hive of hives) {
-      const deck = buildSeasonCheckIn({ slug: hive.slug ?? '' }, kind, quarterReference);
-      if (!deck || !deck.questions.length) continue;
-      sections.push({
-        communityId: hive.id,
-        slug: (hive.slug ?? '').trim().toLowerCase(),
-        // Name the HIVE and the reviewed period without repeating questions.
-        name: `${hiveDisplayName(hive.name)} · ${deck.occurrence.label}`,
-        questions: deck.questions,
-        seasonKind: kind,
-      });
-    }
+  const occurrence = getUpcomingSeasonOccurrence('year', today);
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  if (startOfToday < occurrence.opensDate || startOfToday > occurrence.endDate) return sections;
+  for (const hive of hives) {
+    const deck = buildSeasonCheckIn({ slug: hive.slug ?? '' }, 'year', today);
+    if (!deck || !deck.questions.length) continue;
+    sections.push({
+      communityId: hive.id,
+      slug: (hive.slug ?? '').trim().toLowerCase(),
+      name: `${hiveDisplayName(hive.name)} · ${deck.occurrence.label}`,
+      questions: deck.questions,
+      seasonKind: 'year',
+    });
   }
   return sections;
 }

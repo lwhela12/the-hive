@@ -16,7 +16,7 @@ const events = load(path.resolve('supabase/functions/_shared/upcomingEvents.ts')
 const { surveyCalendarWindow, eligibleSurveyEvent, surveyEventVisibilityLabel, buzzCalendarItems } = load(path.resolve('lib/buzzCalendar.ts'));
 const { shouldReturnToCheckIn } = load(path.resolve('lib/boardCheckInReturn.ts'));
 const { isInvitedToEvent, canShareEventDetailsOnHiveWide } = load(path.resolve('lib/eventDisplay.ts'));
-const { currentMonthlyHelpPost, monthlyHelpWindow, quarterHelpContext } = load(path.resolve('lib/monthlyHiveHelp.ts'));
+const { currentMonthlyHelpPost, monthlyHelpFocusCopy, monthlyHelpWindow, quarterHelpContext } = load(path.resolve('lib/monthlyHiveHelp.ts'));
 const { wideMonthTodo, wideCompletedMonthTodo } = load(path.resolve('lib/wideCheckInTodos.ts'));
 const at = iso => new Date(iso);
 assert.equal(events.pacificDay(at('2026-10-01T06:59:00Z')), '2026-09-30');
@@ -100,7 +100,15 @@ assert.equal(currentMonthlyHelpPost(nonOgVisiblePosts, '2026-10'), null, 'non-OG
 assert.equal(currentMonthlyHelpPost([...nonOgVisiblePosts, { ...helpPosts[1], visibility: 'all_hives' }], '2026-10')?.id, 'oct',
   'sharing only the existing October thread makes it readable without duplicating it');
 assert.equal(quarterHelpContext('Right now, collect plastic to-go containers. Later, collect canned goods. Then cook and deliver meals locally.'),
-  'Later, collect canned goods. Then cook and deliver meals locally.', 'owner-written future plan remains without repeating October');
+  'Right now, collect plastic to-go containers. Later, collect canned goods. Then cook and deliver meals locally.',
+  'the owner-written plan stays intact ahead of the bold monthly focus');
+assert.deepEqual(JSON.parse(JSON.stringify(monthlyHelpFocusCopy('October HIVE Help — collect your plastic to-go containers',
+  'October’s HIVE Help focus: collect your plastic to-go containers.\n\n(Decided together at the meeting — log your helps in this thread!)'))), {
+  heading: 'October focus: Collect your plastic to-go containers',
+  details: '(Decided together at the meeting — log your helps in this thread!)',
+}, 'the canonical October action appears once while the owner’s extra context remains');
+assert.equal(monthlyHelpFocusCopy('November HIVE Help — collect canned goods', 'Bring cans to the next meeting.').details,
+  'Bring cans to the next meeting.', 'a distinct future focus detail is preserved');
 
 const survey = { id: 'survey', title: 'End of the month' };
 const sept = at('2026-10-01T18:00:00Z');

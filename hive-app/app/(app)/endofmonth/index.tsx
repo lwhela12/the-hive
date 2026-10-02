@@ -20,7 +20,7 @@ import { queryClient } from '../../../lib/queryClient';
 import { formatDateShort } from '../../../lib/dateUtils';
 import { endOfMonthContext, isOctoberNewsletterDeadlineDay } from '../../../lib/endOfMonthPeriod';
 import { isOwnMonthEmailPreview, wasOwnMonthEmailSent } from '../../../lib/ownMonthEmail';
-import { isQuarterPulseOpen, SHARED_QUARTER_PULSE_QUESTION } from '../../../lib/quarterPulse';
+import { isQuarterPulseOpen, QUARTER_PULSE_QUESTIONS } from '../../../lib/quarterPulse';
 import { showAlert } from '../../../lib/showAlert';
 import type { Survey } from '../../../types';
 
@@ -177,7 +177,7 @@ export default function EndOfMonthScreen() {
       questions: seasonal.filter(section => section.communityId === m.community_id).flatMap(section => section.questions),
     }))} initialAnswers={current.initialAnswers} showQuarterAnnouncements={month === '2026-09'}
       showNewsletterDeadline={isOctoberNewsletterDeadlineDay(now)}
-      sharedQuarterQuestion={isQuarterPulseOpen(reviewDate) ? SHARED_QUARTER_PULSE_QUESTION : null}
+      sharedQuarterQuestions={isQuarterPulseOpen(reviewDate) ? QUARTER_PULSE_QUESTIONS : []}
       finalQuarter={reviewDate.getMonth() === 8}
       onOpen3Miq={() => router.push({ pathname: '/profile', params: { focus: 'miq', from: 'endofmonth' } })}
       onOpenHiveHelp={categoryId => router.push({ pathname: '/hive-wide-boards', params: { categoryId, from: 'endofmonth', open: String(Date.now()) } })}

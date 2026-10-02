@@ -22,7 +22,7 @@ function savedAnswer(value: SurveyAnswerValue | undefined): string {
   return typeof value === 'object' ? 'Saved' : String(value);
 }
 
-export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraftKeys, readOnly, completedReview = false, showQuarterAnnouncements = false, showNewsletterDeadline = false, sharedQuarterQuestion, finalQuarter = false, onOpen3Miq, onOpenHiveHelp, onSave, onDone, doneLabel, onEmailSettings, onEmailMe, emailingMe = false }: {
+export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraftKeys, readOnly, completedReview = false, showQuarterAnnouncements = false, showNewsletterDeadline = false, sharedQuarterQuestions = [], finalQuarter = false, onOpen3Miq, onOpenHiveHelp, onSave, onDone, doneLabel, onEmailSettings, onEmailMe, emailingMe = false }: {
   sections: { community: Community; todos: CarryForwardItem[]; questions: SurveyQuestion[] }[];
   initialAnswers: EndOfMonthAnswers;
   draftKey: string;
@@ -31,7 +31,7 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
   completedReview?: boolean;
   showQuarterAnnouncements?: boolean;
   showNewsletterDeadline?: boolean;
-  sharedQuarterQuestion?: SurveyQuestion | null;
+  sharedQuarterQuestions?: SurveyQuestion[];
   finalQuarter?: boolean;
   onOpen3Miq?: () => void;
   onOpenHiveHelp?: (categoryId: string) => void;
@@ -103,9 +103,16 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
     <ScrollView ref={scroll} onScroll={event => setShowTop(event.nativeEvent.contentOffset.y > 300)} scrollEventThrottle={100}
       keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 88 }}>
       <View style={{ width: '100%', maxWidth: 880, alignSelf: 'center', gap: 18 }}>
-        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: skin.inkBody }}>
-          {completedReview ? 'Your saved check-in · read only' : readOnly ? 'Date preview · read only' : 'Review your to-dos, then add anything for the Buzz.'}
-        </Text>
+        {readOnly
+          ? <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: skin.inkBody }}>
+              {completedReview ? 'Your saved check-in · read only' : 'Date preview · read only'}
+            </Text>
+          : <View style={{ gap: 4 }}>
+              <Text accessibilityRole="header" style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: skin.ink }}>Your to-do list</Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: skin.inkBody }}>
+                Start with the to-dos already assigned to you in each HIVE. Mark what’s done or archive what you’re leaving behind, then continue to the month’s questions.
+              </Text>
+            </View>}
         {sections.map(section => {
           const community = section.community;
           const tint = accentPalette(hiveAccent(community));
@@ -158,17 +165,17 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
                   accent={tint.accent} answers={own} onSetAnswer={(id, value) => updateHive(community.id, id, value)} />)}
           </View>;
         })}
-        {sharedQuarterQuestion && <View style={{ backgroundColor: '#fffdf5', borderRadius: 16, padding: 16, gap: 12, borderWidth: 2, borderColor: skin.gold }}>
+        {sharedQuarterQuestions.length > 0 && <View style={{ backgroundColor: '#fffdf5', borderRadius: 16, padding: 16, gap: 12, borderWidth: 2, borderColor: skin.gold }}>
           <Text accessibilityRole="header" style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#313130' }}>HIVE-Wide · looking ahead</Text>
           {finalQuarter && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
             We’re moving into the final quarter of the year!
           </Text>}
-          {readOnly
-            ? <View style={{ gap: 6 }}><Text style={{ ...buttonText, color: '#313130' }}>{sharedQuarterQuestion.text}</Text>
-                <Text style={{ fontFamily: 'Lato_400Regular', color: '#5c5648' }}>{completedReview ? savedAnswer(answers.month[sharedQuarterQuestion.id]) : sharedQuarterQuestion.options?.join(' · ')}</Text></View>
-            : <SurveyQuestionField question={sharedQuarterQuestion} index={0} value={answers.month[sharedQuarterQuestion.id]}
-                onChange={value => update({ ...answerRef.current, month: { ...answerRef.current.month, [sharedQuarterQuestion.id]: value } })}
-                answers={answers.month} />}
+          {sharedQuarterQuestions.map((question, index) => readOnly
+            ? <View key={question.id} style={{ gap: 6 }}><Text style={{ ...buttonText, color: '#313130' }}>{question.text}</Text>
+                <Text style={{ fontFamily: 'Lato_400Regular', color: '#5c5648' }}>{completedReview ? savedAnswer(answers.month[question.id]) : question.options?.join(' · ')}</Text></View>
+            : <SurveyQuestionField key={question.id} question={question} index={index} value={answers.month[question.id]}
+                onChange={value => update({ ...answerRef.current, month: { ...answerRef.current.month, [question.id]: value } })}
+                answers={answers.month} />)}
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#5c5648' }}>
             Haven’t done your 3MIQ, or want to revisit them? You can find them in your profile later, or open them now.
           </Text>
