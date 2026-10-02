@@ -26,8 +26,4 @@ export function isEndOfMonthReviewOpen(instant: Date): boolean {
   return today.getDate() >= last - 2;
 }
 
-/** A one-day deadline message for the October 2, 2026 newsletter. */
-export function isOctoberNewsletterDeadlineDay(instant: Date): boolean {
-  const today = pacificCalendarDate(instant);
-  return today.getFullYear() === 2026 && today.getMonth() === 9 && today.getDate() === 1;
-}
+export { isSeptemberNewsletterTomorrowWindow } from '../supabase/functions/_shared/checkInSession';

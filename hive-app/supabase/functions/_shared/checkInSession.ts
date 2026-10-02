@@ -10,6 +10,14 @@ export function monthEndReviewPeriod(pacificDay: string): string {
   if (day <= 7) return new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
   return pacificDay.slice(0, 7);
 }
+/** Short Pacific launch window for the September review's relative newsletter reminder. */
+export function isSeptemberNewsletterTomorrowWindow(instant: Date): boolean {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: 'numeric', day: 'numeric',
+  }).formatToParts(instant);
+  const value = (part: string) => Number(parts.find(item => item.type === part)?.value);
+  return value('year') === 2026 && value('month') === 10 && value('day') >= 1 && value('day') <= 2;
+}
 export function scopeAnswers(answers: Record<string, unknown>, communityId: string) {
   return Object.fromEntries(Object.entries(answers).filter(([key]) => key.startsWith(`${communityId}:`)).map(([key, value]) => [key.slice(communityId.length + 1), value]));
 }

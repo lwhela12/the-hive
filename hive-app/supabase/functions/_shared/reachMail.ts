@@ -25,6 +25,7 @@
  */
 
 import { hiveMark, hiveSealImg } from './hiveMark.ts';
+import { isSeptemberNewsletterTomorrowWindow } from './checkInSession.ts';
 
 /** The kinds of mail a member can turn off, and the column that carries each. */
 export const REACH_COLUMNS = {
@@ -82,10 +83,10 @@ export async function templateRevision(kind: Reach): Promise<string> {
     const letter = genericLetter(kind, { buttonLabel: TEMPLATE_BUTTONS[kind], href: '__destination__', hiveId: null, at });
     return letter.subject + '\n' + plainTextFrom(reachEmailHtml({ ...letter, toName: '__reader__' }));
   };
-  // One review covers both exact monthly variants. The seasonal sentence is
-  // shown in the approval panel, and the revision stays valid after October 1.
+  // One review covers both exact monthly variants. The launch sentence is
+  // shown in the approval panel, and the revision stays valid after October 2.
   const words = kind === 'monthCheckIn'
-    ? render(new Date('2026-10-01T19:00:00Z')) + '\n' + render(new Date('2026-10-02T19:00:00Z'))
+    ? render(new Date('2026-10-02T19:00:00Z')) + '\n' + render(new Date('2026-10-03T19:00:00Z'))
     : render();
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(words));
   return Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('');
@@ -142,15 +143,7 @@ const GENERIC_LINE: Record<Reach, { line: string; said: string }> = {
   },
 };
 
-const OCTOBER_NEWSLETTER_DEADLINE = 'The newsletter goes out tomorrow, October 2! Please add your contributions today.';
-
-function isOctoberNewsletterDeadlineDay(at: Date): boolean {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(at);
-  const value = (part: string) => parts.find(item => item.type === part)?.value;
-  return value('year') === '2026' && value('month') === '10' && value('day') === '01';
-}
+const SEPTEMBER_NEWSLETTER_REMINDER = 'The newsletter goes out tomorrow. Please add your shout-outs and event plugs today.';
 
 /**
  * The whole letter for one kind, with nothing in it that could name anybody.
@@ -165,8 +158,8 @@ export function genericLetter(
   opts: { buttonLabel: string; href: string; hiveId: string | null; at?: Date },
 ): Omit<Parameters<typeof reachEmailHtml>[0], 'toName'> & { subject: string } {
   const { line, said: standardSaid } = GENERIC_LINE[kind];
-  const said = kind === 'monthCheckIn' && isOctoberNewsletterDeadlineDay(opts.at ?? new Date())
-    ? standardSaid.replace(' Takes about 2 minutes.', ` ${OCTOBER_NEWSLETTER_DEADLINE} Takes about 2 minutes.`)
+  const said = kind === 'monthCheckIn' && isSeptemberNewsletterTomorrowWindow(opts.at ?? new Date())
+    ? standardSaid.replace(' Takes about 2 minutes.', ` ${SEPTEMBER_NEWSLETTER_REMINDER} Takes about 2 minutes.`)
     : standardSaid;
   return {
     subject: `HIVE \u00b7 ${line}`,

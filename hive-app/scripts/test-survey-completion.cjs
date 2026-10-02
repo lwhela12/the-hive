@@ -171,7 +171,8 @@ function button(tree, label) { return walk(tree).find(n => n.type === 'Pressable
   assert.doesNotMatch(techAnnouncement, /Honey Pot dues/);
   assert.doesNotMatch(techAnnouncement, /https?:\/\//, 'the homework does not invent a shop link');
   const deadline = text(harness(async () => ({ error: null }), false, ['tech'], false, true).render());
-  assert.match(deadline, /newsletter goes out tomorrow, October 2!.*shout-outs and event plugs today/);
-  assert.doesNotMatch(techAnnouncement, /newsletter goes out tomorrow/, 'the dated prompt is hidden outside its Pacific day');
+  assert.match(deadline, /The newsletter goes out tomorrow\. Please add your shout-outs and event plugs today\./);
+  assert.doesNotMatch(deadline, /October 2/);
+  assert.doesNotMatch(techAnnouncement, /newsletter goes out tomorrow/, 'the launch prompt is hidden outside its Pacific window');
   console.log('Survey completion: compact task Archive/Undo, scoped drafts, retry, and explicit save/exit passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
