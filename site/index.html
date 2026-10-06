@@ -278,6 +278,9 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .evwhat{display:block;font-family:var(--serif);font-size:1.06rem;color:var(--charcoal)}
 .evwhere{display:block;font-size:.86rem;color:var(--label);margin-top:2px}
 .evnote{display:block;font-size:.9rem;line-height:1.5;color:var(--charcoal);margin-top:6px}
+.evlink{display:inline-block;font-size:.9rem;font-weight:700;color:var(--deepgold);
+  text-decoration:none;border-bottom:1px solid rgba(189,147,72,.5);margin-top:8px}
+.evlink:hover{border-color:var(--deepgold)}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .f{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
 .f label{font-size:.8rem;font-weight:700;color:var(--charcoal);letter-spacing:.02em}
@@ -440,8 +443,20 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
   transition:transform .2s ease}
 .buzzlist details[open] .buzzchev{transform:rotate(-135deg)}
 .buzzlist details[open] summary{margin-bottom:12px}
-.buzzbody{white-space:pre-line;font-size:.94rem;line-height:1.68;color:#5c5a54;margin:0;
+.buzzbody{font-size:.94rem;line-height:1.68;color:#5c5a54;margin:0;
   padding-top:12px;border-top:1px solid rgba(189,147,72,.18)}
+.buzzbody h3{font-family:var(--serif);font-size:1.14rem;line-height:1.45;color:var(--charcoal);
+  margin:24px 0 8px}
+.buzzbody h3:first-child{margin-top:0}
+.buzzbody p{margin:0 0 12px}
+.buzzbody .buzzlabel{font-size:.78rem;line-height:1.45;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--deepgold);font-weight:700;margin:18px 0 7px}
+.buzzbody .buzzitem{display:flex;gap:9px;margin:0 0 7px;padding-left:3px}
+.buzzbody .buzzmarker{color:var(--deepgold);font-weight:700;flex:none}
+.buzzbody blockquote{margin:16px 0 4px;padding:2px 0 2px 14px;border-left:3px solid var(--goldlight);
+  font-family:var(--serif);font-style:italic;color:var(--charcoal)}
+.buzzbody .buzzby{font-size:.82rem;color:var(--label);padding-left:17px;margin-bottom:12px}
+.buzzbody a.buzzurl{color:var(--deepgold);overflow-wrap:anywhere}
 
 /* the bee comes along to the shop */
 .swagbtn .swagbee{width:26px;height:20px;flex:none;
@@ -653,6 +668,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
 
 <button class="totop" id="totop" type="button" aria-label="Back to top">&#8593;</button>
 
+<script src="assets/newsletter-reader.js"></script>
 <script>
 (function () {
   "use strict";
@@ -1109,7 +1125,15 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
         var where = (ev.location || '').trim();
         if (where) li.appendChild(line('evwhere', '📍 ' + where));
         var note = (ev.description || '').trim();
-        if (note) li.appendChild(line('evnote', note));
+        if (/^https:\/\/\S+$/.test(note)) {
+          var eventLink = document.createElement('a');
+          eventLink.className = 'evlink';
+          eventLink.href = note;
+          eventLink.textContent = /wedding/i.test(ev.title || '') ? 'Wedding website →' : 'Event details →';
+          li.appendChild(eventLink);
+        } else if (note) {
+          li.appendChild(line('evnote', note));
+        }
         evList.appendChild(li);
       });
       evList.hidden = false;
@@ -1192,7 +1216,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
         sum.appendChild(head);
         sum.appendChild(chev);
 
-        var body = document.createElement('p');
+        var body = document.createElement('div');
         body.className = 'buzzbody';
         /* A line reading [[BUTTON:tech]] is a join button, not prose — the
            same marker the email and the app render. Text stays textContent
@@ -1209,7 +1233,27 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
            marker the email and the app render (LETTER_IMAGE in the app's
            newsletter screen). https only: this string is written by hand and
            comes out the other side as an src. */
-        (n.content || '').split(/\n(\[\[(?:BUTTON:[a-z0-9-]+|IMAGE:[^\]]+)\]\])\n/).forEach(function (piece) {
+        function appendInline(parent, value) {
+          String(value || '').split(/(\*\*[^*\n]+\*\*|https?:\/\/[^\s]+)/g).forEach(function (part) {
+            if (!part) return;
+            if (part.slice(0, 2) === '**' && part.slice(-2) === '**') {
+              var strong = document.createElement('strong');
+              strong.textContent = part.slice(2, -2);
+              parent.appendChild(strong);
+            } else if (/^https?:\/\/\S+$/.test(part)) {
+              var link = document.createElement('a');
+              link.className = 'buzzurl';
+              link.href = part;
+              link.textContent = part;
+              parent.appendChild(link);
+            } else {
+              parent.appendChild(document.createTextNode(part));
+            }
+          });
+        }
+
+        HiveNewsletter.readLetter(n.content || '').forEach(function (block) {
+          var piece = block.text || '';
           var pic = /^\[\[IMAGE:(https:\/\/[^\]|\s]+)(?:\|([^\]]*))?\]\]$/.exec(piece.trim());
           if (pic) {
             var figure = document.createElement('span');
@@ -1236,19 +1280,31 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
             wrap.appendChild(a);
             body.appendChild(wrap);
           } else if (piece) {
-            // `**words**` is the newsletter editor's one inline formatting
-            // marker. Build nodes rather than using innerHTML so the public
-            // archive stays a text-only surface.
-            piece.split(/(\*\*[^*\n]+\*\*)/g).forEach(function (part) {
-              if (!part) return;
-              if (part.slice(0, 2) === '**' && part.slice(-2) === '**') {
-                var strong = document.createElement('strong');
-                strong.textContent = part.slice(2, -2);
-                body.appendChild(strong);
-              } else {
-                body.appendChild(document.createTextNode(part));
-              }
-            });
+            var element;
+            if (block.kind === 'heading') element = document.createElement('h3');
+            else if (block.kind === 'quote') element = document.createElement('blockquote');
+            else element = document.createElement('p');
+
+            if (block.kind === 'label') element.className = 'buzzlabel';
+            if (block.kind === 'attribution') {
+              element.className = 'buzzby';
+              piece = '— ' + piece;
+            }
+            if (block.kind === 'bullet' || block.kind === 'numbered' || block.kind === 'dated') {
+              element.className = 'buzzitem';
+              var marker = document.createElement('span');
+              marker.className = 'buzzmarker';
+              marker.textContent = block.kind === 'bullet' ? '•'
+                : block.kind === 'numbered' ? block.marker + '.'
+                : block.when + ':';
+              element.appendChild(marker);
+              var itemText = document.createElement('span');
+              appendInline(itemText, piece);
+              element.appendChild(itemText);
+            } else {
+              appendInline(element, piece);
+            }
+            body.appendChild(element);
           }
         });
 

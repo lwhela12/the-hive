@@ -4,9 +4,10 @@
 // in the move, and it's most of why signing up felt like a leap of faith — you
 // were asked to commit to something you couldn't see (Nat 2026-08-01).
 //
-// Reads public.public_newsletters: only posts on a newsletter board, only those
-// marked public, and only from HIVEs whose ceiling reaches the public. The
-// board_posts table itself stays shut to anonymous visitors.
+// Reads public.public_newsletters: the same finished-issue shelf shown inside
+// The Buzz — explicitly published issues, live-sent issues, and the imported
+// archive from before the send ledger existed. The owner-reviewed view is the
+// privacy boundary; board_posts itself stays shut to anonymous visitors.
 
 const LIMIT = 12;
 
@@ -23,7 +24,7 @@ export default async function handler(req, res) {
   try {
     const r = await fetch(
       `${url.replace(/\/$/, '')}/rest/v1/public_newsletters` +
-      `?select=id,title,content,created_at&limit=${LIMIT}`,
+      `?select=id,title,content,created_at&order=created_at.desc&limit=${LIMIT}`,
       { headers: { apikey: key, Authorization: `Bearer ${key}` } }
     );
 
