@@ -7,6 +7,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const sender = read('supabase/functions/notify-admin-activity/index.ts');
 const settings = read('app/(app)/settings.tsx');
 const migration = read('supabase/migrations/261_members_choose_hive_activity_mail.sql');
+const newsletterBoundary = read('supabase/migrations/20261006204000_the_buzz_is_not_board_activity.sql');
 const failures = [];
 
 if (/\.eq\('is_owner', true\).*\.eq\('email_admin_activity_enabled', true\)/s.test(sender)) {
@@ -30,6 +31,11 @@ if (!settings.includes('label="Notify me about everything"')
 if (!migration.includes('alter column email_admin_activity_enabled set default false')
   || !migration.includes("lower(email) = 'natwalstead@gmail.com'")) {
   failures.push('Migration does not default everyone off while preserving Nat on.');
+}
+if (!sender.includes("reason: 'the_buzz_not_board_activity'")
+  || !newsletterBoundary.includes("topic_kind = 'newsletter'")
+  || !newsletterBoundary.includes("tg_table_name = 'board_replies'")) {
+  failures.push('The Buzz drafts or replies can still leak into generic board-activity mail.');
 }
 
 if (failures.length) {

@@ -63,6 +63,33 @@ serve(async (req) => {
 
   const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', serviceKey);
 
+  /**
+   * The Buzz is not a board notification.
+   *
+   * Newsletter issues share a durable post row with the three newsletter
+   * renderers, but members encounter them only as The Buzz. A draft must not
+   * announce itself as "posted on a board", and a published issue already has
+   * its own send-and-release path. The database trigger applies the same
+   * boundary; this second check keeps direct or delayed calls honest too.
+   */
+  let postId: string | null = null;
+  if (kind === 'board_post') postId = body.record_id ?? null;
+  if (kind === 'board_reply' && body.record_id && body.community_id) {
+    const { data: reply } = await admin.from('board_replies').select('post_id')
+      .eq('id', body.record_id).eq('community_id', body.community_id).maybeSingle();
+    postId = reply?.post_id ?? null;
+  }
+  if (postId) {
+    const { data: post } = await admin.from('board_posts')
+      .select('category:board_categories!category_id(topic_kind)')
+      .eq('id', postId)
+      .maybeSingle();
+    const category = Array.isArray(post?.category) ? post?.category[0] : post?.category;
+    if ((category as { topic_kind?: string } | null)?.topic_kind === 'newsletter') {
+      return jsonResponse({ sent: 0, reason: 'the_buzz_not_board_activity' });
+    }
+  }
+
   // Meeting Helper, boards and duties are expected to move quickly while a
   // HIVE is together. Those actions are the meeting record, not inbox alerts.
   // The quiet window belongs to the content's HIVE and is dropped rather than
@@ -104,13 +131,6 @@ serve(async (req) => {
   // The trigger supplies the exact row that caused this email. Board mail
   // should land in that thread, just like mention and reply mail do, rather
   // than dropping the reader at the HIVE's board grid.
-  let postId: string | null = null;
-  if (kind === 'board_post') postId = body.record_id ?? null;
-  if (kind === 'board_reply' && body.record_id && body.community_id) {
-    const { data: reply } = await admin.from('board_replies').select('post_id')
-      .eq('id', body.record_id).eq('community_id', body.community_id).maybeSingle();
-    postId = reply?.post_id ?? null;
-  }
   const href = deepLink(postId ? `/board?postId=${encodeURIComponent(postId)}` : copy.path, body.community_id ?? null);
   const button = postId ? 'Open the post' : copy.button;
   const heading = `${actorName} ${copy.verb}`;
