@@ -12,6 +12,7 @@ const buzzArchiveMigration = fs.readFileSync(path.join(root, 'supabase/migration
 // a picture in the email and the literal text `[[IMAGE:…]]` on the website.
 const email = fs.readFileSync(path.join(root, 'supabase/functions/send-newsletter/index.ts'), 'utf8');
 const publicSite = fs.readFileSync(path.join(root, '../site/index.html'), 'utf8');
+const attachmentUpload = fs.readFileSync(path.join(root, 'lib/attachmentUpload.ts'), 'utf8');
 const appNews = fs.readFileSync(path.join(root, 'lib/appNews.ts'), 'utf8');
 const issuePolicy = fs.readFileSync(path.join(root, 'lib/newsletterIssues.ts'), 'utf8');
 const publicArchivePolicy = fs.readFileSync(
@@ -102,6 +103,11 @@ if (!writer.includes('saveExistingDraft') || !writer.includes("draftPostId ? 'un
 }
 if (!writer.includes('Nothing sends from this page')) {
   failures.push('The writer must say plainly that saving and sending are separate actions.');
+}
+if (!writer.includes('uploadNewsletterImage(profile.id, image)')
+  || writer.includes('uploadSingleImage(profile.id, image)')
+  || !attachmentUpload.includes("uploadImageToBucket(userId, image, 'newsletter-images')")) {
+  failures.push('Newsletter photos must use their public editorial bucket, never private member attachments.');
 }
 if (writer.includes('then edit it there')) {
   failures.push('The writer must not send Nat elsewhere to edit the newsletter.');

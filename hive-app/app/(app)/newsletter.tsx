@@ -13,7 +13,7 @@ import { useAppNews } from '../../lib/hooks/useAppNews';
 import { SummarySections, type SummarySection } from '../../components/meetings/SummarySections';
 import { readLetter } from '../../lib/newsletterHeaders';
 import { pickSingleImage } from '../../lib/imagePicker';
-import { uploadSingleImage } from '../../lib/attachmentUpload';
+import { uploadNewsletterImage } from '../../lib/attachmentUpload';
 import { LinkifiedText } from '../../components/ui/LinkifiedText';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -604,7 +604,7 @@ export default function NewsletterScreen() {
     try {
       const image = await pickSingleImage();
       if (!image) return;
-      const uploaded = await uploadSingleImage(profile.id, image);
+      const uploaded = await uploadNewsletterImage(profile.id, image);
       if (!uploaded?.url) {
         setPictureNote('That picture did not upload. Try it again in a moment.');
         return;

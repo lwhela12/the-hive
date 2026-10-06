@@ -84,11 +84,18 @@ async function getTextPreview(file: SelectedFile) {
 }
 
 /**
- * Upload a single image to Supabase Storage
+ * Upload a single image to one of the two deliberately different image homes.
+ *
+ * Ordinary attachments are private member material. Newsletter images are
+ * public editorial assets because the same URL must load for signed-out public
+ * readers and inside email clients. Keeping the bucket choice here prevents a
+ * newsletter photo from quietly landing behind the member-only attachment
+ * door again.
  */
-export async function uploadSingleImage(
+async function uploadImageToBucket(
   userId: string,
-  image: SelectedImage
+  image: SelectedImage,
+  bucket: 'attachments' | 'newsletter-images',
 ): Promise<Attachment | null> {
   try {
     const id = generateUUID();
@@ -119,7 +126,7 @@ export async function uploadSingleImage(
 
     // Upload to Supabase Storage
     const { error: uploadError } = await supabase.storage
-      .from('attachments')
+      .from(bucket)
       .upload(fileName, uploadBody, {
         cacheControl: '3600',
         upsert: false,
@@ -133,7 +140,7 @@ export async function uploadSingleImage(
 
     // Get the public URL
     const { data: urlData } = supabase.storage
-      .from('attachments')
+      .from(bucket)
       .getPublicUrl(fileName);
 
     const url = urlData.publicUrl;
@@ -151,6 +158,22 @@ export async function uploadSingleImage(
     console.error('Error uploading image:', error);
     return null;
   }
+}
+
+/** Upload a private member/app image. */
+export async function uploadSingleImage(
+  userId: string,
+  image: SelectedImage,
+): Promise<Attachment | null> {
+  return uploadImageToBucket(userId, image, 'attachments');
+}
+
+/** Upload a public image that is part of an owner-approved newsletter. */
+export async function uploadNewsletterImage(
+  userId: string,
+  image: SelectedImage,
+): Promise<Attachment | null> {
+  return uploadImageToBucket(userId, image, 'newsletter-images');
 }
 
 /**
