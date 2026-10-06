@@ -109,6 +109,11 @@ if (!writer.includes('uploadNewsletterImage(profile.id, image)')
   || !attachmentUpload.includes("uploadImageToBucket(userId, image, 'newsletter-images')")) {
   failures.push('Newsletter photos must use their public editorial bucket, never private member attachments.');
 }
+if (email.includes('Read everything at the-hive.app')
+  || !email.includes('Go to the HIVE')
+  || !email.includes('${recipient.isMember ?')) {
+  failures.push('Newsletter email must carry the full letter and offer only members a direct HIVE-home button.');
+}
 if (writer.includes('then edit it there')) {
   failures.push('The writer must not send Nat elsewhere to edit the newsletter.');
 }

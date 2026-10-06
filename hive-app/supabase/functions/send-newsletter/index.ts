@@ -293,9 +293,12 @@ function issueHtml(title: string, content: string, footerHtml: string, recipient
       <div style="background:#fffdf5;border:1px solid #e3d4ac;border-radius:16px;padding:26px 26px 30px;">
         ${body}
       </div>
-      <div style="text-align:center;padding-top:22px;">
-        <a href="${PUBLIC_SITE_URL}" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;color:#8a6a2f;text-decoration:none;font-weight:bold;">Read everything at the-hive.app →</a>
-      </div>
+      ${recipient.isMember ? `<div style="text-align:center;padding-top:22px;">
+        <a href="${APP_URL}/hive"
+           style="display:inline-block;background:#bd9348;color:#fffdf5;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:bold;text-decoration:none;border-radius:999px;padding:13px 26px;">
+          Go to the HIVE &rarr;
+        </a>
+      </div>` : ''}
       ${footerHtml}
     </div>
   </body>
