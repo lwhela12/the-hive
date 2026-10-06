@@ -80,7 +80,7 @@ type NewsletterContribution = {
   content: string;
   created_at: string;
   author: string;
-  source: 'survey' | 'board';
+  source: 'survey';
   sourceAnswers?: Record<string, unknown>;
   answerKey?: string;
 };
@@ -517,35 +517,20 @@ export function NewsletterPanel({
       setNewsletterThoughts([]);
     }
 
-    // What members have actually asked to have mentioned — the replies on the
-    // newsletter thread, the same ones the draft harvests.
-    const { data: boards } = await supabase
-      .from('board_categories')
-      .select('id')
-      .eq('topic_kind', 'newsletter');
-    const boardIds = ((boards ?? []) as { id: string }[]).map((b) => b.id);
-    // No newsletter board is a perfectly normal state now — two of the three
-    // HIVEs have never had one. Only the ISSUE list needs one; the shout-outs
-    // below come from the check-ins.
-
     // The issues themselves, and what the send log knows about each. Members
     // are counted here too: the send merges `newsletter_subscribers` with
     // every member who has newsletter email switched on, so a count that only
     // showed subscribers would tell Nat "1 person" before mailing twelve.
     const [issueRes, sendRes, memberRes] = await Promise.all([
       supabase
-        .from('board_posts')
+        .from('newsletter_issues')
         .select('id, title, visibility, created_at')
-        .in('category_id', boardIds)
-        // Archived is gone, not "earlier" — without this the July collecting
-        // thread Nat archived came back as a phantom draft the moment the
-        // real letter was sent (2026-08-12, minutes after the first send).
         .is('archived_at', null)
         .order('created_at', { ascending: false })
         .limit(12),
       supabase
         .from('newsletter_sends')
-        .select('post_id, created_at, recipient_count')
+        .select('issue_id, created_at, recipient_count')
         .eq('mode', 'live')
         .order('created_at', { ascending: false }),
       supabase
@@ -557,7 +542,7 @@ export function NewsletterPanel({
     const sends = new Map<string, { created_at: string; recipient_count: number }>();
     const sentRows = (sendRes.data ?? []) as any[];
     for (const row of sentRows) {
-      if (!sends.has(row.post_id)) sends.set(row.post_id, row);
+      if (!sends.has(row.issue_id)) sends.set(row.issue_id, row);
     }
     const lastLiveNewsletterAt = String(sentRows[0]?.created_at ?? '');
     setIssues(((issueRes.data ?? []) as any[]).map((row) => ({
@@ -744,20 +729,15 @@ export function NewsletterPanel({
       return;
     }
     setSavingContribution(true);
-    const { error } = editingContribution.source === 'survey'
-      ? await supabase
-          .from('survey_responses')
-          .update({
-            answers: {
-              ...(editingContribution.sourceAnswers ?? {}),
-              [editingContribution.answerKey ?? 'q_newsletter']: content,
-            },
-          })
-          .eq('id', editingContribution.id.split(':')[0])
-      : await supabase
-          .from('board_replies')
-          .update({ content, edited_at: new Date().toISOString() })
-          .eq('id', editingContribution.id);
+    const { error } = await supabase
+      .from('survey_responses')
+      .update({
+        answers: {
+          ...(editingContribution.sourceAnswers ?? {}),
+          [editingContribution.answerKey ?? 'q_newsletter']: content,
+        },
+      })
+      .eq('id', editingContribution.id.split(':')[0]);
     setSavingContribution(false);
     if (error) {
       showAlert('Could not save that', 'Try again in a moment.');
@@ -771,20 +751,15 @@ export function NewsletterPanel({
   const removeContribution = async () => {
     if (!contributionToRemove || savingContribution) return;
     setSavingContribution(true);
-    const { error } = contributionToRemove.source === 'survey'
-      ? await supabase
-          .from('survey_responses')
-          .update({
-            answers: {
-              ...(contributionToRemove.sourceAnswers ?? {}),
-              [contributionToRemove.answerKey ?? 'q_newsletter']: '',
-            },
-          })
-          .eq('id', contributionToRemove.id.split(':')[0])
-      : await supabase
-          .from('board_replies')
-          .update({ content: '', edited_at: new Date().toISOString() })
-          .eq('id', contributionToRemove.id);
+    const { error } = await supabase
+      .from('survey_responses')
+      .update({
+        answers: {
+          ...(contributionToRemove.sourceAnswers ?? {}),
+          [contributionToRemove.answerKey ?? 'q_newsletter']: '',
+        },
+      })
+      .eq('id', contributionToRemove.id.split(':')[0]);
     setSavingContribution(false);
     setContributionToRemove(null);
     if (error) {
@@ -821,7 +796,7 @@ export function NewsletterPanel({
   const sendIssue = useCallback(async (issue: NewsletterIssue, mode: 'test' | 'live') => {
     setSending(`${issue.id}:${mode}`);
     const { data, error } = await supabase.functions.invoke('send-newsletter', {
-      body: { postId: issue.id, mode },
+      body: { issueId: issue.id, mode },
     });
     setSending(null);
     setConfirmSend(null);

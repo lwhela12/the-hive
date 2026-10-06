@@ -15,8 +15,8 @@ const publicSite = fs.readFileSync(path.join(root, '../site/index.html'), 'utf8'
 const attachmentUpload = fs.readFileSync(path.join(root, 'lib/attachmentUpload.ts'), 'utf8');
 const appNews = fs.readFileSync(path.join(root, 'lib/appNews.ts'), 'utf8');
 const issuePolicy = fs.readFileSync(path.join(root, 'lib/newsletterIssues.ts'), 'utf8');
-const publicArchivePolicy = fs.readFileSync(
-  path.join(root, 'supabase/migrations/20261006190000_finished_buzz_is_one_archive.sql'),
+const issueHome = fs.readFileSync(
+  path.join(root, 'supabase/migrations/20261006212000_the_buzz_has_its_own_home.sql'),
   'utf8',
 );
 const draftFunction = fs.readFileSync(path.join(root, 'supabase/functions/draft-newsletter/index.ts'), 'utf8');
@@ -49,10 +49,21 @@ if (!buzz.includes('currentNewsletterDraft(candidates)') || !buzz.includes('news
 if (!issuePolicy.includes('issue.created_at <= NEWSLETTER_SEND_LAUNCHED_AT')) {
   failures.push('The Buzz history must keep imported pre-send issues even without a modern send row');
 }
-if (!publicArchivePolicy.includes("ns.mode = 'live'")
-  || !publicArchivePolicy.includes("bp.created_at <= timestamptz '2026-08-12T18:03:25.000Z'")
-  || !publicArchivePolicy.includes('coalesce(author.is_owner, false) = true')) {
-  failures.push('The public archive must mirror sent/imported Buzz history without exposing member contributions');
+if (!issueHome.includes('create table public.newsletter_issues')
+  || !issueHome.includes('create view public.public_newsletters')
+  || !issueHome.includes('delete from public.board_posts post')
+  || !issueHome.includes("delete from public.board_categories where topic_kind = 'newsletter'")) {
+  failures.push('The Buzz must have dedicated issue storage and remove every newsletter-shaped board row');
+}
+const issueSurfaces = [panels, writer, buzz, email];
+if (issueSurfaces.some((source) => source.includes(".from('board_posts')") || source.includes("topic_kind', 'newsletter'"))) {
+  failures.push('Admin, writer, Buzz and sender must use newsletter_issues, never board storage');
+}
+if (!panels.includes(".from('newsletter_issues')")
+  || !writer.includes(".from('newsletter_issues')")
+  || !buzz.includes(".from('newsletter_issues')")
+  || !email.includes(".from('newsletter_issues')")) {
+  failures.push('Every newsletter surface must read the dedicated newsletter issue');
 }
 if (buzz.includes("filter((row) => row.visibility === 'public' || sent.has(row.id) || isOwner)")) {
   failures.push('The Buzz must not relabel imported history as owner-only drafts');
@@ -98,7 +109,7 @@ if (!writer.includes('accessibilityLabel="Newsletter title"')
   || !writer.includes('accessibilityLabel="Newsletter draft"')) {
   failures.push('The newsletter writer must keep both the title and letter editable on the page.');
 }
-if (!writer.includes('saveExistingDraft') || !writer.includes("draftPostId ? 'unsaved' : 'not_saved'")) {
+if (!writer.includes('saveExistingDraft') || !writer.includes("draftIssueId ? 'unsaved' : 'not_saved'")) {
   failures.push('Edits to a saved newsletter draft must autosave from the writing page.');
 }
 if (!writer.includes('Nothing sends from this page')) {

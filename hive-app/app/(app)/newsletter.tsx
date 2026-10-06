@@ -348,7 +348,7 @@ export default function NewsletterScreen() {
   const [recapTitle, setRecapTitle] = useState<string | null>(null);
   const [prose, setProse] = useState<string | null>(null);
   /** Once a draft has an id, every edit on this page saves back to that issue. */
-  const [draftPostId, setDraftPostId] = useState<string | null>(null);
+  const [draftIssueId, setDraftIssueId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'not_saved' | 'unsaved' | 'saving' | 'saved' | 'error'>('idle');
   const editRevision = useRef(0);
   // Write is the default because this is an editor. Preview and Facts are
@@ -382,7 +382,7 @@ export default function NewsletterScreen() {
     setError(null);
     setProse(null);
     setWritingError(null);
-    setDraftPostId(null);
+    setDraftIssueId(null);
     setSaveState('idle');
     editRevision.current += 1;
 
@@ -422,7 +422,7 @@ export default function NewsletterScreen() {
      * a row in Admin that named her own draft — "The Buzz — July Recap" — and
      * landed on a completely different, machine-written August letter:
      * *"which is all bad, this doesnt match the one we're writing in the email
-     * at all."* Worse than confusing: posting from here would have overwritten
+     * at all."* Worse than confusing: saving from here would have overwritten
      * three weeks of her writing with a generated draft.
      *
      * So an unsent draft is loaded as the prose, and the writer is not asked
@@ -432,43 +432,32 @@ export default function NewsletterScreen() {
      */
     const { data: sends } = await supabase
       .from('newsletter_sends')
-      .select('post_id, created_at')
+      .select('issue_id, created_at')
       .eq('mode', 'live');
     const sentAtById = new Map(
-      ((sends ?? []) as { post_id: string; created_at: string }[]).map((send) => [send.post_id, send.created_at])
+      ((sends ?? []) as { issue_id: string; created_at: string }[]).map((send) => [send.issue_id, send.created_at])
     );
 
-    const { data: boardRows } = await supabase
-      .from('board_categories')
-      .select('id')
-      .eq('topic_kind', 'newsletter')
-      .order('created_at', { ascending: true })
-      .limit(1);
-    const newsletterBoardIds = ((boardRows ?? []) as { id: string }[]).map((b) => b.id);
-
     let draftToReplaceId: string | null = null;
-    if (newsletterBoardIds.length > 0) {
-      const { data: drafts } = await supabase
-        .from('board_posts')
-        .select('id, title, content, visibility, created_at')
-        .in('category_id', newsletterBoardIds)
-        .is('archived_at', null)
-        .order('created_at', { ascending: false })
-        .limit(10);
-      const candidates = ((drafts ?? []) as {
-        id: string; title: string; content: string; visibility: string | null; created_at: string;
-      }[]).map((row) => ({ ...row, sentAt: sentAtById.get(row.id) ?? null }));
-      const inProgress = currentNewsletterDraft(candidates);
-      if (inProgress && String(inProgress.content ?? '').trim()) {
-        if (!rebuild) {
-          setProse(inProgress.content);
-          setRecapTitle(inProgress.title);
-          setDraftPostId(inProgress.id);
-          setSaveState('saved');
-          return;
-        }
-        draftToReplaceId = inProgress.id;
+    const { data: drafts } = await supabase
+      .from('newsletter_issues')
+      .select('id, title, content, visibility, created_at')
+      .is('archived_at', null)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    const candidates = ((drafts ?? []) as {
+      id: string; title: string; content: string; visibility: string | null; created_at: string;
+    }[]).map((row) => ({ ...row, sentAt: sentAtById.get(row.id) ?? null }));
+    const inProgress = currentNewsletterDraft(candidates);
+    if (inProgress && String(inProgress.content ?? '').trim()) {
+      if (!rebuild) {
+        setProse(inProgress.content);
+        setRecapTitle(inProgress.title);
+        setDraftIssueId(inProgress.id);
+        setSaveState('saved');
+        return;
       }
+      draftToReplaceId = inProgress.id;
     }
 
     if ((data.sections ?? []).length === 0) return;
@@ -501,14 +490,14 @@ export default function NewsletterScreen() {
           // Rebuild is an explicit replacement action. Keep one working draft
           // rather than creating a stack of nearly-identical copies.
           const { error: replaceError } = await (supabase as any)
-            .from('board_posts')
-            .update({ title, content: generated, edited_at: new Date().toISOString() })
+            .from('newsletter_issues')
+            .update({ title, content: generated, updated_at: new Date().toISOString() })
             .eq('id', draftToReplaceId);
           if (replaceError) {
             setSaveState('not_saved');
             setPostError(userFacingError(replaceError, 'The rebuilt draft is here, but it did not replace the saved one. Try Save draft to The Buzz.'));
           } else {
-            setDraftPostId(draftToReplaceId);
+            setDraftIssueId(draftToReplaceId);
             setSaveState('saved');
           }
           setWriting(false);
@@ -518,22 +507,13 @@ export default function NewsletterScreen() {
         // remember to protect. Give it its private home immediately so a page
         // refresh returns to this version instead of asking the writer for a
         // brand-new interpretation of the same month.
-        const { data: boards } = await supabase
-          .from('board_categories')
-          .select('id, name, community_id')
-          .eq('topic_kind', 'newsletter')
-          .order('created_at', { ascending: true })
-          .limit(1);
-        const board = ((boards ?? []) as { id: string; name: string; community_id: string }[])[0];
-        if (!board || !title) {
+        if (!title) {
           setSaveState('not_saved');
         } else {
           const { data: inserted, error: insertError } = await (supabase as any)
-            .from('board_posts')
+            .from('newsletter_issues')
             .insert({
-              community_id: board.community_id,
-              category_id: board.id,
-              author_id: profile.id,
+              created_by: profile.id,
               title,
               content: generated,
               is_pinned: true,
@@ -544,9 +524,9 @@ export default function NewsletterScreen() {
             setSaveState('not_saved');
             setPostError(userFacingError(insertError, 'Your draft is here, but it needs saving. Try Save draft to The Buzz.'));
           } else {
-            setDraftPostId(inserted.id);
+            setDraftIssueId(inserted.id);
             setSaveState('saved');
-            setPostedTo(`${board.name} → ${title}`);
+            setPostedTo(`The Buzz → ${title}`);
           }
         }
       } else if (generated) {
@@ -582,7 +562,7 @@ export default function NewsletterScreen() {
     const next = selected ? `${before}**${selected}**${after}` : `${before}****${after}`;
     editRevision.current += 1;
     setProse(next);
-    setSaveState(draftPostId ? 'unsaved' : 'not_saved');
+    setSaveState(draftIssueId ? 'unsaved' : 'not_saved');
     const cursor = selected ? end + 4 : start + 2;
     setDraftSelection({ start: cursor, end: cursor });
     requestAnimationFrame(() => draftInputRef.current?.focus());
@@ -615,7 +595,7 @@ export default function NewsletterScreen() {
       const marker = `[[IMAGE:${uploaded.url}|Describe the picture here]]`;
       editRevision.current += 1;
       setProse((current) => `${String(current ?? '').trimEnd()}\n\n${marker}\n`);
-      setSaveState(draftPostId ? 'unsaved' : 'not_saved');
+      setSaveState(draftIssueId ? 'unsaved' : 'not_saved');
       setView('write');
       setPictureNote('Added to the bottom of the draft. Move the picture line wherever you want it.');
     } catch (pictureError) {
@@ -627,14 +607,14 @@ export default function NewsletterScreen() {
 
   const markEdited = () => {
     editRevision.current += 1;
-    setSaveState(draftPostId ? 'unsaved' : 'not_saved');
+    setSaveState(draftIssueId ? 'unsaved' : 'not_saved');
     setPostError(null);
     setPostedTo(null);
   };
 
   /** A saved issue keeps itself safe while Nat writes. It never sends. */
   const saveExistingDraft = useCallback(async (revision: number) => {
-    if (!draftPostId || prose === null) return;
+    if (!draftIssueId || prose === null) return;
     const title = String(recapTitle ?? '').trim();
     if (!title || !prose.trim()) {
       setSaveState('error');
@@ -644,9 +624,9 @@ export default function NewsletterScreen() {
 
     setSaveState('saving');
     const { error: saveError } = await (supabase as any)
-      .from('board_posts')
-      .update({ title, content: prose, edited_at: new Date().toISOString() })
-      .eq('id', draftPostId);
+      .from('newsletter_issues')
+      .update({ title, content: prose, updated_at: new Date().toISOString() })
+      .eq('id', draftIssueId);
 
     if (saveError) {
       setSaveState('error');
@@ -656,35 +636,23 @@ export default function NewsletterScreen() {
     // If another keystroke landed while the request was in flight, schedule
     // one more save instead of falsely calling the newer words saved.
     setSaveState(editRevision.current === revision ? 'saved' : 'unsaved');
-  }, [draftPostId, prose, recapTitle]);
+  }, [draftIssueId, prose, recapTitle]);
 
   useEffect(() => {
-    if (!draftPostId || saveState !== 'unsaved') return;
+    if (!draftIssueId || saveState !== 'unsaved') return;
     const revision = editRevision.current;
     const timer = setTimeout(() => { void saveExistingDraft(revision); }, 700);
     return () => clearTimeout(timer);
-  }, [draftPostId, prose, recapTitle, saveExistingDraft, saveState]);
+  }, [draftIssueId, prose, recapTitle, saveExistingDraft, saveState]);
 
   // The newsletter should be reachable more than one way: email, the public
   // site, and here. This is the in-app writing door — the first save gives the
   // issue a private home in The Buzz, then edits keep saving on this page.
-  const postToBoard = async () => {
+  const saveToBuzz = async () => {
     if (!profile || posting || sections.length === 0) return;
     setPosting(true);
     setPostError(null);
     try {
-      const { data: boards } = await supabase
-        .from('board_categories')
-        .select('id, name, community_id')
-        .eq('topic_kind', 'newsletter')
-        .order('created_at', { ascending: true })
-        .limit(1);
-      const board = ((boards ?? []) as { id: string; name: string; community_id: string }[])[0];
-      if (!board) {
-        setPostError('Could not find the HIVE Newsletter board.');
-        return;
-      }
-
       const month = cycleStart
         ? new Date(Date.UTC(
             Number(cycleStart.slice(0, 4)),
@@ -699,15 +667,15 @@ export default function NewsletterScreen() {
 
       /**
        * The issue in progress, if there is one — otherwise this month's
-       * collecting thread.
+       * saved issue.
        *
        * The month match alone was the only rule until 2026-08-12, and it
        * assumed every letter's title STARTS with a month, which stopped being
        * true the day the archive was renamed to "The Buzz — {Month} Recap".
-       * A hand-written draft sitting on the board would have been missed
-       * entirely and posting would have quietly made a second one beside it.
+       * A hand-written draft already in The Buzz would have been missed
+       * entirely and saving would have quietly made a second one beside it.
        *
-       * So: an unsent draft wins. That is a letter on this board that has
+       * So: an unsent draft wins. That is an issue in The Buzz that has
        * never been published and never been mailed — the same test The Buzz
        * uses to decide what is still Nat's alone. Falling back to the month
        * match keeps the original behaviour, where publishing turns the
@@ -716,16 +684,15 @@ export default function NewsletterScreen() {
        */
       const { data: sends } = await supabase
         .from('newsletter_sends')
-        .select('post_id, created_at')
+        .select('issue_id, created_at')
         .eq('mode', 'live');
       const sentAtById = new Map(
-        ((sends ?? []) as { post_id: string; created_at: string }[]).map((send) => [send.post_id, send.created_at])
+        ((sends ?? []) as { issue_id: string; created_at: string }[]).map((send) => [send.issue_id, send.created_at])
       );
 
       const { data: drafts } = await supabase
-        .from('board_posts')
+        .from('newsletter_issues')
         .select('id, visibility, created_at')
-        .eq('category_id', board.id)
         .is('archived_at', null)
         .order('created_at', { ascending: false })
         .limit(10);
@@ -736,9 +703,8 @@ export default function NewsletterScreen() {
       const inProgress = currentNewsletterDraft(candidates);
 
       const { data: byMonth } = inProgress ? { data: null } : await supabase
-        .from('board_posts')
+        .from('newsletter_issues')
         .select('id')
-        .eq('category_id', board.id)
         .ilike('title', `${month}%`)
         .is('archived_at', null)
         .order('created_at', { ascending: true })
@@ -751,23 +717,19 @@ export default function NewsletterScreen() {
       if ((existing ?? []).length > 0) {
         savedId = (existing as { id: string }[])[0].id;
         const { error: updateError } = await (supabase as any)
-          .from('board_posts')
-          .update({ title, content, is_pinned: true, edited_at: new Date().toISOString() })
+          .from('newsletter_issues')
+          .update({ title, content, is_pinned: true, updated_at: new Date().toISOString() })
           .eq('id', savedId);
         if (updateError) {
-          setPostError(userFacingError(updateError, 'The draft is still here. Try updating the post again.'));
+          setPostError(userFacingError(updateError, 'The draft is still here. Try saving it again.'));
           return;
         }
       } else {
-        // Pinned so the published letter sits above the shout-out thread that
-        // fed it — the board should read as an archive of newsletters, not a
-        // pile of collection threads.
+        // Pinned so the working issue stays at the top of The Buzz for Nat.
         const { data: inserted, error: insertError } = await (supabase as any)
-          .from('board_posts')
+          .from('newsletter_issues')
           .insert({
-            community_id: board.community_id,
-            category_id: board.id,
-            author_id: profile.id,
+            created_by: profile.id,
             title,
             content,
             is_pinned: true,
@@ -775,14 +737,14 @@ export default function NewsletterScreen() {
           .select('id')
           .single();
         if (insertError) {
-          setPostError(userFacingError(insertError, 'The draft is still here. Try posting it again.'));
+          setPostError(userFacingError(insertError, 'The draft is still here. Try saving it again.'));
           return;
         }
         savedId = inserted?.id ?? null;
       }
-      setDraftPostId(savedId);
+      setDraftIssueId(savedId);
       setSaveState(savedId ? 'saved' : 'error');
-      setPostedTo(savedId ? `${board.name} → ${title}` : null);
+      setPostedTo(savedId ? `The Buzz → ${title}` : null);
       if (!savedId) setPostError('The draft saved, but HIVE could not confirm its new address. Reopen it from The Buzz before editing more.');
     } finally {
       setPosting(false);
@@ -1122,14 +1084,14 @@ export default function NewsletterScreen() {
               </Text>
             ) : null}
 
-            {draftPostId ? (
+            {draftIssueId ? (
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 18, color: '#8a7a5e', textAlign: 'center', marginTop: 6, marginBottom: 10 }}>
                 Your edits save here automatically. Nothing sends from this page —
                 when it is ready, use Admin → Newsletter → Test & send.
               </Text>
             ) : (
             <Pressable
-              onPress={() => void postToBoard()}
+              onPress={() => void saveToBuzz()}
               disabled={posting || !String(recapTitle ?? '').trim() || !String(prose ?? '').trim()}
               style={({ pressed }) => ({
                 alignSelf: 'center',

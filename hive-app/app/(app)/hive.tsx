@@ -2116,6 +2116,8 @@ export default function HiveScreen() {
       }
     } else if (destination === 'tuneup') {
       router.push({ pathname: '/monthly-tuneup', params: { from: 'hive' } } as any);
+    } else if (destination === 'buzz') {
+      router.push('/buzz');
     }
   }, [getActivityDestination, openEventFromActivity, openWishFromActivity, router]);
 

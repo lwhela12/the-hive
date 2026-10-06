@@ -44,7 +44,7 @@ export const HIVE_RULES: RuleGroup[] = [
       },
       {
         text: 'The Buzz goes out in the 1st week, to everybody, one letter covering all three HIVEs in general terms. Each issue recaps the month before — September’s covers August.',
-        source: 'newsletter board + send log',
+        source: 'newsletter_issues + newsletter_sends',
       },
       {
         text: 'Write it on the last day of the month, so the End of the month answers are already in it.',

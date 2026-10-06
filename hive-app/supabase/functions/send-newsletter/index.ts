@@ -19,8 +19,8 @@ import { hiveIsMeetingNow } from '../_shared/reachMail.ts';
  * ONE SOURCE, THREE DESTINATIONS. Nat's own requirement: *"i also want
  * whatever is in the email to be on HIVE wide & public site, so we need to
  * make sure that flow is clean & nothing gets lost."* That is why the only
- * thing a caller may name is a POST ID. This function reads the issue out of
- * `board_posts` itself — the same row the in-app archive reads and the same
+ * thing a caller may name is an ISSUE ID. This function reads the issue out of
+ * `newsletter_issues` — the same row the in-app archive reads and the same
  * row the `public_newsletters` view publishes — so the email cannot drift
  * from what everybody else sees, and a caller can never hand it arbitrary
  * HTML to mail out. An owner-only mailer that accepts a body of HTML is a
@@ -71,93 +71,6 @@ const APP_URL = Deno.env.get('EXPO_PUBLIC_APP_URL') || 'https://app.the-hive.app
 const BATCH_SIZE = 100;
 
 type Recipient = { email: string; name: string | null; token: string | null; isMember?: boolean };
-
-const BROADCAST_HANDLES = new Set(['hive', 'all', 'everyone', 'every', 'everybody', 'group', 'community', 'members', 'wide', 'hivewide', 'allhives']);
-const MEMBER_ALIASES: Record<string, string> = { brit: 'brittany', ollie: 'oliver', izzy: 'isabelle', fin: 'infiniti', infinite: 'infiniti', ems: 'emmeline' };
-
-function mentionHandle(value: string) {
-  return value.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '');
-}
-
-function memberMatchesMention(name: string, rawHandle: string) {
-  const handle = mentionHandle(rawHandle);
-  const first = mentionHandle(name.split(/\s+/)[0] ?? '');
-  const full = mentionHandle(name);
-  const resolved = MEMBER_ALIASES[handle] ?? handle;
-  return handle === first || handle === full || resolved === first || resolved === full;
-}
-
-/**
- * A "For the Buzz" mention is intentional member participation: newsletter
- * email renders the ordinary words, while the in-app issue records the real
- * tag. This runs only after an owner sends the finished letter. Production is
- * absent at the membership query, never filtered after it has been read.
- */
-async function notifyNewsletterMentions(
-  supabase: ReturnType<typeof createClient>,
-  input: { postId: string; senderId: string; senderName: string; communityId: string; content: string },
-) {
-  const handles = Array.from(input.content.matchAll(/@([a-z0-9._-]+)/gi))
-    .map((match) => mentionHandle(match[1]))
-    .filter(Boolean);
-  if (handles.length === 0) return 0;
-
-  const { data: membershipRows, error: membershipError } = await supabase
-    .from('community_memberships')
-    .select('user_id, community:communities!inner(slug)')
-    .neq('community.slug', 'show');
-  if (membershipError) {
-    console.error('[send-newsletter] could not resolve newsletter mentions', membershipError);
-    return 0;
-  }
-
-  const visibleMemberIds = Array.from(new Set(
-    ((membershipRows ?? []) as { user_id: string }[]).map((row) => row.user_id).filter(Boolean),
-  ));
-  if (visibleMemberIds.length === 0) return 0;
-
-  const { data: people, error: peopleError } = await supabase
-    .from('profiles')
-    .select('id, name')
-    .in('id', visibleMemberIds);
-  if (peopleError) {
-    console.error('[send-newsletter] could not load mention recipients', peopleError);
-    return 0;
-  }
-
-  const broadcast = handles.some((handle) => BROADCAST_HANDLES.has(handle));
-  const recipientIds = new Set<string>();
-  if (broadcast) visibleMemberIds.forEach((id) => recipientIds.add(id));
-  for (const person of (people ?? []) as { id: string; name: string | null }[]) {
-    if (person.name && handles.some((handle) => memberMatchesMention(person.name, handle))) recipientIds.add(person.id);
-  }
-  recipientIds.delete(input.senderId);
-  if (recipientIds.size === 0) return 0;
-
-  const recipients = [...recipientIds];
-  const { data: alreadyNotified } = await supabase
-    .from('notifications')
-    .select('user_id')
-    .eq('notification_type', 'board_mention')
-    .contains('metadata', { post_id: input.postId, newsletter_mention: true })
-    .in('user_id', recipients);
-  const already = new Set(((alreadyNotified ?? []) as { user_id: string }[]).map((row) => row.user_id));
-  const rows = recipients.filter((id) => !already.has(id)).map((userId) => ({
-    user_id: userId,
-    community_id: input.communityId,
-    notification_type: 'board_mention',
-    title: `${input.senderName} mentioned you in The Buzz`,
-    content: 'You have a shout-out or mention in this month’s Buzz.',
-    metadata: { post_id: input.postId, sender_id: input.senderId, newsletter_mention: true },
-  }));
-  if (rows.length === 0) return 0;
-  const { error: insertError } = await supabase.from('notifications').insert(rows);
-  if (insertError) {
-    console.error('[send-newsletter] could not save newsletter mention notifications', insertError);
-    return 0;
-  }
-  return rows.length;
-}
 
 function escapeHtml(value: string): string {
   return value
@@ -352,47 +265,27 @@ serve(async (req) => {
 
   if (!caller?.is_owner) return errorResponse('Only a HIVE owner can send the newsletter', 403);
 
-  let body: { postId?: string; mode?: string; force?: boolean };
+  let body: { issueId?: string; mode?: string; force?: boolean };
   try {
     body = await req.json();
   } catch {
     return errorResponse('Invalid JSON body', 400);
   }
 
-  const postId = String(body.postId ?? '').trim();
+  const issueId = String(body.issueId ?? '').trim();
   const mode = body.mode === 'live' ? 'live' : 'test';
-  if (!postId) return errorResponse('postId is required', 400);
+  if (!issueId) return errorResponse('issueId is required', 400);
 
   // The issue, read from the same row the app and the public site read.
-  const { data: post } = await supabase
-    .from('board_posts')
-    .select('id, community_id, title, content, visibility, status, category:board_categories!category_id(topic_kind), community:communities!community_id(max_share_scope)')
-    .eq('id', postId)
+  const { data: issue } = await supabase
+    .from('newsletter_issues')
+    .select('id, title, content, visibility, published_at, archived_at')
+    .eq('id', issueId)
     .maybeSingle();
 
-  if (!post) return errorResponse('That issue does not exist', 404);
-
-  const topicKind = Array.isArray(post.category)
-    ? (post.category[0] as { topic_kind?: string } | undefined)?.topic_kind
-    : (post.category as { topic_kind?: string } | null)?.topic_kind;
-  if (topicKind !== 'newsletter') {
-    return errorResponse('That post is not a newsletter issue', 400);
-  }
-  if (!String(post.content ?? '').trim()) {
+  if (!issue || issue.archived_at) return errorResponse('That issue does not exist', 404);
+  if (!String(issue.content ?? '').trim()) {
     return errorResponse('That issue is empty — nothing to send', 400);
-  }
-
-  if (mode === 'live') {
-    const community = Array.isArray(post.community)
-      ? (post.community[0] as { max_share_scope?: string } | undefined)
-      : (post.community as { max_share_scope?: string } | null);
-    if (community?.max_share_scope !== 'public') {
-      return errorResponse('This HIVE does not publish to unauthenticated visitors', 403);
-    }
-
-    // The owner is the editorial approval boundary for The Buzz. In particular,
-    // names submitted through End of the month are voluntary shout-outs: they
-    // read normally in email and become in-app mentions once the issue goes live.
   }
 
   /**
@@ -426,7 +319,7 @@ serve(async (req) => {
     const { data: already } = await supabase
       .from('newsletter_sends')
       .select('id, created_at, recipient_count')
-      .eq('post_id', postId)
+      .eq('issue_id', issueId)
       .eq('mode', 'live')
       .limit(1);
     if (already && already.length > 0) {
@@ -489,8 +382,8 @@ serve(async (req) => {
     return errorResponse('Nobody to send to — the list is empty', 400);
   }
 
-  const title = String(post.title ?? 'The Buzz');
-  const content = String(post.content ?? '');
+  const title = String(issue.title ?? 'The Buzz');
+  const content = String(issue.content ?? '');
   const subject = mode === 'test' ? `[TEST] ${title}` : title;
 
   let sent = 0;
@@ -534,22 +427,17 @@ serve(async (req) => {
   // public_newsletters view, which only shows visibility='public' — so
   // without this, a sent issue would reach every inbox and never appear on
   // the-hive.app. Only a LIVE send flips it; a test changes nothing.
-  if (mode === 'live' && sent > 0 && post.visibility !== 'public') {
+  if (mode === 'live' && sent > 0) {
     await supabase
-      .from('board_posts')
-      .update({ visibility: 'public', is_pinned: true })
-      .eq('id', postId);
-  }
-
-  const mentionsNotified = mode === 'live' && sent > 0
-    ? await notifyNewsletterMentions(supabase, {
-        postId,
-        senderId: caller.id,
-        senderName: String(caller.name ?? 'Nat'),
-        communityId: String(post.community_id),
-        content,
+      .from('newsletter_issues')
+      .update({
+        visibility: 'public',
+        is_pinned: true,
+        published_at: issue.published_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
-    : 0;
+      .eq('id', issueId);
+  }
 
   // A live issue closes the active notes inbox. The next idea belongs to the
   // next issue and starts a fresh list; archived notes remain recoverable in
@@ -571,7 +459,7 @@ serve(async (req) => {
   // Logged even for a test, so "did my test actually send?" has an answer
   // that does not live in somebody's inbox.
   await supabase.from('newsletter_sends').insert({
-    post_id: postId,
+    issue_id: issueId,
     mode,
     sent_by: caller.id,
     recipient_count: sent,
@@ -584,7 +472,6 @@ serve(async (req) => {
     failed: failures.length,
     failedAddresses: failures.slice(0, 20),
     total: recipients.length,
-    mentionsNotified,
     thoughtsCleared,
   });
 });

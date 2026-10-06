@@ -184,12 +184,28 @@ export interface Waitlist extends Record<string, unknown> {
  */
 export interface NewsletterSend extends Record<string, unknown> {
   id: string;
-  post_id: string;
+  issue_id: string;
   mode: 'test' | 'live';
   sent_by?: string | null;
   recipient_count: number;
   failed_count: number;
   created_at: string;
+}
+
+/** A publication issue of The Buzz. It is deliberately not a BoardPost. */
+export interface NewsletterIssue extends Record<string, unknown> {
+  id: string;
+  title: string;
+  content: string;
+  created_by?: string | null;
+  visibility: 'members' | 'public';
+  is_pinned: boolean;
+  attachments?: Attachment[] | null;
+  published_at?: string | null;
+  archived_at?: string | null;
+  archived_by?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 /**
@@ -603,7 +619,7 @@ export interface BoardCategory extends Record<string, unknown> {
    * signature and had to cast.
    */
   reach?: 'hive' | 'all_hives';
-  topic_kind?: 'discussion' | 'hd_board' | 'helper_log' | 'newsletter' | 'compliments';
+  topic_kind?: 'discussion' | 'hd_board' | 'helper_log' | 'compliments';
   goal_title?: string | null;
   owner_user_id?: string | null;
   status?: 'active' | 'completed' | 'archived';
@@ -1185,6 +1201,15 @@ export interface Database {
         Row: NewsletterThought;
         Insert: Pick<NewsletterThought, 'content' | 'created_by'>;
         Update: Partial<Pick<NewsletterThought, 'content' | 'archived_at' | 'featured_in_next_issue'>>;
+        Relationships: [];
+      };
+      newsletter_issues: {
+        Row: NewsletterIssue;
+        Insert: Pick<NewsletterIssue, 'title' | 'content' | 'created_by'>
+          & Partial<Pick<NewsletterIssue, 'visibility' | 'is_pinned' | 'attachments'>>;
+        Update: Partial<Pick<NewsletterIssue,
+          'title' | 'content' | 'visibility' | 'is_pinned' | 'attachments' | 'published_at' | 'archived_at' | 'archived_by' | 'updated_at'
+        >>;
         Relationships: [];
       };
       // Insert is deliberately `never`: only the send-newsletter function

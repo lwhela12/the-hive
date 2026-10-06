@@ -338,18 +338,8 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   // the member happened to enter it from.
   const selectedBoardCommunityId = selectedCategory?.community_id ?? communityId;
 
-  // A newsletter board is deliberately left out of `categories` (Nat,
-  // 2026-08-03: "it just stops being a board you browse. The Buzz has its
-  // own door... and that is the only one") — but a direct link (the new
-  // "newsletter released" Recent Activity entry, or an old share) still
-  // opens the thread itself via `BoardPostDetail`, which fetches its own
-  // post and category independently. Only the trail below was left blank
-  // for that one case, since it reads `selectedCategory.name` and this is
-  // the one kind of thread that will never be in the filtered list. This
-  // fetches just the name, for display — it deliberately does not feed
-  // `selectedCategory` itself, so nothing that gates on category ownership
-  // or `reach` (archiving, mention scope, etc.) treats a newsletter thread
-  // as a manageable board by accident.
+  // A stale direct link can name a category before the category list arrives.
+  // Fetch its name for the trail without treating it as the selected board.
   const [deepLinkCategoryName, setDeepLinkCategoryName] = useState<string | null>(null);
   useEffect(() => {
     if (!selectedCategoryId || selectedCategory || categoriesLoading) {
@@ -441,10 +431,6 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     trailCategoryName && !placingRoutePost
       ? [{
           label: trailCategoryName,
-          // A newsletter board has no browsable "back to this board" screen
-          // (deliberately — see `deepLinkCategoryName` above), so its trail
-          // segment names the thread's home without pretending there's
-          // somewhere to step back to.
           onPress: selectedCategory && selectedPostId ? resetThreadToBoard : undefined,
         }]
       : [],
@@ -499,23 +485,13 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       return matches;
     }, {});
   }, [boardSearchIndex, boardSearchQuery, identityCommunityId]);
-  // The newsletter board is not a board you browse.
-  //
-  // It holds every issue of The Buzz plus the thread that collects shout-outs,
-  // and The Buzz is its only door. The query already excludes it; this is the
-  // second lock, because Nat saw it in the grid anyway and a stale cache is
-  // enough to put it back. She was clear: "i'm feeling very confident right now
-  // that we dont want a newsletter board."
-  const listSourceCategories = activeCategories.filter(
-    (category) => (category as { topic_kind?: string | null }).topic_kind !== 'newsletter',
-  );
   const visibleCategories = sortBoardCategories(
     boardSearchQuery
-      ? listSourceCategories.filter((category) => (
+      ? activeCategories.filter((category) => (
           matchesMemberSearchText([getCategorySearchText(category)], boardSearchQuery)
           || !!boardSearchMatchesByCategory[category.id]
         ))
-      : listSourceCategories,
+      : activeCategories,
     boardSort,
     postCounts,
   );

@@ -58,10 +58,6 @@ export async function fetchCategories(communityId: string | undefined, reach: Bo
   }
 
   const { data, error } = await q
-    // The newsletter board keeps every issue of The Buzz, so it stays in the
-    // database — it just stops being a board you browse. The Buzz has its own
-    // door under HIVE-Wide and that is the only one.
-    .neq('topic_kind', 'newsletter')
     .or('requires_approval.eq.false,approved_at.not.is.null')
     .order('display_order', { ascending: true });
 

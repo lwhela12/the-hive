@@ -53,17 +53,6 @@ type Body = {
   list?: boolean;
 };
 
-/**
- * Where The Buzz's published issues are stored.
- *
- * There is no newsletter board — Nat, repeatedly, and she is right: the
- * newsletter lives in exactly two places, The Buzz at HIVE-Wide and the public
- * site. What is left under this `topic_kind` is not a board anybody posts to,
- * it is seven finished letters that happen to be stored as rows. This door does
- * not write there, and nothing else should either.
- */
-const PUBLISHED_ISSUES = new Set(['newsletter']);
-
 function todayPacific(): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Los_Angeles',
@@ -138,10 +127,6 @@ serve(async (req) => {
       404,
     );
   }
-  if (PUBLISHED_ISSUES.has(board.topic_kind ?? '')) {
-    return errorResponse(`"${board.name}" holds published issues of The Buzz. Nothing writes there.`, 403);
-  }
-
   const topic = (body.topic ?? '').trim();
 
   /* ------------------------------------------------------------ reading ---- */

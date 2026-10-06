@@ -1374,7 +1374,7 @@ export default function MonthlyTuneupScreen() {
   ), []);
   const canRefineWish = useCallback((wish: Wish) => wish.status !== 'fulfilled', []);
 
-  const findBoardTarget = useCallback(async (kind: 'hangs' | 'helpers' | 'newsletter' | 'compliments' | 'general'): Promise<BoardTarget | null> => {
+  const findBoardTarget = useCallback(async (kind: 'hangs' | 'helpers' | 'compliments' | 'general'): Promise<BoardTarget | null> => {
     if (!communityId) return null;
 
     let query = supabase
@@ -1386,9 +1386,6 @@ export default function MonthlyTuneupScreen() {
       ? query.ilike('name', '%hang%')
       : kind === 'compliments'
         ? query.or('topic_kind.eq.compliments,name.ilike.%compliment%')
-        : kind === 'newsletter'
-          // topic_kind, not name — renaming the board must not break the check-in.
-          ? query.or('topic_kind.eq.newsletter,name.ilike.%newsletter%,name.ilike.%announcement%')
         : kind === 'general'
           // The everything-else board a HIVE talks on — Tech's shout-outs land
           // here because Tech has no compliments board (checked live,

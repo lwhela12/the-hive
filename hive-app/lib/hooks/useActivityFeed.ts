@@ -16,7 +16,7 @@ export interface ActivityItem {
   timestamp: string; // ISO string
   sourceId: string;  // the DB record ID (post id, event id, wish id, user id)
   categoryId?: string; // board activity only — to deep-link into the right topic
-  navigatesTo?: 'board' | 'event' | 'members' | 'wish' | 'messages' | 'tuneup'; // screens that can be navigated to
+  navigatesTo?: 'board' | 'event' | 'members' | 'wish' | 'messages' | 'tuneup' | 'buzz'; // screens that can be navigated to
   involvesUserIds?: string[]; // member ids involved in this item — used by the "Mentions me" filter
 }
 
@@ -78,17 +78,7 @@ async function fetchBoardReplyActivity(communityId: string, since: string) {
     return [];
   }
 
-  // The HIVE Newsletter board (topic_kind 'newsletter') is where members
-  // collaboratively draft each issue — real threads, but drafting noise, not
-  // community activity. Nat: "Newsletter was a board at one point, now it's
-  // not. Nothing about the newsletter should populate in recent activity
-  // except for 'newsletter is released.'" The release itself gets its own
-  // item — see fetchNewsletterReleases below.
-  return (data ?? []).filter((r: any) => {
-    const post = firstRelation(r.post);
-    const category = firstRelation((post as any)?.category);
-    return (category as any)?.topic_kind !== 'newsletter';
-  });
+  return data ?? [];
 }
 
 async function fetchGeneralDiscussionActivity(communityId: string, since: string) {
@@ -119,30 +109,17 @@ function firstRelation<T = any>(value: T | T[] | null | undefined): T | null {
   return value ?? null;
 }
 
-// A newsletter issue is "released" the moment its board post goes visibility
-// 'public' — that is what the public_newsletters view (migration 126) and
-// the-hive.app read. There is no dedicated "sent at" column, so this uses
-// edited_at when the flip to public bumped it, falling back to created_at
-// (which is what every published issue so far has, some backfilled to match
-// when it actually went out). Looked up by topic_kind rather than a hardcoded
-// board id, same as newsletter.tsx's own board lookup, so this keeps working
-// if the board is ever recreated or another HIVE gets its own.
-// The board lookup and the post fetch used to be two awaits back to back,
-// which made this the only two-deep leg inside the Promise.all below — every
-// other branch is one round trip, so the whole feed waited on this one's
-// second hop. An `!inner` embed asks Postgres the same question in a single
-// trip: give me the public posts whose board is a newsletter board. Still
-// looked up by `topic_kind` rather than a hardcoded board id, same as
-// newsletter.tsx, so it keeps working if a board is recreated or another
-// HIVE gets its own.
-async function fetchNewsletterReleases(communityId: string, since: string) {
+// The Buzz is HIVE-Wide. Its own published_at timestamp is the release event;
+// the issue never passes through a board table or a board activity path.
+async function fetchNewsletterReleases(since: string) {
   const { data, error } = await supabase
-    .from('board_posts')
-    .select('id, title, category_id, created_at, edited_at, status, category:board_categories!inner(topic_kind)')
-    .eq('category.topic_kind', 'newsletter')
-    .eq('community_id', communityId)
+    .from('newsletter_issues')
+    .select('id, title, created_at, published_at')
     .eq('visibility', 'public')
-    .order('created_at', { ascending: false })
+    .is('archived_at', null)
+    .not('published_at', 'is', null)
+    .gte('published_at', since)
+    .order('published_at', { ascending: false })
     .limit(20);
 
   if (error) {
@@ -150,10 +127,7 @@ async function fetchNewsletterReleases(communityId: string, since: string) {
     return [];
   }
 
-  return (data ?? [])
-    .filter((row: any) => row.status !== 'archived')
-    .map((row: any) => ({ ...row, releasedAt: row.edited_at ?? row.created_at }))
-    .filter((row: any) => row.releasedAt >= since);
+  return (data ?? []).map((row: any) => ({ ...row, releasedAt: row.published_at }));
 }
 
 async function fetchActivityItems(communityId: string, userId?: string): Promise<ActivityItem[]> {
@@ -226,7 +200,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
       .eq('is_active', true)
       .order('created_at', { ascending: false }),
 
-    fetchNewsletterReleases(communityId, thirtyDaysAgo),
+    fetchNewsletterReleases(thirtyDaysAgo),
   ]);
 
   const items: ActivityItem[] = [];
@@ -329,11 +303,8 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
     });
   }
 
-  // Board posts. The HIVE Newsletter board is drafting space, not community
-  // activity (see the note in fetchBoardReplyActivity) — it gets its own
-  // "released" item below instead of showing up as generic posting noise.
+  // Board posts. The Buzz cannot appear here because it has its own table.
   for (const p of postsRes.data ?? []) {
-    if ((p as any).category?.topic_kind === 'newsletter') continue;
     const authorName: string = (p as any).author?.name ?? 'Someone';
     const categoryName: string = (p as any).category?.name ?? 'the board';
     const isIntro = categoryName.toLowerCase().includes('intro');
@@ -350,9 +321,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
     });
   }
 
-  // Newsletter releases. This replaces the drafting noise filtered out of
-  // board_post/board_reply above with the one thing Nat actually wants to see:
-  // the moment an issue goes out, deep-linking to the published post itself.
+  // Newsletter releases are their own activity and deep-link to The Buzz.
   for (const n of newsletterReleases ?? []) {
     items.push({
       id: `newsletter_released_${(n as any).id}`,
@@ -361,8 +330,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
       text: `${truncate((n as any).title, 55)} was released`,
       timestamp: (n as any).releasedAt,
       sourceId: (n as any).id,
-      categoryId: (n as any).category_id,
-      navigatesTo: 'board',
+      navigatesTo: 'buzz',
     });
   }
 
