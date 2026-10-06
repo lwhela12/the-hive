@@ -143,6 +143,21 @@ function imageHtml(src: string, alt: string): string {
   </div>`;
 }
 
+/**
+ * Give a recap's theme its own deliberate line instead of leaving email
+ * clients to wrap the long, letter-spaced masthead wherever they happen to.
+ */
+function mastheadTitleHtml(title: string): string {
+  const separator = title.indexOf(':');
+  if (separator < 0) return escapeHtml(title);
+
+  const lead = title.slice(0, separator + 1).trim();
+  const theme = title.slice(separator + 1).trim();
+  if (!lead || !theme) return escapeHtml(title);
+
+  return `<span style="display:block;">${escapeHtml(lead)}</span><span style="display:block;padding-top:4px;">${escapeHtml(theme)}</span>`;
+}
+
 function buttonHtml(key: string, recipient: Recipient): string {
   const button = HIVE_BUTTONS[key];
   if (!button) return '';
@@ -195,13 +210,13 @@ function issueHtml(title: string, content: string, footerHtml: string, recipient
       <!-- The Buzz is public-facing, so its masthead uses the same warm public
            HIVE identity as the-hive.app rather than the in-app HIVE-Wide seal. -->
       <div style="text-align:center;padding-bottom:18px;">
-        <img src="${PUBLIC_SITE_URL}/assets/hive-logo-email.png" width="120" alt="HIVE — Human, Insight, Vision, Execution" style="display:inline-block;width:120px;height:120px;border:0;outline:none;text-decoration:none;" />
+        <img src="${PUBLIC_SITE_URL}/assets/hive-logo-email.png" width="120" height="120" alt="HIVE — Human, Insight, Vision, Execution" style="display:inline-block;width:120px;height:120px;border:1px solid #bd9348;border-radius:60px;outline:none;text-decoration:none;overflow:hidden;" />
         <!-- The masthead carries the whole title, and the letter starts with
              "Yellow!". It used to say "THE BUZZ" here and then repeat the title
              as a heading inside the card — Nat, 2026-08-12: *"this doubles up a
              little for me... i feel like the light amber 'the buzz' should
              maybe hold this title & we just start with 'yellow!'"* -->
-        <div style="font-family:Helvetica,Arial,sans-serif;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:#8a6a2f;padding-top:10px;">${escapeHtml(title)}</div>
+        <div style="font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;letter-spacing:3px;text-transform:uppercase;color:#8a6a2f;padding-top:10px;">${mastheadTitleHtml(title)}</div>
       </div>
       <div style="background:#fffdf5;border:1px solid #e3d4ac;border-radius:16px;padding:26px 26px 30px;">
         ${body}
