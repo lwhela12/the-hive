@@ -418,7 +418,7 @@ serve(async (req) => {
       const emailResult = await sendReachEmail(supabaseAdmin, recipient_id, 'mention', {
         ...genericLetter('mention', {
           buttonLabel: 'Go and see',
-          href: deepLink('/hive', community_id),
+          href: deepLink(`/hive?openWishId=${encodeURIComponent(wish_id)}`, community_id),
           hiveId: community_id,
         }),
       });

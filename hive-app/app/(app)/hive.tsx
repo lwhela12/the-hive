@@ -26,6 +26,7 @@ import {
 } from '../../lib/checkIns';
 import { pacificToday } from '../../lib/checkInPresentation';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { hiveContentLinkAction } from '../../lib/hiveDeepLink';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { invalidateEventQueries, invalidateWishQueries } from '../../lib/queryClient';
@@ -811,7 +812,7 @@ function SectionMoveButton({ direction, disabled, onPress }: {
 }
 
 export default function HiveScreen() {
-  const { profile, communityId, communityRole, session, refreshProfile, community, memberships, openHivePicker, wholeHive, switchCommunity } = useAuth();
+  const { profile, communityId, communityRole, session, refreshProfile, community, memberships, openHivePicker, wholeHive, switchCommunity, loading: authLoading } = useAuth();
   const { appNews } = useAppNews();
   const router = useRouter();
   const openFeedback = useOpenFeedback();
@@ -825,6 +826,8 @@ export default function HiveScreen() {
     catchup?: string;
     from?: string;
   }>();
+  const askedWishId = Array.isArray(openWishId) ? openWishId[0] : openWishId;
+  const askedHiveId = Array.isArray(linkedHiveId) ? linkedHiveId[0] : linkedHiveId;
 
   // A HIVE's home cannot be drawn while the app thinks you are standing above
   // the HIVEs — and now it cannot be asked to.
@@ -1991,14 +1994,35 @@ export default function HiveScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catchup, from]);
   const handledOpenWishIdRef = useRef<string | null>(null);
+  const wishAskRef = useRef<{ wishId: string; hiveId: string | null } | null>(null);
+  if (askedWishId && !wishAskRef.current && handledOpenWishIdRef.current !== askedWishId) {
+    // Keep the target while switching HIVEs; the URL can change underneath us.
+    wishAskRef.current = { wishId: askedWishId, hiveId: askedHiveId ?? null };
+  }
   useEffect(() => {
-    if (!openWishId || !communityId) return;
-    if (handledOpenWishIdRef.current === openWishId) return;
-    handledOpenWishIdRef.current = openWishId;
+    const ask = wishAskRef.current;
+    if (!ask) return;
+    const action = hiveContentLinkAction({
+      requestedHiveId: ask.hiveId, currentCommunityId: communityId, wholeHive,
+      memberHiveIds: memberships.map(m => m.community_id), authLoading,
+    });
+    if (action === 'wait') return;
+    if (action === 'switch') { void switchCommunity(ask.hiveId!); return; }
+    handledOpenWishIdRef.current = ask.wishId;
+    wishAskRef.current = null;
+    if (action === 'unavailable') {
+      showAlert('That HIVE is not available', 'This wish belongs to a HIVE you cannot open.');
+      router.setParams({ openWishId: undefined, hive: undefined } as any);
+      return;
+    }
     const origin = Array.isArray(from) ? from[0] : from;
     wishReturnRef.current = CATCH_UP_RETURN_PATHS[origin ?? ''] ?? null;
-    void openWishById(openWishId, { alertOnUnavailable: true });
-  }, [openWishId, communityId, openWishById, from]);
+    void openWishById(ask.wishId, { alertOnUnavailable: true });
+    router.setParams({ openWishId: undefined, hive: undefined } as any);
+  }, [askedWishId, askedHiveId, authLoading, communityId, memberships, wholeHive, openWishById, from, router, switchCommunity]);
+  useEffect(() => {
+    if (!askedWishId) handledOpenWishIdRef.current = null;
+  }, [askedWishId]);
 
   // App Feedback used to live here: a search through this HIVE's public wishes
   // for a title containing "bug report", opened as a wish sheet. It is a screen
@@ -2332,7 +2356,6 @@ export default function HiveScreen() {
    */
   const surveyAskRef = useRef<{ surveyId: string; hiveId: string | null } | null>(null);
   const askedSurveyId = Array.isArray(openSurveyId) ? openSurveyId[0] : openSurveyId;
-  const askedHiveId = Array.isArray(linkedHiveId) ? linkedHiveId[0] : linkedHiveId;
   if (askedSurveyId && handledSurveyIdRef.current !== askedSurveyId) {
     surveyAskRef.current = { surveyId: askedSurveyId, hiveId: askedHiveId ?? null };
   }
@@ -2356,6 +2379,22 @@ export default function HiveScreen() {
     openSurvey(match);
     router.setParams({ openSurveyId: undefined, hive: undefined } as any);
   }, [askedSurveyId, askedHiveId, communityId, wholeHive, availableSurveys, openSurvey, switchCommunity, router]);
+
+  // Legacy activity emails only named a HIVE, not their wish. They cannot
+  // recover the missing wish ID, but they should at least land in Tech rather
+  // than leaving Nat on whichever HIVE home was last open.
+  useEffect(() => {
+    if (!askedHiveId || askedWishId || askedSurveyId) return;
+    const action = hiveContentLinkAction({
+      requestedHiveId: askedHiveId, currentCommunityId: communityId, wholeHive,
+      memberHiveIds: memberships.map(m => m.community_id), authLoading,
+    });
+    if (action === 'switch') { void switchCommunity(askedHiveId); return; }
+    if (action === 'unavailable') {
+      showAlert('That HIVE is not available', 'This link belongs to a HIVE you cannot open.');
+    }
+    if (action === 'ready' || action === 'unavailable') router.setParams({ hive: undefined } as any);
+  }, [askedHiveId, askedWishId, askedSurveyId, authLoading, communityId, memberships, wholeHive, router, switchCommunity]);
 
   const closeSurvey = useCallback(() => {
     setActiveSurvey(null);

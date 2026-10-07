@@ -60,7 +60,7 @@ const nav = await import(pathToFileURL(path.join(tmp, 'navigation.mjs')).href);
 const { routeAfterHiveSwitch } = await import(
   pathToFileURL(path.join(tmp, 'hiveSwitchRoute.mjs')).href
 );
-const { hiveDeepLinkAction } = await import(
+const { hiveDeepLinkAction, hiveContentLinkAction } = await import(
   pathToFileURL(path.join(tmp, 'hiveDeepLink.mjs')).href
 );
 fs.rmSync(tmp, { recursive: true, force: true });
@@ -106,6 +106,18 @@ check(hiveDeepLinkAction({ requestedHiveId: null, handledHiveId: null, currentCo
 check(hiveDeepLinkAction({ requestedHiveId: 'og', handledHiveId: null, currentCommunityId: 'og', wholeHive: false }) === 'consume', 'An already-matching HIVE link must be consumed.');
 check(hiveDeepLinkAction({ requestedHiveId: 'og', handledHiveId: null, currentCommunityId: 'tech', wholeHive: false }) === 'switch', 'A fresh HIVE link must switch to its requested HIVE.');
 check(hiveDeepLinkAction({ requestedHiveId: 'og', handledHiveId: 'og', currentCommunityId: 'tech', wholeHive: false }) === 'ignore', 'A handled HIVE link must not override a later sidebar switch.');
+const contentLink = (requestedHiveId, currentCommunityId, wholeHive, authLoading = false) =>
+  hiveContentLinkAction({ requestedHiveId, currentCommunityId, wholeHive, memberHiveIds: ['og', 'tech'], authLoading });
+check(contentLink('tech', 'og', false) === 'switch', 'A Tech wish link from OG must switch to Tech before opening.');
+check(contentLink('tech', 'tech', false) === 'ready', 'A Tech wish link may open once Tech is active.');
+check(contentLink('tech', 'tech', true) === 'switch', 'A HIVE-Wide reader must step into Tech before opening its wish.');
+check(contentLink('tech', 'og', false, true) === 'wait', 'A wish link must wait for signed-in memberships.');
+check(contentLink('unknown', 'og', false) === 'unavailable', 'A wish link cannot switch into a HIVE the reader does not belong to.');
+const hiveHome = fs.readFileSync(path.join(root, 'app/(app)/hive.tsx'), 'utf8');
+check(hiveHome.includes('wishAskRef.current = { wishId: askedWishId, hiveId: askedHiveId ?? null }')
+  && hiveHome.includes('void openWishById(ask.wishId, { alertOnUnavailable: true })')
+  && hiveHome.includes('if (action === \'switch\') { void switchCommunity(ask.hiveId!); return; }'),
+  'Home must keep a linked wish and its HIVE together through the context switch.');
 
 // An unwritten route is HIVE-only. The allow-list is the safe way round: a page
 // added next month shows one HIVE's answer rather than wearing HIVE-Wide's name.

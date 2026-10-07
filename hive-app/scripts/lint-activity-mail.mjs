@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const sender = read('supabase/functions/notify-admin-activity/index.ts');
+const wishMentions = read('supabase/functions/notify-wish-mention/index.ts');
 const settings = read('app/(app)/settings.tsx');
 const migration = read('supabase/migrations/261_members_choose_hive_activity_mail.sql');
 const issueHome = read('supabase/migrations/20261006212000_the_buzz_has_its_own_home.sql');
@@ -23,6 +24,12 @@ if (!sender.includes("if (kind === 'board_post') postId = body.record_id")
   || !sender.includes("from('board_replies').select('post_id')")
   || !sender.includes('`/board?postId=${encodeURIComponent(postId)}`')) {
   failures.push('Board activity mail does not open the exact post or the parent post of a reply.');
+}
+if (!sender.includes('`/hive?openWishId=${encodeURIComponent(body.record_id)}`')) {
+  failures.push('Wish activity mail does not link to the wish that caused the email.');
+}
+if (!wishMentions.includes('href: deepLink(`/hive?openWishId=${encodeURIComponent(wish_id)}`, community_id)')) {
+  failures.push('Same-HIVE wish mention mail does not link to the exact wish.');
 }
 if (!settings.includes('label="Notify me about everything"')
   || !settings.includes('profile.email_admin_activity_enabled === true')) {

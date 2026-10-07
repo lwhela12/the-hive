@@ -23,3 +23,23 @@ export function hiveDeepLinkAction({
   if (!wholeHive && currentCommunityId === requestedHiveId) return 'consume';
   return 'switch';
 }
+
+/** A linked piece of HIVE content must reach its own HIVE before it opens. */
+export function hiveContentLinkAction({
+  requestedHiveId,
+  currentCommunityId,
+  wholeHive,
+  memberHiveIds,
+  authLoading,
+}: {
+  requestedHiveId: string | null | undefined;
+  currentCommunityId: string | null | undefined;
+  wholeHive: boolean;
+  memberHiveIds: string[];
+  authLoading: boolean;
+}): 'wait' | 'switch' | 'ready' | 'unavailable' {
+  if (authLoading) return 'wait';
+  if (requestedHiveId && !memberHiveIds.includes(requestedHiveId)) return 'unavailable';
+  if (requestedHiveId && (wholeHive || currentCommunityId !== requestedHiveId)) return 'switch';
+  return currentCommunityId && !wholeHive ? 'ready' : 'wait';
+}

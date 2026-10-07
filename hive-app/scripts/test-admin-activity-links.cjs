@@ -57,6 +57,13 @@ new Function('require', 'exports', output)(imported, {});
     assert.match(html, new RegExp(`board\\?postId=${postId}&amp;hive=og-hive`));
     assert.match(html, /Open the post/);
   }
-  assert.equal(sent.length, 2);
-  console.log('Activity email board links open the exact post; reply links open their parent post.');
+  const wish = await handler(new Request('https://db.invalid/notify-admin-activity', {
+    method: 'POST', headers: { Authorization: 'Bearer service-key' },
+    body: JSON.stringify({ kind: 'wish', community_id: 'tech-hive', actor_id: 'brietta', record_id: 'new-wish' }),
+  }));
+  assert.equal(wish.status, 200);
+  assert.match(sent.at(-1).html, /hive\?openWishId=new-wish&amp;hive=tech-hive/);
+  assert.match(sent.at(-1).html, /See the wish/);
+  assert.equal(sent.length, 3);
+  console.log('Activity email links open the exact board post or wish; replies open their parent post.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

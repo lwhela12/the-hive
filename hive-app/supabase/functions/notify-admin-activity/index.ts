@@ -111,7 +111,12 @@ serve(async (req) => {
   // The trigger supplies the exact row that caused this email. Board mail
   // should land in that thread, just like mention and reply mail do, rather
   // than dropping the reader at the HIVE's board grid.
-  const href = deepLink(postId ? `/board?postId=${encodeURIComponent(postId)}` : copy.path, body.community_id ?? null);
+  const targetPath = postId
+    ? `/board?postId=${encodeURIComponent(postId)}`
+    : kind === 'wish' && body.record_id
+      ? `/hive?openWishId=${encodeURIComponent(body.record_id)}`
+      : copy.path;
+  const href = deepLink(targetPath, body.community_id ?? null);
   const button = postId ? 'Open the post' : copy.button;
   const heading = `${actorName} ${copy.verb}`;
 
