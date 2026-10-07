@@ -118,6 +118,9 @@ check(hiveHome.includes('wishAskRef.current = { wishId: askedWishId, hiveId: ask
   && hiveHome.includes('void openWishById(ask.wishId, { alertOnUnavailable: true })')
   && hiveHome.includes('if (action === \'switch\') { void switchCommunity(ask.hiveId!); return; }'),
   'Home must keep a linked wish and its HIVE together through the context switch.');
+check(hiveHome.includes('void openWishById(ask.wishId, { alertOnUnavailable: true });\n  },')
+  && hiveHome.includes('} else if (askedWishId) {\n      // Keep a deep link intact until its wish is actually closed.'),
+  'A wish link must survive a service-worker reload until the wish is closed.');
 
 // An unwritten route is HIVE-only. The allow-list is the safe way round: a page
 // added next month shows one HIVE's answer rather than wearing HIVE-Wide's name.

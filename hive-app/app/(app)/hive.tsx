@@ -1194,8 +1194,13 @@ export default function HiveScreen() {
     if (back) {
       wishReturnRef.current = null;
       router.replace(back as any);
+    } else if (askedWishId) {
+      // Keep a deep link intact until its wish is actually closed. A service
+      // worker can reload this page while opening it; an eager clear would
+      // strand that reload on Home with no wish left to retry.
+      router.setParams({ openWishId: undefined, hive: undefined } as any);
     }
-  }, [clearSelectedWishResume, router]);
+  }, [askedWishId, clearSelectedWishResume, router]);
 
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
@@ -2018,7 +2023,6 @@ export default function HiveScreen() {
     const origin = Array.isArray(from) ? from[0] : from;
     wishReturnRef.current = CATCH_UP_RETURN_PATHS[origin ?? ''] ?? null;
     void openWishById(ask.wishId, { alertOnUnavailable: true });
-    router.setParams({ openWishId: undefined, hive: undefined } as any);
   }, [askedWishId, askedHiveId, authLoading, communityId, memberships, wholeHive, openWishById, from, router, switchCommunity]);
   useEffect(() => {
     if (!askedWishId) handledOpenWishIdRef.current = null;
