@@ -504,7 +504,7 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
       },
     },
     wrapupReminders: [
-      'Next meeting — second Tuesday of the month',
+      'Next meeting — confirm the date in Plan',
       'Before we meet — POP + what you learned',
     ],
   },
@@ -2379,7 +2379,7 @@ export default function MeetingHelperScreen() {
             if (remote.length === 0 && missing.length === 0) return null;
             const parts = [
               remote.length > 0
-                ? `💻 Zooming in: ${remote.map((member) => getFirstName(member.name)).join(', ')} — fire up the Meet`
+                ? `💻 Joining remotely: ${remote.map((member) => getFirstName(member.name)).join(', ')} — open the Meet`
                 : null,
               missing.length > 0
                 ? `😢 Missing tonight: ${missing.map((member) => getFirstName(member.name)).join(', ')}`
@@ -4212,7 +4212,7 @@ export default function MeetingHelperScreen() {
                   </Text>
                 ) : attendance === 'remote' ? (
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: GOLD_DEEP, marginTop: sz(3, 2) }}>
-                    💻 zooming in
+                    💻 joining remotely
                   </Text>
                 ) : null}
                 <Text
@@ -4330,7 +4330,7 @@ export default function MeetingHelperScreen() {
                   </Text>
                 ) : attendance === 'remote' ? (
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), color: GOLD_DEEP }}>
-                    💻 zooming in
+                    💻 joining remotely
                   </Text>
                 ) : null}
               </View>
