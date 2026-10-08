@@ -956,6 +956,9 @@ export default function MeetingHelperScreen() {
     : community?.slug === 'show' ? 'show'
     : 'default';
   const deck = DECKS[deckSlug];
+  // Tech gathers on Google Meet. The built-in Daily/room-recording pane is
+  // for the other HIVE decks; showing it here offers a second, unused call.
+  const usesBuiltInMeetingRoom = deckSlug !== 'tech';
 
   // The deck's palette. OG keeps its hand-tuned golds exactly; every other
   // HIVE's deck cuts the same three roles — accent, deep ink, light tint —
@@ -5757,7 +5760,8 @@ export default function MeetingHelperScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: PAPER }} edges={['top']}>
       <AppHeader title="Meeting Helper" />
       <View style={{ flex: 1, flexDirection: stackVideo ? 'column' : 'row' }}>
-      {/* Faces first, then the slide, then the outline — the shape Nat drew
+      {/* Where a HIVE uses the built-in call, faces come first, then the slide,
+          then the outline — the shape Nat drew
           from Jasmine's classroom on 2026-08-15: "the open the classroom,
           that's where anyone who's doing remotely's face pops up, and then the
           arrivals and hellos, that's where our meeting helper is, and then on
@@ -5769,8 +5773,9 @@ export default function MeetingHelperScreen() {
           phone sideways rearranges the deck without dropping the call.
 
           The panel is small until somebody is actually on it: an empty video
-          box has no business taking a third of the deck all evening. */}
-      <View
+          box has no business taking a third of the deck all evening. Tech
+          meets on Google Meet, so it skips this pane and its divider. */}
+      {usesBuiltInMeetingRoom ? <View
         style={
           stackVideo
             // Idle on a phone the panel is one compact row, so it asks for a
@@ -5816,8 +5821,8 @@ export default function MeetingHelperScreen() {
           onPeopleChange={setVideoPeople}
           compact={stackVideo}
         />
-      </View>
-      {!stackVideo ? (
+      </View> : null}
+      {usesBuiltInMeetingRoom && !stackVideo ? (
         <DeckSplit
           width={sideVideoWidth}
           onResize={setVideoWidth}
