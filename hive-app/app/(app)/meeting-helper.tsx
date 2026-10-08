@@ -137,9 +137,8 @@ const PLAIN_FIELD = {
 // Each HIVE that has a designed rhythm gets a deck here — a declarative list,
 // so Production's future deck becomes a third entry rather than a third
 // branch. OG (slug 'default') is the original deck, byte-for-byte; Tech is
-// Nat's 2026-08-11 voice-memo design: monthly first-Thursday evenings,
-// work-and-craft focused, networking instead of hangs, and the treasurer
-// slide kept deliberately as the place to talk about WHETHER Tech wants dues.
+// Tech's deck keeps its work-and-craft focus and networking instead of hangs.
+// Its Honey Pot slide now records the group's decision to wait until January.
 
 type DeckSlideKey =
   | 'room'
@@ -194,11 +193,12 @@ type DeckDefinition = {
   welcomeNudge: string;
   /**
    * The Treasurer slide. OG reports the Honey Pot with real dues numbers;
-   * Tech has no Honey Pot yet, and the slide is KEPT on purpose — Nat: having
-   * the screen is what starts the do-we-want-dues conversation.
+   * Tech records its decision to wait until January, instead of restarting
+   * a vote the room already settled.
    */
   treasurer:
     | { kind: 'honeyPot'; kicker: string; title: string }
+    | { kind: 'deferred'; kicker: string; title: string; decision: string; revisit: string }
     | { kind: 'duesConversation'; kicker: string; title: string; lead: string; questions: string[] }
     /**
      * A HIVE deciding whether it wants a Honey Pot, with a worked example and
@@ -225,12 +225,7 @@ type DeckDefinition = {
   plan: {
     kicker: string;
     title: string;
-    /**
-     * Each card carries its own vote from the check-in, counted underneath it.
-     * Nat, 2026-08-31: *"every card shows its vote"* — the meeting day as a
-     * percentage, whether the HIVE wants a HIVE Help. The room reads where it
-     * already stands and then spends its minutes deciding.
-     */
+    /** Unsettled questions may carry a check-in vote; decided cards do not. */
     cards: { key: 'meeting' | 'help' | 'hang'; title: string; blurb?: string; vote?: VoteTally }[];
     /**
      * OG's Hang card opens the polls-and-ideas panel. Tech's third card is
@@ -238,12 +233,8 @@ type DeckDefinition = {
      * the same move as the Meeting card, with no panel.
      */
     hangCardExpands: boolean;
-    /**
-     * What the Help card opens: OG's check-in voices and focus tally, or —
-     * for a HIVE that hasn't chosen a HIVE Help yet — a short conversation
-     * about whether to have one at all. No pressure; it's a choice.
-     */
-    helpExpansion: { kind: 'voices' } | { kind: 'conversation'; lead: string; points: string[] };
+    /** What the Help card opens: OG's recap, an unsettled discussion, or Tech's adopted plan. */
+    helpExpansion: { kind: 'voices' } | { kind: 'conversation' | 'plan'; lead: string; points: string[] };
     /**
      * The "Help Focus:" composer in the calendar headers is OG's monthly-
      * focus machinery (board thread + to-do fan-out). A HIVE still deciding
@@ -471,37 +462,11 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
     ],
     welcomeNudge: 'grab a drink and check in',
     treasurer: {
-      kind: 'honeyPotVote',
-      kicker: 'Some HIVEs have one',
+      kind: 'deferred',
+      kicker: 'Decided by Tech HIVE',
       title: 'Honey Pot',
-      example: {
-        heading: 'Here is how OG HIVE does it',
-        dues: '$25 a quarter, per member',
-        note: 'Spent at the community’s discretion — the HIVE picks.',
-        ideas: [
-          'HIVE hoodies this fall',
-          'A Bumblebee Ball to close out the year',
-        ],
-      },
-      vote: {
-        answerKey: 'q_honey_pot',
-        heading: 'Where Tech landed',
-        options: [
-          'Yes — count me in',
-          'Maybe — talk me through it',
-          'Let’s leave it for now',
-        ],
-      },
-      spend: {
-        answerKey: 'q_honey_pot_for',
-        heading: 'What we’d spend it on first',
-        options: [
-          'Tech HIVE hoodies',
-          'A Bumblebee Ball',
-          'Tools or subscriptions we all use',
-          'I have another idea — I’ll bring it Tuesday',
-        ],
-      },
+      decision: 'No Honey Pot for now.',
+      revisit: 'Circle back at the beginning of January.',
     },
     plan: {
       kicker: 'Ways we gather · on the calendar',
@@ -510,32 +475,21 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
         {
           key: 'meeting',
           title: 'HIVE Meeting',
-          blurb: 'Second Tuesday evening, monthly, on Meet — built to fit around work.',
-          vote: {
-            answerKey: 'q_meeting_day',
-            heading: 'The evening that suits us',
-            options: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'A weekend'],
-          },
         },
         {
           key: 'help',
           title: 'HIVE Help',
-          blurb: 'A small shared kindness some HIVEs take on each month.',
-          vote: {
-            answerKey: 'q_hive_help',
-            heading: 'Do we want one',
-            options: ['Yes — I’m in', 'Show me what it looks like', 'Let’s leave it for now'],
-          },
         },
-        { key: 'hang', title: 'HIVE Networking', blurb: 'Get the crew in a room with new faces — schedule one right here.' },
+        { key: 'hang', title: 'HIVE Networking' },
       ],
       hangCardExpands: false,
       helpExpansion: {
-        kind: 'conversation',
-        lead: 'Some HIVEs pick one small act of kindness to do together each month.',
+        kind: 'plan',
+        lead: 'Following OG HIVE’s plan:',
         points: [
-          'Does Tech want one? Totally a choice — no pressure either way.',
-          "If it's a yes, we pick the first focus together.",
+          'October · Collect to-go containers.',
+          'November · Collect nonperishable food.',
+          'December · Make meals and distribute them to people experiencing homelessness.',
         ],
       },
       hasHelpFocusHeader: false,
@@ -3125,6 +3079,15 @@ export default function MeetingHelperScreen() {
             </Text>
           </View>
         </View>
+      ) : deck.treasurer.kind === 'deferred' ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: sz(32, 18), paddingBottom: sz(60, 35), gap: sz(18, 12) }}>
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(42, 27), lineHeight: sz(54, 36), color: GOLD, textAlign: 'center' }}>
+            {deck.treasurer.decision}
+          </Text>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(23, 15), lineHeight: sz(32, 22), color: MUTED, textAlign: 'center' }}>
+            {deck.treasurer.revisit}
+          </Text>
+        </View>
       ) : deck.treasurer.kind === 'honeyPotVote' ? (
         /* A HIVE voting on whether to have one, with a worked example on
            screen so the vote is answerable. The example comes first and the
@@ -3690,7 +3653,9 @@ export default function MeetingHelperScreen() {
                       ? isSelected ? '● tap a day below to schedule the meeting' : '○ select, then tap a day to schedule'
                       : column.key === 'hang'
                         ? isSelected ? '● tap a day below to schedule it' : '○ select, then tap a day to schedule'
-                        : expandedPlanCard === 'help' ? '▾ the conversation' : '▸ tap to talk it over'}
+                        : expandedPlanCard === 'help'
+                          ? deck.plan.helpExpansion.kind === 'plan' ? '▾ the plan' : '▾ the conversation'
+                          : deck.plan.helpExpansion.kind === 'plan' ? '▸ see the plan' : '▸ tap to talk it over'}
                   </Text>
                 )}
                 {/* Where the card's own check-in vote lands. Nothing draws
@@ -3914,9 +3879,9 @@ export default function MeetingHelperScreen() {
           </View>
         ) : null}
 
-        {/* Tech's HIVE Help conversation opens with its card too. OG's
-            monthly focus lives in the calendar headers. */}
-        {expandedPlanCard === 'help' && deck.plan.helpExpansion.kind === 'conversation' ? (
+        {/* The Tech HIVE Help plan opens from its card. OG's monthly focus
+            lives in the calendar headers. */}
+        {expandedPlanCard === 'help' && deck.plan.helpExpansion.kind !== 'voices' ? (
           <View
             style={{
               marginTop: sz(14, 8),
@@ -3929,8 +3894,6 @@ export default function MeetingHelperScreen() {
               gap: sz(12, 8),
             }}
           >
-            {/* A HIVE still deciding whether it wants a HIVE Help gets the
-                conversation, in Nat's framing: no pressure, it's a choice. */}
               <View style={{ gap: sz(8, 5) }}>
                 {/* Says which card opened this. The panels stack under the whole
                     row, so without a name the conversation reads as belonging to
@@ -3946,22 +3909,17 @@ export default function MeetingHelperScreen() {
                     {point}
                   </Text>
                 ))}
-                {/* The conversation is the point, and a HIVE that has already
-                    picked its Help wants somewhere to say so. Nat, 2026-08-12:
-                    *"I love that you have the 'lets talk about this' part, but
-                    I'd also like to be able to put text directly in there…
-                    where i could just put the help in."* Written any time —
-                    top of the month, or live while the room decides. */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(10, 6), marginTop: sz(4, 3) }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
-                    This month's Help
-                  </Text>
-                  <EditPill noteKey="help" />
-                </View>
-                <NoteBody
-                  noteKey="help"
-                  emptyText="Nothing written down yet — talk it over, or write it in ahead of the meeting."
-                />
+                {deck.plan.helpExpansion.kind === 'conversation' ? (
+                  <>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(10, 6), marginTop: sz(4, 3) }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
+                        This month's Help
+                      </Text>
+                      <EditPill noteKey="help" />
+                    </View>
+                    <NoteBody noteKey="help" emptyText="Nothing written down yet — talk it over, or write it in ahead of the meeting." />
+                  </>
+                ) : null}
               </View>
           </View>
         ) : null}

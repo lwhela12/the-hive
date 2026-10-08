@@ -95,8 +95,17 @@ if (!checkIn) {
   }
 }
 
-if (deckBallots.size === 0 && !failures.length) {
-  failures.push('The tech deck draws no votes at all — either the guard broke or the votes were removed.');
+// Once Tech makes a decision, its deck should show the decision rather than
+// invent an empty vote. Keep the ballot guard for any future live questions.
+if (deckBallots.size === 0 && deck && !deck.includes("kind: 'deferred'")) {
+  failures.push('The tech deck has no votes and no recorded Honey Pot decision — this guard may no longer be reading the active deck.');
+}
+if (deck?.includes("kind: 'deferred'")) {
+  if (deckBallots.size > 0) failures.push('Tech has settled these questions; the deck must not show another vote.');
+  if (!deck.includes("kind: 'plan'")) failures.push('Tech HIVE Help must show the adopted plan, not reopen the choice.');
+  for (const month of ['October', 'November', 'December']) {
+    if (!deck.includes(`${month} · `)) failures.push(`Tech HIVE Help is missing its ${month} step.`);
+  }
 }
 
 for (const [key, ballot] of deckBallots) {
@@ -127,9 +136,9 @@ if (underCards && !asked.has(underCards[1])) {
 }
 
 if (failures.length) {
-  console.error('Tech check-in: every vote the deck counts is asked in the same words.\n');
+  console.error('Tech check-in: current decisions and any live votes match the deck.\n');
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exit(1);
 }
 
-console.log('Tech check-in: every vote the deck counts is asked in the same words.');
+console.log('Tech check-in: settled decisions do not show empty votes; any live ballots match the check-in.');
