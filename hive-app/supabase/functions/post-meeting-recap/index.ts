@@ -82,32 +82,19 @@ async function loadMeeting(admin: ReturnType<typeof createClient>, meetingId: st
   let title = `${row.community?.name || 'HIVE'} Meeting`;
   let parsedSummary: RecapStoredSummary = {};
   try {
-    // Member mail gets the same safe projection as the member meeting page.
-    // The full stored recap can contain submitted answers and model paraphrases.
-    const { data: safeSummary, error: safeError } = await admin.rpc('member_safe_meeting_summary', {
-      p_summary: row.summary ?? null,
-    });
-    if (safeError) throw safeError;
-    const parsed = JSON.parse(safeSummary || '{}') as RecapStoredSummary & { title?: unknown };
-    parsedSummary = parsed;
+    // The member view deliberately redacts the entire historical record. An
+    // email may use only the separately curated one-minute recap, after Nat
+    // has previewed and explicitly approved the recipients and exact copy.
+    const parsed = JSON.parse(row.summary || '{}') as RecapStoredSummary & {
+      title?: unknown;
+      one_minute_recap?: RecapStoredSummary['one_minute_recap'] & { curated_at?: string };
+    };
+    if (!parsed.one_minute_recap?.curated_at) return null;
+    parsedSummary = { one_minute_recap: parsed.one_minute_recap };
     if (typeof parsed.title === 'string' && parsed.title.trim()) title = parsed.title.trim();
-  } catch { /* old plain-text summaries use the fallback title */ }
+  } catch { return null; }
 
-  const membersResult = await admin
-    .from('community_memberships')
-    .select('user_id, profile:profiles!user_id(id, name)')
-    .eq('community_id', row.community_id);
-  if (membersResult.error) throw membersResult.error;
-  const members = (membersResult.data ?? []).flatMap((membership: {
-    user_id: string;
-    profile?: { id?: string; name?: string | null } | null;
-  }) => membership.profile?.id
-    ? [{ id: membership.profile.id, name: membership.profile.name ?? null }]
-    : []);
-  const recap = buildMeetingRecapContent(
-    parsedSummary,
-    members,
-  );
+  const recap = buildMeetingRecapContent(parsedSummary, []);
   return {
     id: row.id,
     communityId: row.community_id,
@@ -273,6 +260,24 @@ serve(async (req) => {
       if (isAuthError(auth) || !(await isOwner(admin, auth.userId))) {
         return errorResponse('Recap previews can only be created by a HIVE owner.', 403);
       }
+    }
+
+    if (body.preview_only === true) {
+      const meetingId = typeof body.meeting_id === 'string' ? body.meeting_id.trim() : '';
+      const meeting = meetingId ? await loadMeeting(admin, meetingId) : null;
+      if (!meeting) return errorResponse('This meeting needs a curated recap before preview.', 422);
+      const previewTo = await findPreviewProfile(admin);
+      if (!previewTo) return errorResponse('No preview recipient is configured.', 503);
+      if (body.expected_preview_email && body.expected_preview_email !== previewTo.email) {
+        return errorResponse('The preview address changed; no email was sent.', 409);
+      }
+      const banner = `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto 18px;background:#fff3d6;border:1px solid #d4b778;border-radius:14px;padding:16px;color:#5b471e"><strong>Preview only — no member email sent.</strong><br>The greeting is an example. Recipients are not confirmed, and the full-record link is still redacted for non-owners; member delivery remains paused.</div>`;
+      await sendEmail(
+        previewTo.email,
+        `[Preview only] ${postMeetingRecapSubject(meeting)}`,
+        `${banner}${postMeetingRecapHtml('friend', meeting, APP_URL)}`,
+      );
+      return jsonResponse({ preview_sent: true, preview_to: previewTo.email, members_sent: 0 });
     }
 
     const meetingId = typeof body.meeting_id === 'string' ? body.meeting_id.trim() : '';
