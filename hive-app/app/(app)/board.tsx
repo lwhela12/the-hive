@@ -34,6 +34,7 @@ import {
   type BoardSortKey,
 } from '../../lib/boardSort';
 import { normalizeBoardView, type BoardViewMode } from '../../lib/boardView';
+import { normalizeBoardScope, type BoardScopeMode } from '../../lib/boardScope';
 // Which board and which thread were open is remembered for this sitting only
 // (session-scoped), not forever — the same lifetime `lib/hiveSelection.ts`
 // uses for which HIVE you're in, and for the same reason (Nat 2026-08-08).
@@ -202,12 +203,23 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const goldWash = skin.dark ? 'rgba(224,190,118,0.12)' : 'rgba(189,147,72,0.10)';
   const publicInk = skin.dark ? '#86efac' : '#16a34a';
 
+  const boardScopeStorageKey = !isWide && myCommunityId && profile?.id
+    ? `the-hive:boards-scope:${myCommunityId}:${profile.id}`
+    : null;
+  const [boardScope, setBoardScope] = useState<BoardScopeMode>(() =>
+    normalizeBoardScope(boardScopeStorageKey ? getStoredItem(boardScopeStorageKey) : null),
+  );
+  const includeSharedBoards = isWide || boardScope === 'all';
   const {
     data: categories = [],
     isLoading: categoriesLoading,
     refetch: refetchCategories,
     invalidateCategories,
-  } = useBoardCategoriesQuery(isWide ? undefined : (myCommunityId ?? undefined), reach);
+  } = useBoardCategoriesQuery(
+    isWide ? undefined : (myCommunityId ?? undefined),
+    reach,
+    includeSharedBoards,
+  );
   const communityId = isWide ? (categories[0]?.community_id ?? null) : myCommunityId;
   // Identity follows where the member opened the board, not who owns its row.
   // A shared Tech board is anonymous at HIVE-Wide and familiar inside Tech.
@@ -302,10 +314,16 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const [boardSortMenuOpen, setBoardSortMenuOpen] = useState(false);
 
   useEffect(() => {
+    setBoardScope(normalizeBoardScope(boardScopeStorageKey ? getStoredItem(boardScopeStorageKey) : null));
     setBoardSort(normalizeBoardSort(boardSortStorageKey ? getStoredItem(boardSortStorageKey) : null));
     setBoardView(normalizeBoardView(boardViewStorageKey ? getStoredItem(boardViewStorageKey) : null));
     setBoardSortMenuOpen(false);
-  }, [boardSortStorageKey, boardViewStorageKey]);
+  }, [boardScopeStorageKey, boardSortStorageKey, boardViewStorageKey]);
+
+  const selectBoardScope = (scope: BoardScopeMode) => {
+    setBoardScope(scope);
+    if (boardScopeStorageKey) setStoredItem(boardScopeStorageKey, scope);
+  };
 
   const selectBoardSort = (key: BoardSortKey) => {
     setBoardSort(key);
@@ -2247,6 +2265,54 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         })}
       </View>
     );
+    const boardScopeToggle = !isWide ? (
+      <View
+        accessibilityRole="tablist"
+        style={{
+          flexDirection: 'row',
+          alignSelf: 'center',
+          minHeight: 44,
+          backgroundColor: skin.field,
+          borderRadius: 999,
+          borderWidth: 1,
+          borderColor: skin.borderStrong,
+          padding: 3,
+          gap: 3,
+        }}
+      >
+        {([
+          { scope: 'all' as const, label: 'All boards', icon: 'layers-outline' as const },
+          { scope: 'hive' as const, label: 'This HIVE', icon: 'home-outline' as const },
+        ]).map((option) => {
+          const active = boardScope === option.scope;
+          return (
+            <Pressable
+              key={option.scope}
+              onPress={() => selectBoardScope(option.scope)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`${option.label}${active ? ', selected' : ''}`}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 5,
+                minHeight: 36,
+                borderRadius: 999,
+                backgroundColor: active ? skin.gold : 'transparent',
+                paddingHorizontal: 12,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Ionicons name={option.icon} size={15} color={active ? '#313130' : skin.inkSoft} />
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: active ? '#313130' : skin.inkSoft }}>
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    ) : null;
     const boardListToolbar = (
       <View style={{ backgroundColor: skin.card, borderBottomWidth: 1, borderBottomColor: skin.border }}>
         <View className="flex-row items-center px-4 py-3">
@@ -2270,6 +2336,11 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
             )}
           </View>
         </View>
+        {boardScopeToggle && (
+          <View style={{ alignItems: 'center', paddingHorizontal: 16, paddingBottom: 10 }}>
+            {boardScopeToggle}
+          </View>
+        )}
         <View style={{ alignItems: 'center', paddingHorizontal: 16, paddingBottom: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, maxWidth: '100%' }}>
             <Pressable
@@ -2392,7 +2463,9 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
                 ? `No boards or threads found for "${boardSearch.trim()}".`
                 : isWide
                   ? 'Nothing is shared HIVE-Wide yet. Every board still belongs to the HIVE that made it — worth deciding together which ones we all want.'
-                  : 'No boards here yet.'}
+                  : boardScope === 'hive'
+                    ? 'No boards in this HIVE yet.'
+                    : 'No boards here yet.'}
             />
           </View>
         )}

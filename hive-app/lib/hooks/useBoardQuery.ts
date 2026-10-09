@@ -37,7 +37,11 @@ export type BoardReach = 'hive' | 'all_hives';
 // so the prefetched cache quietly served the old answer for its whole
 // staleTime. Nat found it on her phone: Tech HIVE's Boards was missing the
 // HIVE-Wide board that the fixed query returns. One function, one truth.
-export async function fetchCategories(communityId: string | undefined, reach: BoardReach): Promise<BoardCategory[]> {
+export async function fetchCategories(
+  communityId: string | undefined,
+  reach: BoardReach,
+  includeSharedBoards = true,
+): Promise<BoardCategory[]> {
   let q = supabase
     .from('board_categories')
     .select('*, member_tags:board_category_member_tags(*, member:profiles!board_category_member_tags_tagged_user_id_fkey(id, name, avatar_url))');
@@ -46,7 +50,7 @@ export async function fetchCategories(communityId: string | undefined, reach: Bo
     // The shared boards, scoped by reach rather than by community, so that a
     // Tech member sees them even though OG owns the rows (Nat 2026-08-03).
     q = q.eq('reach', 'all_hives');
-  } else {
+  } else if (includeSharedBoards) {
     // This HIVE's own boards PLUS the shared HIVE-Wide ones. The shared boards
     // used to live only behind HIVE-Wide's door (the 2026-08-03 split of
     // "what's ours" and "what's everybody's") — Nat reversed that on
@@ -55,6 +59,12 @@ export async function fetchCategories(communityId: string | undefined, reach: Bo
     // The card's badge says which kind each one is, so the mixed list stays
     // readable in a way the pre-split single list wasn't.
     q = q.or(`and(community_id.eq.${communityId ?? ''},reach.eq.hive),reach.eq.all_hives`);
+  } else {
+    // The focused view is deliberately narrower, never broader: only boards
+    // made for the HIVE a member is standing in. It is a reading filter, not
+    // a visibility change, so shared boards remain available in the other
+    // choice and at their HIVE-Wide door.
+    q = q.eq('community_id', communityId ?? '').eq('reach', 'hive');
   }
 
   const { data, error } = await q
@@ -300,15 +310,21 @@ export function useBoardSearchIndexQuery(communityId?: string) {
   });
 }
 
-export function useBoardCategoriesQuery(communityId?: string, reach: BoardReach = 'hive') {
+export function useBoardCategoriesQuery(
+  communityId?: string,
+  reach: BoardReach = 'hive',
+  includeSharedBoards = true,
+) {
   const queryClient = useQueryClient();
   // The shared boards are the same set for everybody, so they get one cache
   // entry rather than one per HIVE you happen to be standing in.
-  const cacheKey = reach === 'all_hives' ? 'all_hives' : (communityId || '');
+  const cacheKey = reach === 'all_hives'
+    ? 'all_hives'
+    : `${communityId || ''}:${includeSharedBoards ? 'all' : 'hive'}`;
 
   const query = useQuery({
     queryKey: queryKeys.boardCategories(cacheKey),
-    queryFn: () => fetchCategories(communityId, reach),
+    queryFn: () => fetchCategories(communityId, reach, includeSharedBoards),
     // HIVE-Wide does not need a community to ask about — that is the point of it.
     enabled: reach === 'all_hives' || !!communityId,
     // Categories rarely change, cache for 10 minutes
@@ -318,7 +334,7 @@ export function useBoardCategoriesQuery(communityId?: string, reach: BoardReach 
   // Invalidate categories cache (e.g., after creating a new category)
   const invalidateCategories = useCallback(() => {
     queryClient.invalidateQueries({
-      queryKey: queryKeys.boardCategories(cacheKey),
+      queryKey: ['boardCategories'],
     });
   }, [cacheKey, queryClient]);
 
