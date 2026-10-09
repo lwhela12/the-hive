@@ -151,28 +151,36 @@ new Function('require', 'module', 'exports', compiled)(
 );
 const questions = [
   { id: 'q_attendance', text: 'Will we see you?', type: 'choice' },
-  { id: 'q_learned', text: 'Old board promise', type: 'long' },
+  { id: 'q_tech_working_on', text: 'What are you working on?', type: 'long' },
+  { id: 'q_learned', text: 'What did you learn? (This feeds the Things We Learned board.)', type: 'long' },
+  { id: 'q_tech_low', text: 'What was hard?', type: 'long' },
   { id: 'q_pop_priorities', text: 'Priorities', type: 'long' },
   { id: 'q_hard_out', text: 'Hard out', type: 'short' },
 ];
 const techQuestions = presentationModule.exports.checkInQuestions(questions, false, 'tech');
 const techLegacyQuestions = presentationModule.exports.checkInQuestions(questions.filter((question) => question.id !== 'q_learned'), false, 'tech');
 const ogQuestions = presentationModule.exports.checkInQuestions(questions, false, 'default');
-if (techQuestions.findIndex((question) => question.id === 'q_learned') >= techQuestions.findIndex((question) => question.id === 'q_hd_wish')) {
-  failures.push('Tech must ask for the tool story before an optional help request.');
+if (techQuestions.findIndex((question) => question.id === 'q_tech_working_on') >= techQuestions.findIndex((question) => question.id === 'q_learned')
+    || techQuestions.findIndex((question) => question.id === 'q_learned') >= techQuestions.findIndex((question) => question.id === 'q_tech_low')
+    || techQuestions.findIndex((question) => question.id === 'q_tech_low') >= techQuestions.findIndex((question) => question.id === 'q_hd_wish')) {
+  failures.push('Tech must ask about current work, a high and a low before the optional help request.');
 }
-if (!techQuestions.find((question) => question.id === 'q_learned')?.text.includes('tool did you try')
-    || !techLegacyQuestions.find((question) => question.id === 'q_learned')?.text.includes('tool did you try')
+if (!techQuestions.find((question) => question.id === 'q_learned')?.text.includes('tech high')
+    || !techLegacyQuestions.find((question) => question.id === 'q_learned')?.text.includes('tech high')
+    || techQuestions.filter((question) => question.id === 'q_tech_working_on').length !== 1
+    || techQuestions.filter((question) => question.id === 'q_tech_low').length !== 1
     || techQuestions.find((question) => question.id === 'q_hd_wish')?.required !== false) {
-  failures.push('Tech’s tool story or optional help request is missing from Before we meet.');
+  failures.push('Tech’s monthly update or optional help request is missing from Before we meet.');
 }
-if (ogQuestions.find((question) => question.id === 'q_learned')?.text !== 'Old board promise'
+if (ogQuestions.find((question) => question.id === 'q_learned')?.text !== 'What did you learn? (This feeds the Things We Learned board.)'
     || ogQuestions.find((question) => question.id === 'q_hd_wish')?.text !== 'Choose your HD wish for this month') {
   failures.push('The Tech conversation must not rewrite OG’s check-in.');
 }
 if (!deckSource.includes("{ key: 'hummdinger', label: 'What We’re Trying' }")
-    || (deckSource.match(/getTextAnswer\(answers, 'q_learned'\)/g) ?? []).length < 2) {
-  failures.push('Tech’s tool story must appear in both the group cards and expanded meeting view.');
+    || (deckSource.match(/getTextAnswer\(answers, 'q_learned'\)/g) ?? []).length < 2
+    || (deckSource.match(/getTextAnswer\(answers, 'q_tech_working_on'\)/g) ?? []).length < 2
+    || (deckSource.match(/getTextAnswer\(answers, 'q_tech_low'\)/g) ?? []).length < 2) {
+  failures.push('Tech’s monthly update must appear in both the group cards and expanded meeting view.');
 }
 
 if (failures.length) {

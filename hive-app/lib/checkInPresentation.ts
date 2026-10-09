@@ -39,7 +39,7 @@ export const HD_FOCUS_QUESTION: SurveyQuestion = {
   type: 'long',
   required: false,
 };
-const TECH_STORY_QUESTION = 'Which AI or tech tool did you try, what did you use it for, and what did you discover?';
+const TECH_STORY_QUESTION = 'What was a tech high this past month? A win, useful tool, or something you learned.';
 const TECH_HELP_QUESTION = 'Is there a specific thing Tech HIVE could help you with?';
 const standardizedArrivalIds = new Set([
   'q_plate',
@@ -98,9 +98,9 @@ export function checkInQuestions(questions: SurveyQuestion[], month = false, hiv
       ? { ...q, text: 'What should the room help you move forward?' }
       : { ...HD_FOCUS_QUESTION, text: techMeeting ? TECH_HELP_QUESTION : HD_FOCUS_QUESTION.text };
     if (q.id === 'q_hd_wish') return { ...q, text: techMeeting ? TECH_HELP_QUESTION : HD_FOCUS_QUESTION.text };
-    // Tech's retired raw survey promises a board post that never happens.
-    // Keep its stable answer id, but ask for the story the meeting actually uses.
-    if (techMeeting && q.id === 'q_learned') return { ...q, text: TECH_STORY_QUESTION };
+    // Older Tech rows promised a board post that never happened. Current
+    // wording comes from the editable survey row, so Nat can revise it there.
+    if (techMeeting && q.id === 'q_learned' && /Things We Learned board/i.test(q.text)) return { ...q, text: TECH_STORY_QUESTION };
     if (q.id === 'q_hive_help_recap') return { ...q, type: 'focus' as const, text: 'How did this month’s HIVE Help go?' };
     return q;
   });
@@ -112,8 +112,9 @@ export function checkInQuestions(questions: SurveyQuestion[], month = false, hiv
     presented.unshift({ ...FEELING_QUESTION }, { ...FEELING_NOTE_QUESTION });
   }
 
-  // This is the start of Tech's conversation, even if an older persisted
-  // survey row predates q_learned. Keep the id stable across meeting cycles.
+  // Tech's monthly reflection remains useful to members who cannot join the
+  // call. Its live survey row carries work, high and low. Keep q_learned as a
+  // fallback for older rows, with the same stable answer id.
   if (techMeeting && !presented.some(q => q.id === 'q_learned')) {
     presented.push({ id: 'q_learned', text: TECH_STORY_QUESTION, type: 'long', required: false });
   }
@@ -133,10 +134,9 @@ export function checkInQuestions(questions: SurveyQuestion[], month = false, hiv
     });
   }
   if (techMeeting) {
-    // One Tech conversation: what someone tried may become a concrete ask.
-    // Both fields are optional; the member can discover the wish in the room.
+    // The same three prompts work for people who join live or catch up later.
     const order = ['q_attendance', 'q_hard_out', FEELING_QUESTION.id, FEELING_NOTE_QUESTION.id,
-      'q_learned', HD_FOCUS_QUESTION.id, 'q_networking'];
+      'q_tech_working_on', 'q_learned', 'q_tech_low', HD_FOCUS_QUESTION.id, 'q_networking'];
     presented.sort((a, b) => {
       const left = order.indexOf(a.id);
       const right = order.indexOf(b.id);

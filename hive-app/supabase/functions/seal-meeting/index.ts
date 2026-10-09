@@ -1006,6 +1006,9 @@ serve(async (req) => {
       const dutiesForPerson = dutyGroupsByPerson.get(name) ?? [];
       const context = contextByPerson.get(name);
       const fallbackContext = checkIn ? [
+        answerOf(checkIn.answers, 'q_tech_working_on') ? `Working on: ${answerOf(checkIn.answers, 'q_tech_working_on')}` : '',
+        answerOf(checkIn.answers, 'q_learned') ? `Tech high: ${answerOf(checkIn.answers, 'q_learned')}` : '',
+        answerOf(checkIn.answers, 'q_tech_low') ? `Tech low: ${answerOf(checkIn.answers, 'q_tech_low')}` : '',
         answerOf(checkIn.answers, 'q_pop_progress') ? `Progress: ${answerOf(checkIn.answers, 'q_pop_progress')}` : '',
         answerOf(checkIn.answers, 'q_pop_obstacles') ? `Needs / obstacles: ${answerOf(checkIn.answers, 'q_pop_obstacles')}` : '',
         answerOf(checkIn.answers, 'q_pop_priorities') ? `Focus: ${answerOf(checkIn.answers, 'q_pop_priorities')}` : '',

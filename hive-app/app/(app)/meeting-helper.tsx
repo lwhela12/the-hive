@@ -4148,7 +4148,7 @@ export default function MeetingHelperScreen() {
             marginTop: sz(12, 7),
           }}
         >
-          {'What did you try?\nWhat did you discover?\nWhere could this room help?'}
+          {'What are you working on?\nWhat went well or was hard?\nWhere could this room help?'}
         </Text>
       ) : <>
       <Text
@@ -4236,13 +4236,19 @@ export default function MeetingHelperScreen() {
           const topWish = pickSpotlightWish(memberWishes) ?? memberWishes[0];
           const reportedWish = reportsByUser.get(member.id)?.hd_wish?.trim() ?? '';
           const hdGoal = reportedWish || (topWish ? getWishQuickTitle(topWish, 40) : null);
-          const techStory = deckSlug === 'tech' ? getTextAnswer(answers, 'q_learned') : '';
+          const techWork = deckSlug === 'tech' ? getTextAnswer(answers, 'q_tech_working_on') : '';
+          const techHigh = deckSlug === 'tech' ? getTextAnswer(answers, 'q_learned') : '';
+          const techLow = deckSlug === 'tech' ? getTextAnswer(answers, 'q_tech_low') : '';
           const priorities = getTextAnswer(answers, 'q_pop_priorities');
           // Their own answer to "what are you building right now?" — the line
           // the check-in promised would become their 30-second intro.
           const introWords = introsFirst ? getIntroWords(answers) : '';
           const detailSections = deckSlug === 'tech'
-            ? [{ key: 'q_learned', label: 'What I tried and learned', text: techStory }].filter((section) => !!section.text)
+            ? [
+              { key: 'q_tech_working_on', label: 'Working on', text: techWork },
+              { key: 'q_learned', label: 'Tech high', text: techHigh },
+              { key: 'q_tech_low', label: 'Tech low', text: techLow },
+            ].filter((section) => !!section.text)
             : HUMMDINGER_DETAIL_SECTIONS
               .map((section) => ({ ...section, text: getTextAnswer(answers, section.key) }))
               .filter((section) => !!section.text);
@@ -4269,10 +4275,10 @@ export default function MeetingHelperScreen() {
           // their own words; every other night it is their HD goal, unchanged.
           // A blank never shows as a blank — it shows as the invitation.
           const bubbleLine = introsFirst
-            ? introWords || techStory || hdGoal
-            : deckSlug === 'tech' ? techStory || hdGoal : hdGoal;
+            ? introWords || techWork || techHigh || hdGoal
+            : deckSlug === 'tech' ? techWork || techHigh || hdGoal : hdGoal;
           const bubbleEmpty = deckSlug === 'tech'
-            ? 'tell us what you tried'
+            ? 'tell us what you’re working on'
             : introsFirst
               ? 'introduce yourself — 30 seconds'
               : 'open to ideas';
@@ -4334,7 +4340,7 @@ export default function MeetingHelperScreen() {
                 >
                   {bubbleLine || bubbleEmpty}
                 </Text>
-                {(deckSlug === 'tech' ? !!techStory && !!hdGoal : !!priorities) ? (
+                {(deckSlug === 'tech' ? !!(techWork || techHigh) && !!hdGoal : !!priorities) ? (
                   <Text
                     numberOfLines={1}
                     style={{
@@ -4374,7 +4380,9 @@ export default function MeetingHelperScreen() {
     const memberWishList = wishesByUserId.get(member.id) ?? [];
     const topWish = pickSpotlightWish(memberWishList) ?? memberWishList[0];
     const reportedWish = reportsByUser.get(member.id)?.hd_wish?.trim() ?? '';
-    const techStory = deckSlug === 'tech' ? getTextAnswer(answers, 'q_learned') : '';
+    const techWork = deckSlug === 'tech' ? getTextAnswer(answers, 'q_tech_working_on') : '';
+    const techHigh = deckSlug === 'tech' ? getTextAnswer(answers, 'q_learned') : '';
+    const techLow = deckSlug === 'tech' ? getTextAnswer(answers, 'q_tech_low') : '';
     // The first night, their own line from the check-in leads the sheet.
     const introWords = introsFirst ? getIntroWords(answers) : '';
     // The tune-up SEEDS an empty Progress answer with "Checked off: …" and
@@ -4384,7 +4392,11 @@ export default function MeetingHelperScreen() {
     // lines here and keep whatever the member actually wrote; if that's
     // nothing, the section doesn't appear at all.
     const detailSections = deckSlug === 'tech'
-      ? [{ key: 'q_learned', label: 'What I tried and learned', text: techStory }].filter((section) => !!section.text)
+      ? [
+        { key: 'q_tech_working_on', label: 'Working on', text: techWork },
+        { key: 'q_learned', label: 'Tech high', text: techHigh },
+        { key: 'q_tech_low', label: 'Tech low', text: techLow },
+      ].filter((section) => !!section.text)
       : HUMMDINGER_DETAIL_SECTIONS
         .map((section) => {
           const text = getTextAnswer(answers, section.key);
