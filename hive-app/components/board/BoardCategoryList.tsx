@@ -6,6 +6,7 @@ import { HIVE_ICON_PREFIX } from './BoardTopicComposer';
 import { ScopeBadge } from '../ui/ScopeBadge';
 import { useEndBounce } from '../ui/BounceScrollView';
 import { usePageSkin } from '../../lib/pageSkin';
+import type { BoardViewMode } from '../../lib/boardView';
 import type { BoardCategory } from '../../types';
 
 const EMOJI_MAP: Record<string, string> = {
@@ -54,6 +55,8 @@ interface BoardCategoryListProps {
   postCounts?: Record<string, CategoryStats>;
   emptyLabel?: string;
   searchMatches?: Record<string, BoardCategorySearchMatchSummary>;
+  /** The same boards, either as bulletin-board tiles or a compact Drive-like list. */
+  viewMode?: BoardViewMode;
 }
 
 export const BoardCategoryList = memo(function BoardCategoryList({
@@ -63,6 +66,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
   postCounts,
   emptyLabel = 'No boards here yet.',
   searchMatches,
+  viewMode = 'tiles',
 }: BoardCategoryListProps) {
   // The same grid stands on a cream HIVE page and on the near-black HIVE-Wide
   // page, so every colour below comes from one place. Ink and card have to be
@@ -77,7 +81,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
   // (mirrors the Boards nav icon). Column count follows the window, and the
   // cards stretch so the grid fills the screen instead of leaving dead space.
   const { width } = useWindowDimensions();
-  const numColumns = width >= 1100 ? 4 : width >= 760 ? 3 : 2;
+  const numColumns = viewMode === 'list' ? 1 : width >= 1100 ? 4 : width >= 760 ? 3 : 2;
   const compact = width < 760;
   // Fill the screen the way Home and Admin do: measure the space we actually
   // got, divide it by the number of rows, and let the CARD CONTENTS grow with
@@ -125,7 +129,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
     >
     <FlatList
       ref={gridBounceRef}
-      key={numColumns}
+      key={`${viewMode}:${numColumns}`}
       numColumns={numColumns}
       data={categories}
       keyExtractor={(item) => item.id}
@@ -177,6 +181,116 @@ export const BoardCategoryList = memo(function BoardCategoryList({
         const matchLabel = [titleMatchLabel, replyMatchLabel, searchMatch?.archivedOnly ? 'archived threads' : null]
           .filter(Boolean)
           .join(' · ');
+
+        if (viewMode === 'list') {
+          // A list is deliberately concise, but it must not make a search
+          // result a dead end. Keep one normal recent-thread shortcut, or two
+          // when the search found something specific in the board.
+          const listThreads = (postCounts?.[item.id]?.recentThreads ?? [])
+            .slice(0, searchMatch ? 2 : 1);
+
+          return (
+            <Pressable
+              onPress={() => onSelect(item)}
+              className={`active:opacity-80 ${isCompleted ? 'opacity-70' : ''}`}
+              style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: skin.card,
+                  borderWidth: 1,
+                  borderColor: skin.borderStrong,
+                  borderRadius: 16,
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                  gap: 12,
+                }}
+              >
+                <Text style={{ fontSize: 28, lineHeight: 32 }}>{emoji}</Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text
+                      style={{
+                        flex: 1,
+                        fontFamily: 'Lato_700Bold',
+                        fontSize: 16,
+                        lineHeight: 21,
+                        color: isCompleted ? skin.inkSoft : skin.ink,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {item.name}
+                    </Text>
+                    <ScopeBadge
+                      scope={item.reach ?? 'hive'}
+                      communityId={item.community_id}
+                      size="sm"
+                      hideHive={item.reach === 'all_hives'}
+                    />
+                  </View>
+                  {subtitle ? (
+                    <Text
+                      style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 18, color: skin.inkSoft, marginTop: 2 }}
+                      numberOfLines={1}
+                    >
+                      {subtitle}
+                    </Text>
+                  ) : null}
+                  <Text
+                    style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 11, color: skin.inkFaint, marginTop: 2 }}
+                  >
+                    {countLabel}
+                  </Text>
+                  {matchLabel ? (
+                    <Text
+                      style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: skin.gold, marginTop: 3 }}
+                      numberOfLines={1}
+                    >
+                      {matchLabel}
+                    </Text>
+                  ) : null}
+                  {listThreads.map((thread) => (
+                    <Pressable
+                      key={thread.id}
+                      onPress={(event) => {
+                        if (onSelectThread) {
+                          event.stopPropagation?.();
+                          onSelectThread(item, thread.id);
+                        } else {
+                          onSelect(item);
+                        }
+                      }}
+                      accessibilityRole="link"
+                      accessibilityLabel={`Open thread: ${thread.title}`}
+                      hitSlop={2}
+                      style={({ pressed }) => ({
+                        alignSelf: 'flex-start',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        maxWidth: '100%',
+                        marginTop: 5,
+                        borderRadius: 6,
+                        paddingHorizontal: 3,
+                        backgroundColor: pressed ? skin.cardPressed : 'transparent',
+                      })}
+                    >
+                      <Text style={{ fontSize: 9, lineHeight: 17, color: skin.gold, marginRight: 6 }}>▪</Text>
+                      <Text
+                        style={{ flexShrink: 1, fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 17, color: skin.inkBody }}
+                        numberOfLines={1}
+                      >
+                        {thread.title}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={skin.inkFaint} />
+              </View>
+            </Pressable>
+          );
+        }
 
         return (
           <Pressable

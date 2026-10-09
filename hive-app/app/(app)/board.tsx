@@ -33,6 +33,7 @@ import {
   sortBoardCategories,
   type BoardSortKey,
 } from '../../lib/boardSort';
+import { normalizeBoardView, type BoardViewMode } from '../../lib/boardView';
 // Which board and which thread were open is remembered for this sitting only
 // (session-scoped), not forever — the same lifetime `lib/hiveSelection.ts`
 // uses for which HIVE you're in, and for the same reason (Nat 2026-08-08).
@@ -286,20 +287,35 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const boardSortStorageKey = storageScope && profile?.id
     ? `the-hive:boards-sort:${storageScope}:${profile.id}`
     : null;
+  // This is intentionally the same boundary as board sorting: a presentation
+  // preference belongs to the person and the HIVE they are standing in, not to
+  // the shared board rows. HIVE-Wide is its own scope for the same reason.
+  const boardViewStorageKey = storageScope && profile?.id
+    ? `the-hive:boards-view:${storageScope}:${profile.id}`
+    : null;
   const [boardSort, setBoardSort] = useState<BoardSortKey>(() =>
     normalizeBoardSort(boardSortStorageKey ? getStoredItem(boardSortStorageKey) : null),
+  );
+  const [boardView, setBoardView] = useState<BoardViewMode>(() =>
+    normalizeBoardView(boardViewStorageKey ? getStoredItem(boardViewStorageKey) : null),
   );
   const [boardSortMenuOpen, setBoardSortMenuOpen] = useState(false);
 
   useEffect(() => {
     setBoardSort(normalizeBoardSort(boardSortStorageKey ? getStoredItem(boardSortStorageKey) : null));
+    setBoardView(normalizeBoardView(boardViewStorageKey ? getStoredItem(boardViewStorageKey) : null));
     setBoardSortMenuOpen(false);
-  }, [boardSortStorageKey]);
+  }, [boardSortStorageKey, boardViewStorageKey]);
 
   const selectBoardSort = (key: BoardSortKey) => {
     setBoardSort(key);
     setBoardSortMenuOpen(false);
     if (boardSortStorageKey) setStoredItem(boardSortStorageKey, key);
+  };
+
+  const selectBoardView = (view: BoardViewMode) => {
+    setBoardView(view);
+    if (boardViewStorageKey) setStoredItem(boardViewStorageKey, view);
   };
 
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
@@ -2188,6 +2204,49 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">+ Board</Text>
       </Pressable>
     ) : undefined;
+    const boardViewToggle = (
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          minHeight: 44,
+          backgroundColor: skin.field,
+          borderRadius: 999,
+          borderWidth: 1,
+          borderColor: skin.borderStrong,
+          padding: 3,
+          gap: 3,
+        }}
+      >
+        {([
+          { mode: 'tiles' as const, label: 'Tiles', icon: 'grid-outline' as const, activeIcon: 'grid' as const },
+          { mode: 'list' as const, label: 'List', icon: 'list-outline' as const, activeIcon: 'list' as const },
+        ]).map((option) => {
+          const active = boardView === option.mode;
+          return (
+            <Pressable
+              key={option.mode}
+              onPress={() => selectBoardView(option.mode)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`${option.label} view${active ? ', selected' : ''}`}
+              hitSlop={4}
+              style={({ pressed }) => ({
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 38,
+                height: 36,
+                borderRadius: 999,
+                backgroundColor: active ? skin.gold : 'transparent',
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Ionicons name={active ? option.activeIcon : option.icon} size={19} color={active ? '#313130' : skin.inkSoft} />
+            </Pressable>
+          );
+        })}
+      </View>
+    );
     const boardListToolbar = (
       <View style={{ backgroundColor: skin.card, borderBottomWidth: 1, borderBottomColor: skin.border }}>
         <View className="flex-row items-center px-4 py-3">
@@ -2212,32 +2271,35 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           </View>
         </View>
         <View style={{ alignItems: 'center', paddingHorizontal: 16, paddingBottom: 10 }}>
-          <Pressable
-            onPress={() => setBoardSortMenuOpen((open) => !open)}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: boardSortMenuOpen }}
-            accessibilityLabel={`Sort boards, currently by ${BOARD_SORT_OPTIONS.find((option) => option.key === boardSort)?.label ?? 'A–Z'}`}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 5,
-              minHeight: 44,
-              maxWidth: '100%',
-              backgroundColor: skin.field,
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: skin.borderStrong,
-              paddingHorizontal: 14,
-              paddingVertical: 7,
-              opacity: pressed ? 0.7 : 1,
-            })}
-          >
-            <Ionicons name="swap-vertical" size={14} color={skin.gold} />
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: skin.inkSoft }}>
-              Sort: {BOARD_SORT_OPTIONS.find((option) => option.key === boardSort)?.label ?? 'A–Z'}
-            </Text>
-            <Ionicons name={boardSortMenuOpen ? 'chevron-up' : 'chevron-down'} size={12} color={skin.inkSoft} />
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, maxWidth: '100%' }}>
+            <Pressable
+              onPress={() => setBoardSortMenuOpen((open) => !open)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: boardSortMenuOpen }}
+              accessibilityLabel={`Sort boards, currently by ${BOARD_SORT_OPTIONS.find((option) => option.key === boardSort)?.label ?? 'A–Z'}`}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                minHeight: 44,
+                maxWidth: '100%',
+                backgroundColor: skin.field,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: skin.borderStrong,
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Ionicons name="swap-vertical" size={14} color={skin.gold} />
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: skin.inkSoft }}>
+                Sort: {BOARD_SORT_OPTIONS.find((option) => option.key === boardSort)?.label ?? 'A–Z'}
+              </Text>
+              <Ionicons name={boardSortMenuOpen ? 'chevron-up' : 'chevron-down'} size={12} color={skin.inkSoft} />
+            </Pressable>
+            {boardViewToggle}
+          </View>
           {boardSortMenuOpen && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginTop: 8 }}>
               {BOARD_SORT_OPTIONS.map((option) => {
@@ -2325,6 +2387,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
               }}
               postCounts={postCounts}
               searchMatches={boardSearchQuery ? boardSearchMatchesByCategory : undefined}
+              viewMode={boardView}
               emptyLabel={boardSearchQuery
                 ? `No boards or threads found for "${boardSearch.trim()}".`
                 : isWide
