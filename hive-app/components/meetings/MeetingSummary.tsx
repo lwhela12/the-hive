@@ -24,11 +24,13 @@ import {
   type SpeakerMember,
   type SpeakerNameMap,
 } from './SpeakerNames';
-import type { Meeting, ActionItem, Profile } from '../../types';
+import type { Meeting, ActionItem, Profile, Event } from '../../types';
 import { BackButton } from '../ui/BackButton';
 import {
   buildMeetingRecapContent,
+  type RecapDateItem,
 } from '../../supabase/functions/_shared/meetingRecapContent';
+import { useAddToCalendar } from '../ui/AddToCalendarDialog';
 
 interface MeetingSummaryProps {
   meeting: Meeting;
@@ -95,8 +97,11 @@ interface ParsedSummary {
   };
   one_minute_recap?: {
     news?: string[];
+    using?: string[];
+    learned?: string[];
     dates?: { label: string; date: string; time?: string | null; endTime?: string | null; location?: string | null }[];
     help_focus?: string | null;
+    help_plan?: string[];
     member_focuses?: { person_name: string; focus?: string | null; status: 'confirmed' | 'absent' | 'unclear' }[];
     generated_at?: string;
   };
@@ -350,6 +355,8 @@ function PreviewReviewSection<T>({
 
 export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdated }: MeetingSummaryProps) {
   const [meeting, setMeeting] = useState(initialMeeting);
+  const addToCalendar = useAddToCalendar();
+  const [calendarLoadingKey, setCalendarLoadingKey] = useState<string | null>(null);
   const [actionItems, setActionItems] = useState<(ActionItem & { assigned_user?: Profile })[]>([]);
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection>(EMPTY_PREVIEW_SELECTION);
   const [previewSelectionSource, setPreviewSelectionSource] = useState<string | null>(null);
@@ -508,6 +515,32 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
 
   const parsedSummary = parseSummary(meeting.summary);
   const conciseRecap = buildMeetingRecapContent(parsedSummary, members);
+  const openRecapDate = async (item: RecapDateItem) => {
+    const key = `${item.date}:${item.label}`;
+    setCalendarLoadingKey(key);
+    try {
+      const { data } = await supabase.from('events')
+        .select('*')
+        .eq('community_id', meeting.community_id)
+        .eq('event_date', item.date);
+      const savedEvent = (data ?? []).find((row) => row.title === item.label || row.id === item.eventId);
+      const event: Event = (savedEvent as Event | undefined) ?? {
+        id: item.eventId || `recap-${meeting.id}-${item.date}`,
+        community_id: meeting.community_id,
+        title: item.label,
+        description: '',
+        event_date: item.date,
+        event_time: item.time || undefined,
+        end_time: item.endTime || null,
+        location: item.location || undefined,
+        event_type: 'custom',
+        created_at: meeting.created_at,
+      };
+      addToCalendar.open(event);
+    } finally {
+      setCalendarLoadingKey(null);
+    }
+  };
   const confirmedAbsenteeIds = parsedSummary.meeting_helper_snapshot?.confirmed_absentee_ids ?? [];
   const confirmedAbsenteeNames = parsedSummary.meeting_helper_snapshot?.confirmed_absentee_names ?? [];
   // One preview approves one shared template. Requiring the recipient snapshot
@@ -1887,17 +1920,57 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                 </View>
               </View>
 
+              {conciseRecap.using.length > 0 && (
+                <View>
+                  <Text className="text-xs font-semibold uppercase tracking-wider text-honey-800">🛠️ What we're using</Text>
+                  <View className="mt-2" style={{ gap: 7 }}>
+                    {conciseRecap.using.map((line, index) => (
+                      <View key={`using-${index}`} className="flex-row items-start">
+                        <Text className="text-honey-600 mr-2">•</Text>
+                        <Text className="text-gray-800 flex-1 leading-5">{line}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {conciseRecap.learned.length > 0 && (
+                <View>
+                  <Text className="text-xs font-semibold uppercase tracking-wider text-honey-800">💡 What we learned</Text>
+                  <View className="mt-2" style={{ gap: 7 }}>
+                    {conciseRecap.learned.map((line, index) => (
+                      <View key={`learned-${index}`} className="flex-row items-start">
+                        <Text className="text-honey-600 mr-2">•</Text>
+                        <Text className="text-gray-800 flex-1 leading-5">{line}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
               <View>
                 <Text className="text-xs font-semibold uppercase tracking-wider text-honey-800">🗓️ Dates to know</Text>
                 <View className="mt-2" style={{ gap: 9 }}>
                   {conciseRecap.dates.length > 0 ? conciseRecap.dates.map((item, index) => (
-                    <View key={`${item.label}-${item.date}-${index}`}>
-                      <Text className="text-gray-800 font-semibold">{item.label}</Text>
-                      <Text className="text-gray-600 text-sm mt-0.5 leading-5">
-                        {formatDateShort(item.date)}
-                        {item.time ? ` · ${formatTimeRange(item.time, item.endTime)}` : ''}
-                        {item.location ? ` · ${item.location}` : ''}
-                      </Text>
+                    <View key={`${item.label}-${item.date}-${index}`} className="flex-row items-center justify-between flex-wrap" style={{ gap: 8 }}>
+                      <View style={{ flexGrow: 1, flexShrink: 1, minWidth: 160 }}>
+                        <Text className="text-gray-800 font-semibold">{item.label}</Text>
+                        <Text className="text-gray-600 text-sm mt-0.5 leading-5">
+                          {formatDateShort(item.date)}
+                          {item.time ? ` · ${formatTimeRange(item.time, item.endTime)}` : ''}
+                          {item.location ? ` · ${item.location}` : ''}
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => { void openRecapDate(item); }}
+                        disabled={calendarLoadingKey === `${item.date}:${item.label}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Add ${item.label} to calendar`}
+                        className="rounded-full border border-honey-300 px-3 py-2 bg-honey-50"
+                        style={{ minHeight: 44, justifyContent: 'center' }}
+                      >
+                        <Text className="text-honey-800 font-semibold text-sm">{calendarLoadingKey === `${item.date}:${item.label}` ? 'Opening…' : 'Add to cal'}</Text>
+                      </Pressable>
                     </View>
                   )) : (
                     <Text className="text-gray-500">No future dates were recorded.</Text>
@@ -1907,13 +1980,22 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
 
               <View>
                 <Text className="text-xs font-semibold uppercase tracking-wider text-honey-800">🤝 This month’s HIVE Help</Text>
-                <Text className="text-gray-800 mt-2 leading-5">
-                  {conciseRecap.helpFocus || 'No HIVE Help focus was recorded.'}
-                </Text>
+                {conciseRecap.helpPlan.length > 0 ? (
+                  <View className="mt-2" style={{ gap: 7 }}>
+                    {conciseRecap.helpPlan.map((line, index) => (
+                      <View key={`help-${index}`} className="flex-row items-start">
+                        <Text className="text-honey-600 mr-2">•</Text>
+                        <Text className="text-gray-800 flex-1 leading-5">{line}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text className="text-gray-800 mt-2 leading-5">{conciseRecap.helpFocus || 'No HIVE Help focus was recorded.'}</Text>
+                )}
               </View>
 
-              <View>
-                <Text className="text-xs font-semibold uppercase tracking-wider text-honey-800">💛 What everyone wants help with</Text>
+              {conciseRecap.wishes.length > 0 && <View>
+                <Text className="text-xs font-semibold uppercase tracking-wider text-honey-800">💛 What people asked for</Text>
                 <View className="mt-2" style={{ gap: 7 }}>
                   {conciseRecap.wishes.length > 0 ? conciseRecap.wishes.map((item) => (
                     <View key={item.personName} className="flex-row items-start">
@@ -1928,7 +2010,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                     <Text className="text-gray-500">No member wishes are available yet.</Text>
                   )}
                 </View>
-              </View>
+              </View>}
             </View>
           </View>
         )}
@@ -2363,6 +2445,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           </View>
         )}
       </ScrollView>
+      {addToCalendar.dialog}
     </View>
   );
 }

@@ -29,8 +29,11 @@ export type RecapStoredFocus = {
 
 export type RecapStoredOneMinute = {
   news?: string[];
+  using?: string[];
+  learned?: string[];
   dates?: RecapDateItem[];
   help_focus?: string | null;
+  help_plan?: string[];
   member_focuses?: RecapStoredFocus[];
   generated_at?: string;
 };
@@ -50,6 +53,7 @@ export type RecapMember = {
 };
 
 export type RecapDateItem = {
+  eventId?: string | null;
   label: string;
   date: string;
   time?: string | null;
@@ -59,8 +63,11 @@ export type RecapDateItem = {
 
 export type MeetingRecapContent = {
   news: string[];
+  using: string[];
+  learned: string[];
   dates: RecapDateItem[];
   helpFocus: string | null;
+  helpPlan: string[];
   wishes: { personName: string; wish: string | null; status: RecapFocusStatus }[];
 };
 
@@ -120,18 +127,22 @@ export function buildMeetingRecapContent(
   if (stored) {
     return {
       news: (stored.news ?? []).map(clean).filter(Boolean),
+      using: (stored.using ?? []).map(clean).filter(Boolean),
+      learned: (stored.learned ?? []).map(clean).filter(Boolean),
       dates: (stored.dates ?? []).flatMap((item) => {
         const label = clean(item.label);
         const date = clean(item.date);
         return label && date ? [{
           label,
           date,
+          eventId: clean(item.eventId) || null,
           time: clean(item.time) || null,
           endTime: clean(item.endTime) || null,
           location: clean(item.location) || null,
         }] : [];
       }),
       helpFocus: clean(stored.help_focus) || null,
+      helpPlan: (stored.help_plan ?? []).map(clean).filter(Boolean),
       wishes: (stored.member_focuses ?? []).flatMap((item) => {
         const personName = clean(item.person_name);
         if (!personName) return [];
@@ -194,8 +205,11 @@ export function buildMeetingRecapContent(
       .filter((line) => !/\bHIVE Help\b|\bHIVE hang\b/i.test(line))
       .map((line) => compactLine(line, 180))
       .slice(0, 5),
+    using: [],
+    learned: [],
     dates,
     helpFocus,
+    helpPlan: [],
     // Older records did not store a meeting-specific focus. Say so plainly;
     // silently substituting a profile wish made old requests look current.
     wishes: orderedMembers.map((member) => {

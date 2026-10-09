@@ -4,8 +4,11 @@ Deno.test('stored one-minute recap is the source of truth for meeting-specific h
   const recap = buildMeetingRecapContent({
     one_minute_recap: {
       news: ['A high-level update'],
+      using: ['Lucas demonstrated a screenwriting app.'],
+      learned: ['Ask what feedback a builder wants before suggesting fixes.'],
       dates: [{ label: 'Craft night', date: '2026-10-09' }],
       help_focus: 'Collect plastic containers.',
+      help_plan: ['October: collect containers.', 'November: collect food.'],
       member_focuses: [
         { person_name: 'Nic Munson', focus: 'Help Uncle Ernie move.', status: 'confirmed' },
         { person_name: 'Oliver Parkinson', focus: null, status: 'absent' },
@@ -21,6 +24,9 @@ Deno.test('stored one-minute recap is the source of truth for meeting-specific h
   }
   if (recap.wishes[1]?.wish !== null || recap.wishes[1]?.status !== 'absent') {
     throw new Error('absence was not represented honestly');
+  }
+  if (recap.using.length !== 1 || recap.learned.length !== 1 || recap.helpPlan.length !== 2) {
+    throw new Error('tools, lessons, or HIVE Help plan were dropped');
   }
 });
 

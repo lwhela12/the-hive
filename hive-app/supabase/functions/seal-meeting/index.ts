@@ -53,6 +53,9 @@ type SummarySection = {
 type TranscriptReconciliation = {
   overview: string;
   news_highlights: string[];
+  tools_in_use: string[];
+  lessons: string[];
+  help_plan: string[];
   member_focuses: { person: string; focus: string }[];
   attendance: {
     in_person: string[];
@@ -277,9 +280,11 @@ async function reconcileTranscript(
       'If confirmed_absentee_names is non-empty, never say everyone or all members attended. Missing pre-meeting input is not itself a conflict.',
       'If sources disagree, put the discrepancy in conflicts. Do not guess. Use first names from the roster exactly.',
       'Return only valid JSON with this shape:',
-      '{"overview":"2-4 humane sentences","news_highlights":["3-5 short paraphrased bullets"],"member_focuses":[{"person":"First","focus":"the help or focus explicitly requested in this meeting"}],"attendance":{"in_person":[],"remote":[],"absent":[],"unclear":[]},"decisions":[{"section":"treasurer|meetups|hummdinger|wrapup","text":"..."}],"member_context":[{"person":"First","context":"1-2 concise sentences"}],"duty_labels":[{"task":"exact CURRENT_DUTIES task","label":"humane concise wording"}],"conflicts":[{"topic":"...","helper_record":"...","transcript_evidence":"...","action_item_id":"exact id when this conflict concerns a current duty, otherwise empty"}]}',
+      '{"overview":"2-4 humane sentences","news_highlights":["2-4 short paraphrased bullets"],"tools_in_use":["2-4 concrete products, tools, or workflows actually shown or discussed"],"lessons":["2-4 practical takeaways supported by the meeting"],"help_plan":["short steps of any explicitly discussed HIVE Help plan"],"member_focuses":[{"person":"First","focus":"the help or focus explicitly requested in this meeting"}],"attendance":{"in_person":[],"remote":[],"absent":[],"unclear":[]},"decisions":[{"section":"treasurer|meetups|hummdinger|wrapup","text":"..."}],"member_context":[{"person":"First","context":"1-2 concise sentences"}],"duty_labels":[{"task":"exact CURRENT_DUTIES task","label":"humane concise wording"}],"conflicts":[{"topic":"...","helper_record":"...","transcript_evidence":"...","action_item_id":"exact id when this conflict concerns a current duty, otherwise empty"}]}',
       'Attendance rule: confirmed absentees are absent. Pre-meeting attendance is an intention; use explicit transcript statements to resolve remote vs in-person, and leave unclear when unsupported.',
       'News highlights are the high-level meaning of Nat\'s authored news plus what she actually said about it. Merge repetition, paraphrase instead of transcribing, keep each bullet under 150 characters, and omit dates, HIVE Help, and individual member wishes because those have their own sections.',
+      'Tools in use name real products or workflows demonstrated or meaningfully discussed, and what they were used for. Lessons are practical takeaways the group actually reached. Do not invent features, outcomes, endorsements, or a decision from a suggestion.',
+      'Help plan is only the concrete HIVE Help focus or sequence explicitly discussed in the Helper or transcript. If none was discussed, return an empty array. Do not carry a plan from a different meeting.',
       'Member focuses are only the help, wish, or next focus a person explicitly asked for during this meeting. A duty clearly created to help that person may support the focus. Never carry forward an old profile wish, never turn general biography into a wish, and omit anyone whose focus is not clear.',
       'If a person explicitly opts out of a full round or says they have no ask, preserve that as a confirmed "No specific ask this month" rather than inventing a need or marking them absent.',
       'Member context should summarize what each person brought or needed, not repeat their assigned duties.',
@@ -320,6 +325,9 @@ async function reconcileTranscript(
     result: {
       overview: typeof parsed.overview === 'string' ? parsed.overview.trim() : '',
       news_highlights: stringArray(parsed.news_highlights).slice(0, 5),
+      tools_in_use: stringArray(parsed.tools_in_use).slice(0, 4),
+      lessons: stringArray(parsed.lessons).slice(0, 4),
+      help_plan: stringArray(parsed.help_plan).slice(0, 4),
       member_focuses: memberFocuses.flatMap((entry) => {
         if (!entry || typeof entry !== 'object') return [];
         const row = entry as Record<string, unknown>;
@@ -1125,6 +1133,22 @@ serve(async (req) => {
     const dedupedRecapDates = Array.from(
       new Map(recapDates.map((item) => [`${item.date}:${item.label.toLowerCase()}`, item])).values(),
     ).sort((a, b) => a.date.localeCompare(b.date));
+    const { data: matchingCalendarEvents } = dedupedRecapDates.length
+      ? await supabaseAdmin.from('events')
+        .select('id, title, event_date, event_time, end_time, location')
+        .eq('community_id', communityId)
+        .in('event_date', dedupedRecapDates.map((item) => item.date))
+      : { data: [] as { id: string; title: string; event_date: string; event_time: string | null; end_time: string | null; location: string | null }[] };
+    const completeRecapDates = dedupedRecapDates.map((item) => {
+      const event = (matchingCalendarEvents ?? []).find((row) => row.event_date === item.date && row.title === item.label);
+      return event ? {
+        ...item,
+        eventId: event.id,
+        time: event.event_time ?? item.time,
+        endTime: event.end_time ?? item.endTime,
+        location: event.location ?? item.location,
+      } : item;
+    });
 
     const focusByPerson = new Map(
       (transcriptResult?.member_focuses ?? []).map((item) => [firstName(item.person), compactRecapBullet(item.focus, 120)]),
@@ -1133,20 +1157,24 @@ serve(async (req) => {
       news: transcriptResult?.news_highlights?.length
         ? transcriptResult.news_highlights.map((line) => compactRecapBullet(line))
         : fallbackNewsHighlights,
-      dates: dedupedRecapDates,
+      using: (transcriptResult?.tools_in_use ?? []).map((line) => compactRecapBullet(line)),
+      learned: (transcriptResult?.lessons ?? []).map((line) => compactRecapBullet(line)),
+      dates: completeRecapDates,
       help_focus: helperSnapshot.help_focus
         || wrapDecisions.find((line) => /\bHIVE Help\b/i.test(line))
         || null,
-      member_focuses: helperSnapshot.roster.map((person) => {
+      help_plan: (transcriptResult?.help_plan ?? []).map((line) => compactRecapBullet(line)),
+      member_focuses: helperSnapshot.roster.flatMap((person) => {
         const shortName = firstName(person.name);
         const absent = helperSnapshot.confirmed_absentee_ids.includes(person.id)
           || helperSnapshot.confirmed_absentee_names.some((name) => firstName(name) === shortName);
         const focus = absent ? null : focusByPerson.get(shortName) ?? null;
-        return {
+        if (!focus) return [];
+        return [{
           person_name: person.name,
           focus,
-          status: absent ? 'absent' as const : focus ? 'confirmed' as const : 'unclear' as const,
-        };
+          status: 'confirmed' as const,
+        }];
       }),
       generated_at: rebuiltAt,
     };

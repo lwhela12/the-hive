@@ -148,6 +148,8 @@ function postMeetingRecapBody(meeting: RecapMeeting): string {
   const news = recap.news.length > 0
     ? bulletList(recap.news)
     : '<p style="margin:0;font-size:14px;color:#777;">No News from Nat was recorded.</p>';
+  const using = (recap.using ?? []).length > 0 ? recapSection('🛠️ What we\'re using', bulletList(recap.using)) : '';
+  const learned = (recap.learned ?? []).length > 0 ? recapSection('💡 What we learned', bulletList(recap.learned)) : '';
   const dates = recap.dates.length > 0
     ? `<div>${recap.dates.map((item) => {
         const when = [
@@ -158,7 +160,9 @@ function postMeetingRecapBody(meeting: RecapMeeting): string {
         return `<p style="margin:0 0 8px;font-size:14px;line-height:1.45;"><strong>${escapeHtml(item.label)}</strong><br><span style="color:#6b6b6b;">${when}</span></p>`;
       }).join('')}</div>`
     : '<p style="margin:0;font-size:14px;color:#777;">No future dates were recorded.</p>';
-  const help = `<p style="margin:0;font-size:14px;line-height:1.45;">${escapeHtml(recap.helpFocus || 'No HIVE Help focus was recorded.')}</p>`;
+  const help = (recap.helpPlan ?? []).length > 0
+    ? bulletList(recap.helpPlan)
+    : `<p style="margin:0;font-size:14px;line-height:1.45;">${escapeHtml(recap.helpFocus || 'No HIVE Help focus was recorded.')}</p>`;
   const wishes = recap.wishes.length > 0
     ? `<div>${recap.wishes.map((item) => {
         const focus = item.wish || (item.status === 'absent'
@@ -169,7 +173,7 @@ function postMeetingRecapBody(meeting: RecapMeeting): string {
       }).join('')}</div>`
     : '<p style="margin:0;font-size:14px;color:#777;">No member wishes are available yet.</p>';
 
-  return `${recapSection('📣 News from Nat', news)}${recapSection('🗓️ Dates to know', dates)}${recapSection('🤝 This month’s HIVE Help', help)}${recapSection('💛 What everyone wants help with', wishes)}`;
+  return `${recapSection('📣 News from Nat', news)}${using}${learned}${recapSection('🗓️ Dates to know', dates)}${recapSection('🤝 This month’s HIVE Help', help)}${recap.wishes.length > 0 ? recapSection('💛 What people asked for', wishes) : ''}`;
 }
 
 /** Member email. Deliberately contains exactly two links/buttons. */

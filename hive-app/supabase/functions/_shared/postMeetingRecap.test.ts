@@ -14,8 +14,11 @@ const meeting: RecapMeeting = {
   date: '2026-08-18',
   recap: {
     news: ['A useful <update>'],
+    using: ['An outreach tool <demo>'],
+    learned: ['Ask for the kind of feedback wanted.'],
     dates: [{ label: 'Next HIVE meeting', date: '2026-09-23', time: '17:00', endTime: '19:00' }],
     helpFocus: 'Bring containers & labels',
+    helpPlan: [],
     wishes: [{ personName: 'Nat Example', wish: 'A calmer launch', status: 'confirmed' }],
   },
 };
@@ -49,7 +52,7 @@ Deno.test('postMeetingRecapHtml has exactly the two required buttons and escapes
   if (html.includes('A useful <update>') || !html.includes('A useful &lt;update&gt;')) {
     throw new Error('recap content was not safely rendered');
   }
-  for (const heading of ['News from Nat', 'Dates to know', 'This month’s HIVE Help', 'What everyone wants help with']) {
+  for (const heading of ['News from Nat', "What we're using", 'What we learned', 'Dates to know', 'This month’s HIVE Help', 'What people asked for']) {
     if (!html.includes(heading)) throw new Error(`missing recap section: ${heading}`);
   }
 });
