@@ -52,6 +52,9 @@ Deno.test('postMeetingRecapHtml has exactly the two required buttons and escapes
   if (html.includes('A useful <update>') || !html.includes('A useful &lt;update&gt;')) {
     throw new Error('recap content was not safely rendered');
   }
+  if (!html.includes('post the kind of feedback you’d like on the Boards')) {
+    throw new Error('the between-meetings Boards invitation is missing');
+  }
   for (const heading of ['News from Nat', "What we're using", 'What we learned', 'Dates to know', 'This month’s HIVE Help', 'What people asked for']) {
     if (!html.includes(heading)) throw new Error(`missing recap section: ${heading}`);
   }

@@ -205,6 +205,7 @@ export function postMeetingRecapHtml(
       <p style="font-size:15px;">Hi ${name},</p>
       <p style="font-size:15px;">We missed you. Here is the one-minute version of what matters from the meeting.</p>
       ${postMeetingRecapBody(meeting)}
+      <p style="font-size:14px;line-height:1.5;margin:22px 0 0;">Between meetings, share what you’re building, ask questions, and post the kind of feedback you’d like on the Boards. We can keep helping each other between calls.</p>
       <div style="text-align:center;margin:28px 0 12px;">
         <a href="${summaryUrl}" style="background:${mark.accent};color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-size:15px;font-weight:600;display:inline-block;">Open full meeting record</a>
       </div>
