@@ -21,6 +21,7 @@ import {
 import type { Survey, SurveyAnswers, SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { SurveyQuestionField } from './SurveyQuestionField';
 import { OgIdeaChoices } from './OgIdeaChoices';
+import { TechMeetingTimes } from './TechMeetingTimes';
 import { CheckInCalendar } from './CheckInCalendar';
 import {
   checkInDisplayName,
@@ -56,6 +57,8 @@ interface SurveyModalProps {
   afterQuestion?: React.ReactNode;
   ideaMeetingId?: string | null;
   canEditIdeas?: boolean;
+  availabilityMeetingId?: string | null;
+  canEditAvailability?: boolean;
   timingLabel?: string;
   /** Only rendered after a successful save and its follow-up writes finish. */
   renderSuccess?: (close: () => void) => React.ReactNode;
@@ -198,6 +201,8 @@ export function SurveyModal({
   afterQuestion,
   ideaMeetingId,
   canEditIdeas = false,
+  availabilityMeetingId,
+  canEditAvailability = false,
   timingLabel,
   renderSuccess,
   isEditingResponse = false,
@@ -972,6 +977,11 @@ export function SurveyModal({
               {draftLoaded && isOgMeeting && answerCommunityId && ideaMeetingId && (
                 <OgIdeaChoices communityId={answerCommunityId} meetingId={ideaMeetingId}
                   canEdit={canEditIdeas} answers={answers} onSetAnswers={setAnswersPatch} />
+              )}
+
+              {draftLoaded && hiveSlug === 'tech' && answerCommunityId && availabilityMeetingId && (
+                <TechMeetingTimes communityId={answerCommunityId} meetingId={availabilityMeetingId}
+                  canEdit={canEditAvailability} answers={answers} onSetAnswers={setAnswersPatch} />
               )}
 
               {error && (

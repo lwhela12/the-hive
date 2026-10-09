@@ -8,7 +8,13 @@ const previews = [];
 const inserts = [];
 let heldNotification = null;
 let deliveries = 0;
-const event = { id: 'tech-meeting', event_date: '2026-09-09', community_id: 'tech', community: { name: 'Tech HIVE' } };
+const event = { id: 'tech-meeting', event_date: '2026-09-09', community_id: 'tech', community: {
+  name: 'Tech HIVE', slug: 'tech', meeting_helper_notes: { techMeetingTimePoll: { meetingId: 'tech-meeting', options: [
+    { date: '2026-10-13', start: '17:00', end: '19:00' },
+    { date: '2026-10-15', start: '18:00', end: '20:00' },
+    { date: '2026-10-17', start: '12:00', end: '14:00' },
+  ] } },
+} };
 
 function chain(table) {
   const api = {
@@ -62,6 +68,8 @@ new Function('require', 'exports', output)((id) => imported(id), {});
   assert.match(previews[0].body.html, /Brietta/);
   assert.doesNotMatch(previews[0].body.html, /already-done/, 'a saved answer is never re-reminded merely because its receipt is missing');
   assert.match(previews[0].body.html, /Yes, send it to 1/);
+  assert.match(previews[0].body.html, /Next meeting time options/);
+  assert.match(previews[0].body.html, /Oct 13, 5pm–7pm PT/);
   assert.match(previews[0].body.html, /approve-check-in\/hold-1\?action=send/);
   assert.equal(inserts.length, 1, 'the hold is saved before the preview is emailed');
   assert.equal(inserts[0].row.metadata.check_in_approval, 'pending');

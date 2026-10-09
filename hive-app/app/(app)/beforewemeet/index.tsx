@@ -402,7 +402,7 @@ export default function BeforeWeMeetScreen() {
       if (original?.[id] !== undefined) own.answers[id] = original[id];
     }
     if (plate !== undefined) own.answers.q_plate = plate;
-    for (const key of ['q_hd_wish_id', 'q_hd_wish_reach', 'q_hd_wish_mode', 'q_hd_granted_wish_ids', 'q_help_idea_choice', 'q_hang_idea_choice', 'q_help_idea_ranking', 'q_hang_idea_ranking', 'q_help_idea_suggestion', 'q_hang_idea_suggestion']) {
+    for (const key of ['q_hd_wish_id', 'q_hd_wish_reach', 'q_hd_wish_mode', 'q_hd_granted_wish_ids', 'q_help_idea_choice', 'q_hang_idea_choice', 'q_help_idea_ranking', 'q_hang_idea_ranking', 'q_help_idea_suggestion', 'q_hang_idea_suggestion', 'q_next_meeting_times']) {
       if (answers[key] !== undefined) own.answers[key] = answers[key];
     }
     if (answers[CARRY_FORWARD_ANSWER_KEY]) own.answers[CARRY_FORWARD_ANSWER_KEY] = answers[CARRY_FORWARD_ANSWER_KEY];
@@ -442,6 +442,8 @@ export default function BeforeWeMeetScreen() {
         afterQuestion={isOgMeeting ? personalQuestion : undefined}
         ideaMeetingId={currentMeetings.find(m => m.community_id === selected)?.id}
         canEditIdeas={selectedMembership?.role === 'admin' || !!profile?.is_owner}
+        availabilityMeetingId={currentMeetings.find(m => m.community_id === selected)?.id}
+        canEditAvailability={selectedMembership?.role === 'admin' || !!profile?.is_owner}
         timingLabel={meetingLabel(currentMeetings.find(m => m.community_id === selected), today)}
         isEditingResponse={!!mine}
         carryForwardItems={section ? todosByHive[`note_hive_${section.slug}`] ?? [] : []}

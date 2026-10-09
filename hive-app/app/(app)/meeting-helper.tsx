@@ -56,6 +56,7 @@ import { surveyUsesLegacyEnergy } from '../../lib/arrivalSurveySelection';
 import { DeckVideo } from '../../components/meetings/DeckVideo';
 import { DeckSplit } from '../../components/meetings/DeckSplit';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
+import { MEETING_TIME_ANSWER_KEY, meetingTimeLabel, readMeetingTimePoll, tallyMeetingTimes, type MeetingTimeOption, type TechMeetingTimePoll } from '../../lib/techMeetingAvailability';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -763,6 +764,7 @@ type MeetingHelperNotes = {
   helpIdeas?: string;
   hangIdeas?: string;
   ideasMeetingId?: string;
+  techMeetingTimePoll?: TechMeetingTimePoll;
   wrapup?: string;
   // Where the dues conversation actually lands, typed live on the night.
   // Nat, 2026-08-12, on an all-remote Tech HIVE: *"its kinda nice to be able
@@ -788,7 +790,7 @@ type MeetingHelperNotes = {
   fourquestions?: string;
 };
 
-type EditableNoteKey = Exclude<keyof MeetingHelperNotes, 'ideasMeetingId'>;
+type EditableNoteKey = Exclude<keyof MeetingHelperNotes, 'ideasMeetingId' | 'techMeetingTimePoll'>;
 
 type DeckEvent = {
   id: string;
@@ -1284,6 +1286,7 @@ export default function MeetingHelperScreen() {
   // day you tap opens the quick-add already titled with it.
   const [armedHangIdea, setArmedHangIdea] = useState<string | null>(null);
   const [meetingSchedulerDate, setMeetingSchedulerDate] = useState<string | null>(null);
+  const [meetingSchedulerSlot, setMeetingSchedulerSlot] = useState<MeetingTimeOption | null>(null);
 
   // Month pager for the Meet Ups calendars — mini arrows page the two-month
   // window without leaving the slide (the big edge arrows change slides).
@@ -3290,6 +3293,10 @@ export default function MeetingHelperScreen() {
   const renderMeetups = () => {
     const todayIso = getLocalIsoDate(new Date());
     const today = new Date();
+    const techTimePoll = deckSlug === 'tech' ? readMeetingTimePoll(notes, nextMeeting?.id) : null;
+    const techTimeResults = techTimePoll && canViewIndividualCheckIns
+      ? tallyMeetingTimes(techTimePoll, members.map(member => responsesByUser.get(member.id)?.answers?.[MEETING_TIME_ANSWER_KEY]))
+      : null;
     const monthStarts = [
       new Date(today.getFullYear(), today.getMonth() + monthOffset, 1),
       new Date(today.getFullYear(), today.getMonth() + monthOffset + 1, 1),
@@ -3537,6 +3544,7 @@ export default function MeetingHelperScreen() {
                       disabled={isPast}
                       onPress={() => {
                         if (planMode === 'meeting') {
+                          setMeetingSchedulerSlot(null);
                           setMeetingSchedulerDate(dayIso);
                           return;
                         }
@@ -3722,6 +3730,26 @@ export default function MeetingHelperScreen() {
             );
           })}
         </View>
+
+        {techTimePoll && techTimeResults && <View style={{ marginTop: sz(16, 10), borderWidth: 1, borderColor: GOLD_SOFT, borderRadius: sz(18, 14), backgroundColor: CARD, padding: sz(18, 12), gap: sz(9, 6) }}>
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(22, 15), color: GOLD_DEEP }}>Next meeting availability</Text>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(14, 10), color: MUTED }}>
+            {techTimeResults.responded} of {members.length} answered · includes members joining asynchronously
+          </Text>
+          {[...techTimeResults.rows].sort((a, b) => b.yes - a.yes || b.maybe - a.maybe || b.favorite - a.favorite).map(row => <Pressable key={`${row.option.date}-${row.option.start}`}
+            accessibilityRole="button" accessibilityLabel={`Review ${meetingTimeLabel(row.option)} in the meeting scheduler`}
+            disabled={!isAdmin || row.option.date <= todayIso}
+            onPress={() => { setMeetingSchedulerSlot(row.option); setMeetingSchedulerDate(row.option.date); }}
+            style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: sz(8, 5), borderWidth: 1, borderColor: GOLD_SOFT, borderRadius: sz(11, 8), padding: sz(11, 8), backgroundColor: tintWash(0.08) }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: CHARCOAL }}>{meetingTimeLabel(row.option)}</Text>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(14, 10), color: GOLD_DEEP }}>
+              {row.yes} yes · {row.maybe} maybe · {row.no} no · {row.favorite} favorite{row.favorite === 1 ? '' : 's'}{isAdmin && row.option.date > todayIso ? '  ›' : ''}
+            </Text>
+          </Pressable>)}
+          {techTimeResults.suggestions.length > 0 && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(14, 10), color: MUTED }}>
+            Other times suggested: {techTimeResults.suggestions.join(' · ')}
+          </Text>}
+        </View>}
 
         {/* OG's check-in recap stays open while HIVE Help is selected. */}
         {expandedPlanCard === 'help' && deck.plan.helpExpansion.kind === 'voices' ? (
@@ -6452,12 +6480,15 @@ export default function MeetingHelperScreen() {
             with the tapped calendar day */}
         <ScheduleMeetingModal
           visible={!!meetingSchedulerDate}
-          onClose={() => setMeetingSchedulerDate(null)}
+          onClose={() => { setMeetingSchedulerDate(null); setMeetingSchedulerSlot(null); }}
           communityId={communityId ?? null}
           initialDate={meetingSchedulerDate}
+          initialStartTime={meetingSchedulerSlot?.start}
+          initialEndTime={meetingSchedulerSlot?.end}
           onSchedule={async (data) => {
             await handleScheduleMeetingFromDeck(data);
             setMeetingSchedulerDate(null);
+            setMeetingSchedulerSlot(null);
           }}
         />
 

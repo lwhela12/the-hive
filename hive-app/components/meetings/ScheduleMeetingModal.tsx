@@ -38,6 +38,9 @@ interface ScheduleMeetingModalProps {
   // Seed the date picker (YYYY-MM-DD) — used when a calendar day is tapped
   // in the Meeting Helper deck.
   initialDate?: string | null;
+  /** A time chosen from the check-in poll can seed the same scheduler. */
+  initialStartTime?: string | null;
+  initialEndTime?: string | null;
   onSchedule: (data: {
     title: string;
     description: string;
@@ -81,6 +84,8 @@ export function ScheduleMeetingModal({
   onClose,
   communityId,
   initialDate,
+  initialStartTime,
+  initialEndTime,
   onSchedule,
 }: ScheduleMeetingModalProps) {
   const { community } = useAuth();
@@ -117,9 +122,11 @@ export function ScheduleMeetingModal({
   // Seed the picker with the tapped calendar day (5:30pm, the usual start).
   useEffect(() => {
     if (!visible || !initialDate) return;
-    const seeded = new Date(`${initialDate}T17:30:00`);
+    const seeded = new Date(`${initialDate}T${initialStartTime ?? '17:30'}:00`);
     if (!Number.isNaN(seeded.getTime())) setDate(seeded);
-  }, [visible, initialDate]);
+    setStartText(initialStartTime ?? null);
+    setEndText(initialEndTime ?? '');
+  }, [visible, initialDate, initialStartTime, initialEndTime]);
 
   // The title names the month the meeting is IN, not the month you happen to
   // be sitting in when you book it. Nat, 2026-08-12, booking September's Tech
