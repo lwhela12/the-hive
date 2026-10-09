@@ -39,6 +39,8 @@ export const HD_FOCUS_QUESTION: SurveyQuestion = {
   type: 'long',
   required: false,
 };
+const TECH_STORY_QUESTION = 'Which AI or tech tool did you try, what did you use it for, and what did you discover?';
+const TECH_HELP_QUESTION = 'Is there a specific thing Tech HIVE could help you with?';
 const standardizedArrivalIds = new Set([
   'q_plate',
   'q_energy_level',
@@ -61,6 +63,7 @@ const productionHomeworkIds = new Set([
 /** Presentation only: persisted survey rows and old answers remain untouched; never convert energy to capacity. */
 export function checkInQuestions(questions: SurveyQuestion[], month = false, hiveSlug?: string | null): SurveyQuestion[] {
   const productionMeeting = !month && ['show', 'production'].includes((hiveSlug ?? '').trim().toLowerCase());
+  const techMeeting = !month && (hiveSlug ?? '').trim().toLowerCase() === 'tech';
   const alreadyHasHdFocus = questions.some(q => q.id === HD_FOCUS_QUESTION.id);
   const presented = questions.filter(q => (
     !standardizedArrivalIds.has(q.id)
@@ -93,8 +96,11 @@ export function checkInQuestions(questions: SurveyQuestion[], month = false, hiv
     };
     if (q.id === 'q_pop_priorities') return month
       ? { ...q, text: 'What should the room help you move forward?' }
-      : { ...HD_FOCUS_QUESTION };
-    if (q.id === 'q_hd_wish') return { ...q, text: HD_FOCUS_QUESTION.text };
+      : { ...HD_FOCUS_QUESTION, text: techMeeting ? TECH_HELP_QUESTION : HD_FOCUS_QUESTION.text };
+    if (q.id === 'q_hd_wish') return { ...q, text: techMeeting ? TECH_HELP_QUESTION : HD_FOCUS_QUESTION.text };
+    // Tech's retired raw survey promises a board post that never happens.
+    // Keep its stable answer id, but ask for the story the meeting actually uses.
+    if (techMeeting && q.id === 'q_learned') return { ...q, text: TECH_STORY_QUESTION };
     if (q.id === 'q_hive_help_recap') return { ...q, type: 'focus' as const, text: 'How did this month’s HIVE Help go?' };
     return q;
   });
@@ -106,16 +112,36 @@ export function checkInQuestions(questions: SurveyQuestion[], month = false, hiv
     presented.unshift({ ...FEELING_QUESTION }, { ...FEELING_NOTE_QUESTION });
   }
 
-  // Every Before we meet check-in arrives at the HummDinger with one chosen
-  // HD. Older HIVE question rows do not all contain that field, so add the
-  // shared picker after the hard-out question when there is nothing to replace.
+  // This is the start of Tech's conversation, even if an older persisted
+  // survey row predates q_learned. Keep the id stable across meeting cycles.
+  if (techMeeting && !presented.some(q => q.id === 'q_learned')) {
+    presented.push({ id: 'q_learned', text: TECH_STORY_QUESTION, type: 'long', required: false });
+  }
+
+  // OG's HD round and Tech's tool conversation can both lead to a wish.
+  // Older HIVE question rows do not all contain that optional field, so add
+  // the shared picker when there is nothing to replace.
   // This changes presentation only; persisted survey rows and old answers stay
   // untouched.
   // Production's HummDinger is the shared show and its assigned jobs. The
   // personal HD picker belongs to the individual-goal HIVEs.
   if (!month && !productionMeeting && !presented.some(q => q.id === HD_FOCUS_QUESTION.id)) {
     const hardOutIndex = presented.findIndex(q => q.id === 'q_hard_out');
-    presented.splice(hardOutIndex >= 0 ? hardOutIndex + 1 : 0, 0, { ...HD_FOCUS_QUESTION });
+    presented.splice(hardOutIndex >= 0 ? hardOutIndex + 1 : 0, 0, {
+      ...HD_FOCUS_QUESTION,
+      text: techMeeting ? TECH_HELP_QUESTION : HD_FOCUS_QUESTION.text,
+    });
+  }
+  if (techMeeting) {
+    // One Tech conversation: what someone tried may become a concrete ask.
+    // Both fields are optional; the member can discover the wish in the room.
+    const order = ['q_attendance', 'q_hard_out', FEELING_QUESTION.id, FEELING_NOTE_QUESTION.id,
+      'q_learned', HD_FOCUS_QUESTION.id, 'q_networking'];
+    presented.sort((a, b) => {
+      const left = order.indexOf(a.id);
+      const right = order.indexOf(b.id);
+      return (left < 0 ? order.length : left) - (right < 0 ? order.length : right);
+    });
   }
   if (!month && (hiveSlug ?? '').trim().toLowerCase() === 'default') {
     // OG's meeting rhythm: logistics, arrival, what needs the room, what

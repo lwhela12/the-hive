@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 /**
  * Tech HIVE's check-in and Tech HIVE's deck must offer the same words.
@@ -19,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const deckSource = fs.readFileSync(path.join(root, 'app/(app)/meeting-helper.tsx'), 'utf8');
 const checkInSource = fs.readFileSync(path.join(root, 'lib/checkIns.ts'), 'utf8');
+const presentationSource = fs.readFileSync(path.join(root, 'lib/checkInPresentation.ts'), 'utf8');
 const failures = [];
 
 /** The text of a `[...]` array literal starting at `open`, brackets balanced. */
@@ -133,6 +135,44 @@ for (const [key, ballot] of deckBallots) {
 const underCards = deck?.match(/voicesUnderCards: \{[\s\S]*?answerKey: '([a-z_]+)'/);
 if (underCards && !asked.has(underCards[1])) {
   failures.push(`The Plan slide prints "${underCards[1]}" under its cards and the check-in never asks it.`);
+}
+
+// Tech's recurring raw survey still has a stable q_learned answer id. Exercise
+// the presentation layer that turns it into the live tool-story → help flow;
+// OG must keep its own HD prompt and answer wording.
+const compiled = ts.transpileModule(presentationSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const presentationModule = { exports: {} };
+new Function('require', 'module', 'exports', compiled)(
+  () => ({ formatDateShort: () => '', formatTimeRange: () => '' }),
+  presentationModule,
+  presentationModule.exports,
+);
+const questions = [
+  { id: 'q_attendance', text: 'Will we see you?', type: 'choice' },
+  { id: 'q_learned', text: 'Old board promise', type: 'long' },
+  { id: 'q_pop_priorities', text: 'Priorities', type: 'long' },
+  { id: 'q_hard_out', text: 'Hard out', type: 'short' },
+];
+const techQuestions = presentationModule.exports.checkInQuestions(questions, false, 'tech');
+const techLegacyQuestions = presentationModule.exports.checkInQuestions(questions.filter((question) => question.id !== 'q_learned'), false, 'tech');
+const ogQuestions = presentationModule.exports.checkInQuestions(questions, false, 'default');
+if (techQuestions.findIndex((question) => question.id === 'q_learned') >= techQuestions.findIndex((question) => question.id === 'q_hd_wish')) {
+  failures.push('Tech must ask for the tool story before an optional help request.');
+}
+if (!techQuestions.find((question) => question.id === 'q_learned')?.text.includes('tool did you try')
+    || !techLegacyQuestions.find((question) => question.id === 'q_learned')?.text.includes('tool did you try')
+    || techQuestions.find((question) => question.id === 'q_hd_wish')?.required !== false) {
+  failures.push('Tech’s tool story or optional help request is missing from Before we meet.');
+}
+if (ogQuestions.find((question) => question.id === 'q_learned')?.text !== 'Old board promise'
+    || ogQuestions.find((question) => question.id === 'q_hd_wish')?.text !== 'Choose your HD wish for this month') {
+  failures.push('The Tech conversation must not rewrite OG’s check-in.');
+}
+if (!deckSource.includes("{ key: 'hummdinger', label: 'What We’re Trying' }")
+    || (deckSource.match(/getTextAnswer\(answers, 'q_learned'\)/g) ?? []).length < 2) {
+  failures.push('Tech’s tool story must appear in both the group cards and expanded meeting view.');
 }
 
 if (failures.length) {

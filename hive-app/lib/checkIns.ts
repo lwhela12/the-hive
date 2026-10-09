@@ -673,9 +673,10 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
    * Cut, deliberately: `q_who_can_know` (a Production question — that HIVE is
    * building a show in public, this one is not), `q_plate` (energy already
    * asks it), `q_cadence` + `q_when` (replaced by the day vote, which comes
-   * back as a percentage instead of prose), and `q_learned`, which said its
-   * answer could go "straight on the Things We Learned board" while nothing
-   * posted it. That one comes back the day it does.
+   * back as a percentage instead of prose), and `q_learned`, which promised
+   * a Things We Learned board post that did not happen. The recurring Tech
+   * check-in later reuses that stable id for a tool story shown in the room,
+   * not for an automatic board post (see checkInPresentation.ts).
    *
    * **And `q_building`.** It fed the intro bubble, and Nat cut it the same
    * afternoon: *"I think we should just say that we'll do intro's. Or i can

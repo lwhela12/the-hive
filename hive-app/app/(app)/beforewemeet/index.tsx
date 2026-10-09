@@ -381,6 +381,8 @@ export default function BeforeWeMeetScreen() {
       due_date: currentMeetings.find(m => m.community_id === selected)?.event_date ?? row.due_date,
       description: selectedMembership?.community?.slug === 'show'
         ? 'Review your Production HIVE jobs, tick off what is done, then tell the room whether you are coming and how much room you have.'
+        : selectedMembership?.community?.slug === 'tech'
+          ? 'Bring one AI or tech tool story to the room; a wish can emerge while we talk.'
         : selectedMembership ? `Your ${hiveDisplayName(selectedMembership.community?.name)} check-in.` : merged.description,
       questions: mergedPreMeetingQuestions({ ...merged, sections: merged.sections.filter(s => s.communityId === selected) }).map(({ question, key }) => ({
         ...question,

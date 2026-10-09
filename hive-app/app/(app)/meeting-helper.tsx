@@ -164,9 +164,9 @@ type DeckSlideKey =
   | 'meetups'
   | 'hummdinger'
   /**
-   * Production's replacement for the HummDinger slide. OG and Tech spend that
-   * stretch on one member's wish; Production has one shared goal instead, so
-   * the same stretch of the night is spent handing out the jobs that move it.
+   * Production's replacement for the member-conversation slide. OG spends it
+   * on HD wishes and Tech starts with tools and discoveries; Production has
+   * one shared goal, so that stretch is spent handing out the jobs that move it.
    * Same mechanism underneath — @-mention a member and it lands on their list.
    */
   | 'assignments'
@@ -457,7 +457,7 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
       { key: 'news', label: 'News from Nat' },
       { key: 'treasurer', label: 'Honey Pot' },
       { key: 'meetups', label: 'Plan' },
-      { key: 'hummdinger', label: 'HummDinger Sesh' },
+      { key: 'hummdinger', label: 'What We’re Trying' },
       { key: 'wrapup', label: 'Wrap-Up' },
     ],
     welcomeNudge: 'grab a drink and check in',
@@ -505,7 +505,7 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
     },
     wrapupReminders: [
       'Next meeting — confirm the date in Plan',
-      'Before we meet — POP + what you learned',
+      'Before we meet — bring one tech discovery',
     ],
   },
   /**
@@ -523,9 +523,9 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
    * Two deliberate departures from the other two decks:
    *  - No "new in the app" block on the news slide. Nat: *"we don't need new
    *    tech in the app"* — this room is about the show, not the software.
-   *  - The HummDinger slide becomes `assignments`. OG and Tech spend that
-   *    stretch on one person's wish; Production has one shared goal, so it
-   *    spends it handing out the work.
+   *  - The member-conversation slide becomes `assignments`. OG works through
+   *    wishes and Tech shares tools and discoveries; Production spends it
+   *    handing out work for one shared goal.
    */
   show: {
     slides: ['room', 'outline', 'rollcall', 'news', 'meetups', 'assignments', 'wrapup', 'thanks'],
@@ -597,7 +597,7 @@ const HIVE_INTRO = {
   lead: 'A small group helping each other get where we want to go.',
   points: [
     { heading: 'A High Definition wish', body: 'One clear ask that someone here can help with.' },
-    { heading: 'The HummDinger', body: 'We take one wish at a time and find out who can help.' },
+    { heading: 'What We’re Trying', body: 'We share tools and discoveries, then turn a specific ask into a wish when it fits.' },
     { heading: 'Tech HIVE', body: 'Our group for building, learning, and helping each other move forward.' },
     { heading: 'HIVE-Wide', body: SCOPE_LADDER.find((rung) => rung.key === 'all_hives')!.meaning },
   ],
@@ -1133,10 +1133,10 @@ export default function MeetingHelperScreen() {
     () =>
       deck.agenda.map((item) =>
         introsFirst && item.key === 'hummdinger'
-          ? { ...item, label: 'Intros + HummDinger Sesh' }
+          ? { ...item, label: deckSlug === 'tech' ? 'Intros + What We’re Trying' : 'Intros + HummDinger Sesh' }
           : item
       ),
-    [deck.agenda, introsFirst]
+    [deck.agenda, deckSlug, introsFirst]
   );
   // Production borrows the HummDinger's readable card-and-spotlight shell, but
   // not its wishes, visited roster, pacing, or live-note semantics.
@@ -4023,8 +4023,8 @@ export default function MeetingHelperScreen() {
 
   const renderHummdinger = () => (
     <View style={{ flex: 1 }}>
-      <Kicker>{introsFirst ? 'Introductions · the HD sesh' : 'Obstacles · the HD sesh'}</Kicker>
-      <SlideTitle>HummDinger Sesh</SlideTitle>
+      {deckSlug === 'tech' ? null : <Kicker>{introsFirst ? 'Introductions · the HD sesh' : 'Obstacles · the HD sesh'}</Kicker>}
+      <SlideTitle>{deckSlug === 'tech' ? 'What We’re Trying' : 'HummDinger Sesh'}</SlideTitle>
       {introsFirst ? (
         /* The first night, and only the first night. One band, in the HIVE's
            own colour, saying the one thing the room has to do before the
@@ -4057,6 +4057,19 @@ export default function MeetingHelperScreen() {
           </Text>
         </View>
       ) : null}
+      {deckSlug === 'tech' ? (
+        <Text
+          style={{
+            fontFamily: 'Lato_700Bold',
+            fontSize: sz(17, 11),
+            lineHeight: sz(24, 16),
+            color: GOLD_DEEP,
+            marginTop: sz(12, 7),
+          }}
+        >
+          {'What did you try?\nWhat did you discover?\nWhere could this room help?'}
+        </Text>
+      ) : <>
       <Text
         style={{
           fontFamily: 'Lato_700Bold',
@@ -4127,6 +4140,7 @@ export default function MeetingHelperScreen() {
           </View>
         ))}
       </View>
+      </>}
 
       {/* Member bubbles — one per member, uniform size so no one looks
           emptier. Tap a bubble to expand the full check-in (and tap again to
@@ -4141,13 +4155,16 @@ export default function MeetingHelperScreen() {
           const topWish = pickSpotlightWish(memberWishes) ?? memberWishes[0];
           const reportedWish = reportsByUser.get(member.id)?.hd_wish?.trim() ?? '';
           const hdGoal = reportedWish || (topWish ? getWishQuickTitle(topWish, 40) : null);
+          const techStory = deckSlug === 'tech' ? getTextAnswer(answers, 'q_learned') : '';
           const priorities = getTextAnswer(answers, 'q_pop_priorities');
           // Their own answer to "what are you building right now?" — the line
           // the check-in promised would become their 30-second intro.
           const introWords = introsFirst ? getIntroWords(answers) : '';
-          const detailSections = HUMMDINGER_DETAIL_SECTIONS
-            .map((section) => ({ ...section, text: getTextAnswer(answers, section.key) }))
-            .filter((section) => !!section.text);
+          const detailSections = deckSlug === 'tech'
+            ? [{ key: 'q_learned', label: 'What I tried and learned', text: techStory }].filter((section) => !!section.text)
+            : HUMMDINGER_DETAIL_SECTIONS
+              .map((section) => ({ ...section, text: getTextAnswer(answers, section.key) }))
+              .filter((section) => !!section.text);
           const assistsForMember = completedAssists.filter(
             (assist) => assist.relatedUserId === member.id && assist.assignedTo !== member.id
           );
@@ -4170,10 +4187,14 @@ export default function MeetingHelperScreen() {
           // The bubble's second line. On the first night it is their intro in
           // their own words; every other night it is their HD goal, unchanged.
           // A blank never shows as a blank — it shows as the invitation.
-          const bubbleLine = introsFirst ? introWords || hdGoal : hdGoal;
-          const bubbleEmpty = introsFirst
-            ? 'introduce yourself — 30 seconds'
-            : 'open to ideas';
+          const bubbleLine = introsFirst
+            ? introWords || techStory || hdGoal
+            : deckSlug === 'tech' ? techStory || hdGoal : hdGoal;
+          const bubbleEmpty = deckSlug === 'tech'
+            ? 'tell us what you tried'
+            : introsFirst
+              ? 'introduce yourself — 30 seconds'
+              : 'open to ideas';
           return (
             <View key={member.id} style={{ width: `${100 / bubbleColumns}%`, padding: sz(8, 5) }}>
               <Pressable
@@ -4232,7 +4253,7 @@ export default function MeetingHelperScreen() {
                 >
                   {bubbleLine || bubbleEmpty}
                 </Text>
-                {priorities ? (
+                {(deckSlug === 'tech' ? !!techStory && !!hdGoal : !!priorities) ? (
                   <Text
                     numberOfLines={1}
                     style={{
@@ -4244,7 +4265,7 @@ export default function MeetingHelperScreen() {
                       marginTop: sz(6, 4),
                     }}
                   >
-                    {priorities}
+                    {deckSlug === 'tech' ? `Could use help: ${hdGoal}` : priorities}
                   </Text>
                 ) : null}
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 9), color: MUTED, marginTop: sz(8, 5) }}>
@@ -4272,6 +4293,7 @@ export default function MeetingHelperScreen() {
     const memberWishList = wishesByUserId.get(member.id) ?? [];
     const topWish = pickSpotlightWish(memberWishList) ?? memberWishList[0];
     const reportedWish = reportsByUser.get(member.id)?.hd_wish?.trim() ?? '';
+    const techStory = deckSlug === 'tech' ? getTextAnswer(answers, 'q_learned') : '';
     // The first night, their own line from the check-in leads the sheet.
     const introWords = introsFirst ? getIntroWords(answers) : '';
     // The tune-up SEEDS an empty Progress answer with "Checked off: …" and
@@ -4280,18 +4302,20 @@ export default function MeetingHelperScreen() {
     // said everything twice (Nat 2026-07-24: "kind of messy"). Drop the seeded
     // lines here and keep whatever the member actually wrote; if that's
     // nothing, the section doesn't appear at all.
-    const detailSections = HUMMDINGER_DETAIL_SECTIONS
-      .map((section) => {
-        const text = getTextAnswer(answers, section.key);
-        if (section.key !== 'q_pop_progress') return { ...section, text };
-        const ownWords = text
-          .split('\n')
-          .filter((line) => !/^\s*(checked off|done for me\s*💛?)\s*:/i.test(line))
-          .join('\n')
-          .trim();
-        return { ...section, text: ownWords };
-      })
-      .filter((section) => !!section.text);
+    const detailSections = deckSlug === 'tech'
+      ? [{ key: 'q_learned', label: 'What I tried and learned', text: techStory }].filter((section) => !!section.text)
+      : HUMMDINGER_DETAIL_SECTIONS
+        .map((section) => {
+          const text = getTextAnswer(answers, section.key);
+          if (section.key !== 'q_pop_progress') return { ...section, text };
+          const ownWords = text
+            .split('\n')
+            .filter((line) => !/^\s*(checked off|done for me\s*💛?)\s*:/i.test(line))
+            .join('\n')
+            .trim();
+          return { ...section, text: ownWords };
+        })
+        .filter((section) => !!section.text);
     const assistsForMember = completedAssists.filter(
       (assist) => assist.relatedUserId === member.id && assist.assignedTo !== member.id
     );
@@ -4386,15 +4410,21 @@ export default function MeetingHelperScreen() {
                   Nothing written down yet — that's what the floor is for. Catch what {nameToday} says below.
                 </Text>
               ) : null}
+              {deckSlug === 'tech' ? detailSections.map((section) => (
+                <View key={section.key}>
+                  <Text style={sectionLabel}>{section.label}</Text>
+                  <Text style={sectionText}>{section.text}</Text>
+                </View>
+              )) : null}
               {!reportedWish && topWish?.description ? (
                 <View>
-                  <Text style={sectionLabel}>This month's HD</Text>
+                  <Text style={sectionLabel}>{deckSlug === 'tech' ? 'Where I could use help' : "This month's HD"}</Text>
                   <Text style={sectionText}>{topWish.description}</Text>
                 </View>
               ) : null}
               {reportedWish ? (
                 <View>
-                  <Text style={sectionLabel}>HummDinger wish · shared with admin</Text>
+                  <Text style={sectionLabel}>{deckSlug === 'tech' ? 'Help request · shared with admin' : 'HummDinger wish · shared with admin'}</Text>
                   <Text style={sectionText}>{reportedWish}</Text>
                 </View>
               ) : null}
@@ -4413,7 +4443,7 @@ export default function MeetingHelperScreen() {
                   ))}
                 </View>
               ) : null}
-              {detailSections.map((section) => (
+              {deckSlug === 'tech' ? null : detailSections.map((section) => (
                 <View key={section.key}>
                   <Text style={sectionLabel}>{section.label}</Text>
                   <Text style={sectionText}>{section.text}</Text>

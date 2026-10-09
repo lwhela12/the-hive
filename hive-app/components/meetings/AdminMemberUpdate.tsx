@@ -19,7 +19,7 @@ export function AdminMemberUpdate({ members, meeting, reportsByUser, onSaved, op
   onOpenForMemberHandled?: () => void;
   compact?: boolean;
 }) {
-  const { communityId, communityRole, profile, session } = useAuth();
+  const { community, communityId, communityRole, profile, session } = useAuth();
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const [open, setOpen] = useState(false);
   const [memberId, setMemberId] = useState('');
@@ -136,7 +136,9 @@ export function AdminMemberUpdate({ members, meeting, reportsByUser, onSaved, op
                     </View>
                   </View>
                   <View>
-                    <Text style={{ fontFamily: 'Lato_700Bold', color: '#2d2d2d', marginBottom: 6 }}>HummDinger wish</Text>
+                    <Text style={{ fontFamily: 'Lato_700Bold', color: '#2d2d2d', marginBottom: 6 }}>
+                      {community?.slug === 'tech' ? 'Help request' : 'HummDinger wish'}
+                    </Text>
                     <TextInput value={hdWish} onChangeText={setHdWish} placeholder="What do they want the room to help with?" multiline style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#dfcda8', borderRadius: 10, padding: 11, minHeight: 58, color: '#2d2d2d', textAlignVertical: 'top' }} />
                   </View>
                   <View>
