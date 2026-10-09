@@ -186,6 +186,7 @@ export function BoardPostCard({
               </View>
             )}
             <Text
+              selectable
               style={{ fontFamily: 'Lato_700Bold', color: skin.ink }}
               className="text-base mb-1"
               numberOfLines={2}
@@ -193,6 +194,7 @@ export function BoardPostCard({
               {post.title}
             </Text>
             <LinkifiedText
+              selectable
               style={{
                 fontFamily: 'Lato_400Regular',
                 fontSize: 14,
@@ -256,6 +258,7 @@ export function BoardPostCard({
                   </View>
                 )}
                 <Text
+                  selectable
                   style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }}
                   className="text-xs flex-1"
                   numberOfLines={1}

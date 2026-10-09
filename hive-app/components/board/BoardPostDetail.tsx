@@ -605,7 +605,7 @@ export function BoardPostDetail({ postId, onBack, identityCommunityId }: BoardPo
               </Text>
             </View>
           )}
-          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', color: skin.ink }} className="text-xl mb-2">
+          <Text selectable style={{ fontFamily: 'LibreBaskerville_700Bold', color: skin.ink }} className="text-xl mb-2">
             {post.title}
           </Text>
           <View className="flex-row items-center mb-3">
@@ -623,10 +623,10 @@ export function BoardPostDetail({ postId, onBack, identityCommunityId }: BoardPo
                 <Avatar name={postAuthor.name} url={null} size={32} />
               </View>
             )}
-            <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }}>
+            <Text selectable style={{ fontFamily: 'Lato_700Bold', color: skin.ink }}>
               {postAuthor.name}
             </Text>
-            <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }} className="text-sm ml-2">
+            <Text selectable style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }} className="text-sm ml-2">
               {formatDateMedium(post.created_at)}
               {post.edited_at && ' (edited)'}
             </Text>
@@ -634,7 +634,7 @@ export function BoardPostDetail({ postId, onBack, identityCommunityId }: BoardPo
           {/* `isUser` is MarkdownContent's light-ink-on-a-dark-ground setting —
               white words, cream links, translucent code blocks. That is exactly
               what the body copy needs on the space page. */}
-          <MarkdownContent content={post.content} isUser={skin.dark} />
+          <MarkdownContent content={post.content} isUser={skin.dark} selectable />
           <View className="mb-4" />
 
           {post.attachments && post.attachments.length > 0 && (

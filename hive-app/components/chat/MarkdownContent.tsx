@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Platform, StyleSheet, Linking, ScrollView, View } from 'react-native';
+import { Platform, StyleSheet, Linking, ScrollView, Text, View } from 'react-native';
 import Markdown, { MarkdownIt } from 'react-native-markdown-display';
 import type { RenderRules } from 'react-native-markdown-display';
 import { LinkifiedText } from '../ui/LinkifiedText';
@@ -7,6 +7,8 @@ import { LinkifiedText } from '../ui/LinkifiedText';
 interface MarkdownContentProps {
   content: string;
   isUser?: boolean;
+  /** Let a reader select and copy the rendered words, links, and code. */
+  selectable?: boolean;
 }
 
 type MarkdownTableNode = {
@@ -38,6 +40,7 @@ const markdownIt = MarkdownIt({
 export const MarkdownContent = memo(function MarkdownContent({
   content,
   isUser = false,
+  selectable = false,
 }: MarkdownContentProps) {
   // Define colors based on message sender
   const textColor = isUser ? '#FFFFFF' : '#313130'; // white or charcoal
@@ -61,10 +64,12 @@ export const MarkdownContent = memo(function MarkdownContent({
       fontFamily: 'Lato_400Regular',
       flexShrink: 1,
       flexWrap: 'wrap',
+      userSelect: selectable ? 'text' : 'auto',
     },
     text: {
       flexShrink: 1,
       flexWrap: 'wrap',
+      userSelect: selectable ? 'text' : 'auto',
     },
     paragraph: {
       marginTop: 0,
@@ -106,6 +111,7 @@ export const MarkdownContent = memo(function MarkdownContent({
       borderRadius: 4,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       fontSize: 14,
+      userSelect: selectable ? 'text' : 'auto',
     },
     // Code blocks
     code_block: {
@@ -116,6 +122,7 @@ export const MarkdownContent = memo(function MarkdownContent({
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       fontSize: 14,
       marginVertical: 8,
+      userSelect: selectable ? 'text' : 'auto',
     },
     fence: {
       backgroundColor: codeBackgroundColor,
@@ -125,6 +132,7 @@ export const MarkdownContent = memo(function MarkdownContent({
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       fontSize: 14,
       marginVertical: 8,
+      userSelect: selectable ? 'text' : 'auto',
     },
     // Headers
     heading1: {
@@ -278,9 +286,35 @@ export const MarkdownContent = memo(function MarkdownContent({
         key={node.key}
         style={[inheritedStyles, styles.text]}
         linkStyle={styles.link}
+        selectable={selectable}
       >
         {node.content}
       </LinkifiedText>
+    ),
+    link: (node, children, _parent, styles) => (
+      <Text
+        key={node.key}
+        selectable={selectable}
+        style={styles.link}
+        onPress={() => handleLinkPress(node.attributes.href)}
+      >
+        {children}
+      </Text>
+    ),
+    code_inline: (node, _children, _parent, styles, inheritedStyles = {}) => (
+      <Text key={node.key} selectable={selectable} style={[inheritedStyles, styles.code_inline]}>
+        {node.content}
+      </Text>
+    ),
+    code_block: (node, _children, _parent, styles, inheritedStyles = {}) => (
+      <Text key={node.key} selectable={selectable} style={[inheritedStyles, styles.code_block]}>
+        {typeof node.content === 'string' ? node.content.replace(/\n$/, '') : node.content}
+      </Text>
+    ),
+    fence: (node, _children, _parent, styles, inheritedStyles = {}) => (
+      <Text key={node.key} selectable={selectable} style={[inheritedStyles, styles.fence]}>
+        {typeof node.content === 'string' ? node.content.replace(/\n$/, '') : node.content}
+      </Text>
     ),
   };
 

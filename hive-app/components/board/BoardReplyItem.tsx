@@ -79,14 +79,14 @@ export function BoardReplyItem({
         )}
         <View className="flex-1">
           <View className="flex-row items-center mb-1">
-            <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="text-sm">
+            <Text selectable style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="text-sm">
               {author.name}
             </Text>
-            <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }} className="text-xs ml-2">
+            <Text selectable style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }} className="text-xs ml-2">
               {timeAgo}
             </Text>
             {reply.edited_at && (
-              <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkFaint }} className="text-xs ml-1">
+              <Text selectable style={{ fontFamily: 'Lato_400Regular', color: skin.inkFaint }} className="text-xs ml-1">
                 (edited)
               </Text>
             )}
@@ -120,7 +120,7 @@ export function BoardReplyItem({
                entries showed its asterisks and backticks raw. `isUser` is
                MarkdownContent's light-ink-on-a-dark-ground setting, so it
                follows the HIVE-Wide page the way the post does. */
-            <MarkdownContent content={reply.content} isUser={skin.dark} />
+            <MarkdownContent content={reply.content} isUser={skin.dark} selectable />
           )}
 
           {reply.attachments && reply.attachments.length > 0 && (
