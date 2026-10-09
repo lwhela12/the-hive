@@ -76,6 +76,7 @@ import { getStoredItem, getStoredItemAsync, removeStoredItem, setStoredItem, set
 import { getAppNewsSeenKey, getNewestAppNews, getUnseenAppNews, type AppNewsEntry } from '../../lib/appNews';
 import { useAppNews } from '../../lib/hooks/useAppNews';
 import { createCalendarEvent } from '../../lib/eventMutations';
+import { readNetworkingEventDetails, networkingDescriptionWithoutLink } from '../../lib/networkingEvent';
 import { loadActivityRead, persistActivityRead, loadAppNewsSeen, persistAppNewsSeen } from '../../lib/readState';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { addHomeResetListener } from '../../lib/homeNavigation';
@@ -427,6 +428,7 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
         const invitedScope = (event as any).invited_scope ?? seenScope;
         const isOwnBirthday = event.event_type === 'birthday' && !!profile?.id && event.related_user_id === profile.id;
         const isEditingThisBirthday = editingBirthdayId === event.id;
+        const networkingDetails = readNetworkingEventDetails(event.description);
         return (
         <Pressable
           key={event.id}
@@ -488,6 +490,12 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
                   </Text>
                 )}
               </View>
+              {networkingDetails?.focus ? (
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/70 mt-1">{networkingDetails.focus}</Text>
+              ) : null}
+              {networkingDetails?.cost ? (
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/70 mt-1">{networkingDetails.cost}</Text>
+              ) : null}
               {event.location && isInvitedToEvent(event as never, myCommunityIds) && (
                 <Pressable
                   onPress={(e) => {
@@ -607,6 +615,16 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
                   </Text>
                 </Pressable>
               )}
+              {networkingDetails?.infoUrl && isInvitedToEvent(event as never, myCommunityIds) ? (
+                <Pressable
+                  onPress={(e) => { e.stopPropagation(); void Linking.openURL(networkingDetails.infoUrl); }}
+                  accessibilityRole="link"
+                  accessibilityLabel={`Event info for ${event.title}`}
+                  className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full self-start active:bg-gold/10"
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">Event info ↗</Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={(e) => {
                   e.stopPropagation();
@@ -4361,12 +4379,17 @@ export default function HiveScreen() {
                           </Pressable>
                         </View>
                       )}
-                      {eventDescription && (
+                      {networkingDescriptionWithoutLink(eventDescription) && (
                         <View className="mb-4">
                           <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Description</Text>
-                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-base text-charcoal">{eventDescription}</Text>
+                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-base text-charcoal">{networkingDescriptionWithoutLink(eventDescription)}</Text>
                         </View>
                       )}
+                      {readNetworkingEventDetails(eventDescription)?.infoUrl && editingEvent && isInvitedToEvent(editingEvent as never, memberships.map((membership) => membership.community_id)) ? (
+                        <Pressable onPress={() => void Linking.openURL(readNetworkingEventDetails(eventDescription)!.infoUrl)} className="mb-4 bg-gold/10 py-3 px-4 rounded-lg items-center active:bg-gold/20">
+                          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold">Event info ↗</Text>
+                        </Pressable>
+                      ) : null}
                       {editingEvent?.meet_link && (
                         <Pressable
                           onPress={() => Linking.openURL(editingEvent.meet_link!)}

@@ -60,6 +60,10 @@ import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
+import { EventDatePicker } from '../../components/ui/DatePicker';
+import { TimeInput } from '../../components/ui/TimeInput';
+import { parseAmericanDate } from '../../lib/dateUtils';
+import { networkingEventDescription, normalizeEventInfoUrl } from '../../lib/networkingEvent';
 import { AppHeader } from '../../components/navigation';
 import { showAlert } from '../../lib/showAlert';
 import { fetchProductionProjectStatus, groupProductionJobs, type ProductionProjectJob } from '../../lib/productionProject';
@@ -1289,6 +1293,11 @@ export default function MeetingHelperScreen() {
   const [quickAddDate, setQuickAddDate] = useState<string | null>(null);
   const [quickAddTitle, setQuickAddTitle] = useState('');
   const [quickAddTime, setQuickAddTime] = useState('');
+  const [quickAddEndTime, setQuickAddEndTime] = useState('');
+  const [quickAddFocus, setQuickAddFocus] = useState('');
+  const [quickAddCost, setQuickAddCost] = useState('');
+  const [quickAddInfoUrl, setQuickAddInfoUrl] = useState('');
+  const [quickAddLocation, setQuickAddLocation] = useState('');
   const [quickAddVisibility, setQuickAddVisibility] = useState<EventAudience>('members');
   const [quickAddAudience, setQuickAddAudience] = useState<EventAudience>('members');
   const [quickAddSaving, setQuickAddSaving] = useState(false);
@@ -1710,17 +1719,40 @@ export default function MeetingHelperScreen() {
     );
   }, [expandedHummdingerId, meetingWishesAreAutomatic, wishesByUserId]);
 
-  // Pencil in a hang straight from the Plan the Meet Ups calendar — same
-  // create path as the tune-up and Home (the create-event edge function).
+  // OG pencils in hangs here; Tech records outside networking events. Both
+  // use the same calendar create path and visibility rules.
   const handleQuickAddEvent = async () => {
     if (!quickAddDate || !communityId || quickAddSaving) return;
     if (!quickAddTitle.trim()) {
-      setQuickAddError('Give it a name — "Pool hang" works great.');
+      setQuickAddError(deckSlug === 'tech' ? 'Add the event name.' : 'Give it a name — "Pool hang" works great.');
+      return;
+    }
+    const eventDate = deckSlug === 'tech' ? parseAmericanDate(quickAddDate) : quickAddDate;
+    if (!eventDate) {
+      setQuickAddError('Choose an event date.');
       return;
     }
     const normalizedTime = normalizeEventTimeInput(quickAddTime);
     if (quickAddTime.trim() && !normalizedTime.time) {
       setQuickAddError('For time, try something like 2:30 PM.');
+      return;
+    }
+    const normalizedEndTime = deckSlug === 'tech' ? normalizeEventTimeInput(quickAddEndTime) : { time: null, note: '' };
+    if (quickAddEndTime.trim() && !normalizedEndTime.time) {
+      setQuickAddError('For the end time, try something like 4:00 PM.');
+      return;
+    }
+    if (normalizedEndTime.time && !normalizedTime.time) {
+      setQuickAddError('Add a start time before the end time.');
+      return;
+    }
+    if (normalizedTime.time && normalizedEndTime.time && normalizedEndTime.time <= normalizedTime.time) {
+      setQuickAddError('The end time should be after the start time.');
+      return;
+    }
+    const infoUrl = deckSlug === 'tech' ? normalizeEventInfoUrl(quickAddInfoUrl) : '';
+    if (infoUrl === null) {
+      setQuickAddError('Enter a valid event info link.');
       return;
     }
 
@@ -1729,11 +1761,17 @@ export default function MeetingHelperScreen() {
     try {
       const newEvent: Record<string, string | null> = {
         title: quickAddTitle.trim(),
-        event_date: quickAddDate,
+        event_date: eventDate,
         community_id: communityId,
       };
       if (normalizedTime.time) newEvent.event_time = normalizedTime.time;
-      if (normalizedTime.note) newEvent.description = `Time note: ${normalizedTime.note}`;
+      if (normalizedEndTime.time) newEvent.end_time = normalizedEndTime.time;
+      const description = [
+        normalizedTime.note ? `Time note: ${normalizedTime.note}` : null,
+        deckSlug === 'tech' ? networkingEventDescription({ focus: quickAddFocus, cost: quickAddCost, infoUrl: infoUrl || '' }) : null,
+      ].filter(Boolean).join('\n\n');
+      if (description) newEvent.description = description;
+      if (deckSlug === 'tech' && quickAddLocation.trim()) newEvent.location = quickAddLocation.trim();
       newEvent.visibility = quickAddVisibility;
       (newEvent as Record<string, unknown>).invited_scope = quickAddAudience;
 
@@ -1742,11 +1780,17 @@ export default function MeetingHelperScreen() {
       setQuickAddDate(null);
       setQuickAddTitle('');
       setQuickAddTime('');
+      setQuickAddEndTime('');
+      setQuickAddFocus('');
+      setQuickAddCost('');
+      setQuickAddInfoUrl('');
+      setQuickAddLocation('');
       setQuickAddVisibility('members');
       setQuickAddAudience('members');
       // The idea has been claimed — disarm so the next day you tap starts fresh.
       setArmedHangIdea(null);
       await loadDeckData();
+      if (deckSlug === 'tech') showAlert('On the calendar', `${newEvent.title} is saved. Find its details and info link under Upcoming Events on Tech HIVE Home.`);
     } catch (error: any) {
       setQuickAddError(userFacingError(error, 'The event did not save. Your details are still here — please try again.'));
     } finally {
@@ -3501,6 +3545,11 @@ export default function MeetingHelperScreen() {
                         // time and place. Nothing armed = blank, as before.
                         setQuickAddTitle(armedHangIdea ?? '');
                         setQuickAddTime('');
+                        setQuickAddEndTime('');
+                        setQuickAddFocus('');
+                        setQuickAddCost('');
+                        setQuickAddInfoUrl('');
+                        setQuickAddLocation('');
                         setQuickAddError(null);
                       }}
                       style={{
@@ -3606,7 +3655,9 @@ export default function MeetingHelperScreen() {
                     : isHelpRecapCard
                       ? 'Show the check-in recap until another card is selected'
                       : 'Open HIVE Hang plans'
-                  : undefined}
+                  : deckSlug === 'tech' && column.key === 'hang'
+                    ? 'Select, then tap a calendar day to add a networking event'
+                    : undefined}
                 accessibilityState={{ selected: isSelected }}
                 onPress={() => {
                   if (isFollowing) lookAround();
@@ -3655,7 +3706,9 @@ export default function MeetingHelperScreen() {
                     {column.key === 'meeting'
                       ? isSelected ? '● tap a day below to schedule the meeting' : '○ select, then tap a day to schedule'
                       : column.key === 'hang'
-                        ? isSelected ? '● tap a day below to schedule it' : '○ select, then tap a day to schedule'
+                        ? deckSlug === 'tech'
+                          ? isSelected ? '● tap a day below to add an event' : '○ select, then tap a day to add an event'
+                          : isSelected ? '● tap a day below to schedule it' : '○ select, then tap a day to schedule'
                         : expandedPlanCard === 'help'
                           ? deck.plan.helpExpansion.kind === 'plan' ? '▾ the plan' : '▾ the conversation'
                           : deck.plan.helpExpansion.kind === 'plan' ? '▸ see the plan' : '▸ tap to talk it over'}
@@ -6218,7 +6271,7 @@ export default function MeetingHelperScreen() {
           </View>
         </Modal>
 
-        {/* Quick-add: pencil in a hang from a tapped calendar day */}
+        {/* OG keeps its hang quick-add; Tech gets event details for outside rooms. */}
         <Modal
           visible={!!quickAddDate}
           animationType="fade"
@@ -6233,15 +6286,84 @@ export default function MeetingHelperScreen() {
               onPress={(event) => event.stopPropagation()}
               style={{
                 width: '100%',
-                maxWidth: 460,
+                maxWidth: deckSlug === 'tech' ? 540 : 460,
+                maxHeight: deckSlug === 'tech' ? '88%' : undefined,
                 backgroundColor: PAPER,
                 borderRadius: 22,
                 borderWidth: 1,
                 borderColor: GOLD_SOFT,
-                padding: 24,
-                gap: 12,
+                padding: deckSlug === 'tech' ? 0 : 24,
+                gap: deckSlug === 'tech' ? 0 : 12,
               }}
             >
+              {deckSlug === 'tech' ? (
+                <BounceScrollView
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={{ padding: 24, gap: 14 }}
+                  showsVerticalScrollIndicator
+                >
+                  <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: CHARCOAL }}>
+                    Add networking event
+                  </Text>
+                  <ComposerBar
+                    variant="form"
+                    label="Event name"
+                    value={quickAddTitle}
+                    onChangeText={(next) => setQuickAddTitle((previous) => (typeof next === 'function' ? next(previous) : next))}
+                    placeholder="Co-Working & Networking Day"
+                    multiline={false}
+                    autoFocus
+                  />
+                  <EventDatePicker value={quickAddDate ?? ''} onChange={setQuickAddDate} label="Date" />
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                    <View style={{ flex: 1, minWidth: 180 }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: GOLD_DEEP, marginBottom: 5 }}>Start time</Text>
+                      <TimeInput value={quickAddTime} onChangeText={setQuickAddTime} placeholder="6:00 PM" placeholderTextColor={PLACEHOLDER_INK} style={{ ...PLAIN_FIELD, width: '100%' }} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 180 }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: GOLD_DEEP, marginBottom: 5 }}>End time (optional)</Text>
+                      <TimeInput value={quickAddEndTime} onChangeText={setQuickAddEndTime} placeholder="8:00 PM" placeholderTextColor={PLACEHOLDER_INK} style={{ ...PLAIN_FIELD, width: '100%' }} />
+                    </View>
+                  </View>
+                  <ComposerBar
+                    variant="form"
+                    label="Focus (optional)"
+                    value={quickAddFocus}
+                    onChangeText={(next) => setQuickAddFocus((previous) => (typeof next === 'function' ? next(previous) : next))}
+                    placeholder="Who it is for or what they will cover"
+                    multiline={false}
+                  />
+                  <View>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: GOLD_DEEP, marginBottom: 5 }}>Cost (optional)</Text>
+                    <TextInput value={quickAddCost} onChangeText={setQuickAddCost} placeholder="Free, $25, or TBD" placeholderTextColor={PLACEHOLDER_INK} style={PLAIN_FIELD} />
+                  </View>
+                  <View>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: GOLD_DEEP, marginBottom: 5 }}>Event info link (optional)</Text>
+                    <TextInput value={quickAddInfoUrl} onChangeText={setQuickAddInfoUrl} placeholder="startup.vegas/events/..." placeholderTextColor={PLACEHOLDER_INK} autoCapitalize="none" autoCorrect={false} keyboardType="url" style={PLAIN_FIELD} />
+                  </View>
+                  <View>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: GOLD_DEEP, marginBottom: 5 }}>Location (optional)</Text>
+                    <TextInput value={quickAddLocation} onChangeText={setQuickAddLocation} placeholder="Venue or online" placeholderTextColor={PLACEHOLDER_INK} style={PLAIN_FIELD} />
+                  </View>
+                  <EventScopeFields
+                    visibility={quickAddVisibility}
+                    onVisibilityChange={setQuickAddVisibility}
+                    invited={quickAddAudience}
+                    onInvitedChange={setQuickAddAudience}
+                    allowPublic={profile?.is_owner === true}
+                  />
+                  {quickAddError ? <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#b3261e' }}>{quickAddError}</Text> : null}
+                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 4 }}>
+                    <Pressable onPress={() => setQuickAddDate(null)} style={({ pressed }) => ({ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, opacity: pressed ? 0.7 : 1 })}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: MUTED }}>Cancel</Text>
+                    </Pressable>
+                    <Pressable onPress={handleQuickAddEvent} disabled={quickAddSaving} style={({ pressed }) => ({ paddingHorizontal: 26, paddingVertical: 10, borderRadius: 12, backgroundColor: GOLD, opacity: pressed || quickAddSaving ? 0.8 : 1 })}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'white' }}>{quickAddSaving ? 'Adding…' : 'Add event'}</Text>
+                    </Pressable>
+                  </View>
+                </BounceScrollView>
+              ) : (
+              <>
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: CHARCOAL }}>
                 Pencil it in
               </Text>
@@ -6313,6 +6435,8 @@ export default function MeetingHelperScreen() {
                   </Text>
                 </Pressable>
               </View>
+              </>
+              )}
             </Pressable>
           </Pressable>
         </Modal>
