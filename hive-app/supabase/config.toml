@@ -155,6 +155,11 @@ verify_jwt = false
 [functions.post-meeting-recap]
 verify_jwt = false
 
+# Public, read-only calendar links for dates already included in a recap
+# email. Its URL contains the event details; it does not query member data.
+[functions.add-to-calendar]
+verify_jwt = false
+
 # Open (or make) this HIVE's video room and hand back a way in with the
 # caller's own name on it. The only place DAILY_API_KEY is ever read.
 # Membership is checked as the caller, so RLS decides who gets a room.

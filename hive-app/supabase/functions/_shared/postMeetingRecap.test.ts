@@ -28,6 +28,9 @@ Deno.test('buildPostMeetingRecapLinks deep-links the exact summary and contextua
   if (links.summaryUrl !== 'https://app.example/meetings?hive=hive%20%26%20one&meeting=meeting%2F42') {
     throw new Error(`unexpected summary URL: ${links.summaryUrl}`);
   }
+  if (links.homeUrl !== 'https://app.example/hive?hive=hive%20%26%20one') {
+    throw new Error(`unexpected HIVE home URL: ${links.homeUrl}`);
+  }
   const parsed = new URL(links.cliveUrl);
   if (parsed.pathname !== '/' || parsed.searchParams.get('hive') !== meeting.communityId) {
     throw new Error(`Clive URL did not preserve HIVE context: ${links.cliveUrl}`);
@@ -41,12 +44,15 @@ Deno.test('buildPostMeetingRecapLinks deep-links the exact summary and contextua
   }
 });
 
-Deno.test('postMeetingRecapHtml has exactly the two required buttons and escapes member content', () => {
-  const html = postMeetingRecapHtml('<Nat>', meeting, 'https://app.example');
+Deno.test('postMeetingRecapHtml links dates to public calendar choices and keeps two primary buttons', () => {
+  const html = postMeetingRecapHtml('<Nat>', meeting, 'https://app.example', 'https://project.example/functions/v1');
   const anchors = html.match(/<a\s/gi) ?? [];
-  if (anchors.length !== 2) throw new Error(`expected exactly two buttons, got ${anchors.length}`);
-  for (const label of ['Open full meeting record', 'Ask Clive what I missed']) {
+  if (anchors.length !== 5) throw new Error(`expected three calendar links and two buttons, got ${anchors.length}`);
+  for (const label of ['Google', 'Apple / other', 'Outlook', 'Open OG &lt;HIVE&gt; Home', 'Ask Clive what I missed']) {
     if (!html.includes(`>${label}</a>`)) throw new Error(`missing button: ${label}`);
+  }
+  if (!html.includes('format=ics') || !html.includes('provider=google') || !html.includes('provider=outlook') || !html.includes('href="https://app.example/hive?hive=hive%20%26%20one"')) {
+    throw new Error('calendar or HIVE Home link is wrong');
   }
   if (html.includes('<Nat>') || html.includes('OG <HIVE>')) throw new Error('unescaped HTML reached the email');
   if (html.includes('A useful <update>') || !html.includes('A useful &lt;update&gt;')) {

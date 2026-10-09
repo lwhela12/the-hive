@@ -20,6 +20,7 @@ import {
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'H.I.V.E. <hive@yourdomain.com>';
 const APP_URL = Deno.env.get('EXPO_PUBLIC_APP_URL') || 'https://app.the-hive.app';
+const CALENDAR_BASE_URL = `${(Deno.env.get('SUPABASE_URL') ?? '').replace(/\/$/, '')}/functions/v1`;
 const PREVIEW_EMAIL = Deno.env.get('CHECK_IN_PREVIEW_EMAIL') || 'natwalstead@gmail.com';
 
 type ProfileRow = {
@@ -224,7 +225,7 @@ serve(async (req) => {
           await sendEmail(
             recipient.email!,
             postMeetingRecapSubject(meeting),
-            postMeetingRecapHtml(recipient.name, meeting, APP_URL),
+            postMeetingRecapHtml(recipient.name, meeting, APP_URL, CALENDAR_BASE_URL),
           );
           sent += 1;
           sentRecipientIds.push(recipient.id);
@@ -271,11 +272,11 @@ serve(async (req) => {
       if (body.expected_preview_email && body.expected_preview_email !== previewTo.email) {
         return errorResponse('The preview address changed; no email was sent.', 409);
       }
-      const banner = `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto 18px;background:#fff3d6;border:1px solid #d4b778;border-radius:14px;padding:16px;color:#5b471e"><strong>Preview only — no member email sent.</strong><br>The greeting is an example. Recipients are not confirmed, and the full-record link is still redacted for non-owners; member delivery remains paused.</div>`;
+      const banner = `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto 18px;background:#fff3d6;border:1px solid #d4b778;border-radius:14px;padding:16px;color:#5b471e"><strong>Preview only — no member email sent.</strong><br>The greeting is an example. Recipients are not confirmed; member delivery remains paused.</div>`;
       await sendEmail(
         previewTo.email,
         `[Preview only] ${postMeetingRecapSubject(meeting)}`,
-        `${banner}${postMeetingRecapHtml('friend', meeting, APP_URL)}`,
+        `${banner}${postMeetingRecapHtml('friend', meeting, APP_URL, CALENDAR_BASE_URL)}`,
       );
       return jsonResponse({ preview_sent: true, preview_to: previewTo.email, members_sent: 0 });
     }
@@ -323,7 +324,7 @@ serve(async (req) => {
     await sendEmail(
       previewTo.email,
       `[Waiting on you] ${postMeetingRecapSubject(meeting)}`,
-      `${recapPreviewBanner(meeting, recipients.length)}${postMeetingRecapHtml(recipients[0].name, meeting, APP_URL)}`,
+      `${recapPreviewBanner(meeting, recipients.length)}${postMeetingRecapHtml(recipients[0].name, meeting, APP_URL, CALENDAR_BASE_URL)}`,
     );
 
     if (existingPending) {

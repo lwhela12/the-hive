@@ -1,5 +1,6 @@
 import { hiveMark, hiveSealImg } from './hiveMark.ts';
 import type { MeetingRecapContent } from './meetingRecapContent.ts';
+import { recapCalendarChoiceUrl } from './recapCalendar.ts';
 export interface RecapMeeting {
   id: string;
   communityId: string;
@@ -60,6 +61,7 @@ export function buildPostMeetingRecapLinks(appUrl: string, meeting: RecapMeeting
 
   return {
     summaryUrl: `${base}/meetings?hive=${hive}&meeting=${meetingId}`,
+    homeUrl: `${base}/hive?hive=${hive}`,
     cliveUrl: `${base}/?hive=${hive}&prefill=${encodeURIComponent(context)}`,
     cliveContext: context,
   };
@@ -141,7 +143,7 @@ function bulletList(lines: string[]): string {
   ).join('')}</ul>`;
 }
 
-function postMeetingRecapBody(meeting: RecapMeeting): string {
+function postMeetingRecapBody(meeting: RecapMeeting, calendarBaseUrl?: string): string {
   const recap = meeting.recap;
   if (!recap) return '';
 
@@ -157,7 +159,12 @@ function postMeetingRecapBody(meeting: RecapMeeting): string {
           prettyTimeRange(item.time, item.endTime),
           item.location ?? '',
         ].filter(Boolean).map(escapeHtml).join(' · ');
-        return `<p style="margin:0 0 8px;font-size:14px;line-height:1.45;"><strong>${escapeHtml(item.label)}</strong><br><span style="color:#6b6b6b;">${when}</span></p>`;
+        const calendarLink = calendarBaseUrl
+          ? `<br><span style="color:#7d642f;font-size:13px;font-weight:600;">Add to cal: </span>${(['google', 'apple', 'outlook'] as const).map((choice) =>
+            `<a href="${escapeHtml(recapCalendarChoiceUrl(calendarBaseUrl, item, choice))}" style="color:#7d642f;font-size:13px;text-decoration:underline;">${choice === 'apple' ? 'Apple / other' : choice === 'google' ? 'Google' : 'Outlook'}</a>`
+          ).join(' <span style="color:#bba575;">·</span> ')}`
+          : '';
+        return `<p style="margin:0 0 12px;font-size:14px;line-height:1.45;"><strong>${escapeHtml(item.label)}</strong><br><span style="color:#6b6b6b;">${when}</span>${calendarLink}</p>`;
       }).join('')}</div>`
     : '<p style="margin:0;font-size:14px;color:#777;">No future dates were recorded.</p>';
   const help = (recap.helpPlan ?? []).length > 0
@@ -176,16 +183,17 @@ function postMeetingRecapBody(meeting: RecapMeeting): string {
   return `${recapSection('📣 News from Nat', news)}${using}${learned}${recapSection('🗓️ Dates to know', dates)}${recapSection('🤝 This month’s HIVE Help', help)}${recap.wishes.length > 0 ? recapSection('💛 What people asked for', wishes) : ''}`;
 }
 
-/** Member email. Deliberately contains exactly two links/buttons. */
+/** Member email. Two primary actions; each dated event has its own calendar link. */
 export function postMeetingRecapHtml(
   rawName: string | null,
   meeting: RecapMeeting,
   appUrl: string,
+  calendarBaseUrl?: string,
 ): string {
   const name = escapeHtml(firstName(rawName));
   const hive = escapeHtml(meeting.hiveName);
   const title = escapeHtml(meeting.title);
-  const { summaryUrl, cliveUrl } = buildPostMeetingRecapLinks(appUrl, meeting);
+  const { homeUrl, cliveUrl } = buildPostMeetingRecapLinks(appUrl, meeting);
 
   // Nat, 2026-08-24, reading this email live: "the only thing missing is one
   // of our bee's or logos or something." It carried the one-logo-for-everybody
@@ -204,10 +212,10 @@ export function postMeetingRecapHtml(
       <p style="text-align:center;color:#6b6b6b;font-size:14px;margin:0 0 20px;">${title}</p>
       <p style="font-size:15px;">Hi ${name},</p>
       <p style="font-size:15px;">We missed you. Here is the one-minute version of what matters from the meeting.</p>
-      ${postMeetingRecapBody(meeting)}
+      ${postMeetingRecapBody(meeting, calendarBaseUrl)}
       <p style="font-size:14px;line-height:1.5;margin:22px 0 0;">Between meetings, share what you’re building, ask questions, and post the kind of feedback you’d like on the Boards. We can keep helping each other between calls.</p>
       <div style="text-align:center;margin:28px 0 12px;">
-        <a href="${summaryUrl}" style="background:${mark.accent};color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-size:15px;font-weight:600;display:inline-block;">Open full meeting record</a>
+        <a href="${homeUrl}" style="background:${mark.accent};color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-size:15px;font-weight:600;display:inline-block;">Open ${hive} Home</a>
       </div>
       <div style="text-align:center;margin:12px 0 28px;">
         <a href="${cliveUrl}" style="background:${mark.companion};color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-size:15px;font-weight:600;display:inline-block;">Ask Clive what I missed</a>
