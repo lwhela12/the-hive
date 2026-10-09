@@ -8,6 +8,7 @@ import {
   postMeetingRecapSubject,
   recapPreviewBanner,
   recipientsForApprovedPreview,
+  sameRecapContent,
   type RecapMeeting,
   type RecapRecipient,
 } from '../_shared/postMeetingRecap.ts';
@@ -196,7 +197,7 @@ serve(async (req) => {
       if (!meeting || meeting.communityId !== communityId) {
         return errorResponse('That held recap no longer matches a meeting.', 422);
       }
-      if (JSON.stringify(metadata.post_meeting_recap_content) !== JSON.stringify(meeting.recap)) {
+      if (!sameRecapContent(metadata.post_meeting_recap_content, meeting.recap!)) {
         return errorResponse('This recap changed. Preview it again before sending.', 409);
       }
       // Approval sends the exact recap Nat previewed, even if a wish or meeting

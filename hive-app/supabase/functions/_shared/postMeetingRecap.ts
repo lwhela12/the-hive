@@ -80,6 +80,16 @@ export function eligibleRecapRecipients(
   );
 }
 
+/** Supabase stores held metadata as jsonb, which may reorder object keys. */
+export function sameRecapContent(a: MeetingRecapContent, b: MeetingRecapContent): boolean {
+  const stable = (value: unknown) => JSON.stringify(value, (_key, entry) =>
+    entry && typeof entry === 'object' && !Array.isArray(entry)
+      ? Object.fromEntries(Object.entries(entry).sort(([left], [right]) => left.localeCompare(right)))
+      : entry
+  );
+  return stable(a) === stable(b);
+}
+
 /**
  * Resolve a held approval against the exact list Nat saw in her preview.
  * Opting out before Send can remove someone; opting in afterward cannot add a

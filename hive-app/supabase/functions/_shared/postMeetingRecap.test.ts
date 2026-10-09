@@ -3,6 +3,7 @@ import {
   eligibleRecapRecipients,
   postMeetingRecapHtml,
   recipientsForApprovedPreview,
+  sameRecapContent,
   type RecapMeeting,
 } from './postMeetingRecap.ts';
 
@@ -105,5 +106,22 @@ Deno.test('approval sends only the previewed list, minus opt-outs and copies alr
   }
   if (result.becameIneligibleCount !== 1) {
     throw new Error(`expected one previewed opt-out, got ${result.becameIneligibleCount}`);
+  }
+});
+
+Deno.test('held recap comparison ignores jsonb key order but detects changed copy', () => {
+  const recap = meeting.recap!;
+  const reordered = {
+    wishes: recap.wishes,
+    helpPlan: recap.helpPlan,
+    helpFocus: recap.helpFocus,
+    dates: recap.dates,
+    learned: recap.learned,
+    using: recap.using,
+    news: recap.news,
+  };
+  if (!sameRecapContent(reordered, recap)) throw new Error('jsonb key order caused false stale-preview rejection');
+  if (sameRecapContent({ ...reordered, news: ['Changed after preview'] }, recap)) {
+    throw new Error('changed recap copy was accepted');
   }
 });
