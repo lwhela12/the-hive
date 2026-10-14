@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f4e5">
+  <meta name="robots" content="noindex,nofollow">
+  <title>HIVE · Your clothing, your way</title>
+  <link rel="icon" href="assets/logo-C.png">
+  <link rel="stylesheet" href="studio.css">
+</head>
+<body>
+  <a class="skip" href="#screen-title">Skip to choices</a>
+  <header class="masthead">
+    <div class="brand"><img src="assets/logo-A.png" alt="" width="44" height="44"><span>HIVE<span class="brand-small">HUMAN · INSIGHT · VISION · EXECUTION</span></span></div>
+    <span class="review-badge">Local review prototype</span>
+  </header>
+  <nav class="steps" aria-label="Clothing selection steps" id="steps"></nav>
+  <main id="app"></main>
+  <div id="notice" role="status" aria-live="polite"></div>
+  <button class="top-button" id="to-top" aria-label="Back to top" hidden>↑</button>
+  <dialog id="finish-dialog" aria-labelledby="finish-title"><div class="dialog-top"><h2 id="finish-title">Find your finish</h2><button class="icon-button" id="close-dialog" aria-label="Close finish guide">×</button></div><div id="finish-guide"></div></dialog>
+  <dialog id="preview-dialog" aria-labelledby="preview-title"><div class="dialog-top"><h2 id="preview-title">Your garment preview</h2><button class="icon-button" id="close-preview" aria-label="Close garment preview">×</button></div><div id="enlarged-preview"></div><p class="guide-footnote">Illustrative artwork placement. Nat’s Printify screenshot confirms the final design.</p></dialog>
+  <script type="module" src="studio.mjs"></script>
+</body>
+</html>
