@@ -25,6 +25,7 @@ export const GARMENTS = [
    difference: 'Quarter-zip collar · smooth ring-spun cotton blend',
    photoColor: 'Off White', source: 'https://printify.com/app/products/2244/gildan/unisex-softstyle-midweight-q-zip-sweatshirt'},
   {id: 'F', model: 'Hanes OG900', name: 'Heavyweight quarter-zip', kind: 'quarter',
+   catalogColors: ['Black', 'Ash', 'Charcoal Heather', 'Athletic Navy'],
    weight: '13 oz/yd²', fabric: '81% cotton · 19% polyester', fit: 'Men’s fit · ribbed side panels',
    feel: 'Substantial three-end fleece, for a thick cozy feel', warmth: 'Heaviest fabric of these six',
    difference: 'Quarter-zip collar · cotton face · DTF only',

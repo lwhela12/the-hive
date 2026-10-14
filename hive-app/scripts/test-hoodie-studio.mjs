@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {initialState, normalize, availableColors, availableSizes, availableFinishes, selectedRow, canReview, selectionText}
+import {GARMENTS, initialState, normalize, availableColors, availableSizes, availableFinishes, selectedRow, canReview, selectionText}
   from '../public/hoodie-studio/catalog.mjs';
 
 const pick = patch => normalize({...initialState(), ...patch});
@@ -9,6 +9,10 @@ test('both quarter-zips reject embroidery, with only checked neutral variants', 
   assert.deepEqual(availableFinishes(pick({garment:'F', color:'Black', size:'L'})), ['DTF']);
   assert.deepEqual(availableFinishes(pick({garment:'B', color:'Sand', size:'3XL'})), ['DTG']);
   assert.equal(canReview(pick({garment:'F',color:'Black',size:'L',finish:'Embroidery',provider:'Fulfill Engine'})),false);
+});
+test('Hanes catalog colors are distinguished from the requested neutral palette', () => {
+  assert.deepEqual(GARMENTS.find(g=>g.id==='F').catalogColors,['Black','Ash','Charcoal Heather','Athletic Navy']);
+  assert.deepEqual(availableColors('F'),['Black']);
 });
 test('18500 White size 4XL cannot inherit another finish’s availability', () => {
   assert.deepEqual(availableFinishes(pick({garment:'A',color:'White',size:'4XL'})), ['DTG']);

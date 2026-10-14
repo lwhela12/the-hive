@@ -127,6 +127,17 @@ set. Overlays and sketches always require Nat's final Printify screenshot.
 
 ## Verification
 
+October 14 review correction: the preselection preview now uses an explicitly
+labeled real reference photo for every garment, rather than an invented sand
+study. A sole supported palette color is selected automatically when choosing
+the garment, so Hanes opens with its actual Black photo and enabled sizes.
+Comparison counts and the color step explicitly identify the neutral palette.
+Hanes's other catalog colors (Ash, Charcoal Heather, Athletic Navy) are named
+separately from selectable, verified palette records. The official Printify
+listing was rechecked and lists four colors through Fulfill Engine DTF.
+No additional unverified color/size variants were made selectable.
+Correction evidence: `/Users/thenateffect/HIVE/hoodie-color-fix-evidence`.
+
 Run the focused catalog checks:
 
 ```sh
@@ -144,7 +155,7 @@ It always launches a new headless browser and fresh profile. No Nat browser,
 desktop browser tabs, account profile, clipboard or device is inspected.
 
 Evidence is saved in `/Users/thenateffect/HIVE/hoodie-review-evidence`.
-Final local pass: **10 catalog boundary tests passed**, module syntax checks
+Final local pass: **11 catalog boundary tests passed**, module syntax checks
 passed, page-header lint passed, diff whitespace check passed, and the browser
 journey suite passed with zero JavaScript errors and local-only requests.
 Checks cover desktop 1440×1000, 1024×768, tablet 768×1024, and widths around

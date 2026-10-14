@@ -19,6 +19,22 @@ async function choose(page,model,color,size,shot){await page.getByRole('button',
  const page=await context.newPage();const errors=[],requests=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push(r.url()));
  await page.goto(url);assert.equal(await page.locator('.garment-card').count(),6);
+ for(const model of ['Gildan SF008','Hanes OG900','Gildan 18500','Bella+Canvas 3719','Gildan 18600','Gildan 18000']){
+  await page.getByRole('button',{name:`Choose ${model}`,exact:true}).click();
+  assert.equal(await page.locator('.garment-study').count(),0,'An unchosen color must never become an invented garment shade');
+  if(model==='Hanes OG900'){
+   assert.equal(await page.locator('[data-action="color"][data-value="Black"]').getAttribute('aria-pressed'),'true');
+   assert.match(await page.locator('.flat-photo').getAttribute('src'),/garment-F-Black-front/);
+   assert.match(await page.locator('.controls').innerText(),/Printify lists 4 colors/);
+   for(const [w,h] of [[1440,1000],[390,844],[844,390]]){await page.setViewportSize({width:w,height:h});await overflow(page);await capture(page,`hanes-initial-${w}x${h}`);}
+   await page.setViewportSize({width:1440,height:1000});
+  }else{
+   assert.equal(await page.locator('.preview-label').innerText(),'Reference photo');
+   assert.match(await page.locator('.preview-caption').innerText(),/Shown:/);
+   assert.equal(await page.locator('[data-action="view"][data-value="sketch"]').count(),0);
+  }
+  await click(page,'step','0');
+ }
  assert.deepEqual(await page.locator('.garment-card h2').allTextContents().then(x=>x.slice(0,2)),['Midweight quarter-zip','Heavyweight quarter-zip']);
  await capture(page,'desktop-comparison');
  await click(page,'filter','quarter');assert.equal(await page.locator('.garment-card').count(),2);await capture(page,'desktop-quarter-zips');

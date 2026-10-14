@@ -45,7 +45,7 @@ function productCard(g) {
   return `<article class="garment-card ${state.garment===g.id?'chosen':''}">
     <div class="card-photo"><img src="${photo}" alt="${esc(g.model)} · ${photoFor(g,'Black')?'Black':g.photoColor} reference photo" loading="lazy"><span class="letter">${g.id}</span><span class="shown-color">Shown: ${photoFor(g,'Black')?'Black':g.photoColor}</span><span class="weight">${g.weight}</span></div>
     <div class="card-body"><div class="model">${g.model}</div><h2>${g.name}</h2><p class="warmth">${g.warmth}</p>${facts(g)}
-    <div class="card-bottom"><div class="mini-colors" aria-label="Checked garment colors">${colors.map(c=>`<span title="${c}">${colorSwatch(c)}</span>`).join('')}<span>${colors.length} ${colors.length===1?'color':'colors'} · ${methods.join(' / ') || 'Check pending'}</span></div>
+    <div class="card-bottom"><div class="mini-colors" aria-label="Checked colors in your neutral palette">${colors.map(c=>`<span title="${c}">${colorSwatch(c)}</span>`).join('')}<span>${colors.length} ${colors.length===1?'neutral color':'neutral colors'} · ${methods.join(' / ') || 'Check pending'}</span></div>
     <button class="primary card-choose" ${attr('garment',g.id)}>Choose ${g.model}<span aria-hidden="true">→</span></button></div></div>
   </article>`;
 }
@@ -59,16 +59,17 @@ function styleScreen() {
     <details><summary>Catalog checks & photo sources</summary><p>Availability checked ${SNAPSHOT}. Nat rechecks the exact provider, color, size and finish before ordering.</p><p>Photos show real garments. Only the listed choices are included in this neutral palette.</p><ul>${GARMENTS.map(g=>`<li><a href="${g.source}" target="_blank" rel="noopener">${g.model} · Printify catalog</a></li>`).join('')}</ul><p><a href="https://www.bellacanvas.com/product/3719/Unisex-Sponge-Fleece-Pullover-Hoodie.html" target="_blank" rel="noopener">Bella+Canvas manufacturer specifications</a></p></details></div>`;
 }
 function svgGarment(g, color, back) {
+  if (!Object.hasOwn(COLORS, color)) throw new Error('A garment study requires a selected catalog color.');
   const q = g.kind === 'quarter', hood = ['hoodie','zip'].includes(g.kind), zip = g.kind === 'zip';
   return `<svg class="garment-study" viewBox="0 0 600 620" role="img" aria-label="Illustrative ${esc(color)} ${esc(g.name)} ${back?'back':'front'}">
-    <defs><linearGradient id="fabric" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${COLORS[color]||'#d1c2a8'}"/><stop offset=".4" stop-color="${COLORS[color]||'#d1c2a8'}"/><stop offset="1" stop-color="${COLORS[color]||'#d1c2a8'}"/></linearGradient><linearGradient id="light"><stop stop-color="white" stop-opacity=".19"/><stop offset=".45" stop-color="white" stop-opacity="0"/><stop offset="1" stop-color="black" stop-opacity=".17"/></linearGradient></defs>
+    <defs><linearGradient id="fabric" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${COLORS[color]}"/><stop offset=".4" stop-color="${COLORS[color]}"/><stop offset="1" stop-color="${COLORS[color]}"/></linearGradient><linearGradient id="light"><stop stop-color="white" stop-opacity=".19"/><stop offset=".45" stop-color="white" stop-opacity="0"/><stop offset="1" stop-color="black" stop-opacity=".17"/></linearGradient></defs>
     <path d="M220 100 Q300 120 380 100 L447 134 Q462 143 467 161 L527 493 L464 509 L422 300 L428 545 Q300 561 172 545 L178 300 L136 509 L73 493 L133 161 Q138 143 153 134Z" fill="url(#fabric)" stroke="#000" stroke-opacity=".13" stroke-width="2"/>
     <path d="M220 100 Q300 120 380 100 L447 134 Q462 143 467 161 L527 493 L464 509 L422 300 L428 545 Q300 561 172 545 L178 300 L136 509 L73 493 L133 161 Q138 143 153 134Z" fill="url(#light)"/>
     <path d="M174 512 Q300 524 426 512 M176 522 Q300 534 427 522 M176 532 Q300 544 427 532 M174 542 Q300 554 426 542" fill="none" stroke="#000" stroke-opacity=".12" stroke-width="2"/>
     <path d="M76 465 L140 480 M78 473 L139 488 M80 481 L138 496 M83 489 L135 504 M460 480 L524 465 M461 488 L522 473 M462 496 L520 481 M465 504 L517 489" fill="none" stroke="#000" stroke-opacity=".13" stroke-width="2"/>
     <path d="M164 162 Q176 202 178 300 M436 162 Q424 202 422 300 M204 317 Q192 382 198 456 M396 317 Q408 382 402 456" fill="none" stroke="#000" stroke-opacity=".09" stroke-width="3"/>
-    ${q?`<path d="M220 100 L233 58 Q300 42 367 58 L380 100 Q342 136 300 149 Q258 136 220 100" fill="${COLORS[color]||'#d1c2a8'}" stroke="#000" stroke-opacity=".22" stroke-width="2"/>${back?'':`<path d="M300 78 V226" stroke="#b1a996" stroke-width="3"/><path d="M296 82 V226 M304 82 V226" stroke="#000" stroke-opacity=".35" stroke-width="1"/><rect x="296" y="129" width="8" height="18" rx="2" fill="#adac9d"/>`}`:
-      hood?`<path d="M220 100 Q199 43 244 21 Q300 -5 356 21 Q401 43 380 100 Q344 138 300 145 Q256 138 220 100" fill="${COLORS[color]||'#d1c2a8'}" stroke="#000" stroke-opacity=".23" stroke-width="2"/>${back?'':`<path d="M248 53 Q300 81 352 53 L325 130 Q300 145 275 130Z" fill="#000" fill-opacity=".12"/><path d="M273 135 L260 240 M327 135 L340 240" stroke="${g.id==='D'?'#f4f3ec':'#827d72'}" stroke-width="3"/>`}`:
+    ${q?`<path d="M220 100 L233 58 Q300 42 367 58 L380 100 Q342 136 300 149 Q258 136 220 100" fill="${COLORS[color]}" stroke="#000" stroke-opacity=".22" stroke-width="2"/>${back?'':`<path d="M300 78 V226" stroke="#b1a996" stroke-width="3"/><path d="M296 82 V226 M304 82 V226" stroke="#000" stroke-opacity=".35" stroke-width="1"/><rect x="296" y="129" width="8" height="18" rx="2" fill="#adac9d"/>`}`:
+      hood?`<path d="M220 100 Q199 43 244 21 Q300 -5 356 21 Q401 43 380 100 Q344 138 300 145 Q256 138 220 100" fill="${COLORS[color]}" stroke="#000" stroke-opacity=".23" stroke-width="2"/>${back?'':`<path d="M248 53 Q300 81 352 53 L325 130 Q300 145 275 130Z" fill="#000" fill-opacity=".12"/><path d="M273 135 L260 240 M327 135 L340 240" stroke="${g.id==='D'?'#f4f3ec':'#827d72'}" stroke-width="3"/>`}`:
       `<path d="M220 100 Q300 188 380 100 M227 94 Q300 172 373 94" fill="none" stroke="#000" stroke-opacity=".17" stroke-width="6"/>`}
     ${!back&&zip?'<path d="M300 143 V548" stroke="#a09b8e" stroke-width="3"/>':''}
     ${!back&&hood?`<path d="M240 357 L360 357 L389 433 L387 473 Q300 489 213 473 L211 433Z" fill="none" stroke="#000" stroke-opacity=".16" stroke-width="2"/>`:''}
@@ -85,27 +86,28 @@ function overlay(g, hasPhoto, nameOnly = false) {
 }
 function preview() {
   const g = garment(); if (!g) return '';
-  const back = state.face === 'back', photo = photoFor(g,state.color,back?'back':'front');
+  const reference = !state.color, referenceColor = photoFor(g,'Black') ? 'Black' : g.photoColor;
+  const back = state.face === 'back', photo = reference ? photoFor(g,'Black') || `assets/garment-${g.id}.png` : photoFor(g,state.color,back?'back':'front');
   // Photos are shown without recoloring. If the exact shade/view is absent,
   // the labeled code-drawn study carries color and placement instead.
-  const usePhoto = !!photo && state.view !== 'sketch';
+  const usePhoto = !!photo && (reference || state.view !== 'sketch');
   const source = usePhoto ? photo : `assets/garment-${g.id}.png`;
   return `<aside class="preview-panel" aria-label="Garment preview">
-    <div class="preview-top"><span>${g.model}</span><button class="text-button" data-action="preview-large" aria-label="Enlarge garment preview">Enlarge ↗</button><span class="preview-label">Illustrative preview</span></div>
+    <div class="preview-top"><span>${g.model}</span><button class="text-button" data-action="preview-large" aria-label="Enlarge garment preview">Enlarge ↗</button><span class="preview-label">${reference?'Reference photo':'Illustrative preview'}</span></div>
     <div class="preview-stage ${usePhoto?'photo-stage':''}" id="preview-stage">
-      ${usePhoto?`<img class="flat-photo" src="${source}" alt="Actual ${esc(state.color)} ${esc(g.model)} ${back?'back':'front'} product photo" data-photo>`:svgGarment(g,state.color,back)}${overlay(g,usePhoto)}${state.name.trim()&&state.namePlacement!=='With logo'?overlay(g,usePhoto,true):''}
+      ${usePhoto?`<img class="flat-photo" src="${source}" alt="${reference?`${esc(g.model)} reference photo in ${referenceColor}`:`Actual ${esc(state.color)} ${esc(g.model)} ${back?'back':'front'} product photo`}" data-photo>`:svgGarment(g,state.color,back)}${reference?'':overlay(g,usePhoto)}${!reference&&state.name.trim()&&state.namePlacement!=='With logo'?overlay(g,usePhoto,true):''}
     </div>
-    <div class="preview-caption"><strong>${state.color?`${state.color} · ${state.size||'Choose a size'}`:'Choose a color'}</strong><span>${state.step>=2?`${back?'Back view':'Front view'} · ${state.finish||'Choose a finish'}`:g.weight}</span></div>
-    <div class="preview-switch">${state.step>=2&&selectedRow(state)?.placements.includes('Back')?`${btn('face','front','Front',state.face==='front')}${btn('face','back','Back',state.face==='back')}`:''}${photo?`${btn('view','study','Photo',state.view!=='sketch')}${btn('view','sketch','Study',state.view==='sketch')}`:''}</div>
-    <p class="proof-note">${usePhoto?'Real product photo with an artwork overlay.':'Color and placement study; fabric and shade will vary.'}<br>Nat’s Printify screenshot confirms the final design.</p>
+    <div class="preview-caption"><strong>${reference?`Shown: ${referenceColor}`:`${state.color} · ${state.size||'Choose a size'}`}</strong><span>${reference?'Choose a listed color':state.step>=2?`${back?'Back view':'Front view'} · ${state.finish||'Choose a finish'}`:g.weight}</span></div>
+    <div class="preview-switch">${state.step>=2&&selectedRow(state)?.placements.includes('Back')?`${btn('face','front','Front',state.face==='front')}${btn('face','back','Back',state.face==='back')}`:''}${photo&&!reference?`${btn('view','study','Photo',state.view!=='sketch')}${btn('view','sketch','Study',state.view==='sketch')}`:''}</div>
+    <p class="proof-note">${reference?'Choose a listed color to preview your selection.':`${usePhoto?'Real product photo with an artwork overlay.':'Color and placement study; fabric and shade will vary.'}<br>Nat’s Printify screenshot confirms the final design.`}</p>
     ${!usePhoto?`<details class="reference-photo"><summary>See the original garment photo</summary><img src="assets/garment-${g.id}.png" alt="${g.model} original guide reference"><span>Reference shade: ${g.photoColor}</span></details>`:''}
   </aside>`;
 }
 function sizeScreen() {
   const g = garment(), colors = availableColors(g.id), sizes = availableSizes({...state, finish: ''});
   return `<div class="config-layout"><div class="controls"><div class="selection-label"><span>${g.id} · ${g.model}</span><button class="text-button" ${attr('step',0)}>Change style</button></div>
-    <fieldset><legend>Garment color</legend><div class="color-options">${colors.map(c=>btn('color',c,`${colorSwatch(c)}<span>${c}</span>`,state.color===c)).join('')}</div>
-    ${g.id==='F'?'<p class="field-note">Black is the only checked color in your neutral palette for this quarter-zip.</p>':''}
+    <fieldset><legend>Garment color <span class="optional">Neutral palette</span></legend><div class="color-options">${colors.map(c=>btn('color',c,`${colorSwatch(c)}<span>${c}</span>`,state.color===c)).join('')}</div>
+    ${g.catalogColors?`<p class="field-note">Printify lists ${g.catalogColors.length} colors. Black matches your requested palette; the other catalog shades are ${g.catalogColors.filter(c=>c!=='Black').join(', ')}.</p>`:''}
     ${g.id==='D'?'<p class="field-note">Natural, Vintage White and Tan are the provider’s shade names. Availability varies by size.</p>':''}
     ${!colors.length?`<p class="callout">${PENDING[g.id]||'Provider check pending.'}</p>`:''}</fieldset>
     <fieldset ${!state.color?'disabled':''}><legend>Size</legend><div class="size-options">${SIZE_ORDER.filter(s=>sizes.includes(s)).map(s=>btn('size',s,s,state.size===s)).join('')}</div>
@@ -158,7 +160,7 @@ function render() {
 document.addEventListener('click',async e=>{
   const target=e.target.closest('[data-action]'); if(!target||target.disabled)return;
   const {action,value}=target.dataset;
-  if(action==='garment') {update({garment:value,color:'',size:'',finish:'',provider:'',placement:'Left chest',face:'front',step:1},`${GARMENTS.find(g=>g.id===value).model} selected.`);window.scrollTo({top:0,behavior:'instant'});document.querySelector('#screen-title').focus();}
+  if(action==='garment') {const colors=availableColors(value);update({garment:value,color:colors.length===1?colors[0]:'',size:'',finish:'',provider:'',placement:'Left chest',face:'front',step:1},`${GARMENTS.find(g=>g.id===value).model} selected.`);window.scrollTo({top:0,behavior:'instant'});document.querySelector('#screen-title').focus();}
   else if(action==='step') go(Number(value));
   else if(action==='next') go(state.step+1);
   else if(action==='filter') {filter=value;render();}
