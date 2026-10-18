@@ -51,7 +51,7 @@ interface BoardCategoryListProps {
   categories: BoardCategory[];
   onSelect: (category: BoardCategory) => void;
   /** Tapping a thread preview jumps straight into that thread. */
-  onSelectThread?: (category: BoardCategory, postId: string) => void;
+  onSelectThread?: (category: BoardCategory, postId: string, title: string) => void;
   postCounts?: Record<string, CategoryStats>;
   emptyLabel?: string;
   searchMatches?: Record<string, BoardCategorySearchMatchSummary>;
@@ -257,7 +257,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                       onPress={(event) => {
                         if (onSelectThread) {
                           event.stopPropagation?.();
-                          onSelectThread(item, thread.id);
+                          onSelectThread(item, thread.id, thread.title);
                         } else {
                           onSelect(item);
                         }
@@ -395,7 +395,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                       onPress={(event) => {
                         if (onSelectThread) {
                           event.stopPropagation?.();
-                          onSelectThread(item, thread.id);
+                          onSelectThread(item, thread.id, thread.title);
                         } else {
                           onSelect(item);
                         }

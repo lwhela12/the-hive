@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, Text, FlatList, RefreshControl, Pressable, ActivityIndicator, TextInput, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from '../../components/ui/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -168,9 +168,12 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const routeParams = useLocalSearchParams<{
     categoryId?: string | string[];
     postId?: string | string[];
+    board?: string | string[];
+    thread?: string | string[];
     open?: string | string[];
     from?: string | string[];
   }>();
+  const pathname = usePathname();
   const { width } = useWindowDimensions();
   const useMobileLayout = width < 768;
 
@@ -188,6 +191,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   // The wide list has no community to ask for — that is the whole point of it —
   // so it is fetched first and tells us who the owner is (Nat 2026-08-03).
   const isWide = reach === 'all_hives';
+  const boardRoutePath = isWide ? '/hive-wide-boards' : '/board';
   // Cream inside a HIVE, the world in space at HIVE-Wide. Nat asked for this
   // twice, and she was right both times: the shared boards were wearing OG's
   // cream while the rail beside them was black (2026-08-03).
@@ -231,6 +235,43 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const routeOrigin = getRouteParam(routeParams.from);
   const hasRouteTarget = !!routeCategoryId || !!routePostId;
   const shouldReturnHomeFromRoute = routeOrigin === 'home' && hasRouteTarget;
+  const boardLocationKey = JSON.stringify([pathname, routeCategoryId ?? '', routePostId ?? '']);
+  const boardHistoryRef = useRef<string[]>([]);
+  const routeNavigationActiveRef = useRef(hasRouteTarget);
+
+  // Keep a small record of in-app board steps. Browser Back updates Expo
+  // Router's search params; matching that location trims the forward entries
+  // so the in-app arrows can use the same history when it exists, while a
+  // directly opened thread still has a safe local fallback.
+  useEffect(() => {
+    const history = boardHistoryRef.current;
+    const existingIndex = history.lastIndexOf(boardLocationKey);
+    if (existingIndex >= 0) history.splice(existingIndex + 1);
+    else history.push(boardLocationKey);
+  }, [boardLocationKey]);
+
+  const pushBoardLocation = useCallback((category: BoardCategory, post?: Pick<BoardPost, 'id' | 'title'>) => {
+    const readableSlug = (value: string) => value
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .replace(/[^\p{L}\p{N}]+/gu, '-')
+      .replace(/^-|-$/g, '');
+    const params: Record<string, string> = {
+      categoryId: category.id,
+      board: readableSlug(category.name),
+    };
+    if (post) {
+      params.postId = post.id;
+      params.thread = readableSlug(post.title);
+    }
+    if (routeOrigin) params.from = routeOrigin;
+    if (routeOpenKey) params.open = routeOpenKey;
+
+    const nextKey = JSON.stringify([boardRoutePath, category.id, post?.id ?? '']);
+    if (boardHistoryRef.current.at(-1) !== nextKey) boardHistoryRef.current.push(nextKey);
+    router.push({ pathname: boardRoutePath, params } as never);
+  }, [boardRoutePath, routeOpenKey, routeOrigin, router]);
 
   // ── Opening a link to one thread ───────────────────────────────────────────
   //
@@ -437,10 +478,21 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     if (boardDirectOpenStorageKey) removeStoredItem(boardDirectOpenStorageKey);
   }, [boardCategoryStorageKey, boardComposerStorageKey, boardDirectOpenStorageKey, boardPostStorageKey]);
 
+  const goBackWithinBoards = useCallback((categoryId?: string | null) => {
+    if (boardHistoryRef.current.length > 1) {
+      boardHistoryRef.current.pop();
+      router.back();
+      return;
+    }
+    const params = categoryId ? { categoryId } : {};
+    if (!categoryId) resetBoardToList();
+    boardHistoryRef.current = [JSON.stringify([boardRoutePath, categoryId ?? '', ''])];
+    router.replace({ pathname: boardRoutePath, params } as never);
+  }, [boardRoutePath, resetBoardToList, router]);
+
   const resetThreadToBoard = useCallback(() => {
-    setSelectedPostId(null);
-    if (boardPostStorageKey) removeStoredItem(boardPostStorageKey);
-  }, [boardPostStorageKey]);
+    goBackWithinBoards(selectedCategoryId);
+  }, [goBackWithinBoards, selectedCategoryId]);
 
   const returnToCheckInFromRoute = useCallback(() => {
     setCheckInVisitActive(false);
@@ -852,6 +904,19 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     routePostReady,
   ]);
 
+  // The URL is the source of truth when someone uses browser Back. Returning
+  // from a board to `/board` must clear nested selection rather than letting
+  // the last-visited session storage reopen it immediately.
+  useEffect(() => {
+    if (hasRouteTarget) {
+      routeNavigationActiveRef.current = true;
+      return;
+    }
+    if (!routeNavigationActiveRef.current) return;
+    routeNavigationActiveRef.current = false;
+    resetBoardToList();
+  }, [hasRouteTarget, resetBoardToList]);
+
   // The two effects below put you back where you were last time. A link names
   // where it wants you, so they keep their hands off it — otherwise the board
   // you had open last week quietly reappears around somebody else's thread.
@@ -933,7 +998,8 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     if (boardCategoryStorageKey) {
       setStoredItem(boardCategoryStorageKey, category.id);
     }
-  }, [boardCategoryStorageKey, boardSearch, boardSearchMatchesByCategory, boardSearchQuery, routeCategoryId, routeOrigin]);
+    pushBoardLocation(category);
+  }, [boardCategoryStorageKey, boardSearch, boardSearchMatchesByCategory, boardSearchQuery, pushBoardLocation, routeCategoryId, routeOrigin]);
 
   const returnHomeFromRouteTarget = useCallback(() => {
     resetBoardToList();
@@ -950,8 +1016,8 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       return;
     }
 
-    resetBoardToList();
-  }, [resetBoardToList, returnHomeFromRouteTarget, returnToCheckInFromRoute, shouldReturnHomeFromRoute, shouldReturnToCheckInFromRoute]);
+    goBackWithinBoards(null);
+  }, [goBackWithinBoards, returnHomeFromRouteTarget, returnToCheckInFromRoute, shouldReturnHomeFromRoute, shouldReturnToCheckInFromRoute]);
 
   const handleOpenComposer = useCallback(() => {
     setEditingPost(null);
@@ -980,12 +1046,24 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     }
   }, [boardComposerStorageKey]);
 
-  const handlePostSelect = useCallback((postId: string) => {
+  const handlePostSelect = useCallback((postId: string, title?: string) => {
     setSelectedPostId(postId);
     if (boardPostStorageKey) {
       setStoredItem(boardPostStorageKey, postId);
     }
-  }, [boardPostStorageKey]);
+    if (selectedCategory && title) pushBoardLocation(selectedCategory, { id: postId, title });
+  }, [boardPostStorageKey, pushBoardLocation, selectedCategory]);
+
+  const handleOpenThreadFromBoardTile = useCallback((category: BoardCategory, postId: string, title: string) => {
+    if (routeOrigin === 'endofmonth' && category.id !== routeCategoryId) setCheckInVisitActive(false);
+    setSelectedCategoryId(category.id);
+    setSelectedPostId(postId);
+    setThreadListView('active');
+    setThreadSearch('');
+    if (boardCategoryStorageKey) setStoredItem(boardCategoryStorageKey, category.id);
+    if (boardPostStorageKey) setStoredItem(boardPostStorageKey, postId);
+    pushBoardLocation(category, { id: postId, title });
+  }, [boardCategoryStorageKey, boardPostStorageKey, pushBoardLocation, routeCategoryId, routeOrigin]);
 
   const handlePostBack = useCallback(() => {
     if (shouldReturnHomeFromRoute) {
@@ -993,10 +1071,10 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       return;
     }
 
-    resetThreadToBoard();
+    goBackWithinBoards(selectedCategoryId);
     invalidatePosts();
     refetchPostCounts();
-  }, [invalidatePosts, refetchPostCounts, resetThreadToBoard, returnHomeFromRouteTarget, shouldReturnHomeFromRoute]);
+  }, [goBackWithinBoards, invalidatePosts, refetchPostCounts, returnHomeFromRouteTarget, selectedCategoryId, shouldReturnHomeFromRoute]);
 
   const handleCreatePost = async (title: string, content: string, attachments?: Attachment[]) => {
     if (!profile || !selectedBoardCommunityId || !selectedCategory) {
@@ -2452,10 +2530,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
             <BoardCategoryList
               categories={visibleCategories}
               onSelect={handleCategorySelect}
-              onSelectThread={(category, postId) => {
-                handleCategorySelect(category);
-                handlePostSelect(postId);
-              }}
+              onSelectThread={handleOpenThreadFromBoardTile}
               postCounts={postCounts}
               searchMatches={boardSearchQuery ? boardSearchMatchesByCategory : undefined}
               viewMode={boardView}
@@ -2518,7 +2593,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           return (
             <BoardPostCard
               post={item}
-              onPress={() => handlePostSelect(item.id)}
+              onPress={() => handlePostSelect(item.id, item.title)}
               canEdit={canManageThread(item)}
               onEdit={handleEditThread}
               onUseFormat={canPost() && item.is_pinned && /^start here\b/i.test(item.title.trim())
