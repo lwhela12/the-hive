@@ -1184,6 +1184,8 @@ export default function HiveScreen() {
     fetchRecentAnswers();
   };
   const [selectedWish, setSelectedWish] = useState<WishWithGranters | null>(null);
+  const wishRouteActiveRef = useRef(false);
+  const wishRouteWasPushedHereRef = useRef(false);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
   const [managingWish, setManagingWish] = useState<WishWithGranters | null>(null);
   const [wishToGrant, setWishToGrant] = useState<WishWithGranters | null>(null);
@@ -1213,12 +1215,32 @@ export default function HiveScreen() {
       wishReturnRef.current = null;
       router.replace(back as any);
     } else if (askedWishId) {
-      // Keep a deep link intact until its wish is actually closed. A service
-      // worker can reload this page while opening it; an eager clear would
-      // strand that reload on Home with no wish left to retry.
-      router.setParams({ openWishId: undefined, hive: undefined } as any);
+      if (wishRouteWasPushedHereRef.current && router.canGoBack()) {
+        wishRouteWasPushedHereRef.current = false;
+        router.back();
+      } else {
+        // A direct link has no in-app detail entry to go back to. Close it to
+        // the HIVE page rather than letting its X escape to the public site.
+        wishRouteWasPushedHereRef.current = false;
+        router.setParams({ openWishId: undefined, hive: undefined } as any);
+      }
     }
   }, [askedWishId, clearSelectedWishResume, router]);
+
+  // The wish sheet is a real Home destination now, not just local state. If
+  // browser Back removes its query, dismiss the sheet as well. Restored wishes
+  // without a route target remain ordinary Home state.
+  useEffect(() => {
+    if (askedWishId) {
+      wishRouteActiveRef.current = true;
+      return;
+    }
+    if (!wishRouteActiveRef.current) return;
+    wishRouteActiveRef.current = false;
+    wishRouteWasPushedHereRef.current = false;
+    setSelectedWish(null);
+    clearSelectedWishResume();
+  }, [askedWishId, clearSelectedWishResume]);
 
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
@@ -1998,8 +2020,9 @@ export default function HiveScreen() {
   }, [clearSelectedWishResume, communityId, openWishDetail]);
 
   const openWishFromActivity = useCallback((wishId: string) => {
-    void openWishById(wishId, { alertOnUnavailable: true });
-  }, [openWishById]);
+    wishRouteWasPushedHereRef.current = true;
+    router.push({ pathname: '/hive', params: { openWishId: wishId } } as any);
+  }, [router]);
 
   // Deep link: /hive?openWishId=... opens that wish's detail sheet (used by the
   // profile App Feedback shortcut; works for any screen that wants to point at a wish).
@@ -4137,7 +4160,7 @@ export default function HiveScreen() {
                               <WishCard
                                 key={wish.id}
                                 wish={wish}
-                                onPress={() => openWishDetail(wish)}
+                                onPress={() => openWishFromActivity(wish.id)}
                                 canEdit={canOpenWishActions(wish)}
                                 canDelete={canDeleteWish(wish)}
                                 onManage={() => setManagingWish(wish)}

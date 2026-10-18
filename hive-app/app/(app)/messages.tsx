@@ -183,6 +183,9 @@ export default function MessagesScreen() {
   const [railMembers, setRailMembers] = useState<Profile[]>([]);
   const hasPrefetchedRef = useRef(false);
   const ignoredDirectRoomIdRef = useRef<string | null>(null);
+  const roomRouteActiveRef = useRef(false);
+  const roomWasPushedHereRef = useRef(false);
+  const ignoreSavedRoomRestoreRef = useRef(false);
   const selectedRoomStorageKey = communityId ? `the-hive:last-chat-room:${communityId}` : null;
 
   // Use the optimized chat rooms hook (React Query with caching)
@@ -246,6 +249,24 @@ export default function MessagesScreen() {
     }
   }, [wholeHive, communityId, roomId, router, selectedRoomStorageKey]);
 
+  // Rooms are useful destinations in their own right. Keep a room selection
+  // addressable, and let browser Back return to the room list when the room was
+  // opened from this screen. A directly opened room remains safe: its in-page
+  // close falls back to /messages instead of guessing at external history.
+  useEffect(() => {
+    if (roomId) {
+      roomRouteActiveRef.current = true;
+      return;
+    }
+    if (!roomRouteActiveRef.current) return;
+    roomRouteActiveRef.current = false;
+    roomWasPushedHereRef.current = false;
+    ignoreSavedRoomRestoreRef.current = true;
+    ignoredDirectRoomIdRef.current = selectedRoom?.id ?? null;
+    setSelectedRoom(null);
+    setCustomizeRoomOnOpen(false);
+  }, [roomId, selectedRoom?.id]);
+
   // Prefetch messages for top 7 rooms when room list loads
   useEffect(() => {
     if (rooms.length > 0 && !hasPrefetchedRef.current) {
@@ -278,6 +299,11 @@ export default function MessagesScreen() {
       return;
     }
 
+    if (ignoreSavedRoomRestoreRef.current) {
+      ignoreSavedRoomRestoreRef.current = false;
+      return;
+    }
+
     const directRoomId = roomId && roomId !== ignoredDirectRoomIdRef.current ? roomId : null;
 
     if (directRoomId) {
@@ -302,6 +328,9 @@ export default function MessagesScreen() {
       if (savedRoom) {
         setSelectedRoom(savedRoom);
         markRoomAsRead(savedRoom.id);
+        // Restore the remembered conversation in the address too. It is an
+        // automatic replace, not a new back-button step.
+        router.setParams({ roomId: savedRoom.id } as never);
       } else {
         void removeStoredItemAsync(selectedRoomStorageKey);
       }
@@ -310,7 +339,7 @@ export default function MessagesScreen() {
     return () => {
       cancelled = true;
     };
-  }, [markRoomAsRead, roomId, rooms, selectedRoom, selectedRoomStorageKey, showHiveWide, wholeHive]);
+  }, [markRoomAsRead, roomId, rooms, router, selectedRoom, selectedRoomStorageKey, showHiveWide, wholeHive]);
 
   const openHiveWide = useCallback(() => {
     setShowHiveWide(true);
@@ -329,22 +358,32 @@ export default function MessagesScreen() {
     setShowHiveWide(false);
     setSelectedRoom(room);
     setCustomizeRoomOnOpen(false);
+    roomRouteActiveRef.current = true;
+    if (roomId !== room.id) {
+      roomWasPushedHereRef.current = true;
+      router.push({ pathname: '/messages', params: { roomId: room.id } } as never);
+    }
 
     if (selectedRoomStorageKey) {
       void setStoredItemAsync(selectedRoomStorageKey, room.id);
     }
-  }, [markRoomAsRead, selectedRoomStorageKey]);
+  }, [markRoomAsRead, roomId, router, selectedRoomStorageKey]);
 
   const openRoomCustomizer = useCallback((room: RoomWithData) => {
     markRoomAsRead(room.id);
     setShowHiveWide(false);
     setCustomizeRoomOnOpen(true);
     setSelectedRoom(room);
+    roomRouteActiveRef.current = true;
+    if (roomId !== room.id) {
+      roomWasPushedHereRef.current = true;
+      router.push({ pathname: '/messages', params: { roomId: room.id } } as never);
+    }
 
     if (selectedRoomStorageKey) {
       void setStoredItemAsync(selectedRoomStorageKey, room.id);
     }
-  }, [markRoomAsRead, selectedRoomStorageKey]);
+  }, [markRoomAsRead, roomId, router, selectedRoomStorageKey]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -494,7 +533,12 @@ export default function MessagesScreen() {
     if (!selectedRoom) return;
     // Mark room as read when leaving
     markRoomAsRead(selectedRoom.id);
-    if (roomId) {
+    if (roomId && roomWasPushedHereRef.current && router.canGoBack()) {
+      roomRouteActiveRef.current = false;
+      roomWasPushedHereRef.current = false;
+      ignoreSavedRoomRestoreRef.current = true;
+      router.back();
+    } else if (roomId) {
       ignoredDirectRoomIdRef.current = roomId;
       router.replace('/messages');
     }

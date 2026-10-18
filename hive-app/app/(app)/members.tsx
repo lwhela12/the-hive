@@ -2668,6 +2668,7 @@ export default function MembersScreen() {
    * directory behind it does.
    */
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const memberDetailWasPushedRef = useRef(false);
   /**
    * A member the card has just changed, held over the top of the fetched list.
    *
@@ -3092,16 +3093,34 @@ export default function MembersScreen() {
     // that survives a reload and can be sent to somebody. Links from other
     // screens (`MemberProfileLink`) already arrive this way; tapping a hexagon
     // used to not, so the same card had two ways of existing (2026-08-06).
-    router.setParams({ memberId: member.id });
+    // A selected member is a real destination: keep it in the address and in
+    // browser history so Back closes the card (and a copied link reopens it).
+    memberDetailWasPushedRef.current = true;
+    router.push({ pathname: '/members', params: { memberId: member.id } } as never);
   }, [router]);
 
   const closeMemberProfile = useCallback(() => {
     setSelectedId(null);
     if (memberId) {
       dismissedRouteMemberIdRef.current = memberId;
-      router.replace('/members');
+      if (memberDetailWasPushedRef.current && router.canGoBack()) {
+        memberDetailWasPushedRef.current = false;
+        router.back();
+      } else {
+        memberDetailWasPushedRef.current = false;
+        router.replace('/members');
+      }
     }
   }, [memberId, router]);
+
+  // Browser Back can close a card just like its X button. Keep the mounted
+  // Members tab in step with the address instead of leaving a stale card open.
+  useEffect(() => {
+    if (!memberId && memberDetailWasPushedRef.current) {
+      memberDetailWasPushedRef.current = false;
+      setSelectedId(null);
+    }
+  }, [memberId]);
 
   useEffect(() => {
     if (memberId) return;
