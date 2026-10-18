@@ -115,6 +115,15 @@ function getRouteParam(value: string | string[] | undefined) {
   return value ?? null;
 }
 
+function readableBoardSlug(value: string) {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-|-$/g, '');
+}
+
 /**
  * A long board name, broken onto two lines so it fits a phone header.
  *
@@ -251,19 +260,13 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   }, [boardLocationKey]);
 
   const pushBoardLocation = useCallback((category: BoardCategory, post?: Pick<BoardPost, 'id' | 'title'>) => {
-    const readableSlug = (value: string) => value
-      .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim()
-      .replace(/[^\p{L}\p{N}]+/gu, '-')
-      .replace(/^-|-$/g, '');
     const params: Record<string, string> = {
       categoryId: category.id,
-      board: readableSlug(category.name),
+      board: readableBoardSlug(category.name),
     };
     if (post) {
       params.postId = post.id;
-      params.thread = readableSlug(post.title);
+      params.thread = readableBoardSlug(post.title);
     }
     if (routeOrigin) params.from = routeOrigin;
     if (routeOpenKey) params.open = routeOpenKey;
@@ -694,6 +697,17 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     useCallback(() => {
       if (hasRouteTarget) return;
 
+      const restoreSavedLocation = (categoryId: string | null, postId: string | null) => {
+        const params: Record<string, string> = {};
+        if (categoryId) {
+          params.categoryId = categoryId;
+          const category = categories.find((item) => item.id === categoryId);
+          if (category) params.board = readableBoardSlug(category.name);
+        }
+        if (postId) params.postId = postId;
+        if (Object.keys(params).length > 0) router.setParams(params as never);
+      };
+
       const isDirectOpen = boardDirectOpenStorageKey
         ? getStoredItem(boardDirectOpenStorageKey) === 'true'
         : false;
@@ -703,6 +717,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         const savedPostId = boardPostStorageKey ? getStoredItem(boardPostStorageKey) : null;
         if (savedCategoryId) setSelectedCategoryId(savedCategoryId);
         if (savedPostId) setSelectedPostId(savedPostId);
+        restoreSavedLocation(savedCategoryId, savedPostId);
         return;
       }
 
@@ -710,12 +725,13 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       const savedPostId = boardPostStorageKey ? getStoredItem(boardPostStorageKey) : null;
       if (savedCategoryId) setSelectedCategoryId(savedCategoryId);
       if (savedPostId) setSelectedPostId(savedPostId);
+      restoreSavedLocation(savedCategoryId, savedPostId);
 
       const isComposing = boardComposerStorageKey
         ? getStoredItem(boardComposerStorageKey) === 'true'
         : false;
       if (isComposing) setShowComposer(true);
-    }, [boardCategoryStorageKey, boardComposerStorageKey, boardDirectOpenStorageKey, boardPostStorageKey, hasRouteTarget, resetBoardToList])
+    }, [boardCategoryStorageKey, boardComposerStorageKey, boardDirectOpenStorageKey, boardPostStorageKey, categories, hasRouteTarget, resetBoardToList, router])
   );
 
   /**
