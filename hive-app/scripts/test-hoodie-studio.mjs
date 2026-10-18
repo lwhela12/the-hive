@@ -1,14 +1,58 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {GARMENTS, initialState, normalize, availableColors, availableSizes, availableFinishes, selectedRow, canReview, selectionText}
+import {GARMENTS, PRICE_GUIDE, initialState, normalize, availableColors, availableSizes, availableFinishes, selectedRow, isBackPlacement, canReview, priceFor, selectionText}
   from '../public/hoodie-studio/catalog.mjs';
 
 const pick = patch => normalize({...initialState(), ...patch});
-test('both quarter-zips reject embroidery, with only checked neutral variants', () => {
+test('quarter-zips expose only exact checked finishes and placements', () => {
   assert.deepEqual(availableColors('F'), ['Black']);
   assert.deepEqual(availableFinishes(pick({garment:'F', color:'Black', size:'L'})), ['DTF']);
-  assert.deepEqual(availableFinishes(pick({garment:'B', color:'Sand', size:'3XL'})), ['DTG']);
+  assert.deepEqual(availableColors('B'), ['Dust']);
+  assert.deepEqual(availableFinishes(pick({garment:'B', color:'Dust', size:'3XL'})), ['DTG','DTF','Embroidery']);
   assert.equal(canReview(pick({garment:'F',color:'Black',size:'L',finish:'Embroidery',provider:'Fulfill Engine'})),false);
+  assert.ok(canReview(pick({garment:'B',color:'Dust',size:'L',finish:'Embroidery',provider:'Printful',placement:'Left chest'})));
+  const printful = pick({garment:'B',color:'Dust',size:'L',finish:'Embroidery',provider:'Printful'});
+  assert.ok(!selectedRow(printful).placements.includes('Large back'));
+  const staleBack = normalize({...printful,placement:'Large back',face:'back'});
+  assert.equal(staleBack.placement,'Left chest');
+  assert.equal(staleBack.face,'front');
+  const printify = pick({garment:'B',color:'Dust',size:'L',finish:'DTF',provider:'Fulfill Engine · Printify'});
+  assert.equal(printify.placement,'Back');
+  assert.equal(canReview({...printify,placement:'Left chest'}),false);
+});
+test('back placement labels are recognized without exact-string coupling', () => {
+  assert.equal(isBackPlacement('Back'),true);
+  assert.equal(isBackPlacement('Large back'),true);
+  assert.equal(isBackPlacement('Left chest'),false);
+  const printable=pick({garment:'B',color:'Dust',size:'L',finish:'DTF',provider:'Fulfill Engine · Printify',placement:'Back',face:'back'});
+  assert.equal(printable.face,'back');
+});
+test('Meg black-on-black layout keeps both Printful embroidery placements', () => {
+  const meg=pick({garment:'H',color:'Black',size:'L',finish:'Embroidery',provider:'Printful',designLayout:'chest-back',name:'Meg',logo:'G',placement:'Large back',artColor:'White'});
+  assert.deepEqual(availableFinishes(meg),['DTG','DTF','Embroidery']);
+  assert.equal(meg.designLayout,'chest-back');
+  assert.equal(meg.logo,'C');
+  assert.equal(meg.placement,'Left chest');
+  assert.equal(meg.artColor,'Black');
+  assert.ok(selectedRow(meg).placements.includes('Large back'));
+  assert.ok(canReview(meg));
+  assert.match(selectionText(meg),/Black-on-black chest \+ large back/);
+  assert.match(selectionText(meg),/Back artwork: G · HIVE seal/);
+  assert.equal(priceFor(meg).from,27.49);
+  assert.equal(priceFor({...meg,quantity:2}).subtotalFrom,54.98);
+  assert.match(priceFor(meg).note,/second embroidery placement costs extra/i);
+  assert.match(selectionText(meg),/Estimated item price: from \$27\.49 USD each/);
+  assert.match(selectionText(meg),/Shipping, tax and any size, color, technique or placement charges are not included/);
+});
+test('catalog and exact-provider starting prices stay distinct', () => {
+  assert.equal(PRICE_GUIDE.B.from,38.96);
+  const printify=pick({garment:'B',color:'Dust',size:'L',finish:'DTF',provider:'Fulfill Engine · Printify',quantity:3});
+  assert.equal(priceFor(printify).exactProvider,true);
+  assert.equal(priceFor(printify).from,47.37);
+  assert.equal(priceFor(printify).subtotalFrom,142.11);
+  const catalogOnly=pick({garment:'C',color:'Black',size:'L',finish:'DTG',provider:'SwiftPOD'});
+  assert.equal(priceFor(catalogOnly).exactProvider,false);
+  assert.equal(priceFor(catalogOnly).from,28.63);
 });
 test('Hanes catalog colors are distinguished from the requested neutral palette', () => {
   assert.deepEqual(GARMENTS.find(g=>g.id==='F').catalogColors,['Black','Ash','Charcoal Heather','Athletic Navy']);

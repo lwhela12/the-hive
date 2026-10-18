@@ -9,6 +9,14 @@ The dirty authentication work in the original checkout is untouched.
 
 Local review: http://127.0.0.1:8766/
 
+Production route after the authorized app release:
+https://app.the-hive.app/hoodie-studio/
+
+That production route is now the single URL used by the quarter announcement,
+the hoodie-board cleanup migration and Clive's ordering guidance. The Vercel
+configuration routes both `/hoodie-studio` and `/hoodie-studio/` to the static
+configurator. This branch does not deploy it.
+
 If the temporary server has stopped, start it from the worktree root:
 
 ```sh
@@ -29,10 +37,10 @@ No duplicate task or direct state-database edits were used.
 
 | Member's question | Visible title | Next action | Supporting detail |
 | --- | --- | --- | --- |
-| Which garment fits how I want it to feel? | Choose your style | Choose one of six garments | Both quarter-zips together; weight, blend, fit, feel; finish guide opens separately |
+| Which garment fits how I want it to feel? | Choose your style | Choose from eight garments | Two each of quarter-zips, hoodies, crewnecks and full-zips; quarter-zips side by side |
 | Which neutral color and size can I request? | Choose your color & size | Choose color, size and quantity | Exact availability narrows by provider and finish; size chart links to the model |
 | What can go on this garment, and where? | Make it yours | Choose compatible finish, artwork and optional name | Constrained placements, font and text color; live photo/study preview; front/back and enlargement |
-| Are these the selections I want Nat to prepare? | Review your picks | Save locally or download/share selections | OG dues / non-OG at cost; Nat rechecks stock and confirms the Printify screenshot |
+| Are these the selections I want Nat to prepare? | Review your picks | Save locally or download/share selections | OG dues / non-OG at cost; Nat rechecks stock and confirms the provider screenshot |
 
 One title per step. Page explanation, production caveats and repeated guide
 headings are kept out of the masthead. Finish explanations live by the controls
@@ -59,19 +67,42 @@ were inspected for context, rather than changed into a competing flow.
 
 ## Catalog evidence
 
-Snapshot: **October 14, 2026**, forwarded from official Printify provider tables.
-It is a catalog snapshot, rather than a live inventory service.
+The original six model records are from **October 14, 2026**. The added crewneck
+and full-zip records were checked against public Printify listings on
+**October 18, 2026**. This is a catalog snapshot, rather than a live inventory
+service.
 Records remain separate per provider and finish. Changing a choice normalizes
 incompatible fields before review becomes available.
 
 | Model | Included neutral records |
 | --- | --- |
-| Gildan SF008 | Choice DTG: Black / Sand / Off White, S–3XL |
+| Bella+Canvas 4740 | Dust, XS–4XL. Printify Fulfill Engine DTG/DTF on back/sleeves; Printful embroidery on left/right chest or wrists (Printful through 3XL) |
 | Hanes OG900 | Fulfill Engine DTF: Black, S–3XL; no embroidery |
 | Gildan 18500 | Choice DTG: Black / White / Sand, S–5XL; Fulfill Engine embroidery: Black / Sand S–5XL, White S–3XL and 5XL (4XL absent) |
 | Gildan 18600 | SwiftPOD DTG and Fulfill Engine embroidery: Black S–5XL, White S–3XL; unstocked White 4XL/5XL excluded |
 | Bella+Canvas 3719 | Fulfill Engine DTF: Black / White / Vintage White XS–3XL; Natural S–3XL; Tan XS/S/M/XL/3XL; Heather Dust XS/S/XL |
 | Gildan 18000 | Choice DTG: Black / White S–5XL, Sand S–3XL; Fulfill Engine embroidery: Black / White / Sand S–3XL |
+| Independent Trading Co. IND5000C | Fulfill Engine DTG and DTF: Black / White / Bone XS–3XL; front / back / sleeve print areas; no embroidery |
+| Lane Seven LS14003 | Fulfill Engine: Black / White / Oatmeal Heather XS–3XL; DTF chest/wrists and DTG back. Printful: Black S–3XL; embroidery at left chest and large back, including the black-on-black chest + back request |
+
+## Price guidance
+
+The form shows public **USD starting prices**, an estimated merchandise subtotal
+for the chosen quantity, and the published starting shipping price. It does not
+present those figures as a checkout quote. Size, color, technique, placement,
+tax and current provider pricing can change the final amount; Nat confirms the
+exact at-cost amount in the same provider screenshot used to approve the design.
+OG HIVE coverage through Honey Pot dues and non-OG HIVE payment at cost remain
+unchanged. The prototype has no payment or ordering controls.
+
+Starting prices checked October 18, 2026: Gildan 18500 $21.58; Bella+Canvas
+4740 $38.96 through Printful or $47.37 through Printify Fulfill Engine; Gildan
+18600 $28.63; Bella+Canvas 3719 $37.55; Gildan 18000 $17.87; Hanes OG900
+$58.80; Independent IND5000C $51.21; Lane Seven LS14003 $27.49 through
+Printful or $32.43 through Printify Fulfill Engine. Printful includes one
+decoration in its displayed product price and may add $6.50 per uploaded
+embroidery file for first-time digitization. A second embroidery placement,
+including Meg's large back, costs extra; the provider determines that amount.
 
 The chosen provider's known decoration areas are conservatively narrowed to
 useful clothing placements. Extra label/wrist/provider variants are not
@@ -84,9 +115,29 @@ It remains unselectable until an exact neutral provider/size/placement/font
 record is supplied. Uploaded-logo puff and 3D embroidery are never offered.
 
 The exact provider shade names are preserved. “Beige” is not substituted for
-Natural, Tan, Sand or Off White. Out-of-stock French Vanilla and Heather Sand
-Dune are excluded. The focused palette does not include additional black
-heather shades or gray/navy Hanes variants.
+Natural, Tan, Sand, Off White, Bone or Oatmeal Heather. Out-of-stock French
+Vanilla and Heather Sand Dune are excluded. The focused palette does not
+include additional black heather shades or gray/navy Hanes variants.
+
+The expanded October 18 check found a substantially better light quarter-zip:
+the Bella+Canvas 4740 in Dust. It is 10 oz/yd² (339 gsm) brushed three-end
+fleece, between the 8.4 oz Gildan and 13 oz Hanes. Printify's Fulfill Engine
+listing offers Dust in XS–4XL with DTG/DTF on the back or sleeves. Printful's
+listing offers the same blank through 3XL with left-chest embroidery and no
+minimum. The 4740 replaces the lighter Gildan SF008 in the two-option
+quarter-zip comparison.
+
+No 13 oz quarter-zip in a cream shade was found: the 13 oz Hanes OG900 listing
+shows Black, Ash, Charcoal Heather and Athletic Navy. The closest light-color
+garment at or above that weight remains the IND5000C crewneck in Bone at 13.5
+oz. It is a crewneck and the checked Fulfill Engine option has DTG/DTF, without
+embroidery.
+
+[Printful's Lane Seven LS14014](https://www.printful.com/custom/mens/hoodies-sweatshirts/unisex-premium-quarter-zip-sweatshirt-lane-seven-ls14014)
+is a lighter cream-adjacent alternative: its Sandshell shade is listed in
+S–3XL, with left-chest embroidery or DTFlex, but the garment is 8.25 oz/yd².
+[Printful's Comfort Colors 1580 quarter-zip](https://www.printful.com/custom/collections/sportswear/unisex-garment-dyed-quarter-zip-sweatshirt-comfort-colors-1580)
+is 9.5 oz/yd² and DTF-only. Neither matches the Hanes's 13 oz weight.
 
 Fabric specifications were checked against the linked official Printify model
 pages and Bella+Canvas's manufacturer page. The 3719 weight discrepancy remains
@@ -121,7 +172,7 @@ the original photograph available separately.
 
 **Remaining photography work:** replace the original Gildan reference shots
 with forwarded, matching neutral front/back catalog images when available.
-Until then, the six-card layout and labeling are consistent, while the original
+Until then, the eight-card layout and labeling are consistent, while the original
 photography differs in pose/background. This is not a completed uniform photo
 set. Overlays and sketches always require Nat's final Printify screenshot.
 
@@ -155,16 +206,14 @@ It always launches a new headless browser and fresh profile. No Nat browser,
 desktop browser tabs, account profile, clipboard or device is inspected.
 
 Evidence is saved in `/Users/thenateffect/HIVE/hoodie-review-evidence`.
-Final local pass: **11 catalog boundary tests passed**, module syntax checks
-passed, page-header lint passed, diff whitespace check passed, and the browser
-journey suite passed with zero JavaScript errors and local-only requests.
-Checks cover desktop 1440×1000, 1024×768, tablet 768×1024, and widths around
-responsive boundaries: 640×800, 560×844, phone 390×844, 320×640 and landscape
-844×390. Journey checks cover conditional sizes/finishes, all Hanes placements,
-separate name placement, both garment sides, photo/study views, enlargement,
-finish guide, name-only selection, exact name/font/color, local save/readback,
-downloaded selection text and horizontal overflow. Browser requests must remain
-local and JavaScript errors must be absent.
+The current catalog passed **14 boundary and price tests**, module syntax
+checks, page-header lint and diff whitespace checks. The earlier six-style
+baseline passed the full browser journey suite. The updated eight-style price page was visually reviewed in a
+fresh isolated headless browser at 1440 px and 390 px: all eight cards showed
+starting prices, Meg's quantity-two Printful review showed the $27.49 item
+start and $54.98 merchandise subtotal, and the phone viewport had no horizontal
+overflow. Review captures are in this folder as `pricing-style-review.png`,
+`pricing-meg-review.png`, and `pricing-meg-mobile-review.png`.
 
 This verifies the review prototype. Full Expo/native build and signed-in
 integration are not claimed; another evaluator owns baseline dependency/test

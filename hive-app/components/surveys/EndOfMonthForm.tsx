@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,6 +13,7 @@ import { SPACE_SKIN } from '../../lib/pageSkin';
 import { CARRY_FORWARD_ANSWER_KEY, getCarryForwardStatusLabel, normalizeCarryForwardResponse, type CarryForwardItem, type CarryForwardStatus } from '../../lib/carryForward';
 import { endOfMonthTaskResponses, type EndOfMonthAnswers } from '../../lib/endOfMonth';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
+import { HIVE_CLOTHING_ORDER_URL } from '../../lib/hoodieOrdering';
 import type { Community, SurveyQuestion } from '../../types';
 import type { SurveyAnswerValue } from '../../lib/hooks/useSurveys';
 
@@ -189,11 +190,17 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
           <Text accessibilityRole="header" style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: '#313130' }}>It’s hoodie season!</Text>
           {sections.some(section => section.community.slug === 'default') &&
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
-                OG HIVE members: we’re using part of our Honey Pot dues to cover our hoodies and the rest for the Bumblebee Ball. Please reach out to Nat to schedule a time to design and order your hoodie, virtually or in person.
+                OG HIVE members: Honey Pot dues cover your HIVE clothing. Choose your garment, color, size and artwork in the ordering site; Nat will prepare the provider design and confirm it with you by screenshot.
               </Text>}
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#313130' }}>
-            Not in OG? You can still get a hoodie at cost from our shop. Reach out to Nat to schedule a time to design and order yours, virtually or in person.
+            Not in OG? You can order from the same site at cost. Prices shown are starting estimates; Nat confirms the exact amount before ordering.
           </Text>
+          <Pressable accessibilityRole="link" accessibilityLabel="Open the HIVE clothing ordering site"
+            disabled={saving} onPress={() => { void leaveWithDraft(() => { void Linking.openURL(HIVE_CLOTHING_ORDER_URL); }); }}
+            style={({ pressed }) => ({ minHeight: 44, alignSelf: 'flex-start', justifyContent: 'center', paddingHorizontal: 14,
+              borderRadius: 999, borderWidth: 1, borderColor: '#8a652f', backgroundColor: '#f5eddc', opacity: pressed || saving ? 0.7 : 1 })}>
+            <Text style={{ ...buttonText, color: '#313130' }}>Choose my HIVE clothing</Text>
+          </Pressable>
         </View>}
         {!completedReview && <HiveHelpPreview disabled={saving} onOpenBoard={categoryId => {
           if (onOpenHiveHelp) void leaveWithDraft(() => onOpenHiveHelp(categoryId));

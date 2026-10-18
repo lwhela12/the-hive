@@ -7,7 +7,7 @@ const jsx = require('react/jsx-runtime');
 // Exercise the real form's save/exit handlers without writing member data.
 function harness(result, withTask = false, announcementHives = [], draftFailure = false, showDeadline = false) {
   const slots = []; let cursor = 0; let saves = 0; let exits = 0; let removed = 0; let miqOpens = 0; let helpOpens = 0; let savedAnswers;
-  const drafts = [];
+  const drafts = []; const openedUrls = [];
   const react = {
     useState: initial => { const i = cursor++; if (!(i in slots)) slots[i] = initial;
       return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next; }]; },
@@ -15,7 +15,8 @@ function harness(result, withTask = false, announcementHives = [], draftFailure 
   };
   const mocks = {
     react, 'react/jsx-runtime': jsx,
-    'react-native': Object.fromEntries(['ActivityIndicator', 'Pressable', 'ScrollView', 'Text', 'View'].map(n => [n, n])),
+    'react-native': { ...Object.fromEntries(['ActivityIndicator', 'Pressable', 'ScrollView', 'Text', 'View'].map(n => [n, n])),
+      Linking: { openURL: async url => { openedUrls.push(url); } } },
     'expo-image': { Image: 'Image' }, '@expo/vector-icons': { Ionicons: 'Ionicons' },
     '@react-native-async-storage/async-storage': { __esModule: true, default: {
       setItem: async (key, value) => { if (draftFailure) throw new Error('device storage unavailable'); drafts.push([key, JSON.parse(value)]); },
@@ -28,6 +29,7 @@ function harness(result, withTask = false, announcementHives = [], draftFailure 
     '../../lib/endOfMonth': { endOfMonthTaskResponses: (items, answers) => items.map(item => ({ ...item,
       status: answers.q_carry_forward_items?.find(saved => saved.id === item.id)?.status ?? 'keep_active' })) },
     '../../lib/actionItemDisplay': { parseActionItemDescription: label => ({ text: label, context: null }) },
+    '../../lib/hoodieOrdering': { HIVE_CLOTHING_ORDER_URL: 'https://app.the-hive.app/hoodie-studio/' },
     './SurveyQuestionField': { SurveyQuestionField: 'Question' },
     './BuzzContributionInput': { BuzzContributionInput: 'Input' },
     './BuzzCalendarPreview': { BuzzCalendarPreview: 'Calendar' },
@@ -66,7 +68,7 @@ function harness(result, withTask = false, announcementHives = [], draftFailure 
     onDone: () => { exits++; }, onEmailSettings: () => {},
   };
   function render() { cursor = 0; return EndOfMonthForm(props); }
-  return { render, SurveyCompletion, counts: () => ({ saves, exits, removed }), drafts, savedAnswers: () => savedAnswers,
+  return { render, SurveyCompletion, counts: () => ({ saves, exits, removed }), drafts, openedUrls, savedAnswers: () => savedAnswers,
     miqOpens: () => miqOpens, helpOpens: () => helpOpens };
 }
 function walk(node) {
@@ -139,8 +141,14 @@ function button(tree, label) { return walk(tree).find(n => n.type === 'Pressable
   const ogAnnouncement = text(ogAnnouncementTree);
   assert.match(ogAnnouncement, /Your to-do list.*to-dos already assigned to you in each HIVE/);
   assert.match(ogAnnouncement, /It’s hoodie season!/);
-  assert.match(ogAnnouncement, /Honey Pot dues.*Bumblebee Ball.*reach out to Nat.*virtually or in person/);
-  assert.match(ogAnnouncement, /Not in OG\?.*at cost from our shop.*virtually or in person/);
+  assert.match(ogAnnouncement, /Honey Pot dues cover.*ordering site.*Nat.*screenshot/);
+  assert.match(ogAnnouncement, /Not in OG\?.*same site at cost.*exact amount/);
+  const clothingLink = button(ogAnnouncementTree, 'Choose my HIVE clothing');
+  assert.equal(clothingLink.props.accessibilityRole, 'link');
+  assert.equal(clothingLink.props.style({ pressed: false }).minHeight, 44, 'clothing link is a phone-sized target');
+  clothingLink.props.onPress();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(ogWithTech.openedUrls, ['https://app.the-hive.app/hoodie-studio/']);
   const sharedQuestion = walk(ogAnnouncementTree).filter(node => node.type === 'Question' && node.props.question.id === 'q_quarter_help_next');
   const helpingQuestion = walk(ogAnnouncementTree).filter(node => node.type === 'Question' && node.props.question.id === 'q_quarter_helping');
   const miqLink = button(ogAnnouncementTree, 'Explore my 3MIQ');
@@ -167,9 +175,9 @@ function button(tree, label) { return walk(tree).find(n => n.type === 'Pressable
   assert.equal(failedDraftLink.miqOpens(), 0, 'a failed device draft keeps the member on the check-in');
   assert.ok(walk(failedDraftLink.render()).some(node => node.props?.accessibilityRole === 'alert'));
   const techAnnouncement = text(harness(async () => ({ error: null }), false, ['tech']).render());
-  assert.match(techAnnouncement, /Not in OG\?.*at cost from our shop.*virtually or in person/);
+  assert.match(techAnnouncement, /Not in OG\?.*same site at cost.*exact amount/);
   assert.doesNotMatch(techAnnouncement, /Honey Pot dues/);
-  assert.doesNotMatch(techAnnouncement, /https?:\/\//, 'the homework does not invent a shop link');
+  assert.match(techAnnouncement, /Choose my HIVE clothing/);
   const deadline = text(harness(async () => ({ error: null }), false, ['tech'], false, true).render());
   assert.match(deadline, /The newsletter goes out tomorrow\. Please add your shout-outs and event plugs today\./);
   assert.doesNotMatch(deadline, /October 2/);

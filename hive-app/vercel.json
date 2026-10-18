@@ -43,6 +43,14 @@
   ],
   "rewrites": [
     {
+      "source": "/hoodie-studio",
+      "destination": "/hoodie-studio/index.html"
+    },
+    {
+      "source": "/hoodie-studio/",
+      "destination": "/hoodie-studio/index.html"
+    },
+    {
       "source": "/((?!_expo/|assets/|.*\\.[a-zA-Z0-9]+$).*)",
       "destination": "/index.html"
     }

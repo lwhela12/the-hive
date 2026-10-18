@@ -32,12 +32,28 @@
   "photo_sources": {
     "Hanes OG900 Black front": "https://images.printify.com/api/catalog/6a06bc35accfefaee90860f0?s=520",
     "Hanes OG900 Black back": "https://images.printify.com/api/catalog/6a06bc3556893e2af60d71c0?s=220",
+    "Bella+Canvas 4740 Dust front": "https://images.printify.com/api/catalog/6a05daccaff5234f090b0a93?s=1040",
     "BC3719 Black front": "https://www.bellacanvas.com/bella/product/hires/37190155_1.jpg",
     "BC3719 Black back": "https://www.bellacanvas.com/bella/product/hires/37190166_1.jpg",
     "BC3719 White front": "https://www.bellacanvas.com/bella/product/hires/37190055_1.jpg",
     "BC3719 Natural front": "https://www.bellacanvas.com/bella/product/hires/37193755_1.jpg",
     "BC3719 Vintage White front": "https://www.bellacanvas.com/bella/product/hires/37190034955_1.jpg",
-    "BC3719 Tan front": "https://www.bellacanvas.com/bella/product/hires/37190030255_1.jpg"
+    "BC3719 Tan front": "https://www.bellacanvas.com/bella/product/hires/37190030255_1.jpg",
+    "IND5000C Bone front": "https://images.printify.com/api/catalog/6a06bfd658ea026ee80e1612?s=520",
+    "IND5000C Bone back": "https://images.printify.com/api/catalog/6a06bfd62f9fde96ec029694?s=520",
+    "Lane Seven LS14003 catalog reference": "https://images.printify.com/api/catalog/66d858167cb156095302f086?s=520"
+  },
+  "price_sources_checked_2026_10_18": {
+    "Gildan 18500": "https://printify.com/app/products/77/gildan/unisex-heavy-blendtm-hooded-sweatshirt",
+    "Bella+Canvas 4740 Printify": "https://printify.com/app/products/6392/bellacanvas/unisex-10-oz-quarter-zip-pullover-sweatshirt",
+    "Bella+Canvas 4740 Printful": "https://www.printful.com/custom/mens/all/unisex-heavyweight-half-zip-pullover",
+    "Gildan 18600": "https://printify.com/app/products/66/gildan/unisex-heavy-blend-full-zip-hooded-sweatshirt",
+    "Bella+Canvas 3719": "https://printify.com/app/products/175/bellacanvas/unisex-sponge-fleece-pullover-hoodie",
+    "Gildan 18000": "https://printify.com/app/products/49/gildan/unisex-heavy-blend-crewneck-sweatshirt",
+    "Hanes OG900": "https://printify.com/app/products/6843/hanes/mens-premium-heavyweight-quarter-zip-sweatshirt",
+    "Independent IND5000C": "https://printify.com/app/products/6997/independent-trading-company/unisex-legend-premium-heavyweight-cross-grain-crewneck-sweatshirt",
+    "Lane Seven LS14003 Printify": "https://printify.com/app/products/445/lane-seven/unisex-zip-hoodie",
+    "Lane Seven LS14003 Printful": "https://www.printful.com/custom/mens/all/lane-seven-ls14003-premium-full-zip-hoodie"
   },
   "guide_sha256": "6e89127a03714d403e5701364af3c063393ad84050f37560def7c8db03bb3382"
 }

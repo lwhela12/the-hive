@@ -1,5 +1,5 @@
-import {SNAPSHOT, SIZE_ORDER, COLORS, ART_COLORS, FONTS, LOGOS, GARMENTS, FINISHES, VARIANTS, PENDING, PHOTOS,
-  initialState, normalize, availableColors, availableSizes, availableFinishes, rowsFor, selectedRow, canReview, selectionText} from './catalog.mjs';
+import {SNAPSHOT, SIZE_ORDER, COLORS, ART_COLORS, FONTS, LOGOS, GARMENTS, PRICE_GUIDE, FINISHES, VARIANTS, PENDING, PHOTOS,
+  initialState, normalize, availableColors, availableSizes, availableFinishes, rowsFor, selectedRow, isBackPlacement, canReview, money, priceFor, selectionText} from './catalog.mjs?v=20261018.9';
 
 const app = document.querySelector('#app'), steps = document.querySelector('#steps'), notice = document.querySelector('#notice');
 const DRAFT_KEY = 'hive-clothing-review-v1';
@@ -38,29 +38,42 @@ function facts(g) {
 function photoFor(g, color, side = 'front') {
   return PHOTOS[g.id]?.[color]?.[side] || null;
 }
+function priceBlock({review = false} = {}) {
+  const price = priceFor(state); if (!price) return '';
+  const heading = price.exactProvider ? `${price.basis} starting price` : 'Catalog starting price';
+  return `<div class="price-block ${review?'review-price':''}"><div><span>${heading}</span><strong>From ${money(price.from)} USD each</strong></div>
+    <div><span>Merchandise subtotal</span><strong>From ${money(price.subtotalFrom)} USD</strong></div>
+    <p>Shipping from ${money(price.shippingFrom)} plus tax. Size, color, technique and placement can change the total.${price.note?` ${price.note}`:''} Nat confirms the exact at-cost amount in the provider screenshot.</p></div>`;
+}
 function productCard(g) {
+  const typeName = {hoodie:'Hoodie',quarter:'Quarter-zip',fullzip:'Full-zip',crew:'Crewneck'}[g.kind];
   const colors = availableColors(g.id);
-  const photo = photoFor(g,'Black') || `assets/garment-${g.id}.png`;
+  const shownColor = photoFor(g,g.photoColor) ? g.photoColor : photoFor(g,'Black') ? 'Black' : g.photoColor || null;
+  const photo = photoFor(g,shownColor) || `assets/garment-${g.id}.png`;
+  const photoLabel = shownColor === 'Catalog reference' ? 'Catalog reference' : shownColor ? `Shown: ${shownColor}` : 'Reference photo';
   const methods = [...new Set(VARIANTS.filter(r=>r.garment===g.id).map(r=>r.finish))];
   return `<article class="garment-card ${state.garment===g.id?'chosen':''}">
-    <div class="card-photo"><img src="${photo}" alt="${esc(g.model)} · ${photoFor(g,'Black')?'Black':g.photoColor} reference photo" loading="lazy"><span class="letter">${g.id}</span><span class="shown-color">Shown: ${photoFor(g,'Black')?'Black':g.photoColor}</span><span class="weight">${g.weight}</span></div>
-    <div class="card-body"><div class="model">${g.model}</div><h2>${g.name}</h2><p class="warmth">${g.warmth}</p>${facts(g)}
-    <div class="card-bottom"><div class="mini-colors" aria-label="Checked colors in your neutral palette">${colors.map(c=>`<span title="${c}">${colorSwatch(c)}</span>`).join('')}<span>${colors.length} ${colors.length===1?'neutral color':'neutral colors'} · ${methods.join(' / ') || 'Check pending'}</span></div>
+    <div class="card-photo"><img src="${photo}" alt="${esc(g.model)} · ${esc(photoLabel)}" loading="lazy"><span class="shown-color">${photoLabel}</span><span class="weight">${g.weight}</span></div>
+    <div class="card-body"><div class="type-label">${typeName}</div><div class="model">${g.model}</div><h2>${g.name}</h2><p class="warmth">${g.warmth}</p>${facts(g)}
+    <div class="card-bottom"><p class="card-price"><strong>From ${money(PRICE_GUIDE[g.id].from)} USD</strong><span>public catalog starting price</span></p><div class="mini-colors" aria-label="Checked colors in your neutral palette">${colors.map(c=>`<span title="${c}">${colorSwatch(c)}</span>`).join('')}<span>${colors.length} ${colors.length===1?'neutral color':'neutral colors'} · ${methods.join(' / ') || 'Check pending'}</span></div>
     <button class="primary card-choose" ${attr('garment',g.id)}>Choose ${g.model}<span aria-hidden="true">→</span></button></div></div>
   </article>`;
 }
 function styleScreen() {
-  const choices = GARMENTS.filter(g => filter === 'all' || (filter === 'quarter' ? g.kind === 'quarter' : filter === 'hoodies' ? ['hoodie','zip'].includes(g.kind) : g.kind === 'crew'));
+  const groups = [['hoodie','Hoodies'],['quarter','Quarter-zips'],['fullzip','Full-zips'],['crew','Crewnecks']]
+    .filter(([kind]) => filter === 'all' || filter === kind)
+    .map(([kind,label]) => ({label,items:GARMENTS.filter(g=>g.kind===kind).sort((a,b)=>a.model.localeCompare(b.model))}));
+  const choices = groups.flatMap(({items})=>items);
   return `<div class="section-tools"><div class="filter-group" aria-label="Filter garment styles">
-    ${[['all','All six'],['quarter','Quarter-zips'],['hoodies','Hoodies'],['crew','Crewneck']].map(([k,v])=>btn('filter',k,v,filter===k)).join('')}</div>
+    ${[['all','All eight'],['quarter','Quarter-zips'],['hoodie','Hoodies'],['crew','Crewnecks'],['fullzip','Full-zips']].map(([k,v])=>btn('filter',k,v,filter===k)).join('')}</div>
     <button class="text-button" data-action="finish-guide">Compare finishes ↗</button></div>
     <div class="garment-grid">${choices.map(productCard).join('')}</div>
     <div class="catalog-notes"><p>Warmth describes relative fabric weight and coverage, rather than a tested temperature rating.</p><p>¹ Bella+Canvas 3719: Printify lists 7 oz/yd²; the manufacturer lists 8 oz/yd². Blend varies by shade.</p>
-    <details><summary>Catalog checks & photo sources</summary><p>Availability checked ${SNAPSHOT}. Nat rechecks the exact provider, color, size and finish before ordering.</p><p>Photos show real garments. Only the listed choices are included in this neutral palette.</p><ul>${GARMENTS.map(g=>`<li><a href="${g.source}" target="_blank" rel="noopener">${g.model} · Printify catalog</a></li>`).join('')}</ul><p><a href="https://www.bellacanvas.com/product/3719/Unisex-Sponge-Fleece-Pullover-Hoodie.html" target="_blank" rel="noopener">Bella+Canvas manufacturer specifications</a></p></details></div>`;
+    <details><summary>Catalog checks & photo sources</summary><p>Availability checked ${SNAPSHOT}. Nat rechecks the exact provider, color, size and finish before ordering.</p><p>Photos show real garments. Only the listed choices are included in this neutral palette.</p><ul>${GARMENTS.map(g=>`<li><a href="${g.source}" target="_blank" rel="noopener">${g.model} · primary catalog</a>${g.secondarySource?` · <a href="${g.secondarySource}" target="_blank" rel="noopener">embroidery source</a>`:''}</li>`).join('')}</ul><p><a href="https://www.bellacanvas.com/product/3719/Unisex-Sponge-Fleece-Pullover-Hoodie.html" target="_blank" rel="noopener">Bella+Canvas manufacturer specifications</a></p></details></div>`;
 }
 function svgGarment(g, color, back) {
   if (!Object.hasOwn(COLORS, color)) throw new Error('A garment study requires a selected catalog color.');
-  const q = g.kind === 'quarter', hood = ['hoodie','zip'].includes(g.kind), zip = g.kind === 'zip';
+  const q = g.kind === 'quarter', hood = ['hoodie','fullzip'].includes(g.kind), zip = g.kind === 'fullzip';
   return `<svg class="garment-study" viewBox="0 0 600 620" role="img" aria-label="Illustrative ${esc(color)} ${esc(g.name)} ${back?'back':'front'}">
     <defs><linearGradient id="fabric" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${COLORS[color]}"/><stop offset=".4" stop-color="${COLORS[color]}"/><stop offset="1" stop-color="${COLORS[color]}"/></linearGradient><linearGradient id="light"><stop stop-color="white" stop-opacity=".19"/><stop offset=".45" stop-color="white" stop-opacity="0"/><stop offset="1" stop-color="black" stop-opacity=".17"/></linearGradient></defs>
     <path d="M220 100 Q300 120 380 100 L447 134 Q462 143 467 161 L527 493 L464 509 L422 300 L428 545 Q300 561 172 545 L178 300 L136 509 L73 493 L133 161 Q138 143 153 134Z" fill="url(#fabric)" stroke="#000" stroke-opacity=".13" stroke-width="2"/>
@@ -75,32 +88,37 @@ function svgGarment(g, color, back) {
     ${!back&&hood?`<path d="M240 357 L360 357 L389 433 L387 473 Q300 489 213 473 L211 433Z" fill="none" stroke="#000" stroke-opacity=".16" stroke-width="2"/>`:''}
   </svg>`;
 }
-function overlay(g, hasPhoto, nameOnly = false) {
-  const placement = nameOnly ? state.namePlacement : state.placement, back = placement === 'Back', sleeve = placement.includes('sleeve');
+function overlay(g, hasPhoto, nameOnly = false, options = {}) {
+  const placement = options.placement || (nameOnly ? state.namePlacement : state.placement);
+  const visualPlacement = isBackPlacement(placement) ? 'Back' : placement.replace(' wrist', ' sleeve');
+  const back = isBackPlacement(placement), sleeve = visualPlacement.includes('sleeve');
   if ((back ? 'back' : 'front') !== state.face) return '';
-  const coords = hasPhoto ? (g.id === 'F' ? {'Left chest':[63,38,10], 'Right chest':[37,38,10], Back:[50,33,25], 'Left sleeve':[77,57,7], 'Right sleeve':[23,57,7]} : {'Left chest':[57,46,8], 'Right chest':[43,46,8], 'Center front':[50,52,17], Back:[50,46,18], 'Left sleeve':[71,64,5], 'Right sleeve':[29,64,5]}) : {'Left chest':[61,37,10], 'Right chest':[39,37,10], 'Center front':[50,39,21], Back:[50,36,23], 'Left sleeve':[79,55,7], 'Right sleeve':[21,55,7]};
-  const [x,y,w] = coords[placement] || coords['Left chest'];
+  const coords = hasPhoto ? (g.id === 'F' ? {'Left chest':[63,38,10], 'Right chest':[37,38,10], Back:[50,38,30], 'Left sleeve':[78,83,5], 'Right sleeve':[22,83,5]} : {'Left chest':[63,39,7], 'Right chest':[37,39,7], 'Center front':[50,43,17], Back:[50,43,30], 'Left sleeve':[78,84,5], 'Right sleeve':[22,84,5]}) : {'Left chest':[61,37,10], 'Right chest':[39,37,10], 'Center front':[50,39,21], Back:[50,40,34], 'Left sleeve':[82,76,6], 'Right sleeve':[18,76,6]};
+  const [x,y,w] = coords[visualPlacement] || coords['Left chest'];
   const font = FONTS.find(f=>f.id===state.font)?.family || 'Lato';
-  const name = nameOnly || state.namePlacement === 'With logo' ? state.name.trim() : '', hasLogo = !nameOnly && state.logo !== 'none' && state.step >= 2;
-  return state.step < 2 ? '' : `<div class="artwork ${sleeve?'sleeve-art':''}" style="left:${x}%;top:${y}%;width:${w}%;--name-color:${ART_COLORS[state.artColor]};--name-font:'${font}';--letter-size:${(w * 1.3 / Math.max(6,name.length)).toFixed(3)}cqw" aria-hidden="true">${hasLogo?`<img src="${logoAsset(state.logo)}" alt="" class="logo-overlay">`:''}${name?`<span class="name-overlay">${esc(name)}</span>`:''}</div>`;
+  const logo = options.logo ?? state.logo;
+  const name = options.name ?? ((nameOnly || state.namePlacement === 'With logo') ? state.name.trim() : '');
+  const hasLogo = !nameOnly && logo !== 'none' && state.step >= 2;
+  return state.step < 2 ? '' : `<div class="artwork ${sleeve?'sleeve-art':''} ${options.monochrome?'monochrome-art':''}" style="left:${x}%;top:${y}%;width:${w}%;--name-color:${ART_COLORS[state.artColor]};--name-font:'${font}';--letter-size:${(w * 1.3 / Math.max(6,name.length)).toFixed(3)}cqw" aria-hidden="true">${hasLogo?`<img src="${logoAsset(logo)}" alt="" class="logo-overlay">`:''}${name?`<span class="name-overlay">${esc(name)}</span>`:''}</div>`;
 }
 function preview() {
   const g = garment(); if (!g) return '';
-  const reference = !state.color, referenceColor = photoFor(g,'Black') ? 'Black' : g.photoColor;
-  const back = state.face === 'back', photo = reference ? photoFor(g,'Black') || `assets/garment-${g.id}.png` : photoFor(g,state.color,back?'back':'front');
+  const reference = !state.color, referenceColor = photoFor(g,'Black') ? 'Black' : g.photoColor || 'Catalog reference';
+  const referencePhoto = photoFor(g,referenceColor) || photoFor(g,'Black');
+  const back = state.face === 'back', photo = reference ? referencePhoto : photoFor(g,state.color,back?'back':'front');
   // Photos are shown without recoloring. If the exact shade/view is absent,
   // the labeled code-drawn study carries color and placement instead.
-  const usePhoto = !!photo && (reference || state.view !== 'sketch');
+  const usePhoto = reference ? !!referencePhoto : !!photo && state.view !== 'sketch';
   const source = usePhoto ? photo : `assets/garment-${g.id}.png`;
   return `<aside class="preview-panel" aria-label="Garment preview">
     <div class="preview-top"><span>${g.model}</span><button class="text-button" data-action="preview-large" aria-label="Enlarge garment preview">Enlarge ↗</button><span class="preview-label">${reference?'Reference photo':'Illustrative preview'}</span></div>
     <div class="preview-stage ${usePhoto?'photo-stage':''}" id="preview-stage">
-      ${usePhoto?`<img class="flat-photo" src="${source}" alt="${reference?`${esc(g.model)} reference photo in ${referenceColor}`:`Actual ${esc(state.color)} ${esc(g.model)} ${back?'back':'front'} product photo`}" data-photo>`:svgGarment(g,state.color,back)}${reference?'':overlay(g,usePhoto)}${!reference&&state.name.trim()&&state.namePlacement!=='With logo'?overlay(g,usePhoto,true):''}
+      ${usePhoto?`<img class="flat-photo" src="${source}" alt="${reference?`${esc(g.model)} catalog reference photo`:`Actual ${esc(state.color)} ${esc(g.model)} ${back?'back':'front'} product photo`}" data-photo>`:svgGarment(g,state.color,back)}${reference?'':state.designLayout==='chest-back'?(back?overlay(g,usePhoto,false,{placement:'Large back',logo:'G',name:'',monochrome:true}):overlay(g,usePhoto,false,{monochrome:true})):overlay(g,usePhoto)}${!reference&&state.designLayout!=='chest-back'&&state.name.trim()&&state.namePlacement!=='With logo'?overlay(g,usePhoto,true):''}
     </div>
-    <div class="preview-caption"><strong>${reference?`Shown: ${referenceColor}`:`${state.color} · ${state.size||'Choose a size'}`}</strong><span>${reference?'Choose a listed color':state.step>=2?`${back?'Back view':'Front view'} · ${state.finish||'Choose a finish'}`:g.weight}</span></div>
-    <div class="preview-switch">${state.step>=2&&selectedRow(state)?.placements.includes('Back')?`${btn('face','front','Front',state.face==='front')}${btn('face','back','Back',state.face==='back')}`:''}${photo&&!reference?`${btn('view','study','Photo',state.view!=='sketch')}${btn('view','sketch','Study',state.view==='sketch')}`:''}</div>
-    <p class="proof-note">${reference?'Choose a listed color to preview your selection.':`${usePhoto?'Real product photo with an artwork overlay.':'Color and placement study; fabric and shade will vary.'}<br>Nat’s Printify screenshot confirms the final design.`}</p>
-    ${!usePhoto?`<details class="reference-photo"><summary>See the original garment photo</summary><img src="assets/garment-${g.id}.png" alt="${g.model} original guide reference"><span>Reference shade: ${g.photoColor}</span></details>`:''}
+    <div class="preview-caption"><strong>${reference?(referenceColor==='Catalog reference'?'Catalog reference':`Shown: ${referenceColor}`):`${state.color} · ${state.size||'Choose a size'}`}</strong><span>${reference?'Choose a listed color':state.step>=2?`${back?'Back view':'Front view'} · ${state.finish||'Choose a finish'}`:g.weight}</span></div>
+    <div class="preview-switch">${state.step>=2&&selectedRow(state)?.placements.some(isBackPlacement)?`${btn('face','front','Front',state.face==='front')}${btn('face','back','Back',state.face==='back')}`:''}${photo&&!reference?`${btn('view','study','Photo',state.view!=='sketch')}${btn('view','sketch','Study',state.view==='sketch')}`:''}</div>
+    <p class="proof-note">${reference?'Choose a listed color to preview your selection.':`${usePhoto?'Real product photo with an artwork overlay.':'Color and placement study; fabric and shade will vary.'}<br>Nat’s ${state.provider==='Printful'?'Printful':'Printify'} screenshot confirms the final design.`}</p>
+    ${!usePhoto?(referencePhoto?`<details class="reference-photo"><summary>See the original catalog photo</summary><img src="${referencePhoto}" alt="${g.model} catalog reference"><span>${referenceColor==='Catalog reference'?'Color in reference photo is not confirmed.':`Reference shade: ${referenceColor}`}</span></details>`:`<details class="reference-photo"><summary>See the original garment photo</summary><img src="assets/garment-${g.id}.png" alt="${g.model} original guide reference"><span>Reference shade: ${g.photoColor}</span></details>`):''}
   </aside>`;
 }
 function sizeScreen() {
@@ -112,7 +130,7 @@ function sizeScreen() {
     ${!colors.length?`<p class="callout">${PENDING[g.id]||'Provider check pending.'}</p>`:''}</fieldset>
     <fieldset ${!state.color?'disabled':''}><legend>Size</legend><div class="size-options">${SIZE_ORDER.filter(s=>sizes.includes(s)).map(s=>btn('size',s,s,state.size===s)).join('')}</div>
     <p class="field-note">${!state.color?'Choose a color to see its sizes.':'Finish choices will match this exact color and size.'}</p><a class="source-link" href="${g.source}" target="_blank" rel="noopener">Open ${g.model} size guide ↗</a></fieldset>
-    <fieldset><legend>Quantity</legend><div class="quantity"><button class="icon-button" aria-label="Decrease quantity" data-action="quantity" data-value="-1" ${state.quantity===1?'disabled':''}>−</button><output aria-label="Quantity">${state.quantity}</output><button class="icon-button" aria-label="Increase quantity" data-action="quantity" data-value="1" ${state.quantity===20?'disabled':''}>+</button></div></fieldset>
+    <fieldset><legend>Quantity</legend><div class="quantity"><button class="icon-button" aria-label="Decrease quantity" data-action="quantity" data-value="-1" ${state.quantity===1?'disabled':''}>−</button><output aria-label="Quantity">${state.quantity}</output><button class="icon-button" aria-label="Increase quantity" data-action="quantity" data-value="1" ${state.quantity===20?'disabled':''}>+</button></div>${priceBlock()}</fieldset>
     <div class="actions"><button class="secondary" ${attr('step',0)}>Back</button><button class="primary" data-action="next" ${!state.color||!state.size?'disabled':''}>Choose finish & artwork <span aria-hidden="true">→</span></button></div>
     <p class="snapshot-note">Catalog checked ${SNAPSHOT}. Nat rechecks stock before ordering.</p></div>${preview()}</div>`;
 }
@@ -121,36 +139,40 @@ function finishOptions() {
   return `<fieldset><legend>Finish <button class="text-button" data-action="finish-guide" type="button">What’s the difference?</button></legend>
     <div class="finish-options">${possible.map(f=>btn('finish',f,`<strong>${f}</strong><span>${FINISHES[f].short}</span>`,state.finish===f)).join('')}</div>
     ${state.garment==='F'?'<p class="field-note">This thick quarter-zip is offered with DTF. Embroidery would need a different garment.</p>':''}
-    ${state.garment==='B'?'<p class="field-note">This quarter-zip is offered with DTG through Printify Choice.</p>':''}
+    ${state.garment==='B'?'<p class="field-note">Dust is the cream-beige shade. Printful offers small chest embroidery; Printify offers DTG/DTF on the back or sleeves for this exact blank.</p>':''}
+    ${state.garment==='G'?'<p class="field-note">This 13.5 oz Bone crewneck has DTG and DTF. The checked provider offers front, back and sleeve print areas, with no embroidery or left-chest option.</p>':''}
+    ${state.garment==='H'?`<p class="field-note">Fulfill Engine offers printing. On Black in S–3XL, Printful offers chest and large-back embroidery, including the black-on-black layout.</p>`:''}
     ${state.finish?`<div class="finish-detail"><p><strong>Good for</strong> ${FINISHES[state.finish].good}</p><p><strong>Consider</strong> ${FINISHES[state.finish].tradeoff}</p><p><strong>Durability</strong> ${FINISHES[state.finish].life}</p><p class="estimate-note">Method guidance; garment/provider performance is not guaranteed.</p></div>`:''}
     <p class="field-note">Only finishes checked for ${state.color} / ${state.size} are shown.</p></fieldset>`;
 }
 function customizeScreen() {
   const g=garment(), row=selectedRow(state), embroidery=state.finish==='Embroidery';
   const providers=[...new Set(rowsFor(state).filter(r=>r.finish===state.finish).map(r=>r.provider))];
+  const chestBack=embroidery&&row?.placements.includes('Left chest')&&row.placements.some(isBackPlacement);
   return `<div class="config-layout"><div class="controls"><div class="selection-label"><span>${g.model} · ${state.color} · ${state.size}</span><button class="text-button" ${attr('step',1)}>Edit</button></div>${finishOptions()}
-    ${row?`<div class="provider-label">Provider: <strong>${row.provider}</strong>${providers.length>1?`<select data-field="provider" aria-label="Print provider">${providers.map(p=>`<option ${state.provider===p?'selected':''}>${p}</option>`).join('')}</select>`:''}</div>`:''}
+    ${row?`<div class="provider-label">Provider: <strong>${row.provider}</strong>${providers.length>1?`<select data-field="provider" aria-label="Print provider">${providers.map(p=>`<option ${state.provider===p?'selected':''}>${p}</option>`).join('')}</select>`:''}</div>${priceBlock()}`:''}
     <fieldset ${!row?'disabled':''}><legend>HIVE artwork</legend><div class="logo-options">${LOGOS.map(l=>btn('logo',l.id,`<img src="assets/logo-${l.id}.png" alt=""><span>${l.id} · ${l.name}</span>`,state.logo===l.id,embroidery&&l.id!=='C'?'disabled title="Detailed artwork needs embroidery adaptation and proof"':'')).join('')}${btn('logo','none','<span class="name-only">Aa</span><span>Name only</span>',state.logo==='none')}</div>
     ${embroidery?'<p class="field-note">Bee only is the simple starting point for embroidery. Detailed seals need adapted artwork and Nat’s proof.</p>':''}
     ${state.color==='Black'&&state.logo==='C'?'<p class="field-note">This bee has dark outlines. Nat will confirm contrast on Black in the final proof.</p>':''}</fieldset>
-    <fieldset ${!row?'disabled':''}><legend>Placement</legend><div class="placement-options">${(row?.placements||[]).map(p=>btn('placement',p,p,state.placement===p)).join('')}</div><p class="field-note">Left and right mean the wearer’s left and right. Placements stay within the provider’s decoration area.</p></fieldset>
+    ${chestBack?`<fieldset><legend>Decoration layout</legend><div class="coverage-options">${btn('layout','single','<strong>One placement</strong><span>Use one artwork area</span>',state.designLayout==='single')}${btn('layout','chest-back','<strong>Black-on-black chest + back</strong><span>Bee and optional name at left chest; large HIVE seal on back</span>',state.designLayout==='chest-back')}</div><p class="field-note">Both designs use black thread. Printful digitizes each file and Nat confirms both placements in the final screenshot.</p></fieldset>`:''}
+    <fieldset ${!row?'disabled':''}><legend>Placement</legend><div class="placement-options">${(row?.placements||[]).map(p=>btn('placement',p,p,state.placement===p,state.designLayout==='chest-back'?'disabled':'')).join('')}</div><p class="field-note">Left and right mean the wearer’s left and right. Placements stay within the provider’s decoration area.</p></fieldset>
     <fieldset ${!row?'disabled':''}><legend>Your name <span class="optional">optional</span></legend><label for="name">Spelling exactly as you want it</label><input id="name" data-field="name" type="text" maxlength="24" value="${esc(state.name)}" autocomplete="off" placeholder="Your name"><span class="input-help">Up to 24 characters</span>
       <div class="font-options" aria-label="Name font">${FONTS.map(f=>btn('font',f.id,`<span style="font-family:'${f.family}'" class="font-sample">${esc(state.name.trim()||'Your name')}</span><span>${f.name}</span>`,state.font===f.id)).join('')}</div>
       <div class="color-options artwork-colors" aria-label="Name color">${Object.entries(ART_COLORS).map(([n,c])=>btn('artColor',n,`${colorSwatch(n,c)}<span>${n}</span>`,state.artColor===n)).join('')}</div>
-      <p class="field-note">Name color applies to your text. Original logo colors stay as drawn.${embroidery?' Nat confirms the closest available thread shade and digitized lettering.':''}</p>
-      ${state.logo!=='none'&&row?.placements.length>1?`<label for="name-placement" class="name-placement-label">Name placement</label><select id="name-placement" data-field="namePlacement"><option value="With logo" ${state.namePlacement==='With logo'?'selected':''}>With logo</option>${row.placements.filter(p=>p!==state.placement).map(p=>`<option ${state.namePlacement===p?'selected':''}>${p}</option>`).join('')}</select><p class="field-note">A second placement may add to production cost. Nat confirms the complete design.</p>`:''}</fieldset>
+      <p class="field-note">${state.designLayout==='chest-back'?'The chest artwork, name and back seal use black thread.':'Name color applies to your text. Original logo colors stay as drawn.'}${embroidery?' Nat confirms the closest available thread shade and digitized lettering.':''}</p>
+      ${state.designLayout==='single'&&state.logo!=='none'&&row?.placements.length>1?`<label for="name-placement" class="name-placement-label">Name placement</label><select id="name-placement" data-field="namePlacement"><option value="With logo" ${state.namePlacement==='With logo'?'selected':''}>With logo</option>${row.placements.filter(p=>p!==state.placement).map(p=>`<option ${state.namePlacement===p?'selected':''}>${p}</option>`).join('')}</select><p class="field-note">A second placement may add to production cost. Nat confirms the complete design.</p>`:''}</fieldset>
     <div class="actions"><button class="secondary" ${attr('step',1)}>Back</button><button class="primary" data-action="next" ${!canReview(state)?'disabled':''}>Review my picks <span aria-hidden="true">→</span></button></div>
   </div>${preview()}</div>`;
 }
 function reviewScreen() {
   const g=garment(), l=LOGOS.find(l=>l.id===state.logo);
   return `<div class="config-layout review-layout"><div class="controls"><div class="review-card"><div class="review-card-top"><span>Your selections</span><button class="text-button" ${attr('step',2)}>Edit artwork</button></div>
-    <dl class="review-facts"><div><dt>Garment</dt><dd>${g.name}<span>${g.id} · ${g.model}</span></dd></div><div><dt>Color / size</dt><dd>${state.color} / ${state.size}<button class="text-button" ${attr('step',1)}>Edit</button></dd></div><div><dt>Quantity</dt><dd>${state.quantity}</dd></div><div><dt>Finish</dt><dd>${state.finish}<span>${state.provider}</span></dd></div><div><dt>Artwork</dt><dd>${l?`${l.id} · ${l.name}`:'Name only'}<span>${state.placement}</span></dd></div><div><dt>Name</dt><dd>${esc(state.name.trim()||'None')}${state.name.trim()?`<span>${FONTS.find(f=>f.id===state.font)?.name} · ${state.artColor}</span><span>${state.namePlacement==='With logo'?state.placement:state.namePlacement}</span>`:''}</dd></div></dl></div>
+    <dl class="review-facts"><div><dt>Garment</dt><dd>${g.name}<span>${g.id} · ${g.model}</span></dd></div><div><dt>Color / size</dt><dd>${state.color} / ${state.size}<button class="text-button" ${attr('step',1)}>Edit</button></dd></div><div><dt>Quantity</dt><dd>${state.quantity}</dd></div><div><dt>Finish</dt><dd>${state.finish}<span>${state.provider}</span></dd></div><div><dt>Artwork</dt><dd>${state.designLayout==='chest-back'?'Black-on-black chest + large back':l?`${l.id} · ${l.name}`:'Name only'}<span>${state.designLayout==='chest-back'?'C · Bee only at left chest / G · HIVE seal at large back':state.placement}</span></dd></div><div><dt>Name</dt><dd>${esc(state.name.trim()||'None')}${state.name.trim()?`<span>${FONTS.find(f=>f.id===state.font)?.name} · ${state.artColor}</span><span>${state.namePlacement==='With logo'?state.placement:state.namePlacement}</span>`:''}</dd></div></dl>${priceBlock({review:true})}</div>
     <fieldset><legend>Order coverage</legend><div class="coverage-options">${btn('member','OG HIVE','<strong>OG HIVE</strong><span>Covered by Honey Pot dues</span>',state.member==='OG HIVE')}${btn('member','Other HIVE','<strong>Other HIVE</strong><span>At cost · Nat confirms the amount</span>',state.member==='Other HIVE')}</div></fieldset>
-    <div class="next-steps"><strong>Nat takes it from here</strong><ol><li>Share your selections with Nat through your usual channel.</li><li>Nat rechecks stock and prepares your Printify design.</li><li>Confirm her screenshot before the order is placed.</li></ol></div>
+    <div class="next-steps"><strong>Nat takes it from here</strong><ol><li>Share your selections with Nat through your usual channel.</li><li>Nat rechecks stock and prepares your ${state.provider==='Printful'?'Printful':'Printify'} design.</li><li>Confirm her screenshot before the order is placed.</li></ol></div>
     <button class="primary save-button" data-action="save">${saved?'Saved on this device ✓':'Save picks on this device'}</button><div class="handoff-actions"><button class="secondary" data-action="download">Download selections</button><button class="text-button" data-action="show-text">View copyable text</button></div>
     <div class="copyable" hidden id="copyable"><label for="selection-text">Select this text to share with Nat</label><textarea id="selection-text" readonly rows="14">${esc(selectionText(state))}</textarea></div>
-    <p class="snapshot-note">This review stays on your device. Catalog checked ${SNAPSHOT}; final stock, shade and placement need Nat’s Printify proof.</p></div>${preview()}</div>`;
+    <p class="snapshot-note">This review stays on your device. Catalog checked ${SNAPSHOT}; final stock, shade and placement need Nat’s provider proof.</p></div>${preview()}</div>`;
 }
 function render() {
   steps.innerHTML=stepNames.map((s,i)=>`<button class="step ${state.step===i?'active':''} ${i<state.step?'complete':''}" ${attr('step',i)} ${i>maxStep()?'disabled':''} ${state.step===i?'aria-current="step"':''}><span class="step-number">${i<state.step?'✓':i+1}</span><span>${s}</span></button>`).join('');
@@ -167,7 +189,8 @@ document.addEventListener('click',async e=>{
   else if(action==='color') update({color:value},`${value} selected. Sizes updated.`);
   else if(action==='size') update({size:value},`${value} selected.`);
   else if(action==='quantity') update({quantity:state.quantity+Number(value)},`Quantity: ${state.quantity+Number(value)}.`);
-  else if(action==='placement') update({placement:value,face:value==='Back'?'back':'front'});
+  else if(action==='placement') update({placement:value,face:isBackPlacement(value)?'back':'front'});
+  else if(action==='layout') update({designLayout:value,face:'front'},value==='chest-back'?'Black-on-black chest and back selected.':'');
   else if(['finish','logo','font','artColor','member','view','face'].includes(action)) update({[action]:value},action==='finish'?`${value} selected. Artwork and placement options updated.`:'');
   else if(action==='finish-guide') document.querySelector('#finish-dialog').showModal();
   else if(action==='preview-large') {const stage=document.querySelector('#preview-stage').cloneNode(true);stage.removeAttribute('id');document.querySelector('#enlarged-preview').replaceChildren(stage);document.querySelector('#preview-dialog').showModal();}
@@ -191,7 +214,7 @@ document.addEventListener('input',e=>{
   document.querySelectorAll('.font-sample').forEach(el=>el.textContent=state.name.trim()||'Your name');
   const next=document.querySelector('[data-action="next"]');if(next)next.disabled=!canReview(state);
 });
-document.addEventListener('change',e=>{if(e.target.dataset.field==='provider')update({provider:e.target.value});else if(e.target.dataset.field==='namePlacement')update({namePlacement:e.target.value,face:e.target.value==='Back'?'back':'front'},'Name placement updated.');});
+document.addEventListener('change',e=>{if(e.target.dataset.field==='provider')update({provider:e.target.value});else if(e.target.dataset.field==='namePlacement')update({namePlacement:e.target.value,face:isBackPlacement(e.target.value)?'back':'front'},'Name placement updated.');});
 document.querySelector('#finish-guide').innerHTML=Object.entries(FINISHES).map(([k,f])=>`<article class="finish-guide-card"><h3>${k}<span>${f.short}</span></h3><dl><div><dt>Good for</dt><dd>${f.good}</dd></div><div><dt>Consider</dt><dd>${f.tradeoff}</dd></div><div><dt>Durability</dt><dd>${f.life}</dd></div></dl></article>`).join('')+`<p class="guide-footnote">Wash counts are general method estimates, rather than garment/provider wash tests or guarantees.</p><p class="guide-footnote">Follow the garment label. Wash cool and inside out; avoid bleach and ironing the design. Air drying is gentlest.</p><p class="guide-footnote">Puff is editor-made raised transfer text. Exact neutral variants and provider font choices still need verification before it becomes selectable.</p><p class="guide-footnote"><a href="https://printify.com/blog/dtf-vs-dtg-printing/" target="_blank" rel="noopener">DTG / DTF guide</a> · <a href="https://printify.com/blog/embroidery-vs-screen-printing/" target="_blank" rel="noopener">Embroidery guide</a> · <a href="https://printify.com/guide/specialty-prints/" target="_blank" rel="noopener">Puff guide</a></p>`;
 document.querySelector('#close-dialog').onclick=()=>document.querySelector('#finish-dialog').close();
 document.querySelector('#close-preview').onclick=()=>document.querySelector('#preview-dialog').close();
