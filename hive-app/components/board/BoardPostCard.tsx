@@ -20,8 +20,6 @@ interface BoardPostCardProps {
   onEdit?: (post: BoardPost & { author?: Profile; reactions?: BoardReaction[] }) => void;
   onUseFormat?: (post: BoardPost & { author?: Profile; reactions?: BoardReaction[] }) => void;
   compactImages?: boolean;
-  linkedWishLabel?: string;
-  onLinkedWishPress?: () => void;
   currentUserId?: string;
   /** null = HIVE-Wide; a HIVE id = that HIVE; undefined = no identity gate. */
   identityCommunityId?: string | null;
@@ -56,8 +54,6 @@ export function BoardPostCard({
   onEdit,
   onUseFormat,
   compactImages = false,
-  linkedWishLabel,
-  onLinkedWishPress,
   currentUserId,
   identityCommunityId,
 }: BoardPostCardProps) {
@@ -65,7 +61,6 @@ export function BoardPostCard({
   // the ink so the two can never disagree.
   const skin = usePageSkin();
   const timeAgo = getTimeAgo(new Date(post.created_at));
-  const isCompleted = post.status === 'completed';
   const isArchived = !!post.archived_at;
   const hasAttachments = post.attachments && post.attachments.length > 0;
   const previewAttachments = hasAttachments
@@ -81,10 +76,6 @@ export function BoardPostCard({
     ? { width: 176, height: 132 }
     : { width: '100%' as const, height: 210 };
   const author = getBoardAuthorIdentity(post.author, identityCommunityId);
-  // A granted thread wears a wash of the accent. pageSkin has no "gold at a
-  // whisper" token, so the two live here — both are just skin.gold turned
-  // right down, which is why they read the same on either page.
-  const grantedWash = skin.dark ? 'rgba(224,190,118,0.10)' : 'rgba(189,147,72,0.06)';
   // An archived thread is muted by stepping the WHOLE card back, not by
   // greying the text — grey text on black is the thing we're fixing.
   const cardOpacity = isArchived ? 0.72 : 1;
@@ -96,8 +87,8 @@ export function BoardPostCard({
     <View
       className="relative rounded-xl mb-3 shadow-sm overflow-hidden border"
       style={{
-        backgroundColor: isCompleted ? grantedWash : skin.card,
-        borderColor: isCompleted ? skin.borderStrong : skin.border,
+        backgroundColor: skin.card,
+        borderColor: skin.border,
         opacity: cardOpacity,
       }}
     >
@@ -151,26 +142,10 @@ export function BoardPostCard({
             className={`p-4 ${canEdit && onEdit ? 'pr-14' : ''}`}
             style={useCompactImage ? { flex: 1, minHeight: 132 } : undefined}
           >
-            {(post.is_pinned || isCompleted || isArchived) && (
+{(post.is_pinned || isArchived) && (
               <View className="flex-row items-center mb-2" style={{ gap: 6 }}>
                 {post.is_pinned && (
                   <Text className="text-xs" style={{ color: skin.gold }}>📌 Pinned</Text>
-                )}
-                {isCompleted && (
-                  <View
-                    className="flex-row items-center rounded-full px-2 py-0.5"
-                    style={{ backgroundColor: skin.gold }}
-                  >
-                    {/* The space gold is a pale gold — white on it disappears,
-                        so the badge writes in the page's own colour there. */}
-                    <Ionicons name="checkmark-circle-outline" size={12} color={skin.dark ? skin.page : '#ffffff'} />
-                    <Text
-                      style={{ fontFamily: 'Lato_700Bold', color: skin.dark ? skin.page : '#ffffff' }}
-                      className="text-xs ml-1"
-                    >
-                      Granted
-                    </Text>
-                  </View>
                 )}
                 {isArchived && (
                   <View
@@ -199,7 +174,7 @@ export function BoardPostCard({
                 fontFamily: 'Lato_400Regular',
                 fontSize: 14,
                 color: skin.inkBody,
-                marginBottom: linkedWishLabel ? 6 : 8,
+                marginBottom: 8,
               }}
               linkStyle={{ color: skin.gold }}
             >
@@ -219,24 +194,6 @@ export function BoardPostCard({
                 <Ionicons name="copy-outline" size={15} color={skin.gold} />
                 <Text style={{ fontFamily: 'Lato_700Bold', color: skin.gold }} className="text-xs ml-1">
                   Use this format
-                </Text>
-              </Pressable>
-            )}
-            {linkedWishLabel && (
-              <Pressable
-                onPress={(event) => {
-                  event.stopPropagation();
-                  onLinkedWishPress?.();
-                }}
-                disabled={!onLinkedWishPress}
-                className="self-start flex-row items-center border rounded-full px-2 py-1 mb-2 active:opacity-70"
-                style={{ backgroundColor: chipFill, borderColor: skin.border }}
-                accessibilityRole={onLinkedWishPress ? 'button' : undefined}
-                accessibilityLabel={linkedWishLabel}
-              >
-                <Ionicons name="link-outline" size={12} color={skin.gold} />
-                <Text style={{ fontFamily: 'Lato_700Bold', color: skin.gold }} className="text-xs ml-1">
-                  {linkedWishLabel}
                 </Text>
               </Pressable>
             )}

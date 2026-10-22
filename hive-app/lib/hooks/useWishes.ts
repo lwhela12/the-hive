@@ -116,7 +116,7 @@ export function useWishes({ loadWishes = false }: { loadWishes?: boolean } = {})
 
     const { data: wishLink } = await (supabase as any)
       .from('wishes')
-      .select('source_board_post_id, user_id')
+      .select('user_id')
       .eq('id', wishId)
       .eq('community_id', wishCommunityId)
       .maybeSingle();
@@ -147,40 +147,6 @@ export function useWishes({ loadWishes = false }: { loadWishes?: boolean } = {})
 
     if (wishError) {
       return { error: wishError };
-    }
-
-    // If this wish was turned into a board, completing either side completes the shared dream.
-    const { error: boardError } = await (supabase as any)
-      .from('board_categories')
-      .update({
-        status: 'completed',
-        completed_at: fulfilledAt,
-        completed_by: profile.id,
-        completion_note: thankYouMessage || 'Completed from linked wish.',
-      })
-      .eq('source_wish_id', wishId)
-      .eq('community_id', wishCommunityId);
-
-    if (boardError) {
-      console.log('Linked board completion skipped (non-blocking):', boardError);
-    }
-
-    if (wishLink?.source_board_post_id) {
-      const { error: postError } = await (supabase as any)
-        .from('board_posts')
-        .update({
-          status: 'completed',
-          completed_at: fulfilledAt,
-          completed_by: profile.id,
-          completion_note: thankYouMessage || 'Completed from linked wish.',
-          granted_wish_id: wishId,
-        })
-        .eq('id', wishLink.source_board_post_id)
-        .eq('community_id', wishCommunityId);
-
-      if (postError) {
-        console.log('Linked thread completion skipped (non-blocking):', postError);
-      }
     }
 
     // 2. Insert granters into junction table

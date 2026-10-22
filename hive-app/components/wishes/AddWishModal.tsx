@@ -17,14 +17,13 @@ import { userFacingError } from '../../lib/userFacingError';
 import { invalidateWishQueries } from '../../lib/queryClient';
 import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { notifyWishMentions } from '../../lib/wishMentions';
-import { syncWishEditToLinkedBoard } from '../../lib/wishBoardLinking';
 import { ComposerBar } from '../ui/ComposerBar';
 import { uploadAttachments, type AttachmentUploadOutcome } from '../../lib/attachmentUpload';
 import type { Attachment } from '../../types';
 import type { SelectedImage } from '../../lib/imagePicker';
 import type { SelectedFile } from '../../lib/filePicker';
 import { WishScopePicker, type WishScope } from '../ui/WishScopePicker';
-import type { BoardCategory, Wish } from '../../types';
+import type { Wish } from '../../types';
 import { BounceScrollView } from '../ui/BounceScrollView';
 
 const WISH_DRAFT_KEY = 'add-wish-draft';
@@ -50,7 +49,6 @@ interface AddWishModalProps {
   onSave: () => void | Promise<void>;
   onRefineWithClive?: (roughWish: string) => void;
   existingWish?: Wish | null;
-  linkedBoardCategory?: Pick<BoardCategory, 'id' | 'name'> | null;
   wishOwnerUserId?: string;
   wishOwnerName?: string;
 }
@@ -63,7 +61,6 @@ export function AddWishModal({
   onSave,
   onRefineWithClive,
   existingWish,
-  linkedBoardCategory,
   wishOwnerUserId,
   wishOwnerName,
 }: AddWishModalProps) {
@@ -117,7 +114,6 @@ export function AddWishModal({
   // and the "@" rows change with it, because they read the same value.
   const mentionReach = useMentionReach({ reach: wishScope });
   const isEditMode = !!existingWish;
-  const isLinkedWish = !!linkedBoardCategory && !existingWish;
 
   /**
    * Both boxes keep a draft, and both take an updater as well as a string —
@@ -210,7 +206,7 @@ export function AddWishModal({
   const handleSave = async (makePublic: boolean) => {
     if (!userId || !communityId || !wishText.trim()) return;
     const ownerUserId = wishOwnerUserId || existingWish?.user_id || userId;
-    const shouldPublish = !existingWish || isLinkedWish || makePublic;
+    const shouldPublish = !existingWish || makePublic;
     const titleMissingFromSchema = (err: unknown) =>
       err instanceof Error
         ? err.message.includes('title')
@@ -265,13 +261,6 @@ export function AddWishModal({
 
         if (updateError) throw updateError;
 
-        // Mirror the edit onto the linked HD-board thread so board and wish never diverge.
-        await syncWishEditToLinkedBoard({
-          wishId: existingWish.id,
-          communityId,
-          title: updatePayload.title,
-          description: updatePayload.description,
-        });
       } else {
         const picked = await collectAttachments(ownerUserId);
         if (!picked.readyToSend) return;
@@ -288,10 +277,6 @@ export function AddWishModal({
           extracted_from: 'manual',
           ...(attachments && attachments.length > 0 ? { attachments } : {}),
         };
-
-        if (linkedBoardCategory?.id) {
-          insertPayload.board_category_id = linkedBoardCategory.id;
-        }
 
         let { data: insertedWish, error: insertError } = await supabase
           .from('wishes')
@@ -395,7 +380,7 @@ export function AddWishModal({
                   style={{ fontFamily: 'Lato_700Bold' }}
                   className="text-xl text-charcoal"
                 >
-                  {isEditMode ? 'Edit HD Wish' : isLinkedWish ? 'Add Linked HD Wish' : 'Add an HD Wish'}
+{isEditMode ? 'Edit HD Wish' : 'Add an HD Wish'}
                 </Text>
                 <View style={{ width: 50 }} />
               </View>
@@ -408,23 +393,6 @@ export function AddWishModal({
                 >
                   What is the HD wish?
                 </Text>
-                {isLinkedWish && (
-                  <View className="bg-gold/10 border border-gold/20 rounded-xl px-4 py-3 mb-3">
-                    <Text
-                      style={{ fontFamily: 'Lato_700Bold' }}
-                      className="text-gold text-sm"
-                    >
-                      Linked to {linkedBoardCategory.name}
-                    </Text>
-                    <Text
-                      style={{ fontFamily: 'Lato_400Regular' }}
-                      className="text-charcoal/60 text-sm mt-1"
-                    >
-                      This public HD wish will show up on profiles and Home.
-                      {wishOwnerName ? ` It will belong to ${wishOwnerName}.` : ''}
-                    </Text>
-                  </View>
-                )}
                 {/* A title is words too — short ones. Same box, one line. */}
                 <ComposerBar
                   variant="form"
@@ -445,7 +413,7 @@ export function AddWishModal({
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal/60 text-sm mb-3"
                 >
-                  {isLinkedWish ? 'Make this one clear, claimable ask from the linked thread.' : 'Describe what you need help with'}
+Describe what you need help with
                 </Text>
                 {/* The one box, wearing form clothes. The mic is inside its own
                     border with the counter — Clive's geometry (Nat 2026-08-04),
@@ -505,9 +473,6 @@ export function AddWishModal({
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal/70 text-sm"
                 >
-                  {isLinkedWish
-                    ? 'Linked HD wishes work best as concrete next steps: "Help hang the mirror" or "Send Iceland travel tips."'
-                    : 'Be specific about what you need. "Help cooking" becomes "Teach me 3 easy weeknight meals I can prep on Sundays."'}
                 </Text>
               </View>
 
@@ -529,15 +494,6 @@ export function AddWishModal({
                   <Button
                     title="Save Changes"
                     onPress={() => handleSave(existingWish?.status === 'public')}
-                    loading={saving}
-                    disabled={saving || !canSubmit}
-                  />
-                </View>
-              ) : isLinkedWish ? (
-                <View className="mb-4">
-                  <Button
-                    title="Add Linked HD Wish"
-                    onPress={() => handleSave(true)}
                     loading={saving}
                     disabled={saving || !canSubmit}
                   />

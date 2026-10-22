@@ -94,26 +94,11 @@ export function useHiveDataQuery(
           // three fields actually read; same fix below for granters.
           let { data, error } = await (supabase as any)
             .from('wishes')
-            .select('*, user:profiles!user_id(id, name, avatar_url), board_category:board_categories!wishes_board_category_id_fkey(id, name, topic_kind, status)')
+.select('*, user:profiles!user_id(id, name, avatar_url)')
             .eq('status', 'public')
             .or('is_active.is.true,is_active.is.null')
             .eq('community_id', communityId!)
             .order('created_at', { ascending: false });
-          if (
-            error &&
-            (String(error.message ?? '').includes('wishes_board_category_id_fkey') ||
-              String(error.message ?? '').includes('board_category'))
-          ) {
-            const fallback = await (supabase as any)
-              .from('wishes')
-              .select('*, user:profiles!user_id(id, name, avatar_url)')
-              .eq('status', 'public')
-              .or('is_active.is.true,is_active.is.null')
-              .eq('community_id', communityId!)
-              .order('created_at', { ascending: false });
-            data = fallback.data;
-            error = fallback.error;
-          }
           if (error) {
             console.error('Error fetching public wishes:', error);
           }
@@ -129,29 +114,12 @@ export function useHiveDataQuery(
           let { data, error } = await (supabase as any)
             .from('wishes')
             .select(
-              '*, user:profiles!user_id(id, name, avatar_url), board_category:board_categories!wishes_board_category_id_fkey(id, name, topic_kind, status), granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))'
+'*, user:profiles!user_id(id, name, avatar_url), granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))'
             )
             .eq('status', 'fulfilled')
             .eq('community_id', communityId!)
             .order('fulfilled_at', { ascending: false })
             .limit(20);
-          if (
-            error &&
-            (String(error.message ?? '').includes('wishes_board_category_id_fkey') ||
-              String(error.message ?? '').includes('board_category'))
-          ) {
-            const fallback = await (supabase as any)
-              .from('wishes')
-              .select(
-                '*, user:profiles!user_id(id, name, avatar_url), granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))'
-              )
-              .eq('status', 'fulfilled')
-              .eq('community_id', communityId!)
-              .order('fulfilled_at', { ascending: false })
-              .limit(20);
-            data = fallback.data;
-            error = fallback.error;
-          }
           if (error) {
             console.error('Error fetching granted wishes:', error);
           }

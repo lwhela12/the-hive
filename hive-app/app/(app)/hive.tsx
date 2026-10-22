@@ -1981,27 +1981,11 @@ export default function HiveScreen() {
     try {
       let { data, error } = await (supabase as any)
         .from('wishes')
-        .select('*, user:profiles!user_id(id, name, avatar_url), board_category:board_categories!wishes_board_category_id_fkey(id, name, topic_kind, status), granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))')
+.select('*, user:profiles!user_id(id, name, avatar_url), granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))')
         .eq('id', wishId)
         .eq('community_id', communityId)
         .in('status', ['public', 'fulfilled'])
         .single();
-
-      if (
-        error &&
-        (String(error.message ?? '').includes('wishes_board_category_id_fkey') ||
-          String(error.message ?? '').includes('board_category'))
-      ) {
-        const fallback = await (supabase as any)
-          .from('wishes')
-          .select('*, user:profiles!user_id(id, name, avatar_url), granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))')
-          .eq('id', wishId)
-          .eq('community_id', communityId)
-          .in('status', ['public', 'fulfilled'])
-          .single();
-        data = fallback.data;
-        error = fallback.error;
-      }
 
       if (error || !data) throw error ?? new Error('Wish not found');
       openWishDetail(data as WishWithGranters);

@@ -6,11 +6,14 @@ const read = (relativePath) => fs.readFileSync(path.resolve(__dirname, '..', rel
 const screen = read('app/(app)/board.tsx');
 const migration = read('supabase/migrations/20261022194038_move_linkedin_article_to_things_we_learned.sql');
 
-assert.match(
-  screen,
-  /!isCompletableHdAsk\(selectedCategory\)/,
-  'Only HD Wish boards may offer the Granted action.',
-);
+const wishEditor = read('components/wishes/AddWishModal.tsx');
+const wishActions = read('lib/hooks/useWishes.ts');
+assert.doesNotMatch(screen, /Granted|linkedWish|LinkedWish|GrantWishModal|markBoardThreadGranted/, 'Boards have no wish lifecycle controls.');
+assert.doesNotMatch(wishEditor, /linkedBoardCategory|syncWishEditToLinkedBoard/, 'Wish editing does not synchronize to a board.');
+assert.doesNotMatch(wishActions, /source_board_post_id|source_wish_id|granted_wish_id/, 'Granting a wish does not complete a board or thread.');
+for (const retiredModule of ['lib/wishBoardLinking.ts', 'lib/boardThreadCompletion.ts', 'lib/hooks/useBoardLinkedWishes.ts']) {
+  assert.equal(fs.existsSync(path.resolve(__dirname, '..', retiredModule)), false, `${retiredModule} is retired`);
+}
 assert.match(
   migration,
   /title = 'LinkedIn Article from a call'/,
@@ -28,4 +31,4 @@ assert.match(
 );
 assert.doesNotMatch(migration, /delete from public\.(board_posts|board_replies|board_reactions)/i, 'Moving the thread never deletes its history.');
 
-console.log('PASS: Granted stays on HD Wish boards, and the LinkedIn thread moves without deleting its discussion.');
+console.log('PASS: Boards and wishes are independent; the LinkedIn thread move preserves its discussion.');

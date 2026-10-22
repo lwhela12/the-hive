@@ -55,8 +55,6 @@ export const queryKeys = {
     ['boardPosts', communityId, categoryId] as const,
   boardPostCounts: (communityId: string) => ['boardPostCounts', communityId] as const,
   boardSearchIndex: (communityId: string) => ['boardSearchIndex', communityId] as const,
-  boardLinkedWishes: (communityId: string, categoryId: string) =>
-    ['boardLinkedWishes', communityId, categoryId] as const,
 };
 
 /**
@@ -90,7 +88,6 @@ export async function invalidateWishQueries(
   const invalidations = [
     queryClient.invalidateQueries({ queryKey: queryKeys.publicWishes(communityId) }),
     queryClient.invalidateQueries({ queryKey: queryKeys.grantedWishes(communityId) }),
-    queryClient.invalidateQueries({ queryKey: ['boardLinkedWishes', communityId] }),
     // Posting or granting a wish is one of the things Recent Activity reports,
     // and that feed started caching on 2026-08-12. Without this, a member
     // could grant a wish and go back to Home to find their own good deed

@@ -96,7 +96,6 @@ export function BoardPostDetail({ postId, onBack, identityCommunityId }: BoardPo
   // rather than on the page, and a warning that isn't a hole in the black.
   const chipFill = skin.dark ? 'rgba(255,255,255,0.08)' : '#faf8f3';
   const dangerInk = skin.dark ? '#ff9a9a' : '#ef4444';
-  const goldWash = skin.dark ? 'rgba(224,190,118,0.12)' : 'rgba(189,147,72,0.10)';
   const queryClient = useQueryClient();
   const [post, setPost] = useState<PostWithAuthor | null>(null);
 
@@ -581,17 +580,6 @@ export function BoardPostDetail({ postId, onBack, identityCommunityId }: BoardPo
           {post.is_pinned && (
             <View className="flex-row items-center mb-2">
               <Text className="text-xs" style={{ color: skin.gold }}>📌 Pinned</Text>
-            </View>
-          )}
-          {post.status === 'completed' && (
-            <View
-              className="flex-row items-center self-start border rounded-full px-3 py-1 mb-3"
-              style={{ backgroundColor: goldWash, borderColor: skin.borderStrong }}
-            >
-              <Ionicons name="checkmark-circle-outline" size={15} color={skin.gold} />
-              <Text style={{ fontFamily: 'Lato_700Bold', color: skin.gold }} className="text-xs ml-1">
-                HD Wish Granted
-              </Text>
             </View>
           )}
           {post.archived_at && (

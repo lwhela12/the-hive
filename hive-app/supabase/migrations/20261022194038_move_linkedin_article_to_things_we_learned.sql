@@ -66,7 +66,7 @@ insert into public.app_news (occurred_on, title, detail, created_by)
 select
   date '2026-10-22',
   'Boards keep conversations in the right place',
-  'Regular board threads no longer show a Granted action. That action is reserved for HD Wish boards, while useful workflows can live in Things We Learned.',
+  'Boards and HD Wishes have separate homes. Board threads no longer show a Granted action or linked-wish controls; useful workflows can live in Things We Learned.',
   owner.id
 from (
   select profile.id
