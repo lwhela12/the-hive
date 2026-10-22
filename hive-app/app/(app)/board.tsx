@@ -540,7 +540,17 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     return selectedCategory.owner_user_id === profile.id;
   }, [isAdmin, profile, selectedCategory]);
   const canCompleteThread = useCallback((post: Pick<BoardPost, 'author_id' | 'status' | 'archived_at'>) => {
-    if (!profile || !selectedCategory || post.status === 'completed' || post.archived_at || isArchivedCategory(selectedCategory)) {
+    // Only HD Wish boards have a wish lifecycle. A regular discussion (such
+    // as the Brag Board) is never a proxy for a wish, even when its author or
+    // an admin can edit it.
+    if (
+      !profile
+      || !selectedCategory
+      || !isCompletableHdAsk(selectedCategory)
+      || post.status === 'completed'
+      || post.archived_at
+      || isArchivedCategory(selectedCategory)
+    ) {
       return false;
     }
 
