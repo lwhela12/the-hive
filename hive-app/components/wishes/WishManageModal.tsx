@@ -44,18 +44,14 @@ type TileLook = {
 // solid honey, cream lettering, unmistakably the first thing your eye lands on.
 const GRANT_LOOK: TileLook = { emoji: '🎁', ink: '#fffdf5', background: '#bd9348', border: '#a67f3a' };
 
-// Edit and Archive are the quiet ones. They stay pale and unshouty, but they
-// are warm grey and cool grey so they still read apart at a glance.
+// Edit stays pale and unobtrusive.
 const EDIT_LOOK: TileLook = { emoji: '✏️', ink: '#6b6257', background: '#fffdf5', border: 'rgba(49,49,48,0.13)' };
-const ARCHIVE_LOOK: TileLook = { emoji: '📦', ink: '#6b7280', background: '#f5f4f0', border: 'rgba(49,49,48,0.13)' };
 
 // Clive is a gold ✨ everywhere else in the app — the rail draws him that way,
 // and so does the "Refine with Clive ✨" link on the member cards. He keeps it.
 const CLIVE_LOOK: TileLook = { emoji: '✨', ink: '#bd9348', background: '#fff8e8', border: 'rgba(189,147,72,0.34)' };
 
-// The only red in the set. Delete and Archive are one slip apart and only one
-// of them can be undone, so Delete gets the red, the far end of the row, a rule
-// between it and everything else, and the arming tap below.
+// Delete gets the red, a rule between it and other actions, and an arming tap.
 const DELETE_LOOK: TileLook = { emoji: '🗑️', ink: '#c0523f', background: '#fdf1ee', border: 'rgba(192,82,63,0.3)' };
 const DELETE_ARMED_LOOK: TileLook = { emoji: '🗑️', ink: '#fffdf5', background: '#c0523f', border: '#a8452f' };
 
@@ -124,19 +120,16 @@ export function WishManageModal<TWish extends ManagedWish>({
   onClose,
   canGrant = false,
   canEdit = false,
-  canArchive = false,
   canDelete = false,
   canRefine = false,
   onGrant,
   onEdit,
-  onArchive,
   onDelete,
   onRefine,
 }: WishManageModalProps<TWish>) {
   // Delete asks for a second tap before it hands off. Every screen that opens
   // this sheet already asks "are you sure?" — this is not that question, it is
-  // the guard for the new shape: a small tile shoulder to shoulder with Archive
-  // is easier to hit by mistake than a pill of its own was.
+  // the guard for a small tile that is easy to hit by mistake.
   const [deleteArmed, setDeleteArmed] = useState(false);
 
   useEffect(() => {
@@ -235,14 +228,6 @@ export function WishManageModal<TWish extends ManagedWish>({
               />
             ) : null}
 
-            {canArchive && onArchive ? (
-              <WishActionTile
-                label="Archive"
-                look={ARCHIVE_LOOK}
-                onPress={() => runAction(onArchive)}
-              />
-            ) : null}
-
             {canRefine && onRefine ? (
               <WishActionTile
                 label="Refine with Clive"
@@ -252,8 +237,7 @@ export function WishManageModal<TWish extends ManagedWish>({
             ) : null}
 
             {canDelete && onDelete ? (
-              // Delete travels with its own hairline rule so it never sits flush
-              // against Archive, wherever the row happens to wrap.
+              // Delete travels with its own hairline rule wherever the row wraps.
               <View
                 style={{
                   flexGrow: 1,
