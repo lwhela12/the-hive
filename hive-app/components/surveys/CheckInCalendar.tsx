@@ -5,7 +5,7 @@ import { EventDatePicker } from '../ui/DatePicker';
 import { TimeInput } from '../ui/TimeInput';
 import { EventScopeFields, type EventAudience } from '../events/EventAudienceToggle';
 import { formatDateRangeShort, parseAmericanDate } from '../../lib/dateUtils';
-import { humanTimeInput, parseTimeInput } from '../../lib/timeInput';
+import { humanTimeInput, parseCalendarTime } from '../../lib/timeInput';
 import { createCalendarEvent } from '../../lib/eventMutations';
 import { invalidateEventQueries } from '../../lib/queryClient';
 import { supabase } from '../../lib/supabase';
@@ -17,6 +17,7 @@ type CalendarEvent = {
   event_date: string;
   end_date: string | null;
   event_time: string | null;
+  end_time: string | null;
   created_by: string | null;
   visibility: string | null;
   invited_scope: string | null;
@@ -55,7 +56,7 @@ export function CheckInCalendar({ communityId, profileId, firstName, isOwner }: 
 
   const refresh = useCallback(async () => {
     const { data, error: loadError } = await supabase.from('events')
-      .select('id,title,event_date,end_date,event_time,created_by,visibility,invited_scope')
+      .select('id,title,event_date,end_date,event_time,end_time,created_by,visibility,invited_scope')
       .eq('community_id', communityId).eq('event_type', 'custom')
       .gte('event_date', getLocalIsoDate(new Date()))
       .order('event_date').limit(50);
@@ -80,24 +81,25 @@ export function CheckInCalendar({ communityId, profileId, firstName, isOwner }: 
   const startEdit = (event: CalendarEvent) => {
     setEditing(event); setTitle(event.title); setDate(dateForInput(event.event_date));
     setEndDate(event.end_date ? dateForInput(event.end_date) : '');
-    setAllDay(!event.event_time); setTime(humanTimeInput(event.event_time));
+    setAllDay(!event.event_time); setTime(event.event_time ? `${humanTimeInput(event.event_time)}${event.end_time ? ` – ${humanTimeInput(event.end_time)}` : ''}` : '');
     setVisibility(scope(event.visibility)); setInvited(scope(event.invited_scope ?? event.visibility));
     setError(null); setFormOpen(true);
   };
   const save = async () => {
     const eventDate = parseAmericanDate(date);
     const ending = endDate.trim() ? parseAmericanDate(endDate) : null;
-    const eventTime = allDay || !time.trim() ? null : parseTimeInput(time);
+    const times = allDay || !time.trim() ? null : parseCalendarTime(time);
     if (!title.trim()) return setError('Add a name for this date.');
     if (!eventDate) return setError('Choose a valid start date.');
     if (endDate.trim() && (!ending || ending < eventDate)) return setError('Choose an end date on or after the start.');
-    if (!allDay && time.trim() && !eventTime) return setError('Use a time like 7:30 PM.');
+    if (!allDay && time.trim() && !times) return setError('Enter a time like 4 PM or a range like 4–7 PM.');
+    if (times?.end && times.end <= times.start) return setError('The end time should be after the start time.');
     setSaving(true); setError(null);
     try {
       const payload = {
         title: title.trim(), event_date: eventDate,
         end_date: ending && ending > eventDate ? ending : null,
-        event_time: eventTime, visibility, invited_scope: invited,
+        event_time: times?.start ?? null, end_time: times?.end ?? null, visibility, invited_scope: invited,
       };
       if (editing) {
         let query = supabase.from('events').update(payload).eq('id', editing.id).eq('community_id', communityId);
@@ -158,17 +160,19 @@ export function CheckInCalendar({ communityId, profileId, firstName, isOwner }: 
           <Text style={{ fontFamily: 'Lato_700Bold', color: ink }}>I’m out of town</Text>
         </Pressable>
       </View>
-      {formOpen && <View style={{ borderTopWidth: 1, borderColor: '#eadfc9', paddingTop: 14, gap: 10 }}>
+      {formOpen && <View style={{ width: '100%', maxWidth: 760, alignSelf: 'center', borderTopWidth: 1, borderColor: '#eadfc9', paddingTop: 14, gap: 10 }}>
         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: ink }}>{editing ? 'Update this date' : 'Add to HIVE calendar'}</Text>
         <TextInput accessibilityLabel="Event title" value={title} onChangeText={setTitle} placeholder="Event or away dates" style={inputStyle} />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
           <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 190 }}><EventDatePicker value={date} onChange={setDate} /></View>
           <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 190 }}><EventDatePicker value={endDate} onChange={setEndDate} label="End date" placeholder="Same day — or pick one" clearable /></View>
         </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 16 }}>
         <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: allDay }} onPress={() => setAllDay(value => !value)} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Text style={{ color: gold, fontSize: 18 }}>{allDay ? '☑' : '□'}</Text><Text style={{ color: ink }}>All day</Text>
         </Pressable>
-        {!allDay && <TimeInput value={time} onChangeText={setTime} placeholder="Time (optional) — 7:30 PM" style={inputStyle} />}
+        {!allDay && <TimeInput value={time} onChangeText={setTime} accessibilityLabel="Time or time range" placeholder="4–7 PM (optional)" style={[inputStyle, { width: 220 }]} />}
+        </View>
         <EventScopeFields visibility={visibility} onVisibilityChange={setVisibility} invited={invited} onInvitedChange={setInvited} allowPublic={isOwner} />
         {error && <Text style={{ color: '#b42318' }}>{error}</Text>}
         <View style={{ flexDirection: 'row', gap: 8 }}>

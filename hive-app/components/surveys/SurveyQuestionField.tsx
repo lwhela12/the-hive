@@ -526,6 +526,9 @@ export function SurveyQuestionField({
   }, [isHdWish, profile?.id, communityId]);
   const selectedWish = pickableWishes.find(wish =>
     textValue.trim() === wish.description && (!answers?.q_hd_wish_id || answers.q_hd_wish_id === wish.id));
+  // Keep existing wish records while hiding the two yarn duplicates.
+  const hasBeaniesWish = pickableWishes.some(wish => wish.id === '1deaaae7-b163-47e6-a010-d66358898f57');
+  const repeatedYarnWishIds = ['9099d70c-2c61-4870-94a9-65b598151560', '212d621e-9545-4394-87c7-529944a4932d'];
   const showNewWish = !selectedWish && (writingNewWish || answers?.q_hd_wish_mode === 'new' || (wishesLoaded && !answers?.q_hd_wish_id && !!textValue.trim()));
   const [writeOwnWish, setWriteOwnWish] = useState(false);
   const [grantTarget, setGrantTarget] = useState<Wish | null>(null);
@@ -705,7 +708,8 @@ export function SurveyQuestionField({
       {isHdWish && (
         <View style={{ gap: 12, marginBottom: 10 }}>
           <View accessibilityRole="radiogroup" accessibilityLabel="Meeting focus" style={{ gap: 8 }}>
-            {pickableWishes.filter(wish => !grantedIds.includes(wish.id)).map(wish => {
+            {pickableWishes.filter(wish => !grantedIds.includes(wish.id)
+              && (!hasBeaniesWish || !repeatedYarnWishIds.includes(wish.id) || selectedWish?.id === wish.id)).map(wish => {
               const chosen = selectedWish?.id === wish.id;
               const sourceCommunity = memberships.find(member => member.community_id === wish.communityId)?.community
                 ?? (community?.id === wish.communityId ? community : null);
