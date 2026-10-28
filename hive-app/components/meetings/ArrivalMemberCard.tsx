@@ -37,7 +37,7 @@ function ArrivalFact({
   danger?: boolean;
 }) {
   return (
-    <View style={{ width: '100%', flexDirection: 'row', alignItems: 'flex-start', gap: (isTV ? 10 : 7) * scale }}>
+    <View style={{ width: '100%', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: (isTV ? 10 : 7) * scale }}>
       <Text
         numberOfLines={1}
         adjustsFontSizeToFit
@@ -49,14 +49,16 @@ function ArrivalFact({
           lineHeight: Math.max(14, (isTV ? 18 : 15) * scale),
           letterSpacing: 0.6,
           color: danger ? '#b3261e' : '#9a8060',
-          textAlign: 'right',
+          textAlign: 'left',
         }}
       >
         {label.toUpperCase()}
       </Text>
       <Text
         style={{
-          flex: 1,
+          flexGrow: 1,
+          flexShrink: 1,
+          flexBasis: 110,
           fontFamily: 'Lato_700Bold',
           fontSize: Math.max(11, (isTV ? 15 : 12) * scale),
           lineHeight: Math.max(15, (isTV ? 20 : 17) * scale),
