@@ -2,6 +2,11 @@ import type { SurveyQuestion } from '../types';
 
 export const TOMORROW_CHECK_IN_TITLE = 'Before we meet — October draft';
 
+/** The same four answer keys stored privately for the member and Nat. */
+export function isNatFeedbackQuestion(questionId: string): boolean {
+  return ['member_goal', 'member_support', 'member_value', 'member_next_year'].includes(questionId);
+}
+
 export const TOMORROW_CHECK_IN_QUESTIONS: SurveyQuestion[] = [
   {
     id: 'ball_context',
@@ -40,7 +45,7 @@ export const TOMORROW_CHECK_IN_QUESTIONS: SurveyQuestion[] = [
   { id: 'ball_food', type: 'long', text: 'What food would you enjoy at the Bumblebee Ball?', required: false, show_if: { question_id: 'ball_choice', equals: 'I’d like to give input.' } },
   { id: 'ball_awards', type: 'long', text: 'Any ideas for awards or people we should celebrate?', required: false, show_if: { question_id: 'ball_choice', equals: 'I’d like to give input.' } },
   { id: 'ball_dress', type: 'choice', text: 'What should we wear?', options: ['Ballgowns and fancy clothes', 'Onesies', 'Costumes', 'Cozies', 'Dealer’s choice — wear what you like'], required: false, show_if: { question_id: 'ball_choice', equals: 'I’d like to give input.' } },
-  { id: 'nat_feedback_context', type: 'note', text: 'Just for Nat', body: ['Your goals, support, HIVE feedback, and plans for next year are private between you and Nat. They will not appear on the meeting screen or in the planning chat.'], required: false },
+  { id: 'nat_feedback_context', type: 'note', text: 'Just for Nat', body: ['The four highlighted questions below are private between you and Nat.'], required: false },
   {
     id: 'member_goal',
     type: 'long',

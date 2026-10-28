@@ -21,6 +21,8 @@ import { supabase } from '../../lib/supabase';
 import { ReachPill } from '../ui/ReachPill';
 import { accentPalette, HIVE_GOLD } from '../../lib/hiveBrand';
 import { formatDateShort } from '../../lib/dateUtils';
+import { isNatFeedbackQuestion } from '../../lib/octoberOgQuestions';
+import { Ionicons } from '@expo/vector-icons';
 
 export function ScaleInput({ value, onChange, accent = HIVE_GOLD }: { value: number | null; onChange: (v: number) => void; accent?: string }) {
   const tint = accentPalette(accent);
@@ -112,6 +114,7 @@ export function VoiceTextInput({
   placeholder,
   multiline = false,
   communityId,
+  allowMentions = true,
 }: {
   value: string;
   onChangeText: (text: string) => void;
@@ -123,8 +126,9 @@ export function VoiceTextInput({
    *  bubbles"). ComposerBar already has the picker built in — survey answer
    *  boxes just never handed it a member list before. */
   communityId?: string | null;
+  allowMentions?: boolean;
 }) {
-  const { members: mentionMembers, loading: mentionsLoading } = useMentionableMembers(communityId);
+  const { members: mentionMembers, loading: mentionsLoading } = useMentionableMembers(allowMentions ? communityId : null);
   return (
     <ComposerBar
       tone="light"
@@ -137,8 +141,8 @@ export function VoiceTextInput({
       placeholder={placeholder ?? 'Your answer...'}
       multiline={multiline}
       minHeight={multiline ? 100 : undefined}
-      mentionMembers={mentionMembers}
-      mentionsLoading={mentionsLoading}
+      mentionMembers={allowMentions ? mentionMembers : []}
+      mentionsLoading={allowMentions && mentionsLoading}
     />
   );
 }
@@ -440,6 +444,7 @@ export function SurveyQuestionField({
   accent?: string;
 }) {
   const tint = accentPalette(accent);
+  const privateForNat = isNatFeedbackQuestion(question.id);
   const textValue = typeof value === 'string' ? value : '';
   // A saved absentee answer from before the recap wording changed should stay
   // visibly selected when somebody reopens their check-in.
@@ -649,7 +654,24 @@ export function SurveyQuestionField({
   }
 
   return (
-    <View style={{ marginBottom: 24 }}>
+    <View testID={privateForNat ? `private-nat-${question.id}` : undefined} style={{
+      marginBottom: 24,
+      ...(privateForNat ? {
+        backgroundColor: tint.wash,
+        borderWidth: 1,
+        borderLeftWidth: 4,
+        borderColor: tint.line(0.7),
+        borderLeftColor: tint.accent,
+        borderRadius: 14,
+        padding: 16,
+      } : {}),
+    }}>
+      {privateForNat && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+          <Ionicons name="lock-closed-outline" size={14} color={tint.ink} />
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: tint.ink }}>Just for Nat · Private</Text>
+        </View>
+      )}
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
         {/* index -1 = question embedded in another step; no number chip */}
         {index >= 0 && (
@@ -829,6 +851,7 @@ export function SurveyQuestionField({
           onChangeText={onChange}
           multiline={question.type === 'long'}
           communityId={communityId}
+          allowMentions={!privateForNat}
         />
       )}
       {question.type === 'scale' && (
