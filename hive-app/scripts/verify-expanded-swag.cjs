@@ -13,6 +13,8 @@ let browser;
   await click('filter',kind);assert.equal(await page.locator('.garment-card').count(),1);
   await click('garment',id);await click('color','Black');await click('size',size);await click('next');assert.equal(await page.locator(`[data-action="finish"][data-value="${finish}"]`).getAttribute('aria-pressed'),'true');assert.equal(await page.locator('[data-action="logo"][data-value="C"]').isEnabled(),true);
   await page.locator('[data-field="name"]').fill('Nat');
+  assert.match(await page.locator('.preview-artwork-summary').innerText(),/C · Bee only/);
+  if(finish!=='Embroidery'){await click('logo','E');assert.match(await page.locator('.preview-artwork-summary').innerText(),/E · OG HIVE/);assert.match(await page.locator('.logo-overlay').first().getAttribute('src'),/logo-E/);}
   for(const [w,h] of [[1440,1000],[390,844],[844,390]]){
    await page.setViewportSize({width:w,height:h});
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${kind} overflow ${w}`);
