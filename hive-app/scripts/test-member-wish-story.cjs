@@ -1,0 +1,21 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const ts = require('typescript');
+function load(file) { const module = { exports: {} }; vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { module, exports: module.exports, require: name => name === './wishDisplay' ? load('lib/wishDisplay.ts') : require(name) }); return module.exports; }
+const { memberWishStory } = load('lib/memberWishStory.ts');
+const wish = (id, user, status, created, extra = {}) => ({ id, user_id: user, status, created_at: created, description: id, is_active: true, ...extra });
+const task = (id, assigned, related, complete, at) => ({ id, description:id, assigned_to:assigned, related_user_id:related, completed:complete, completed_at:at });
+const wishes = [wish('new','me','public','2026-10-25'),wish('star','me','public','2026-10-01',{is_spotlight:true}),wish('past','me','fulfilled','2026-08-01',{fulfilled_at:'2026-10-10'}),wish('helped','other','fulfilled','2026-08-02',{fulfilled_at:'2026-10-11',granters:[{granter_id:'me'}]}),wish('old-grant','me','fulfilled','2026-06-01',{fulfilled_at:'2026-08-01'})];
+const tasks = [task('own','me',null,true,'2026-10-05'),task('self','me','me',true,'2026-10-06'),task('given','me','other',true,'2026-10-07'),task('received','other','me',true,'2026-10-08'),task('unassigned',null,'me',true,'2026-10-08'),task('old','me','other',true,'2026-08-01'),task('pending','me','other',false,null)];
+const story=memberWishStory('me',wishes,tasks,'2026-09-23');
+const ids=items=>Array.from(items,w=>w.id);
+assert.equal(story.spotlight.id,'star');
+assert.deepEqual(ids(story.history),['past','old-grant']);
+assert.deepEqual(ids(story.ownDone),['own','self']);
+assert.deepEqual(ids(story.given),['given']);
+assert.deepEqual(ids(story.received),['received']);
+assert.deepEqual(ids(story.next),['pending']);
+assert.deepEqual(ids(story.granted),['past','helped']);
+assert.equal(memberWishStory('nobody',wishes,tasks,'2026-09-23').current.length,0);
+console.log('PASS: wish history, starred current ask, correct help direction, no self-help credit, cycle boundary, and pending steps.');

@@ -35,7 +35,7 @@ vm.runInNewContext(ts.transpileModule(`${extracted}\nthis.result = { DECKS, HIVE
   { compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2020 } }).outputText, context);
 const { DECKS, HIVE_INTRO, APP_TOUR, renderWhatIsHive } = context.result;
 assert.deepEqual(Array.from(DECKS.tech.slides), ['room', 'outline', 'whatis', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks']);
-assert.deepEqual(Array.from(DECKS.default.slides), ['room', 'outline', 'rollcall', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks']);
+assert.deepEqual(Array.from(DECKS.default.slides), ['room', 'outline', 'rollcall', 'news', 'treasurer', 'spend', 'meetups', 'hummdinger', 'wrapup', 'thanks']);
 assert.deepEqual(Array.from(DECKS.show.slides), ['room', 'outline', 'rollcall', 'news', 'meetups', 'assignments', 'wrapup', 'thanks']);
 for (const deck of Object.values(DECKS)) {
   assert.deepEqual(Array.from(deck.agenda, item => item.key), Array.from(deck.slides).filter(key => key !== 'thanks'), 'Outline and navigation agree with actual slide order');

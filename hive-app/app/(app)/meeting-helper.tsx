@@ -1,3 +1,4 @@
+import { MemberWishStory } from '../../components/meetings/MemberWishStory';
 import { meetingVoteResults } from '../../lib/meetingVoteResults';
 import { quarterPulseDeckLines, recentQuarterPulsePeriod, type QuarterPulseCount } from '../../lib/quarterPulse';
 import { pacificCalendarDate } from '../../lib/endOfMonthPeriod';
@@ -4511,7 +4512,7 @@ export default function MeetingHelperScreen() {
                   )}
                 </View>
               ) : null}
-              {!introsFirst
+              {deckSlug !== 'default' && !introsFirst
                 && !topWish?.description
                 && !reportedWish
                 && grantedThisCycle.length === 0
@@ -4522,25 +4523,31 @@ export default function MeetingHelperScreen() {
                   Nothing written down yet — that's what the floor is for. Catch what {nameToday} says below.
                 </Text>
               ) : null}
+              {deckSlug === 'default' && communityId && cycleStart && nextMeeting && profile ? <MemberWishStory
+                key={`${nextMeeting.id}:${member.id}`} meetingId={nextMeeting.id} viewerId={profile.id} canEdit={isAdmin || profile.id === member.id}
+                communityId={communityId} memberId={member.id} memberName={getFirstName(member.name)}
+                memberIds={memberOrder.map(person => person.id)} since={cycleStart.toISOString()}
+                scale={sz(18, 13) / 16}
+              /> : null}
               {deckSlug === 'tech' ? detailSections.map((section) => (
                 <View key={section.key}>
                   <Text style={sectionLabel}>{section.label}</Text>
                   <Text style={sectionText}>{section.text}</Text>
                 </View>
               )) : null}
-              {!reportedWish && topWish?.description ? (
+              {deckSlug !== 'default' && !reportedWish && topWish?.description ? (
                 <View>
                   <Text style={sectionLabel}>{deckSlug === 'tech' ? 'Where I could use help' : "This month's HD"}</Text>
                   <Text style={sectionText}>{topWish.description}</Text>
                 </View>
               ) : null}
-              {reportedWish ? (
+              {deckSlug !== 'default' && reportedWish ? (
                 <View>
                   <Text style={sectionLabel}>{deckSlug === 'tech' ? 'Help request · shared with admin' : 'HummDinger wish · shared with admin'}</Text>
                   <Text style={sectionText}>{reportedWish}</Text>
                 </View>
               ) : null}
-              {grantedThisCycle.length > 0 ? (
+              {deckSlug !== 'default' && grantedThisCycle.length > 0 ? (
                 <View>
                   <Text style={sectionLabel}>Wishes granted this cycle 🌟</Text>
                   {grantedThisCycle.map((wish) => (
@@ -4555,7 +4562,7 @@ export default function MeetingHelperScreen() {
                   ))}
                 </View>
               ) : null}
-              {deckSlug === 'tech' ? null : detailSections.map((section) => (
+              {deckSlug === 'tech' || deckSlug === 'default' ? null : detailSections.map((section) => (
                 <View key={section.key}>
                   <Text style={sectionLabel}>{section.label}</Text>
                   <Text style={sectionText}>{section.text}</Text>
@@ -4608,7 +4615,7 @@ export default function MeetingHelperScreen() {
                   </Text>
                 </Pressable>
               ) : null}
-              {assistsForMember.length > 0 ? (
+              {deckSlug !== 'default' && assistsForMember.length > 0 ? (
                 <View style={{ gap: sz(6, 4) }}>
                   <Text style={sectionLabel}>Done for {getFirstName(member.name)} this cycle 💛</Text>
                   {assistsForMember.map((assist) => {
@@ -4624,7 +4631,7 @@ export default function MeetingHelperScreen() {
                   })}
                 </View>
               ) : null}
-              {assistsByMember.length > 0 ? (
+              {deckSlug !== 'default' && assistsByMember.length > 0 ? (
                 <View style={{ gap: sz(6, 4) }}>
                   <Text style={sectionLabel}>{getFirstName(member.name)} checked off ✓</Text>
                   {/* Jots arrive as raw routing text ("@Nat do the thing (re:
