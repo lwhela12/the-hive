@@ -14,6 +14,9 @@ export interface SurveyQuestion {
   // more obvious, like, explaining how the HIVE's work."*
   type: 'short' | 'long' | 'scale' | 'choice' | 'hangs' | 'focus' | 'note';
   options?: string[];
+  show_if?: { question_id: string; equals: string };
+  link_url?: string;
+  link_label?: string;
   /** A 'note' block's paragraphs. Nothing else reads it. */
   body?: string[];
   required: boolean;

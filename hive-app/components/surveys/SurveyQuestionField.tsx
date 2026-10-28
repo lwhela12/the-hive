@@ -8,9 +8,10 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { CheckInWishGrant } from './CheckInWishGrant';
 import type { Wish } from '../../types';
 import { HardOutInput } from './HardOutInput';
+import { CLOTHING_INTEREST_KEY, clothingInterests, toggleClothingInterest } from '../../lib/clothingInterest';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { CarryForwardItem } from '../../lib/carryForward';
-import { Pressable, Text, View } from 'react-native';
+import { Linking, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ComposerBar } from '../ui/ComposerBar';
 import type { SurveyQuestion } from '../../lib/hooks/useSurveys';
@@ -526,7 +527,8 @@ export function SurveyQuestionField({
   }, [isHdWish, profile?.id, communityId]);
   const selectedWish = pickableWishes.find(wish =>
     textValue.trim() === wish.description && (!answers?.q_hd_wish_id || answers.q_hd_wish_id === wish.id));
-  // Keep existing wish records while hiding the two yarn duplicates.
+  // Nat's two short yarn wishes repeat her detailed Box o' Beanies wish.
+  // Keep all records intact, and retain a short wish if it was already chosen.
   const hasBeaniesWish = pickableWishes.some(wish => wish.id === '1deaaae7-b163-47e6-a010-d66358898f57');
   const repeatedYarnWishIds = ['9099d70c-2c61-4870-94a9-65b598151560', '212d621e-9545-4394-87c7-529944a4932d'];
   const showNewWish = !selectedWish && (writingNewWish || answers?.q_hd_wish_mode === 'new' || (wishesLoaded && !answers?.q_hd_wish_id && !!textValue.trim()));
@@ -633,6 +635,15 @@ export function SurveyQuestionField({
             {paragraph}
           </Text>
         ))}
+        {question.link_url && question.link_label && /^https:\/\//i.test(question.link_url) ? (
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => { void Linking.openURL(question.link_url!).catch(() => showAlert('Could not open that link', 'Please try again later.')); }}
+            style={({ pressed }) => ({ alignSelf: 'flex-start', borderRadius: 999, backgroundColor: pressed ? '#e9d7ae' : tint.accent, paddingHorizontal: 14, paddingVertical: 10, marginTop: 4 })}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', fontSize: 13 }}>{question.link_label}</Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   }
@@ -823,7 +834,21 @@ export function SurveyQuestionField({
       {question.type === 'scale' && (
         <ScaleInput value={value ?? null} onChange={onChange} accent={accent} />
       )}
-      {question.type === 'choice' && question.options && (
+      {question.id === CLOTHING_INTEREST_KEY && question.options && (
+        <View style={{ gap: 8 }}>
+          {question.options.map(option => {
+            const selected = clothingInterests(value).includes(option);
+            return <Pressable key={option} accessibilityRole="checkbox" accessibilityLabel={option} accessibilityState={{ checked: selected }}
+              onPress={() => onChange(toggleClothingInterest(value, option))}
+              style={{ minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: tint.line(0.5), backgroundColor: selected ? tint.wash : '#fffdf5', padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Text style={{ color: tint.ink }}>{selected ? '☑' : '□'}</Text>
+              <Text style={{ color: tint.ink, fontFamily: 'Lato_700Bold' }}>{option}</Text>
+            </Pressable>;
+          })}
+          <Text style={{ color: '#665c4b', fontSize: 13 }}>Interest only. No order or price is set.</Text>
+        </View>
+      )}
+      {question.type === 'choice' && question.id !== CLOTHING_INTEREST_KEY && question.options && (
         <ChoiceInput options={question.options} value={choiceValue ?? ''} onChange={onChange} accent={accent} compact={question.id.startsWith('q_quarter_')} />
       )}
       {question.type === 'hangs' && (

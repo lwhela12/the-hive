@@ -90,7 +90,7 @@ export function OgIdeaChoices({ communityId, meetingId, canEdit, answers, onSetA
     <Text style={{ fontFamily: 'Lato_400Regular', color: '#665c4b' }}>Tap your favorites in order: 1st, 2nd, then 3rd. Rank fewer if you prefer. You can also suggest your own.</Text>
     {novemberHelpDecided && <View style={{ borderWidth: 1, borderColor: '#e8d6b2', borderRadius: 16, padding: 16, gap: 8, backgroundColor: '#fffdf8' }}>
       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: '#765b2d' }}>HIVE Help</Text>
-      <Text style={{ fontFamily: 'Lato_400Regular', color: '#51452f' }}>November’s HIVE Help is planned. We’ll share it at the meeting.</Text>
+      <Text style={{ fontFamily: 'Lato_400Regular', color: '#51452f' }}>November: collect canned goods and other nonperishable foods for the homemade meals we’ll prepare and distribute to people experiencing homelessness in December.</Text>
     </View>}
     {(['help', 'hang'] as Kind[]).filter(kind => !novemberHelpDecided || kind !== 'help').map(kind => {
       const options = choicesFor(kind);

@@ -20,6 +20,7 @@ import {
 } from '../../lib/carryForward';
 import type { Survey, SurveyAnswers, SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { SurveyQuestionField } from './SurveyQuestionField';
+import { getVisibleSurveyQuestions, pruneHiddenSurveyAnswers } from '../../lib/surveyQuestionVisibility';
 import { OgIdeaChoices } from './OgIdeaChoices';
 import { TechMeetingTimes } from './TechMeetingTimes';
 import { CheckInCalendar } from './CheckInCalendar';
@@ -365,6 +366,8 @@ export function SurveyModal({
     return next;
   }, [carryForwardResponses]);
 
+  const visibleQuestions = useMemo(() => getVisibleSurveyQuestions(survey.questions, answers), [survey.questions, answers]);
+
   // Restore saved draft on open
   useEffect(() => {
     let active = true;
@@ -377,9 +380,9 @@ export function SurveyModal({
     AsyncStorage.getItem(DRAFT_KEY(draftId)).then(raw => {
       if (!active) return;
       if (raw) {
-        try { setAnswers(JSON.parse(raw)); } catch {}
+        try { setAnswers(pruneHiddenSurveyAnswers(survey.questions, JSON.parse(raw))); } catch {}
       } else {
-        setAnswers(initialAnswers ?? {});
+        setAnswers(pruneHiddenSurveyAnswers(survey.questions, initialAnswers ?? {}));
       }
       setDraftLoaded(true);
     });
@@ -431,31 +434,32 @@ export function SurveyModal({
 
   const setAnswersPatch = useCallback((patch: Record<string, unknown>) => {
     setAnswers(prev => {
-      const next = { ...prev, ...patch };
+      const next = pruneHiddenSurveyAnswers(survey.questions, { ...prev, ...patch });
       AsyncStorage.setItem(DRAFT_KEY(draftId), JSON.stringify(next)).catch(() => {});
       return next;
     });
-  }, [draftId]);
+  }, [draftId, survey.questions]);
   const setAnswer = useCallback((questionId: string, value: any) => {
     setAnswersPatch({ [questionId]: value });
   }, [setAnswersPatch]);
 
   const handleSubmit = async () => {
-    const missing = survey.questions.filter(q => q.required && !answers[q.id] && answers[q.id] !== 0);
+    const submissionAnswers = pruneHiddenSurveyAnswers(survey.questions, answers);
+    const missing = visibleQuestions.filter(q => q.required && !submissionAnswers[q.id] && submissionAnswers[q.id] !== 0);
     if (missing.length > 0) {
       setError(`Please answer: ${missing.map(q => `"${q.text.slice(0, 30)}..."`).join(', ')}`);
       return;
     }
-    const departureError = survey.questions.some(q => q.id === 'q_hard_out') ? personalHardOutError(answers.q_hard_out) : null;
+    const departureError = visibleQuestions.some(q => q.id === 'q_hard_out') ? personalHardOutError(submissionAnswers.q_hard_out) : null;
     if (departureError) { setError(departureError); return; }
     setSubmitting(true);
     setError(null);
     const finalAnswers: SurveyAnswers = carryForwardItems.length > 0
       ? {
-          ...answers,
-          [CARRY_FORWARD_ANSWER_KEY]: buildCarryForwardResponse(answers, carryForwardItems),
+          ...submissionAnswers,
+          [CARRY_FORWARD_ANSWER_KEY]: buildCarryForwardResponse(submissionAnswers, carryForwardItems),
         }
-      : answers;
+      : submissionAnswers;
     const { error: submitError } = await onSubmit(finalAnswers);
     if (submitError) {
       setSubmitting(false);
@@ -523,7 +527,7 @@ export function SurveyModal({
     }
   };
 
-  const answeredCount = survey.questions.filter(q => q.type !== 'note' && answers[q.id] !== undefined && answers[q.id] !== '').length;
+  const answeredCount = visibleQuestions.filter(q => q.type !== 'note' && answers[q.id] !== undefined && answers[q.id] !== '').length;
   const hasDraft = answeredCount > 0;
 
   const updateCarryForwardItem = (
@@ -940,8 +944,8 @@ export function SurveyModal({
                   counts the boxes finds twelve boxes. */}
               {draftLoaded && (() => {
                 let asked = introduction ? 1 : 0;
-                return survey.questions.map((q) => {
-                  const redundantHiveHeading = q.type === 'note' && q.id.startsWith('note_hive_') && survey.questions.filter(question => question.type === 'note' && question.id.startsWith('note_hive_')).length === 1 && !!survey.community_id;
+                return visibleQuestions.map((q) => {
+                  const redundantHiveHeading = q.type === 'note' && q.id.startsWith('note_hive_') && visibleQuestions.filter(question => question.type === 'note' && question.id.startsWith('note_hive_')).length === 1 && !!survey.community_id;
                   const drawn = redundantHiveHeading ? null : renderQuestion(q, q.type === 'note' ? -1 : asked++);
                   const sectionTitle = isOgMeeting ? ({
                     q_attendance: 'Your plans',

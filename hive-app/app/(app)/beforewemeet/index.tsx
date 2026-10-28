@@ -14,6 +14,7 @@ import { CheckInHiveCard } from '../../../components/surveys/CheckInHiveCard';
 import { CheckInAction } from '../../../components/surveys/CheckInAction';
 import { ProductionProjectOverview } from '../../../components/surveys/ProductionProjectOverview';
 import { checkInQuestions, groupCheckInHives, upcomingCheckIns, meetingLabel, pacificToday, type MeetingPreview } from '../../../lib/checkInPresentation';
+import { withOctoberMeetingQuestions } from '../../../lib/octoberOgQuestions';
 import {
   buildMergedPreMeeting,
   mergedPreMeetingQuestions,
@@ -252,7 +253,14 @@ export default function BeforeWeMeetScreen() {
           : (pre.find((s: any) => isFirstNight.test(String(s.title ?? ''))) ?? pre[0]);
         const chosen = wanted
           ?? mine.find((s: any) => !notPreMeeting.test(String(s.title ?? '')));
-        return checkInQuestions((chosen?.questions ?? []) as SurveyQuestion[], false, slug);
+        const existing = checkInQuestions((chosen?.questions ?? []) as SurveyQuestion[], false, slug);
+        // These additions belong only to OG's October 28 occurrence. Include
+        // them in the section itself so the existing split/save path retains
+        // their answers with this HIVE's meeting response.
+        const event = linkedMeeting?.community_id === id
+          ? linkedMeeting
+          : (upcoming ?? []).find((item: MeetingPreview) => item.community_id === id);
+        return withOctoberMeetingQuestions(existing, slug, event?.id);
       };
 
       const built = buildMergedPreMeeting(
