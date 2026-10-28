@@ -65,12 +65,12 @@ export function MemberWishStory({ communityId, memberId, since, meetingId, selec
   const update = data.reflection.progress || progressText || ownDone.slice(0,2).map(t => '✓ ' + parseActionItemDescription(t.description).text).join('\n');
   const toggle = (key: string) => setExpanded(v => ({ ...v, [key]: !v[key] }));
   const more = (key: string, label = 'Read more') => <Pressable accessibilityRole="button" accessibilityState={{ expanded: !!expanded[key] }} onPress={() => toggle(key)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={heading}>{expanded[key] ? 'Show less' : label}</Text></Pressable>;
-  const paragraph = (key: string, value: string) => <View><Text numberOfLines={expanded[key] || value.length <= 180 ? undefined : 4} style={text}>{value}</Text>{value.length > 180 ? more(key) : null}</View>;
-  const column = { flexGrow: 1, flexBasis: width >= 620 ? '45%' as const : '100%' as const, minWidth: 0, gap: 8, backgroundColor: '#fbf6e9', borderRadius: 14, padding: 16 };
+  const paragraph = (key: string, value: string, lines = 4) => <View><Text numberOfLines={expanded[key] || value.length <= 180 ? undefined : lines} style={text}>{value}</Text>{value.length > 180 ? more(key) : null}</View>;
+  const column = { flexGrow: 1, flexBasis: width >= 900 ? '30%' as const : '100%' as const, minWidth: 0, gap: 8, backgroundColor: '#fbf6e9', borderRadius: 14, padding: 16 };
   const helpColumn = (key: 'received' | 'given', title: string) => {
     const rows = help[key];
     const spoken = key === 'received' ? data.reflection.help_received : data.reflection.help_given;
-    return <View style={column}>
+    return <View style={{ gap: 12 }}>
       <Text accessibilityRole="header" style={heading}>{title}</Text>
       {spoken ? paragraph(key+'spoken', spoken) : null}
       {(expanded[key] ? rows : rows.slice(0,2)).map((row, i) => {
@@ -82,15 +82,27 @@ export function MemberWishStory({ communityId, memberId, since, meetingId, selec
       {rows.length > 2 ? more(key, `See all ${rows.length}`) : rows.some(r => r.description.length > 120) ? more(key) : null}
     </View>;
   };
-  return <View onLayout={e => setWidth(e.nativeEvent.layout.width)} style={{ gap: 16 }}>
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
-      <View style={column}><Text accessibilityRole="header" style={heading}>Last month’s focus</Text>{paragraph('previous', data.previous || 'No wish saved in last month’s check-in.')}</View>
-      <View style={column}><Text accessibilityRole="header" style={heading}>Next month’s focus</Text>{paragraph('next', focus?.description || (!hasCheckIn ? reportedWish : '') || (selectedText || selectedId ? 'The selected wish was closed or removed. Choose a new focus.' : 'No new focus shared yet.'))}</View>
+  return <View onLayout={e => setWidth(e.nativeEvent.layout.width)} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
+    <View style={column}>
+      {helpColumn('given', 'How I helped others')}
     </View>
-    {update ? <View style={{ gap: 8 }}><Text accessibilityRole="header" style={heading}>How my month went</Text>{paragraph('progress', update)}</View> : null}
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
-      {helpColumn('received', 'Who helped me')}
-      {helpColumn('given', 'Who I helped')}
+    <View style={{ ...column, gap: 18 }}>
+      <Text accessibilityRole="header" style={heading}>How my projects went</Text>
+      <View style={{ gap: 6 }}>
+        <Text style={{ ...heading, fontSize: 14 * scale }}>Last month’s focus</Text>
+        {paragraph('previous', data.previous || 'No wish saved in last month’s check-in.', 3)}
+      </View>
+      {update ? <View style={{ gap: 6 }}>
+        <Text style={{ ...heading, fontSize: 14 * scale }}>Progress</Text>
+        {paragraph('progress', update)}
+      </View> : null}
+      <View style={{ borderTopWidth: 1, borderColor: '#e9d5ad', paddingTop: 14 }}>
+        {helpColumn('received', 'Who helped me')}
+      </View>
+    </View>
+    <View style={column}>
+      <Text accessibilityRole="header" style={heading}>My focus for next month</Text>
+      {paragraph('next', focus?.description || (!hasCheckIn ? reportedWish : '') || (selectedText || selectedId ? 'The selected wish was closed or removed. Choose a new focus.' : 'No new focus shared yet.'))}
     </View>
   </View>;
 }
