@@ -2438,13 +2438,6 @@ export default function MeetingHelperScreen() {
             <Text style={{ fontFamily: 'Lato_400Regular', color: CHARCOAL, fontSize: sz(15, 11) }}>{counts.map(item => `${item.option}: ${item.count}`).join('  ·  ')}</Text>
           </View>;
         })()}
-      {deckIsOg && nextMeeting?.id === '131d6001-43e4-4426-b07c-9cb7f51e1ab7'
-        && profile?.is_owner && profile.email?.trim().toLowerCase() === 'natwalstead@gmail.com'
-        && canViewIndividualCheckIns && <View style={{ marginBottom: 14 }}>
-          <Pressable accessibilityRole="button" onPress={() => router.push('/nat-feedback' as never)} style={{ alignSelf: 'flex-start', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: GOLD_SOFT }}>
-            <Text style={{ color: GOLD_DEEP, fontFamily: 'Lato_700Bold' }}>Open private feedback</Text>
-          </Pressable>
-        </View>}
       {arrivalLoading ? (
         <View style={{ paddingVertical: 60, alignItems: 'center' }}>
           <ThinkingBee />
