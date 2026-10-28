@@ -27,6 +27,8 @@ export function OgIdeaChoices({ communityId, meetingId, canEdit, answers, onSetA
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Nat already chose November's second step for the October OG meeting.
+  const novemberHelpDecided = meetingId === '131d6001-43e4-4426-b07c-9cb7f51e1ab7';
 
   const refresh = useCallback(async () => {
     const { data, error: loadError } = await supabase.from('communities')
@@ -86,7 +88,11 @@ export function OgIdeaChoices({ communityId, meetingId, canEdit, answers, onSetA
   return <View style={{ gap: 14, marginTop: 12, marginBottom: 20 }}>
     <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 19, color: '#3b3428' }}>Ideas for next month</Text>
     <Text style={{ fontFamily: 'Lato_400Regular', color: '#665c4b' }}>Tap your favorites in order: 1st, 2nd, then 3rd. Rank fewer if you prefer. You can also suggest your own.</Text>
-    {(['help', 'hang'] as Kind[]).map(kind => {
+    {novemberHelpDecided && <View style={{ borderWidth: 1, borderColor: '#e8d6b2', borderRadius: 16, padding: 16, gap: 8, backgroundColor: '#fffdf8' }}>
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: '#765b2d' }}>HIVE Help</Text>
+      <Text style={{ fontFamily: 'Lato_400Regular', color: '#51452f' }}>November’s HIVE Help is planned. We’ll share it at the meeting.</Text>
+    </View>}
+    {(['help', 'hang'] as Kind[]).filter(kind => !novemberHelpDecided || kind !== 'help').map(kind => {
       const options = choicesFor(kind);
       const rankingKey = `q_${kind}_idea_ranking`;
       const suggestionKey = `q_${kind}_idea_suggestion`;
