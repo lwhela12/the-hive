@@ -18,7 +18,7 @@ export default function NatFeedback() {
  useEffect(()=>{void load();},[load]);
  return <View style={{flex:1,backgroundColor:'#faf8f0'}}><AppHeader title="Private feedback" />
  <ScrollView contentContainerStyle={{padding:20,gap:14}}>
- <Pressable accessibilityRole="button" onPress={()=>router.back()} style={{padding:12}}><Text>Back</Text></Pressable>
+ <Pressable accessibilityRole="button" onPress={()=>router.replace('/admin' as never)} style={{padding:12}}><Text>Back to Admin</Text></Pressable>
  {profile?.id!==NAT?<Text>This page is for Nat.</Text>:<>
  <Text style={{color:'#665c4b'}}>Personal check-in answers shared with you.</Text>
  {loading?<ActivityIndicator/>:error?<Pressable onPress={()=>void load()}><Text>Could not load feedback. Tap to retry.</Text></Pressable>:rows.length?rows.map(row=><View key={row.source_id} style={{backgroundColor:'white',borderWidth:1,borderColor:'#eadfc9',borderRadius:14,padding:16,gap:10}}>
