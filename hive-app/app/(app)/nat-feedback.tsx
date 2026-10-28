@@ -16,7 +16,7 @@ export default function NatFeedback() {
   if(result.error)setError(true);else setRows(result.data??[]);setLoading(false);
  },[profile?.id]);
  useEffect(()=>{void load();},[load]);
- return <View style={{flex:1,backgroundColor:'#faf8f0'}}><AppHeader title="Private feedback" tone="wide" />
+ return <View style={{flex:1,backgroundColor:'#faf8f0'}}><AppHeader title="Private feedback" />
  <ScrollView contentContainerStyle={{padding:20,gap:14}}>
  <Pressable accessibilityRole="button" onPress={()=>router.back()} style={{padding:12}}><Text>Back</Text></Pressable>
  {profile?.id!==NAT?<Text>This page is for Nat.</Text>:<>

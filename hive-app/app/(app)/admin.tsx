@@ -1260,6 +1260,7 @@ export default function AdminScreen() {
         ) : undefined}
       >
         <View style={dashboardWrapStyle}>
+          {profile?.id === 'd85dd42e-81fc-4b4c-8f3a-b2cf39c76359' && <Pressable accessibilityRole="button" onPress={() => router.push('/nat-feedback' as never)} style={{ padding: 16, borderWidth: 1, borderColor: '#d3b477', borderRadius: 12, marginBottom: 16, backgroundColor: '#fff8e7' }}><Text style={{ color: '#765b2d', fontWeight: 'bold' }}>Private check-in feedback</Text></Pressable>}
           {/* Honey Pot moved out. Recording lives on the Honey Pot page now,
               where the pot is, and the ledger was always public anyway
               (Nat 2026-08-01). This room is for people. */}

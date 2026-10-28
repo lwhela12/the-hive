@@ -1,5 +1,4 @@
 import type { SurveyQuestion } from '../types';
-import { CLOTHING_INTEREST_KEY, CLOTHING_INTEREST_OPTIONS } from './clothingInterest';
 
 export const TOMORROW_CHECK_IN_TITLE = 'Before we meet — October draft';
 
@@ -64,22 +63,15 @@ export const TOMORROW_CHECK_IN_QUESTIONS: SurveyQuestion[] = [
   {
     id: 'clothing_interest',
     type: 'note',
-    text: 'HIVE swag interest',
+    text: 'HIVE swag',
     body: [
-      'Explore the current hoodie choices, then select other HIVE swag you’d like us to offer below.',
-      'This is an interest/selection form, not a confirmed order or fulfillment promise.',
+      'Choose your style, color, size, and HIVE artwork in the interactive form. Save or download each selection to share with Nat.',
     ],
-    link_label: 'Open the clothing form',
+    link_label: 'Customize your HIVE swag',
     link_url: 'https://app.the-hive.app/hoodie-studio/',
     required: false,
   },
-  {
-    id: CLOTHING_INTEREST_KEY,
-    type: 'choice',
-    text: 'Which HIVE swag interests you? Select any.',
-    options: [...CLOTHING_INTEREST_OPTIONS],
-    required: false,
-  },
+
 ];
 
 /** October's optional prompts belong only to the scheduled OG meeting. */

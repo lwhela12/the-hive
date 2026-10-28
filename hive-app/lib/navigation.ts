@@ -340,7 +340,7 @@ export function placeForRoute(pathname: string | null | undefined): RoutePlace {
   // selected most recently.
   if (path === '/newsletter') return 'wide';
   // Before we meet still opens individual HIVE check-ins from a shared door.
-  if (path.startsWith('/beforewemeet')) return 'either';
+  if (path.startsWith('/beforewemeet') || path === '/nat-feedback' || path === '/og-party-planning') return 'either';
 
   return 'hive';
 }

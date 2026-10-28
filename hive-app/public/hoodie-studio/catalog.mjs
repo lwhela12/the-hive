@@ -1,8 +1,8 @@
 // A dated catalog, deliberately separate from the UI. A record is a verified
 // garment + provider + finish + color combination, never a garment-wide promise.
-export const SNAPSHOT = 'October 14, 2026 · new listings checked October 18, 2026';
-export const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
-const s3 = SIZE_ORDER.slice(1, 7), s5 = SIZE_ORDER.slice(1), xs3 = SIZE_ORDER.slice(0, 7);
+export const SNAPSHOT = 'Original garments: October 18, 2026 · new swag: October 27, 2026';
+export const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '2XS', '6XL', 'S/M', 'L/XL', 'M/L'];
+const s3 = SIZE_ORDER.slice(1, 7), s5 = SIZE_ORDER.slice(1, 9), xs3 = SIZE_ORDER.slice(0, 7);
 export const COLORS = {
   Black: '#242424', White: '#fdfdf9', Sand: '#cfbda0', 'Off White': '#eee8d8',
   'Vintage White': '#ebe5d4', Natural: '#e8dac0', Tan: '#ba9573', 'Heather Dust': '#d8cbb9',
@@ -63,11 +63,22 @@ export const GARMENTS = [
    difference: 'YKK #5 zipper · Oatmeal Heather and White offered by Fulfill Engine', photoColor: 'Catalog reference',
    source: 'https://printify.com/app/products/445/lane-seven/unisex-zip-hoodie',
    secondarySource: 'https://www.printful.com/custom/mens/all/lane-seven-ls14003-premium-full-zip-hoodie'},
+  {"id": "T", "model": "Bella+Canvas 3001", "name": "Staple T-shirt", "kind": "tee", "weight": "4.2 oz/yd\u00b2", "fabric": "Cotton jersey; fiber blend varies by shade", "fit": "Unisex retail fit", "feel": "Lightweight everyday jersey", "warmth": "Short sleeves and a classic crew neck", "difference": "Short sleeves and a classic crew neck", "source": "https://www.printful.com/custom/mens/all/unisex-staple-t-shirt-bella-canvas-3001", "photoColor": "Catalog reference", "newSwag": true, "printedColor": false},
+  {"id": "P", "model": "Printful wide-leg joggers", "name": "Wide-leg joggers", "kind": "pants", "weight": "9.08 oz/yd\u00b2", "fabric": "Recycled polyester and elastane; regional blend varies", "fit": "Relaxed unisex fit \u00b7 drawstring waist", "feel": "Stretch fabric with side pockets", "warmth": "Wide legs and an adjustable waistband", "difference": "Wide legs and an adjustable waistband", "source": "https://www.printful.com/custom/collections/all-over-print/all-over-print-unisex-wide-leg-joggers", "photoColor": "Catalog reference", "newSwag": true, "printedColor": true},
+  {"id": "S", "model": "Printful athletic shorts", "name": "Athletic shorts", "kind": "shorts", "weight": "5.13 oz/yd\u00b2", "fabric": "91% recycled polyester \u00b7 9% spandex", "fit": "Relaxed unisex fit \u00b7 2.56-inch inseam", "feel": "Lightweight stretch fabric", "warmth": "Mesh pockets and drawstring waist", "difference": "Mesh pockets and drawstring waist", "source": "https://www.printful.com/custom/collections/sportswear/all-over-print-unisex-athletic-shorts", "photoColor": "Catalog reference", "newSwag": true, "printedColor": true},
+  {"id": "K", "model": "SOCCO SC200", "name": "Embroidered crew socks", "kind": "socks", "weight": "Cushioned sole", "fabric": "80% cotton \u00b7 17% polyester \u00b7 3% spandex", "fit": "Unisex crew socks", "feel": "Ribbed knit with cushioning", "warmth": "Matching embroidery on both socks", "difference": "Matching embroidery on both socks", "source": "https://www.printful.com/custom/socks/personalized/embroidered-crew-socks-socco-sc200", "photoColor": "Catalog reference", "newSwag": true, "printedColor": false},
+  {"id": "W", "model": "Printful fanny pack", "name": "Fanny pack", "kind": "bag", "weight": "1.4-liter capacity", "fabric": "100% polyester", "fit": "Adjustable strap \u00b7 two strap sizes", "feel": "Water-resistant woven fabric", "warmth": "Zipped main pocket and inside pocket", "difference": "Zipped main pocket and inside pocket", "source": "https://www.printful.com/custom/bags/personalized/all-over-print-fanny-pack", "photoColor": "Catalog reference", "newSwag": true, "printedColor": true},
 ];
 // Public USD starting prices checked October 18, 2026. These are deliberately
 // kept separate from availability: a catalog starting price is useful context,
 // but it is not a quote for every size, color, technique or placement.
 export const PRICE_GUIDE = {
+  T: {from: 11.92, shippingFrom: 4.95, basis: 'Printful · October 27, 2026'},
+  P: {from: 39.73, shippingFrom: 8.29, basis: 'Printful · October 27, 2026'},
+  S: {from: 29.98, shippingFrom: 4.69, basis: 'Printful · October 27, 2026'},
+  K: {from: 23.36, shippingFrom: 4.69, basis: 'Printful · October 27, 2026'},
+  W: {from: 24.11, shippingFrom: 4.69, basis: 'Printful · October 27, 2026'},
+
   A: {from: 21.58, shippingFrom: 7.39, basis: 'Printify catalog'},
   B: {from: 38.96, shippingFrom: 4.95, basis: 'Printful catalog'},
   C: {from: 28.63, shippingFrom: 7.39, basis: 'Printify catalog'},
@@ -102,6 +113,7 @@ export function priceFor(state) {
   };
 }
 export const FINISHES = {
+  AOP: {name:'All-over print', short:'Printed fabric, then cut and sewn',good:'A custom base color and HIVE artwork.',tradeoff:'White fabric can show slightly at folds and seams.',life:'Follow the product care label.'},
   DTG: {name: 'DTG', short: 'Ink printed into fabric', good: 'Soft feel; detailed, multicolor logos.',
     tradeoff: 'Can fade gradually; fabric affects the result.', life: 'General estimate: about 50+ washes with proper care.'},
   DTF: {name: 'DTF', short: 'Heat-pressed transfer print', good: 'Crisp detail and strong color on blends.',
@@ -115,6 +127,12 @@ const front = ['Left chest', 'Center front', 'Back', 'Left sleeve', 'Right sleev
 const qfront = ['Left chest', 'Back', 'Left sleeve', 'Right sleeve'];
 const record = (garment, provider, finish, color, sizes, placements, checked = '2026-10-14') => ({garment, provider, finish, color, sizes, placements, checked});
 export const VARIANTS = [
+  ...['Black','White'].map(c=>record('T','Printful','DTG',c,['XS','S','M','L','XL','2XL','3XL','4XL','5XL'],['Left chest','Center front','Back'],'2026-10-27')),
+  ...['Black','White','Sand'].map(c=>record('P','Printful','AOP',c,['2XS','XS','S','M','L','XL','2XL','3XL','4XL','5XL','6XL'],['Left thigh','Right thigh'],'2026-10-27')),
+  ...['Black','White','Sand'].map(c=>record('S','Printful','AOP',c,['XS','S','M','L','XL','2XL','3XL'],['Left thigh','Right thigh'],'2026-10-27')),
+  ...['Black','White'].map(c=>record('K','Printful','Embroidery',c,['S/M','L/XL'],['Outside','Inside'],'2026-10-27')),
+  ...['Black','White','Sand'].map(c=>record('W','Printful','AOP',c,['S/M','M/L'],['Front panel'],'2026-10-27')),
+
   record('B', 'Fulfill Engine · Printify', 'DTF', 'Dust', SIZE_ORDER.slice(0, 8), ['Back', 'Left sleeve', 'Right sleeve'], '2026-10-18'),
   record('B', 'Fulfill Engine · Printify', 'DTG', 'Dust', SIZE_ORDER.slice(0, 8), ['Back', 'Left sleeve', 'Right sleeve'], '2026-10-18'),
   record('B', 'Printful', 'Embroidery', 'Dust', xs3, ['Left chest', 'Right chest', 'Left wrist', 'Right wrist'], '2026-10-18'),
@@ -143,7 +161,7 @@ export const VARIANTS = [
 // Unverified variants never become selectable merely because a model supports
 // the method in general. The separate evidence batch can add exact records.
 export const PENDING = {};
-export const PHOTOS = {B: {
+export const PHOTOS = {T: {'Catalog reference': {front: "https://files.cdn.printful.com/o/upload/variant-image-jpg/9d/9d2757a2333a362030a37d607942588c_l?v=c17e84ebf91ab325852f9d18120a338f"}},P: {'Catalog reference': {front: "https://files.cdn.printful.com/o/upload/variant-image/09/091a0b151a47a34d6b94927e8c41032a_l?v=3f6547eacf6d8ed88e748b84aa934b1b"}},S: {'Catalog reference': {front: "https://files.cdn.printful.com/o/upload/variant-image/50/50e077550a3d7e45e8339d77c2d310fc_l"}},K: {'Catalog reference': {front: "https://files.cdn.printful.com/o/upload/variant-image-jpg/4a/4ad93a60e28bd2090fc691aec125ade1_l"}},W: {'Catalog reference': {front: "https://files.cdn.printful.com/o/upload/variant-image-jpg/00/00d140b7235d3e1dcd375b0e66a6ec2d_l"}},B: {
   Dust: {front: 'assets/garment-B-Dust-front.jpg'},
 }, F: {
   Black: {front: 'assets/garment-F-Black-front.jpg',
@@ -232,7 +250,7 @@ export function selectionText(state) {
       `Name color: ${state.artColor}${state.finish === 'Embroidery' ? ' · closest available thread shade' : ''}`, `Name placement: ${state.namePlacement === 'With logo' ? state.placement : state.namePlacement}`] : []),
     ...(price ? [`Estimated item price: from ${money(price.from)} USD each`, `Estimated merchandise subtotal: from ${money(price.subtotalFrom)} USD`,
       ...(price.note ? [`Price note: ${price.note}`] : []), `Shipping, tax and any size, color, technique or placement charges are not included.`] : []),
-    `Coverage: ${state.member === 'OG HIVE' ? 'Honey Pot dues' : 'At cost · Nat confirms amount'}`,
+    `Coverage: ${g?.newSwag ? 'Confirm coverage and amount with Nat' : state.member === 'OG HIVE' ? 'Honey Pot dues' : 'At cost · Nat confirms amount'}`,
     `Catalog snapshot: ${SNAPSHOT} · Nat rechecks stock before ordering`,
     `Next: Nat prepares the ${designService} design and confirms the screenshot before ordering.`,
     'This local prototype has not submitted an order or sent selections.'].join('\n');

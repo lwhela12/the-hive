@@ -1,5 +1,5 @@
 import {SNAPSHOT, SIZE_ORDER, COLORS, ART_COLORS, FONTS, LOGOS, GARMENTS, PRICE_GUIDE, FINISHES, VARIANTS, PENDING, PHOTOS,
-  initialState, normalize, availableColors, availableSizes, availableFinishes, rowsFor, selectedRow, isBackPlacement, canReview, money, priceFor, selectionText} from './catalog.mjs?v=20261018.9';
+  initialState, normalize, availableColors, availableSizes, availableFinishes, rowsFor, selectedRow, isBackPlacement, canReview, money, priceFor, selectionText} from './catalog.mjs?v=20261027.1';
 
 const app = document.querySelector('#app'), steps = document.querySelector('#steps'), notice = document.querySelector('#notice');
 const DRAFT_KEY = 'hive-clothing-review-v1';
@@ -46,7 +46,7 @@ function priceBlock({review = false} = {}) {
     <p>Shipping from ${money(price.shippingFrom)} plus tax. Size, color, technique and placement can change the total.${price.note?` ${price.note}`:''} Nat confirms the exact at-cost amount in the provider screenshot.</p></div>`;
 }
 function productCard(g) {
-  const typeName = {hoodie:'Hoodie',quarter:'Quarter-zip',fullzip:'Full-zip',crew:'Crewneck'}[g.kind];
+  const typeName = {hoodie:'Hoodie',quarter:'Quarter-zip',fullzip:'Full-zip',crew:'Crewneck',tee:'T-shirt',pants:'Pants',shorts:'Shorts',socks:'Socks',bag:'Fanny pack'}[g.kind];
   const colors = availableColors(g.id);
   const shownColor = photoFor(g,g.photoColor) ? g.photoColor : photoFor(g,'Black') ? 'Black' : g.photoColor || null;
   const photo = photoFor(g,shownColor) || `assets/garment-${g.id}.png`;
@@ -60,19 +60,30 @@ function productCard(g) {
   </article>`;
 }
 function styleScreen() {
-  const groups = [['hoodie','Hoodies'],['quarter','Quarter-zips'],['fullzip','Full-zips'],['crew','Crewnecks']]
+  const groups = [['hoodie','Hoodies'],['quarter','Quarter-zips'],['fullzip','Full-zips'],['crew','Crewnecks'],['tee','T-shirts'],['pants','Pants'],['shorts','Shorts'],['socks','Socks'],['bag','Fanny packs']]
     .filter(([kind]) => filter === 'all' || filter === kind)
     .map(([kind,label]) => ({label,items:GARMENTS.filter(g=>g.kind===kind).sort((a,b)=>a.model.localeCompare(b.model))}));
   const choices = groups.flatMap(({items})=>items);
   return `<div class="section-tools"><div class="filter-group" aria-label="Filter garment styles">
-    ${[['all','All eight'],['quarter','Quarter-zips'],['hoodie','Hoodies'],['crew','Crewnecks'],['fullzip','Full-zips']].map(([k,v])=>btn('filter',k,v,filter===k)).join('')}</div>
+    ${[['all','All styles'],['quarter','Quarter-zips'],['hoodie','Hoodies'],['crew','Crewnecks'],['fullzip','Full-zips'],['tee','T-shirts'],['pants','Pants'],['shorts','Shorts'],['socks','Socks'],['bag','Fanny packs']].map(([k,v])=>btn('filter',k,v,filter===k)).join('')}</div>
     <button class="text-button" data-action="finish-guide">Compare finishes ↗</button></div>
-    <section class="swag-interest" style="padding:18px;border:1px solid #decda8;border-radius:12px;margin:0 0 20px;background:#fff8e6"><h2 style="font-size:20px;margin:0 0 8px">More HIVE swag</h2><p>T-shirts · Pants · Shorts · Socks · Fanny packs</p><p>Tell us what you’d like to see. These interest choices do not have prices or product styles yet.</p><a class="primary" href="/beforewemeet?meeting=131d6001-43e4-4426-b07c-9cb7f51e1ab7">Choose your interests in the check-in →</a></section>
     <div class="garment-grid">${choices.map(productCard).join('')}</div>
     <div class="catalog-notes"><p>Warmth describes relative fabric weight and coverage, rather than a tested temperature rating.</p><p>¹ Bella+Canvas 3719: Printify lists 7 oz/yd²; the manufacturer lists 8 oz/yd². Blend varies by shade.</p>
     <details><summary>Catalog checks & photo sources</summary><p>Availability checked ${SNAPSHOT}. Nat rechecks the exact provider, color, size and finish before ordering.</p><p>Photos show real garments. Only the listed choices are included in this neutral palette.</p><ul>${GARMENTS.map(g=>`<li><a href="${g.source}" target="_blank" rel="noopener">${g.model} · primary catalog</a>${g.secondarySource?` · <a href="${g.secondarySource}" target="_blank" rel="noopener">embroidery source</a>`:''}</li>`).join('')}</ul><p><a href="https://www.bellacanvas.com/product/3719/Unisex-Sponge-Fleece-Pullover-Hoodie.html" target="_blank" rel="noopener">Bella+Canvas manufacturer specifications</a></p></details></div>`;
 }
+function swagStudy(g,color,back) {
+ const fill=COLORS[color]||'#eee8d8';
+ const shapes={
+ tee:'M220 110 L160 130 L85 255 L165 292 L200 230 L200 535 L400 535 L400 230 L435 292 L515 255 L440 130 L380 110 Q300 160 220 110Z',
+ pants:'M210 80 L390 80 L420 545 L318 545 L300 240 L282 545 L180 545Z',
+ shorts:'M200 165 L400 165 L440 440 L315 440 L300 285 L285 440 L160 440Z',
+ socks:'M160 90 L240 90 L240 360 L145 470 Q95 490 78 450 Q70 425 102 400 L160 335Z M355 90 L435 90 L435 360 L340 470 Q290 490 273 450 Q265 425 297 400 L355 335Z',
+ bag:'M60 240 L180 240 L200 200 L400 200 L420 240 L540 240 L540 275 L430 275 Q410 410 300 420 Q190 410 170 275 L60 275Z'
+ };
+ return `<svg class="garment-study" viewBox="0 0 600 620" role="img" aria-label="Illustrative ${esc(color)} ${esc(g.name)}"><path d="${shapes[g.kind]}" fill="${fill}" stroke="#756a56" stroke-width="3"/>${g.kind==='pants'||g.kind==='shorts'?'<path d="M205 190 H395 M290 190 V238 M310 190 V238" stroke="#756a56" fill="none" stroke-width="3"/>':''}${g.kind==='bag'?'<path d="M205 260 H395" stroke="#756a56" stroke-width="5"/>':''}${g.kind==='socks'?'<path d="M160 120 H240 M355 120 H435" stroke="#756a56" stroke-width="3"/>':''}</svg>`;
+}
 function svgGarment(g, color, back) {
+  if (g.newSwag) return swagStudy(g,color,back);
   if (!Object.hasOwn(COLORS, color)) throw new Error('A garment study requires a selected catalog color.');
   const q = g.kind === 'quarter', hood = ['hoodie','fullzip'].includes(g.kind), zip = g.kind === 'fullzip';
   return `<svg class="garment-study" viewBox="0 0 600 620" role="img" aria-label="Illustrative ${esc(color)} ${esc(g.name)} ${back?'back':'front'}">
@@ -95,7 +106,8 @@ function overlay(g, hasPhoto, nameOnly = false, options = {}) {
   const back = isBackPlacement(placement), sleeve = visualPlacement.includes('sleeve');
   if ((back ? 'back' : 'front') !== state.face) return '';
   const coords = hasPhoto ? (g.id === 'F' ? {'Left chest':[63,38,10], 'Right chest':[37,38,10], Back:[50,38,30], 'Left sleeve':[78,83,5], 'Right sleeve':[22,83,5]} : {'Left chest':[63,39,7], 'Right chest':[37,39,7], 'Center front':[50,43,17], Back:[50,43,30], 'Left sleeve':[78,84,5], 'Right sleeve':[22,84,5]}) : {'Left chest':[61,37,10], 'Right chest':[39,37,10], 'Center front':[50,39,21], Back:[50,40,34], 'Left sleeve':[82,76,6], 'Right sleeve':[18,76,6]};
-  const [x,y,w] = coords[visualPlacement] || coords['Left chest'];
+  const customCoords = { 'Left thigh':[61,42,12], 'Right thigh':[39,42,12], 'Outside':[39,35,9], 'Inside':[69,35,9], 'Front panel':[50,48,25] };
+  const [x,y,w] = customCoords[visualPlacement] || coords[visualPlacement] || coords['Left chest'];
   const font = FONTS.find(f=>f.id===state.font)?.family || 'Lato';
   const logo = options.logo ?? state.logo;
   const name = options.name ?? ((nameOnly || state.namePlacement === 'With logo') ? state.name.trim() : '');
@@ -125,7 +137,8 @@ function preview() {
 function sizeScreen() {
   const g = garment(), colors = availableColors(g.id), sizes = availableSizes({...state, finish: ''});
   return `<div class="config-layout"><div class="controls"><div class="selection-label"><span>${g.id} · ${g.model}</span><button class="text-button" ${attr('step',0)}>Change style</button></div>
-    <fieldset><legend>Garment color <span class="optional">Neutral palette</span></legend><div class="color-options">${colors.map(c=>btn('color',c,`${colorSwatch(c)}<span>${c}</span>`,state.color===c)).join('')}</div>
+    <fieldset><legend>${g.printedColor?'Printed base color':'Garment color'} <span class="optional">Neutral palette</span></legend><div class="color-options">${colors.map(c=>btn('color',c,`${colorSwatch(c)}<span>${c}</span>`,state.color===c)).join('')}</div>
+    ${g.printedColor?'<p class="field-note">Your chosen base color is printed onto white fabric together with the artwork. Seams and folds may show some white.</p>':''}
     ${g.catalogColors?`<p class="field-note">Printify lists ${g.catalogColors.length} colors. Black matches your requested palette; the other catalog shades are ${g.catalogColors.filter(c=>c!=='Black').join(', ')}.</p>`:''}
     ${g.id==='D'?'<p class="field-note">Natural, Vintage White and Tan are the provider’s shade names. Availability varies by size.</p>':''}
     ${!colors.length?`<p class="callout">${PENDING[g.id]||'Provider check pending.'}</p>`:''}</fieldset>
@@ -138,7 +151,7 @@ function sizeScreen() {
 function finishOptions() {
   const possible = availableFinishes(state);
   return `<fieldset><legend>Finish <button class="text-button" data-action="finish-guide" type="button">What’s the difference?</button></legend>
-    <div class="finish-options">${possible.map(f=>btn('finish',f,`<strong>${f}</strong><span>${FINISHES[f].short}</span>`,state.finish===f)).join('')}</div>
+    <div class="finish-options">${possible.map(f=>btn('finish',f,`<strong>${FINISHES[f].name}</strong><span>${FINISHES[f].short}</span>`,state.finish===f)).join('')}</div>
     ${state.garment==='F'?'<p class="field-note">This thick quarter-zip is offered with DTF. Embroidery would need a different garment.</p>':''}
     ${state.garment==='B'?'<p class="field-note">Dust is the cream-beige shade. Printful offers small chest embroidery; Printify offers DTG/DTF on the back or sleeves for this exact blank.</p>':''}
     ${state.garment==='G'?'<p class="field-note">This 13.5 oz Bone crewneck has DTG and DTF. The checked provider offers front, back and sleeve print areas, with no embroidery or left-chest option.</p>':''}
@@ -169,7 +182,7 @@ function reviewScreen() {
   const g=garment(), l=LOGOS.find(l=>l.id===state.logo);
   return `<div class="config-layout review-layout"><div class="controls"><div class="review-card"><div class="review-card-top"><span>Your selections</span><button class="text-button" ${attr('step',2)}>Edit artwork</button></div>
     <dl class="review-facts"><div><dt>Garment</dt><dd>${g.name}<span>${g.id} · ${g.model}</span></dd></div><div><dt>Color / size</dt><dd>${state.color} / ${state.size}<button class="text-button" ${attr('step',1)}>Edit</button></dd></div><div><dt>Quantity</dt><dd>${state.quantity}</dd></div><div><dt>Finish</dt><dd>${state.finish}<span>${state.provider}</span></dd></div><div><dt>Artwork</dt><dd>${state.designLayout==='chest-back'?'Black-on-black chest + large back':l?`${l.id} · ${l.name}`:'Name only'}<span>${state.designLayout==='chest-back'?'C · Bee only at left chest / G · HIVE seal at large back':state.placement}</span></dd></div><div><dt>Name</dt><dd>${esc(state.name.trim()||'None')}${state.name.trim()?`<span>${FONTS.find(f=>f.id===state.font)?.name} · ${state.artColor}</span><span>${state.namePlacement==='With logo'?state.placement:state.namePlacement}</span>`:''}</dd></div></dl>${priceBlock({review:true})}</div>
-    <fieldset><legend>Order coverage</legend><div class="coverage-options">${btn('member','OG HIVE','<strong>OG HIVE</strong><span>Covered by Honey Pot dues</span>',state.member==='OG HIVE')}${btn('member','Other HIVE','<strong>Other HIVE</strong><span>At cost · Nat confirms the amount</span>',state.member==='Other HIVE')}</div></fieldset>
+    <fieldset><legend>Order coverage</legend><div class="coverage-options">${btn('member','OG HIVE',`<strong>OG HIVE</strong><span>${g.newSwag?'Coverage to confirm with Nat':'Covered by Honey Pot dues'}</span>`,state.member==='OG HIVE')}${btn('member','Other HIVE','<strong>Other HIVE</strong><span>At cost · Nat confirms the amount</span>',state.member==='Other HIVE')}</div></fieldset>
     <div class="next-steps"><strong>Nat takes it from here</strong><ol><li>Share your selections with Nat through your usual channel.</li><li>Nat rechecks stock and prepares your ${state.provider==='Printful'?'Printful':'Printify'} design.</li><li>Confirm her screenshot before the order is placed.</li></ol></div>
     <button class="primary save-button" data-action="save">${saved?'Saved on this device ✓':'Save picks on this device'}</button><div class="handoff-actions"><button class="secondary" data-action="download">Download selections</button><button class="text-button" data-action="show-text">View copyable text</button></div>
     <div class="copyable" hidden id="copyable"><label for="selection-text">Select this text to share with Nat</label><textarea id="selection-text" readonly rows="14">${esc(selectionText(state))}</textarea></div>

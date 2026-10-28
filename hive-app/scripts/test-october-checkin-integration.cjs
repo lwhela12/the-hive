@@ -41,7 +41,7 @@ import('../lib/surveyQuestionVisibility.mjs').then(({ getVisibleSurveyQuestions,
   assert.deepEqual(Array.from(picks), ['T-shirts']);
   assert.deepEqual(Array.from(clothing.clothingInterests(['Pants', 'Pants', 'Unknown'])), ['Pants']);
   const selection = clothing.toggleClothingInterest(picks, 'Pants');
-  const submitted = checks.splitMergedAnswers(merged, { 'og:q_oct_clothing_interests': selection }, [])[0].answers;
+  const submitted = { q_oct_clothing_interests: selection };
   const syntheticStoredResponse = JSON.parse(JSON.stringify(submitted));
   const responsesByUser = new Map([
     ['member-1', { answers: syntheticStoredResponse }],
@@ -50,6 +50,7 @@ import('../lib/surveyQuestionVisibility.mjs').then(({ getVisibleSurveyQuestions,
   ]);
   const counts = clothing.clothingInterestCountsForMembers([{ id: 'member-1' }, { id: 'member-2' }, { id: 'no-response' }], responsesByUser);
   assert.deepEqual(Array.from(counts, item => [item.option, item.count]), [['Hoodies', 0], ['Pants', 2], ['Shorts', 0], ['T-shirts', 1], ['Socks', 0], ['Fanny packs', 0]]);
-  assert.ok(merged.sections[0].questions.find(question => question.id === clothing.CLOTHING_INTEREST_KEY), 'interest selection is part of the real check-in section');
+  assert.ok(merged.sections[0].questions.find(question => question.id === 'clothing_interest')?.link_url?.endsWith('/hoodie-studio/'), 'the survey opens the interactive configurator');
+  assert.ok(!merged.sections[0].questions.some(question => question.id === clothing.CLOTHING_INTEREST_KEY), 'the old interest poll no longer appears');
   console.log('PASS: October scope, notes, Ball skip, fixture submission and member-scoped organizer aggregation.');
 }).catch(error => { console.error(error); process.exitCode = 1; });

@@ -8,6 +8,7 @@ import {
 export const LAST_APP_PATH_KEY = 'the-hive:last-app-path';
 
 const APP_PATHS = new Set([
+  '/nat-feedback',
   '/',
   '/index',
   '/hive',

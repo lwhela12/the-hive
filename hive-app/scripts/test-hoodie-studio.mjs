@@ -110,3 +110,12 @@ test('separate name placement stays within the exact provider’s areas', () => 
   const embroidery=normalize({...request,garment:'C',finish:'Embroidery',namePlacement:'Back'});
   assert.equal(embroidery.namePlacement,'With logo');
 });
+
+test('new swag reaches review with its own size and placement options',()=>{
+ for(const [garment,size,finish,placement] of [['T','M','DTG','Left chest'],['P','6XL','AOP','Left thigh'],['S','XS','AOP','Right thigh'],['K','S/M','Embroidery','Outside'],['W','M/L','AOP','Front panel']]){
+  const state=pick({garment,color:'Black',size,finish,provider:'Printful',placement,name:'Nat'});
+  assert.ok(canReview(state),garment);assert.match(selectionText(state),new RegExp(size));
+ }
+ assert.equal(pick({garment:'K',color:'Black',size:'5XL'}).size,'');
+ assert.equal(pick({garment:'W',color:'Black',size:'L/XL'}).size,'');
+});
