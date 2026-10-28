@@ -1177,6 +1177,7 @@ export default function MeetingHelperScreen() {
   // staple every jot to the spotlight wish anyway, which sent the to-do to an
   // unrelated wish and commented there ("Sex therapy workshop" landed on
   // Charlee's dog-door HD — Nat 2026-07-26). null = not about an HD at all.
+  const [showLiveNote, setShowLiveNote] = useState(false);
   const [liveNoteWishId, setLiveNoteWishId] = useState<string | null>(null);
   // Everything jotted this session stays visible on the card it was taken on,
   // with an ✕ that pulls it back off every list it landed on (oops insurance).
@@ -1726,6 +1727,7 @@ export default function MeetingHelperScreen() {
   useEffect(() => {
     if (!expandedHummdingerId) {
       liveNoteSubjectMemberRef.current = null;
+      setShowLiveNote(false);
       liveNoteChoiceEditedRef.current = false;
       return;
     }
@@ -2986,7 +2988,7 @@ export default function MeetingHelperScreen() {
             onPress={(event) => event.stopPropagation()}
             style={{
               width: '100%',
-              maxWidth: sz(880, 640),
+              maxWidth: deckSlug === 'default' ? sz(1140, 960) : sz(880, 640),
               maxHeight: '88%',
               backgroundColor: PAPER,
               borderRadius: sz(26, 18),
@@ -4483,7 +4485,7 @@ export default function MeetingHelperScreen() {
             onPress={(event) => event.stopPropagation()}
             style={{
               width: '100%',
-              maxWidth: sz(880, 640),
+              maxWidth: deckSlug === 'default' ? sz(1140, 960) : sz(880, 640),
               maxHeight: '88%',
               backgroundColor: PAPER,
               borderRadius: sz(26, 18),
@@ -4557,8 +4559,9 @@ export default function MeetingHelperScreen() {
                   Nothing written down yet — that's what the floor is for. Catch what {nameToday} says below.
                 </Text>
               ) : null}
-              {deckSlug === 'default' && communityId && cycleStart && nextMeeting && profile ? <MemberWishStory
+              {deckSlug === 'default' && communityId && cycleStart && nextMeeting && profile && survey && responsePeriod ? <MemberWishStory
                 key={`${nextMeeting.id}:${member.id}`} meetingId={nextMeeting.id}
+                surveyId={survey.id} responsePeriod={responsePeriod} memberNames={Object.fromEntries(memberOrder.map(person => [person.id, person.name]))}
                 selectedId={answers.q_hd_wish_id} selectedText={getTextAnswer(answers, 'q_hd_wish')} hasCheckIn={!!response}
                 progressText={detailSections.find(section => section.key === 'q_pop_progress')?.text}
                 communityId={communityId} memberId={member.id} reportedWish={reportedWish}
@@ -4684,7 +4687,8 @@ export default function MeetingHelperScreen() {
                   })}
                 </View>
               ) : null}
-              <View style={{ borderTopWidth: 1, borderColor: GOLD_SOFT, paddingTop: sz(14, 9), gap: sz(8, 6) }}>
+              {deckSlug === 'default' ? <Pressable accessibilityRole="button" accessibilityState={{ expanded: showLiveNote }} onPress={() => setShowLiveNote(v => !v)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ ...sectionText, color: GOLD_DEEP }}>{showLiveNote ? 'Close next-step note' : '+ Add a next step'}</Text></Pressable> : null}
+              {deckSlug !== 'default' || showLiveNote ? <View style={{ borderTopWidth: 1, borderColor: GOLD_SOFT, paddingTop: sz(14, 9), gap: sz(8, 6) }}>
                 <Text style={sectionLabel}>
                   {deckSlug === 'default' ? 'Capture the next step' : meetingWishesAreAutomatic ? 'Catch a wish → connected to-do' : 'Live note → to-do list'}
                 </Text>
@@ -4732,7 +4736,7 @@ export default function MeetingHelperScreen() {
                 ) : null}
                 {meetingWishesAreAutomatic ? (
                   <Text style={sectionContext}>
-                    New wish is the OG default. Pick an existing wish only when this is truly an update to that same ask; pick Just a to-do when no wish surfaced.
+                    Add the agreed next step and choose who will help.
                   </Text>
                 ) : null}
                 {/* The jot box. Mentions, the "@" suggestions list and the
@@ -4805,7 +4809,7 @@ export default function MeetingHelperScreen() {
                     </Pressable>
                   </View>
                 ))}
-              </View>
+              </View> : null}
             </BounceScrollView>
           </Pressable>
         </Pressable>

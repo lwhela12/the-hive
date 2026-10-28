@@ -1,5 +1,5 @@
 export type StoryWish = { id: string; user_id: string; description: string; status?: string | null; is_active?: boolean | null; is_spotlight?: boolean | null };
-export type StoryTask = { id: string; description: string; assigned_to: string | null; related_wish_id: string | null; completed: boolean; completed_at: string | null; created_at?: string };
+export type StoryTask = { id: string; description: string; assigned_to: string | null; related_wish_id: string | null; completed: boolean; completed_at: string | null; created_at?: string; related_user_id?: string | null };
 export const wishIdentity = (text: string) => text.normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 /** The submitted selection wins. Never fill an unanswered/retired choice with other wishes. */
 export function meetingFocus<T extends StoryWish>(wishes: T[], selectedId: unknown, selectedText: string, hasCheckIn: boolean): T | null {
@@ -19,4 +19,30 @@ export function compactWishSteps(tasks: StoryTask[], wishId: string | undefined,
     groups.set(key, group);
   }
   return { next: [...groups.values()][0] ?? null, completed: linked.filter(t => t.completed && !!t.completed_at && t.completed_at >= since).length };
+}
+
+/** A month of reminders, grouped by action; unchecked promises stay visibly open. */
+export function monthlyHelp(tasks: StoryTask[], memberId: string, since: string) {
+  const recent = tasks.filter(t => t.completed ? !!t.completed_at && t.completed_at >= since : !!t.created_at && t.created_at >= since);
+  function group(direction: 'given' | 'received') {
+    const rows = recent.filter(t => direction === 'given'
+      ? t.assigned_to === memberId && t.related_user_id && t.related_user_id !== memberId
+      : t.related_user_id === memberId && t.assigned_to && t.assigned_to !== memberId);
+    const grouped = new Map<string, { description: string; completed: boolean; people: Set<string> }>();
+    for (const row of rows) {
+      const description = row.description.replace(/\s*[(]re:[^)]*[)]/gi, '').replace(/^(@[\w.-]+[\s,]*)+/, '').trim();
+      const key = `${row.completed}:${wishIdentity(description)}`;
+      const value = grouped.get(key) ?? { description, completed: row.completed, people: new Set<string>() };
+      value.people.add((direction === 'given' ? row.related_user_id : row.assigned_to)!);
+      grouped.set(key, value);
+    }
+    return [...grouped.values()].sort((a,b) => Number(b.completed)-Number(a.completed));
+  }
+  return { given: group('given'), received: group('received') };
+}
+export function precedingPeriod(period: string) {
+  const match = /^(\d{4})-(\d{2})$/.exec(period);
+  if (!match) return null;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2])-2, 1));
+  return date.toISOString().slice(0,7);
 }

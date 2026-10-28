@@ -27,3 +27,17 @@ assert.equal(summary.next.helpers.size,2);
 assert.equal(summary.completed,1);
 assert.equal(compactWishSteps([],undefined,'2026-09-23').next,null);
 console.log('PASS: submitted focus, removed choice, no random fallback, grouped helpers, relevant cycle progress.');
+
+const {monthlyHelp, precedingPeriod}=load('lib/memberWishStory.ts');
+assert.equal(precedingPeriod('2026-10'),'2026-09');
+assert.equal(precedingPeriod('2026-01'),'2025-12');
+const help=monthlyHelp([
+ {id:'a',description:'Collect yarn (re: Nat)',assigned_to:'other',related_user_id:'me',completed:true,completed_at:'2026-10-02'},
+ {id:'b',description:'Collect yarn (re: Nat)',assigned_to:'second',related_user_id:'me',completed:true,completed_at:'2026-10-03'},
+ {id:'c',description:'Schedule filming',assigned_to:'me',related_user_id:'friend',completed:false,created_at:'2026-10-02'},
+ {id:'d',description:'Old ankle help',assigned_to:'other',related_user_id:'me',completed:false,created_at:'2026-07-01'},
+ {id:'e',description:'Own task',assigned_to:'me',related_user_id:'me',completed:true,completed_at:'2026-10-04'},
+],'me','2026-09-23');
+assert.equal(help.received.length,1);assert.equal(help.received[0].people.size,2);
+assert.equal(help.given.length,1);assert.equal(help.given[0].completed,false);
+console.log('PASS: prior month boundary, named help directions, grouped copies, pending truth, stale and self-help excluded.');
