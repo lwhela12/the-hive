@@ -204,6 +204,7 @@ export function normalize(state) {
   if (next.size && !rowsFor({...next, finish: ''}, {ignoreSize: true}).some(r => r.sizes.includes(next.size))) next.size = '';
   const possible = availableFinishes(next);
   if (!possible.includes(next.finish)) {next.finish = ''; next.provider = '';}
+  if (!state.finish && !next.finish && next.color && next.size && possible.length === 1) next.finish = possible[0];
   const row = selectedRow(next);
   if (!row) next.provider = rowsFor(next).find(r => r.finish === next.finish)?.provider || '';
   const exact = selectedRow(next);

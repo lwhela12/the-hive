@@ -1,5 +1,5 @@
 import {SNAPSHOT, SIZE_ORDER, COLORS, ART_COLORS, FONTS, LOGOS, GARMENTS, PRICE_GUIDE, FINISHES, VARIANTS, PENDING, PHOTOS,
-  initialState, normalize, availableColors, availableSizes, availableFinishes, rowsFor, selectedRow, isBackPlacement, canReview, money, priceFor, selectionText} from './catalog.mjs?v=20261027.1';
+  initialState, normalize, availableColors, availableSizes, availableFinishes, rowsFor, selectedRow, isBackPlacement, canReview, money, priceFor, selectionText} from './catalog.mjs?v=20261027.2';
 
 const app = document.querySelector('#app'), steps = document.querySelector('#steps'), notice = document.querySelector('#notice');
 const DRAFT_KEY = 'hive-clothing-review-v1';

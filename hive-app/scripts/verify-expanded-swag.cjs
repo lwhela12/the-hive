@@ -11,7 +11,7 @@ let browser;
  for(const [id,kind,size,finish] of [['T','tee','M','DTG'],['P','pants','M','AOP'],['S','shorts','M','AOP'],['K','socks','S/M','Embroidery'],['W','bag','M/L','AOP']]){
   await page.goto('http://127.0.0.1:4176');await page.evaluate(()=>localStorage.clear());await page.reload();
   await click('filter',kind);assert.equal(await page.locator('.garment-card').count(),1);
-  await click('garment',id);await click('color','Black');await click('size',size);await click('next');await click('finish',finish);
+  await click('garment',id);await click('color','Black');await click('size',size);await click('next');assert.equal(await page.locator(`[data-action="finish"][data-value="${finish}"]`).getAttribute('aria-pressed'),'true');assert.equal(await page.locator('[data-action="logo"][data-value="C"]').isEnabled(),true);
   await page.locator('[data-field="name"]').fill('Nat');
   for(const [w,h] of [[1440,1000],[390,844],[844,390]]){
    await page.setViewportSize({width:w,height:h});

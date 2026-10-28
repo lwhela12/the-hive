@@ -119,3 +119,12 @@ test('new swag reaches review with its own size and placement options',()=>{
  assert.equal(pick({garment:'K',color:'Black',size:'5XL'}).size,'');
  assert.equal(pick({garment:'W',color:'Black',size:'L/XL'}).size,'');
 });
+
+
+test('one available finish is selected automatically and multiple finishes still ask',()=>{
+ const shorts=pick({garment:'S',color:'Sand',size:'S'});
+ assert.equal(shorts.finish,'AOP');assert.equal(shorts.provider,'Printful');assert.ok(canReview(shorts));
+ const hoodie=pick({garment:'A',color:'Black',size:'M'});
+ assert.equal(hoodie.finish,'');
+ assert.equal(pick({garment:'S',color:'Sand',size:''}).finish,'');
+});
