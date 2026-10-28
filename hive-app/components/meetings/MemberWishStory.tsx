@@ -50,6 +50,7 @@ export function MemberWishStory({ communityId, memberId, since, meetingId, selec
   useEffect(() => {
     const channel = supabase.channel(`meeting-focus:${meetingId}:${memberId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'action_items', filter: `related_user_id=eq.${memberId}` }, () => setRetry(n => n + 1))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'action_items', filter: `assigned_to=eq.${memberId}` }, () => setRetry(n => n + 1))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wishes', filter: `user_id=eq.${memberId}` }, () => setRetry(n => n + 1))
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
@@ -64,7 +65,7 @@ export function MemberWishStory({ communityId, memberId, since, meetingId, selec
   const update = data.reflection.progress || progressText || ownDone.slice(0,2).map(t => '✓ ' + parseActionItemDescription(t.description).text).join('\n');
   const toggle = (key: string) => setExpanded(v => ({ ...v, [key]: !v[key] }));
   const more = (key: string, label = 'Read more') => <Pressable accessibilityRole="button" accessibilityState={{ expanded: !!expanded[key] }} onPress={() => toggle(key)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={heading}>{expanded[key] ? 'Show less' : label}</Text></Pressable>;
-  const paragraph = (key: string, value: string) => <View><Text numberOfLines={expanded[key] ? undefined : 4} style={text}>{value}</Text>{value.length > 180 ? more(key) : null}</View>;
+  const paragraph = (key: string, value: string) => <View><Text numberOfLines={expanded[key] || value.length <= 180 ? undefined : 4} style={text}>{value}</Text>{value.length > 180 ? more(key) : null}</View>;
   const column = { flexGrow: 1, flexBasis: width >= 620 ? '45%' as const : '100%' as const, minWidth: 0, gap: 8, backgroundColor: '#fbf6e9', borderRadius: 14, padding: 16 };
   const helpColumn = (key: 'received' | 'given', title: string) => {
     const rows = help[key];
@@ -75,7 +76,7 @@ export function MemberWishStory({ communityId, memberId, since, meetingId, selec
       {(expanded[key] ? rows : rows.slice(0,2)).map((row, i) => {
         const names = [...row.people].map(id => memberNames[id]?.split(' ')[0] || 'A member');
         const label = names.slice(0,3).join(', ') + (names.length > 3 ? ` +${names.length-3}` : '');
-        return <View key={i} style={{ gap: 3 }}><Text style={{ ...heading, fontSize: 15 * scale }}>{label} · {row.completed ? 'Done' : 'Still open'}</Text><Text numberOfLines={expanded[key] ? undefined : 2} style={text}>{parseActionItemDescription(row.description).text}</Text></View>;
+        return <View key={i} style={{ gap: 3 }}><Text style={{ ...heading, fontSize: 15 * scale }}>{label} · {row.completed ? 'Done' : 'Still open'}</Text><Text numberOfLines={expanded[key] || row.description.length <= 120 ? undefined : 2} style={text}>{parseActionItemDescription(row.description).text}</Text></View>;
       })}
       {!rows.length && !spoken ? <Text style={text}>Nothing recorded this month yet.</Text> : null}
       {rows.length > 2 ? more(key, `See all ${rows.length}`) : rows.some(r => r.description.length > 120) ? more(key) : null}
