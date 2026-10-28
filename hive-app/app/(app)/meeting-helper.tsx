@@ -1,3 +1,5 @@
+import { MeetingNoteSection } from '../../components/meetings/MeetingNoteSection';
+import { meetingTurnOrder } from '../../lib/meetingTurnOrder';
 import { meetingFocus } from '../../lib/memberWishStory';
 import { meetingDeck, meetingSlidePosition } from '../../lib/meetingAgenda';
 import { MemberWishStory } from '../../components/meetings/MemberWishStory';
@@ -8,6 +10,7 @@ import { ideaRanking, tallyIdeaRankings } from '../../lib/ideaRanking';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Linking,
+  type ScrollView,
   Modal,
   Platform,
   Pressable,
@@ -1169,15 +1172,25 @@ export default function MeetingHelperScreen() {
 
   // Live meeting notes typed into an expanded HummDinger card. "@name" routes
   // the note onto that member's to-do list; no @ = the expanded member's list.
-  const [liveNoteDraft, setLiveNoteDraft] = useState('');
+  const [liveNoteDrafts, setLiveNoteDrafts] = useState<Record<string, string>>({});
+  const liveNoteDraft = expandedHummdingerId ? liveNoteDrafts[expandedHummdingerId] ?? '' : '';
+  const setLiveNoteDraft = (value: string | ((previous: string) => string)) => {
+    const id = expandedHummdingerId;
+    if (id) setLiveNoteDrafts(current => ({ ...current, [id]: typeof value === 'function' ? value(current[id] ?? '') : value }));
+  };
+  const hummdingerScrollRef = useRef<ScrollView>(null);
   const [liveNoteSaving, setLiveNoteSaving] = useState(false);
-  const [liveNoteConfirmation, setLiveNoteConfirmation] = useState<string | null>(null);
+  const [liveNoteConfirmations, setLiveNoteConfirmations] = useState<Record<string, string | null>>({});
+  const liveNoteConfirmation = expandedHummdingerId ? liveNoteConfirmations[expandedHummdingerId] ?? null : null;
+  const setLiveNoteConfirmation = (value: string | null) => {
+    const id = expandedHummdingerId;
+    if (id) setLiveNoteConfirmations(current => ({ ...current, [id]: value }));
+  };
   // Which HD the note is about. Meetings wander: someone's card is open and the
   // room starts talking about a thing that ISN'T their headline HD. We used to
   // staple every jot to the spotlight wish anyway, which sent the to-do to an
   // unrelated wish and commented there ("Sex therapy workshop" landed on
   // Charlee's dog-door HD — Nat 2026-07-26). null = not about an HD at all.
-  const [showLiveNote, setShowLiveNote] = useState(false);
   const [liveNoteWishId, setLiveNoteWishId] = useState<string | null>(null);
   // Everything jotted this session stays visible on the card it was taken on,
   // with an ✕ that pulls it back off every list it landed on (oops insurance).
@@ -1687,27 +1700,13 @@ export default function MeetingHelperScreen() {
     }
   }, [deckRefreshing, loadDeckData, refreshArrivals]);
 
-  // Go-around order: Nat leads by example (her call, 2026-07-24 — she used to
-  // sit wherever the sort put her), then the absentees right after (the torch
-  // gets carried for whoever can't speak for themselves — everyone stays on
-  // the HD board even when they miss), then present checked-in members in
-  // submit order (a different voice order each month), then the rest who
-  // haven't checked in.
-  const memberOrder = useMemo(() => {
-    const leader = members.find((member) => getFirstName(member.name).toLowerCase() === 'nat');
-    const others = members.filter((member) => member.id !== leader?.id);
-    const bySubmitTime = (a: ArrivalBoardMember, b: ArrivalBoardMember) => {
-      const aTime = responsesByUser.get(a.id)?.submitted_at ?? '';
-      const bTime = responsesByUser.get(b.id)?.submitted_at ?? '';
-      return aTime.localeCompare(bTime);
-    };
-    const checkedIn = others.filter((member) => responsesByUser.has(member.id)).sort(bySubmitTime);
-    const reported = others.filter((member) => !responsesByUser.has(member.id) && reportsByUser.has(member.id));
-    const absent = [...checkedIn, ...reported].filter((member) => getReportedAttendance(responsesByUser.get(member.id), reportsByUser.get(member.id)) === 'missing');
-    const present = [...checkedIn, ...reported].filter((member) => getReportedAttendance(responsesByUser.get(member.id), reportsByUser.get(member.id)) !== 'missing');
-    const notYet = others.filter((member) => !responsesByUser.has(member.id) && !reportsByUser.has(member.id));
-    return [...(leader ? [leader] : []), ...absent, ...present, ...notYet];
-  }, [members, responsesByUser, reportsByUser]);
+  // All attendance categories share this order in the grid and agenda rail.
+  const memberOrder = useMemo(() => meetingTurnOrder(
+    members,
+    id => getReportedAttendance(responsesByUser.get(id), reportsByUser.get(id)),
+    id => responsesByUser.get(id)?.submitted_at ?? '',
+    members.find(member => getFirstName(member.name).toLowerCase() === 'nat')?.id,
+  ), [members, responsesByUser, reportsByUser]);
 
   const wishesByUserId = useMemo(() => {
     const grouped = new Map<string, DeckWish[]>();
@@ -1727,13 +1726,13 @@ export default function MeetingHelperScreen() {
   useEffect(() => {
     if (!expandedHummdingerId) {
       liveNoteSubjectMemberRef.current = null;
-      setShowLiveNote(false);
       liveNoteChoiceEditedRef.current = false;
       return;
     }
     if (liveNoteSubjectMemberRef.current !== expandedHummdingerId) {
       liveNoteSubjectMemberRef.current = expandedHummdingerId;
       liveNoteChoiceEditedRef.current = false;
+      setLiveNoteConfirmation(null);
     }
     if (liveNoteChoiceEditedRef.current) return;
     const memberWishes = wishesByUserId.get(expandedHummdingerId) ?? [];
@@ -4495,7 +4494,7 @@ export default function MeetingHelperScreen() {
                 </Text>
                 {attendance === 'missing' ? (
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), color: MUTED }}>
-                    😢 not here tonight — carry the torch
+                    Not here tonight · quick update
                   </Text>
                 ) : attendance === 'remote' ? (
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), color: GOLD_DEEP }}>
@@ -4523,7 +4522,7 @@ export default function MeetingHelperScreen() {
             </View>
             {/* The spotlight sheet's scroller — BounceScrollView so a member's
                 story bounces at both ends like every other sheet in the app. */}
-            <BounceScrollView contentContainerStyle={{ paddingHorizontal: sz(28, 16), paddingVertical: sz(20, 12), gap: sz(16, 10) }}>
+            <BounceScrollView ref={hummdingerScrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: sz(28, 16), paddingVertical: sz(20, 12), gap: sz(16, 10) }}>
               {/* Introductions, on the HIVE's first night. Always drawn, even
                   with nothing written down: a member who skipped the check-in
                   gets their turn and the prompt, never a blank card or an
@@ -4680,8 +4679,8 @@ export default function MeetingHelperScreen() {
                   })}
                 </View>
               ) : null}
-              {deckSlug === 'default' ? <Pressable accessibilityRole="button" accessibilityState={{ expanded: showLiveNote }} onPress={() => setShowLiveNote(v => !v)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ ...sectionText, color: GOLD_DEEP }}>{showLiveNote ? 'Close next-step note' : '+ Add a next step'}</Text></Pressable> : null}
-              {deckSlug !== 'default' || showLiveNote ? <View style={{ borderTopWidth: 1, borderColor: GOLD_SOFT, paddingTop: sz(14, 9), gap: sz(8, 6) }}>
+              <MeetingNoteSection key={member.id} alwaysOpen={deckSlug !== 'default'} scale={sz(24, 18) / 18} scrollTo={y => hummdingerScrollRef.current?.scrollTo({ y, animated: false })}>
+              <View style={{ borderTopWidth: 1, borderColor: GOLD_SOFT, paddingTop: sz(14, 9), gap: sz(8, 6) }}>
                 <Text style={sectionLabel}>
                   {deckSlug === 'default' ? 'Capture the next step' : meetingWishesAreAutomatic ? 'Catch a wish → connected to-do' : 'Live note → to-do list'}
                 </Text>
@@ -4742,6 +4741,7 @@ export default function MeetingHelperScreen() {
                     it. */}
                 <ComposerBar
                   variant="form"
+                  autoFocus={deckSlug === 'default'}
                   value={liveNoteDraft}
                   onChangeText={(next) => {
                     setLiveNoteDraft((previous) => (typeof next === 'function' ? next(previous) : next));
@@ -4764,6 +4764,7 @@ export default function MeetingHelperScreen() {
                 />
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8) }}>
                   <Pressable
+                    accessibilityRole="button"
                     onPress={() => handleSaveLiveNote(member, liveNoteWishId)}
                     disabled={liveNoteSaving || !liveNoteDraft.trim()}
                     style={({ pressed }) => ({
@@ -4802,7 +4803,8 @@ export default function MeetingHelperScreen() {
                     </Pressable>
                   </View>
                 ))}
-              </View> : null}
+              </View>
+              </MeetingNoteSection>
             </BounceScrollView>
           </Pressable>
         </Pressable>

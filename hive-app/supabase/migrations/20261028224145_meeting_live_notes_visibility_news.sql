@@ -1,0 +1,1 @@
+update public.app_news set detail='See every monthly action grouped by person. Tap a cue for full wording or Add a next step to record who will help. In-room and remote attendees go before absentees; presenting shares the open member card with followers.' where occurred_on='2026-10-28' and title='A simpler OG HIVE HummDinger';
