@@ -20,8 +20,8 @@ async function pages(query: () => any) {
   }
 }
 
-export function MemberWishStory({ communityId, memberId, memberName, memberIds, since, meetingId, viewerId, canEdit, scale = 1 }: {
-  communityId: string; memberId: string; memberName: string; memberIds: string[]; since: string; meetingId: string; viewerId: string; canEdit: boolean; scale?: number;
+export function MemberWishStory({ communityId, memberId, memberName, memberIds, since, reportedWish = '', meetingId, viewerId, canEdit, scale = 1 }: {
+  communityId: string; memberId: string; memberName: string; memberIds: string[]; since: string; reportedWish?: string; meetingId: string; viewerId: string; canEdit: boolean; scale?: number;
 }) {
   const [data, setData] = useState<{ wishes: StoryWish[]; tasks: StoryTask[] } | null>(null);
   const [previousReflections, setPreviousReflections] = useState<(Reflection & { meeting_id: string; meeting?: { event_date: string } })[]>([]);
@@ -125,7 +125,7 @@ export function MemberWishStory({ communityId, memberId, memberName, memberIds, 
         {update.help_given ? <Text style={text}>Help given: {update.help_given}</Text> : null}
       </View>)}
 
-      {story.history.length > 2 || previousReflections.length > 1 ? <Pressable accessibilityRole="button" accessibilityState={{ expanded: historyOpen }} onPress={() => setHistoryOpen(!historyOpen)} style={button}><Text style={title}>{historyOpen ? 'Show less history' : `See all ${story.history.length} previous wishes${previousReflections.length > 1 ? ' and meeting updates' : ''}`}</Text></Pressable> : null}
+      {story.history.length > 2 || previousReflections.length > 1 ? <Pressable accessibilityRole="button" accessibilityState={{ expanded: historyOpen }} onPress={() => setHistoryOpen(!historyOpen)} style={button}><Text style={title}>{historyOpen ? 'Show less history' : 'See full wish and meeting history'}</Text></Pressable> : null}
     </>, 'What happened with these wishes?')}
     {section('What happened since our last meeting', <>
       {story.ownDone.map(t => renderTask(t, 'own'))}
@@ -148,7 +148,7 @@ export function MemberWishStory({ communityId, memberId, memberName, memberIds, 
       </View> : null}
       {saved ? <Text accessibilityLiveRegion="polite" style={quiet}>Shared update saved.</Text> : null}
     </>)}
-    {section('What I want now', <>{story.current.map(renderWish)}{!story.current.length ? <Text style={quiet}>No open shared wish yet.</Text> : null}</>, 'Is this still what you want, or has your ask changed?')}
+    {section('What I want now', <>{reportedWish ? <View><Text style={quiet}>Reported for this meeting · shared with admin</Text><Text style={text}>{reportedWish}</Text></View> : null}{story.current.map(renderWish)}{!story.current.length && !reportedWish ? <Text style={quiet}>No open shared wish yet.</Text> : null}</>, 'Is this still what you want, or has your ask changed?')}
     {section('What happens next', <>{story.next.map(t => renderTask(t, 'next'))}{!story.next.length ? <Text style={quiet}>No open next steps recorded for {memberName}.</Text> : null}</>, 'Use the note below to capture tonight’s wish and who will help.')}
   </View>;
 }

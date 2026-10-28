@@ -4525,7 +4525,7 @@ export default function MeetingHelperScreen() {
               ) : null}
               {deckSlug === 'default' && communityId && cycleStart && nextMeeting && profile ? <MemberWishStory
                 key={`${nextMeeting.id}:${member.id}`} meetingId={nextMeeting.id} viewerId={profile.id} canEdit={isAdmin || profile.id === member.id}
-                communityId={communityId} memberId={member.id} memberName={getFirstName(member.name)}
+                communityId={communityId} memberId={member.id} memberName={getFirstName(member.name)} reportedWish={reportedWish}
                 memberIds={memberOrder.map(person => person.id)} since={cycleStart.toISOString()}
                 scale={sz(18, 13) / 16}
               /> : null}
