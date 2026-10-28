@@ -1,3 +1,4 @@
+import { meetingFocus } from '../../lib/memberWishStory';
 import { meetingDeck, meetingSlidePosition } from '../../lib/meetingAgenda';
 import { MemberWishStory } from '../../components/meetings/MemberWishStory';
 import { meetingVoteResults } from '../../lib/meetingVoteResults';
@@ -1721,20 +1722,26 @@ export default function MeetingHelperScreen() {
   // the fast path stays one keystroke. Keyed on the member, not on the wish
   // list, or a background deck refresh would throw away a pick made mid-jot.
   const liveNoteSubjectMemberRef = useRef<string | null>(null);
+  const liveNoteChoiceEditedRef = useRef(false);
   useEffect(() => {
     if (!expandedHummdingerId) {
       liveNoteSubjectMemberRef.current = null;
+      liveNoteChoiceEditedRef.current = false;
       return;
     }
-    if (liveNoteSubjectMemberRef.current === expandedHummdingerId) return;
-    liveNoteSubjectMemberRef.current = expandedHummdingerId;
+    if (liveNoteSubjectMemberRef.current !== expandedHummdingerId) {
+      liveNoteSubjectMemberRef.current = expandedHummdingerId;
+      liveNoteChoiceEditedRef.current = false;
+    }
+    if (liveNoteChoiceEditedRef.current) return;
     const memberWishes = wishesByUserId.get(expandedHummdingerId) ?? [];
-    setLiveNoteWishId(
-      meetingWishesAreAutomatic
-        ? NEW_MEETING_WISH_ID
-        : (pickSpotlightWish(memberWishes) ?? memberWishes[0])?.id ?? null
-    );
-  }, [expandedHummdingerId, meetingWishesAreAutomatic, wishesByUserId]);
+    const response = responsesByUser.get(expandedHummdingerId);
+    const answers = response?.answers ?? {};
+    const chosen = deckSlug === 'default'
+      ? meetingFocus(memberWishes, answers.q_hd_wish_id, getTextAnswer(answers, 'q_hd_wish'), !!response)
+      : pickSpotlightWish(memberWishes);
+    setLiveNoteWishId(deckSlug === 'default' ? chosen?.id ?? null : meetingWishesAreAutomatic ? NEW_MEETING_WISH_ID : (chosen ?? memberWishes[0])?.id ?? null);
+  }, [expandedHummdingerId, wishesByUserId, responsesByUser, deckSlug, meetingWishesAreAutomatic]);
 
   // OG pencils in hangs here; Tech records outside networking events. Both
   // use the same calendar create path and visibility rules.
@@ -4277,9 +4284,11 @@ export default function MeetingHelperScreen() {
           const answers = response?.answers ?? {};
           const nameToday = getTextAnswer(answers, 'q_name_today') || getFirstName(member.name);
           const memberWishes = wishesByUserId.get(member.id) ?? [];
-          const topWish = pickSpotlightWish(memberWishes) ?? memberWishes[0];
+          const topWish = deckSlug === 'default' ? meetingFocus(memberWishes, answers.q_hd_wish_id, getTextAnswer(answers, 'q_hd_wish'), !!response) : pickSpotlightWish(memberWishes) ?? memberWishes[0];
           const reportedWish = reportsByUser.get(member.id)?.hd_wish?.trim() ?? '';
-          const hdGoal = reportedWish || (topWish ? getWishQuickTitle(topWish, 40) : null);
+          const hdGoal = deckSlug === 'default'
+            ? (topWish ? getWishQuickTitle(topWish, 40) : null) || (!response ? reportedWish : null)
+            : reportedWish || (topWish ? getWishQuickTitle(topWish, 40) : null);
           const techWork = deckSlug === 'tech' ? getTextAnswer(answers, 'q_tech_working_on') : '';
           const techHigh = deckSlug === 'tech' ? getTextAnswer(answers, 'q_learned') : '';
           const techLow = deckSlug === 'tech' ? getTextAnswer(answers, 'q_tech_low') : '';
@@ -4422,7 +4431,8 @@ export default function MeetingHelperScreen() {
     const answers = response?.answers ?? {};
     const nameToday = getTextAnswer(answers, 'q_name_today') || getFirstName(member.name);
     const memberWishList = wishesByUserId.get(member.id) ?? [];
-    const topWish = pickSpotlightWish(memberWishList) ?? memberWishList[0];
+    const topWish = deckSlug === 'default' ? meetingFocus(memberWishList, answers.q_hd_wish_id, getTextAnswer(answers, 'q_hd_wish'), !!response) : pickSpotlightWish(memberWishList) ?? memberWishList[0];
+    const noteWishOptions = deckSlug === 'default' ? (topWish ? [topWish] : []) : memberWishList;
     const reportedWish = reportsByUser.get(member.id)?.hd_wish?.trim() ?? '';
     const techWork = deckSlug === 'tech' ? getTextAnswer(answers, 'q_tech_working_on') : '';
     const techHigh = deckSlug === 'tech' ? getTextAnswer(answers, 'q_learned') : '';
@@ -4548,10 +4558,11 @@ export default function MeetingHelperScreen() {
                 </Text>
               ) : null}
               {deckSlug === 'default' && communityId && cycleStart && nextMeeting && profile ? <MemberWishStory
-                key={`${nextMeeting.id}:${member.id}`} meetingId={nextMeeting.id} viewerId={profile.id} canEdit={isAdmin || profile.id === member.id}
-                communityId={communityId} memberId={member.id} memberName={getFirstName(member.name)} reportedWish={reportedWish}
-                memberIds={memberOrder.map(person => person.id)} since={cycleStart.toISOString()}
-                scale={sz(18, 13) / 16}
+                key={`${nextMeeting.id}:${member.id}`} meetingId={nextMeeting.id}
+                selectedId={answers.q_hd_wish_id} selectedText={getTextAnswer(answers, 'q_hd_wish')} hasCheckIn={!!response}
+                progressText={detailSections.find(section => section.key === 'q_pop_progress')?.text}
+                communityId={communityId} memberId={member.id} reportedWish={reportedWish}
+                since={cycleStart.toISOString()} scale={sz(24, 18) / 18}
               /> : null}
               {deckSlug === 'tech' ? detailSections.map((section) => (
                 <View key={section.key}>
@@ -4675,26 +4686,26 @@ export default function MeetingHelperScreen() {
               ) : null}
               <View style={{ borderTopWidth: 1, borderColor: GOLD_SOFT, paddingTop: sz(14, 9), gap: sz(8, 6) }}>
                 <Text style={sectionLabel}>
-                  {meetingWishesAreAutomatic ? 'Catch a wish → connected to-do' : 'Live note → to-do list'}
+                  {deckSlug === 'default' ? 'Capture the next step' : meetingWishesAreAutomatic ? 'Catch a wish → connected to-do' : 'Live note → to-do list'}
                 </Text>
-                {/* What the jot means. OG starts at one new atomic wish; an
+                {/* What the jot means. OG starts at the selected focus; an
                     existing wish is an explicit update and gets the comment;
                     Just a to-do touches no wish at all. */}
-                {memberWishList.length > 0 || meetingWishesAreAutomatic ? (
+                {noteWishOptions.length > 0 || meetingWishesAreAutomatic ? (
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: sz(6, 4) }}>
                     <Text style={{ ...sectionContext, marginRight: sz(2, 1) }}>About:</Text>
                     {[
                       ...(meetingWishesAreAutomatic
                         ? [{ id: NEW_MEETING_WISH_ID, label: '✨ New wish' }]
                         : []),
-                      ...memberWishList.map((wish) => ({ id: wish.id, label: getWishQuickTitle(wish, 30) })),
+                      ...noteWishOptions.map((wish) => ({ id: wish.id, label: deckSlug === 'default' ? 'Tonight’s wish' : getWishQuickTitle(wish, 30) })),
                       { id: null, label: 'Just a to-do' },
                     ].map((option) => {
                       const selected = liveNoteWishId === option.id;
                       return (
                         <Pressable
                           key={option.id ?? 'no-hd'}
-                          onPress={() => setLiveNoteWishId(option.id)}
+                          onPress={() => { liveNoteChoiceEditedRef.current = true; setLiveNoteWishId(option.id); }}
                           style={({ pressed }) => ({
                             paddingHorizontal: sz(12, 9),
                             paddingVertical: sz(5, 4),
@@ -4740,7 +4751,7 @@ export default function MeetingHelperScreen() {
                     if (liveNoteConfirmation) setLiveNoteConfirmation(null);
                   }}
                   placeholder={meetingWishesAreAutomatic
-                    ? `Write the wish that surfaced. Start with @ (like @Charlee or @all) to choose who will help; no @ puts the next step on ${getFirstName(member.name)}'s list.`
+                    ? `Write the agreed step. Use @ to choose helpers; choose New wish only when the ask is new.`
                     : `Jot a to-do — it lands on ${getFirstName(member.name)}'s list. Start a word with @ (like @Charlee, or @all) to send it to them instead.`}
                   onSubmit={() => handleSaveLiveNote(member, liveNoteWishId)}
                   // Deliberately not `submitting`: a jot saves in a blink and

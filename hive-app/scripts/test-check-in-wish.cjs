@@ -16,6 +16,7 @@ const jsx=(type,props)=>({type,props});
 const {SurveyQuestionField}=load('components/surveys/SurveyQuestionField.tsx',{
   react:{useState:value=>{const i=index++;if(!(i in states))states[i]=value;return[states[i],next=>states[i]=typeof next==='function'?next(states[i]):next];},useEffect(){}},
   'react/jsx-runtime':{jsx,jsxs:jsx},'react-native':{View:'View',Text:'Text',Pressable:'Pressable'},
+  '../../lib/octoberOgQuestions':{isNatFeedbackQuestion:()=>false},
   'expo-router':{useRouter:()=>({push(){}})},
   '../../lib/hooks/useAuth':{useAuth:()=>({profile:{id:'owner'},community:{max_share_scope:'all_hives'}})},
   '../../lib/hiveBrand':{HIVE_GOLD:'gold',accentPalette:()=>({line:()=>'',ink:'navy'})},
@@ -85,8 +86,10 @@ for(const grouped of [false,true]) for(const hasWish of [false,true]) {
  const {SurveyModal}=load('components/surveys/SurveyModal.tsx',{
   react:{Fragment:'Fragment',useState:value=>{const i=cursor++;if(!(i in state))state[i]=value;return[state[i],next=>state[i]=typeof next==='function'?next(state[i]):next];},useEffect(){},useCallback:fn=>fn,useMemo:fn=>fn()},
   'react/jsx-runtime':{jsx,jsxs:jsx},'react-native':{View:'View',Text:'Text',Pressable:'Pressable',Modal:'Modal',ScrollView:'ScrollView',useWindowDimensions:()=>({width:390})},
+  'expo-router':{useRouter:()=>({push(){}})},
   '../../lib/hooks/useAuth':{useAuth:()=>({profile:null})},
   '../../lib/hiveBrand':{HIVE_GOLD:'gold',hiveSeal:()=>1,accentPalette:()=>({line:()=>'',ink:'navy'})},
+  '../../lib/surveyQuestionVisibility':{getVisibleSurveyQuestions:questions=>questions,pruneHiddenSurveyAnswers:(_questions,answers)=>answers},
   '../../lib/checkIns':{getSeasonCheckInKind:()=>null,checkInDisplayName:x=>x,isPreMeetingCheckInSurvey:()=>true,isEndOfMonthCheckInSurvey:()=>false},
   '@react-native-async-storage/async-storage':{default:{setItem:async()=>{}}},
   '../../lib/actionItemDisplay':load('lib/actionItemDisplay.ts'),
@@ -118,21 +121,17 @@ for(const grouped of [false,true]) for(const hasWish of [false,true]) {
  }
 }
 const {fileCheckInWish}=load('lib/checkInWish.ts');
-function fixture(rows,error=null){const writes=[];let cleared=0;return{writes,get cleared(){return cleared;},clear:async()=>{cleared++;return{error:null};},client:{from(){let result={data:rows,error};return{select(){return this;},eq(){return this;},or(){return this;},update(payload){writes.push({kind:'update',payload});result={error:null};return this;},insert(payload){writes.push({kind:'insert',payload});result={error:null};return this;},then(resolve,reject){return Promise.resolve(result).then(resolve,reject);}};}}};}
 (async()=>{
- for(const staleReach of ['hive','all_hives',undefined]){
-  const f=fixture([{id:'wide',description:wish.description}]);
-  await fileCheckInWish(f.client,'owner','tech',{q_hd_wish:wish.description,q_hd_wish_id:'wide',q_hd_wish_reach:staleReach},f.clear);
-  assert.deepEqual(JSON.parse(JSON.stringify(f.writes)),[{kind:'update',payload:{is_spotlight:true}}],'existing audience never overwritten, even by an old draft');
- }
- const legacy=fixture([{id:'wide',description:wish.description}]);
- await fileCheckInWish(legacy.client,'owner','tech',{q_hd_wish:wish.description},legacy.clear);
- assert.equal(legacy.writes[0].kind,'update','old answer without ID reuses existing wish');
- const fresh=fixture([]);await fileCheckInWish(fresh.client,'owner','tech',{q_hd_wish:'A new wish',q_hd_wish_reach:'all_hives'},fresh.clear);
- assert.equal(fresh.writes[0].payload.share_scope,'all_hives');
- for(const f of [fixture([],new Error('read failed')),fixture([])]){
-  await assert.rejects(fileCheckInWish(f.client,'owner','tech',{q_hd_wish:wish.description,q_hd_wish_id:'gone'},f.clear));
-  assert.equal(f.writes.length,0);assert.equal(f.cleared,0);
- }
- console.log('PASS: actual existing/new wish UI, saved visibility label, explicit selection, stale/legacy draft audience preservation, new-wish reach, missing-wish/read-error no-write guards. Offline only.');
+ const calls=[];const client={rpc:async(name,args)=>{calls.push({name,args});return{error:null};}};
+ const noClear=async()=>{throw Error('non-atomic clear called');};
+ await fileCheckInWish(client,'owner','og',{q_hd_wish:' A wish ',q_hd_wish_id:'existing',q_hd_wish_reach:'all_hives'},noClear);
+ assert.equal(calls[0].name,'file_check_in_wish');
+ assert.deepEqual(JSON.parse(JSON.stringify(calls[0].args)),{p_community_id:'og',p_description:'A wish',p_wish_id:'existing',p_reach:'all_hives'});
+ await fileCheckInWish(client,'owner','og',{q_hd_wish:'New'},noClear);
+ assert.equal(calls[1].args.p_wish_id,null);
+ await assert.rejects(fileCheckInWish({rpc:async()=>({error:Error('removed')})},'owner','og',{q_hd_wish:'Old'},noClear));
+ await assert.rejects(fileCheckInWish(client,'owner',null,{q_hd_wish:'New'},noClear));
+ await fileCheckInWish(client,'owner','og',{},noClear);
+ assert.equal(calls.length,2);
+ console.log('PASS: wish chooser and atomic RPC save, audience and selected ID passed, server errors preserved.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

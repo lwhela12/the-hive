@@ -1,31 +1,22 @@
-import { pickSpotlightWish } from './wishDisplay';
-
-export type StoryWish = {
-  id: string; user_id: string; description: string; title?: string | null;
-  status: string; is_active: boolean | null; is_spotlight?: boolean;
-  created_at: string; fulfilled_at?: string | null;
-  owner?: { name: string } | null;
-  granters?: { granter_id: string; granter?: { name: string } | null }[];
-};
-export type StoryTask = {
-  id: string; description: string; assigned_to: string | null; related_user_id: string | null;
-  completed: boolean; completed_at: string | null; related_wish_id: string | null;
-  assignee?: { name: string } | null; recipient?: { name: string } | null;
-};
-
-export function memberWishStory(memberId: string, wishes: StoryWish[], tasks: StoryTask[], since: string) {
-  const mine = wishes.filter(w => w.user_id === memberId).sort((a,b) => b.created_at.localeCompare(a.created_at));
-  const current = mine.filter(w => w.status === 'public' && w.is_active !== false);
-  const done = tasks.filter(t => t.completed && !!t.completed_at && t.completed_at >= since);
-  const received = done.filter(t => t.related_user_id === memberId && t.assigned_to !== memberId && !!t.assigned_to);
-  const given = done.filter(t => t.assigned_to === memberId && !!t.related_user_id && t.related_user_id !== memberId);
-  return {
-    current, spotlight: pickSpotlightWish(current),
-    history: mine.filter(w => !current.some(c => c.id === w.id)),
-    ownDone: done.filter(t => t.assigned_to === memberId && (!t.related_user_id || t.related_user_id === memberId)),
-    received, given,
-    granted: wishes.filter(w => w.status === 'fulfilled' && !!w.fulfilled_at && w.fulfilled_at >= since
-      && (w.user_id === memberId || w.granters?.some(g => g.granter_id === memberId))),
-    next: tasks.filter(t => !t.completed && (t.assigned_to === memberId || t.related_user_id === memberId)),
-  };
+export type StoryWish = { id: string; user_id: string; description: string; status?: string | null; is_active?: boolean | null; is_spotlight?: boolean | null };
+export type StoryTask = { id: string; description: string; assigned_to: string | null; related_wish_id: string | null; completed: boolean; completed_at: string | null; created_at?: string };
+export const wishIdentity = (text: string) => text.normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+/** The submitted selection wins. Never fill an unanswered/retired choice with other wishes. */
+export function meetingFocus<T extends StoryWish>(wishes: T[], selectedId: unknown, selectedText: string, hasCheckIn: boolean): T | null {
+  const live = wishes.filter(w => w.status === 'public' && w.is_active !== false);
+  if (typeof selectedId === 'string' && selectedId) return live.find(w => w.id === selectedId) ?? null;
+  if (selectedText.trim()) return live.find(w => wishIdentity(w.description) === wishIdentity(selectedText)) ?? null;
+  return hasCheckIn ? null : live.find(w => w.is_spotlight) ?? null;
+}
+/** One group per actual step, regardless of how many helpers it was assigned to. */
+export function compactWishSteps(tasks: StoryTask[], wishId: string | undefined, since: string) {
+  const linked = wishId ? tasks.filter(t => t.related_wish_id === wishId) : [];
+  const groups = new Map<string, { description: string; helpers: Set<string> }>();
+  for (const task of linked.filter(t => !t.completed)) {
+    const key = wishIdentity(task.description.replace(/[(]re:[^)]*[)]/gi, '').replace(/^(@[\w.-]+[\s,]*)+/, ''));
+    const group = groups.get(key) ?? { description: task.description, helpers: new Set<string>() };
+    if (task.assigned_to) group.helpers.add(task.assigned_to);
+    groups.set(key, group);
+  }
+  return { next: [...groups.values()][0] ?? null, completed: linked.filter(t => t.completed && !!t.completed_at && t.completed_at >= since).length };
 }

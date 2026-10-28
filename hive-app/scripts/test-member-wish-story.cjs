@@ -2,20 +2,28 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
-function load(file) { const module = { exports: {} }; vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { module, exports: module.exports, require: name => name === './wishDisplay' ? load('lib/wishDisplay.ts') : require(name) }); return module.exports; }
-const { memberWishStory } = load('lib/memberWishStory.ts');
-const wish = (id, user, status, created, extra = {}) => ({ id, user_id: user, status, created_at: created, description: id, is_active: true, ...extra });
-const task = (id, assigned, related, complete, at) => ({ id, description:id, assigned_to:assigned, related_user_id:related, completed:complete, completed_at:at });
-const wishes = [wish('new','me','public','2026-10-25'),wish('star','me','public','2026-10-01',{is_spotlight:true}),wish('past','me','fulfilled','2026-08-01',{fulfilled_at:'2026-10-10'}),wish('helped','other','fulfilled','2026-08-02',{fulfilled_at:'2026-10-11',granters:[{granter_id:'me'}]}),wish('old-grant','me','fulfilled','2026-06-01',{fulfilled_at:'2026-08-01'})];
-const tasks = [task('own','me',null,true,'2026-10-05'),task('self','me','me',true,'2026-10-06'),task('given','me','other',true,'2026-10-07'),task('received','other','me',true,'2026-10-08'),task('unassigned',null,'me',true,'2026-10-08'),task('old','me','other',true,'2026-08-01'),task('pending','me','other',false,null)];
-const story=memberWishStory('me',wishes,tasks,'2026-09-23');
-const ids=items=>Array.from(items,w=>w.id);
-assert.equal(story.spotlight.id,'star');
-assert.deepEqual(ids(story.history),['past','old-grant']);
-assert.deepEqual(ids(story.ownDone),['own','self']);
-assert.deepEqual(ids(story.given),['given']);
-assert.deepEqual(ids(story.received),['received']);
-assert.deepEqual(ids(story.next),['pending']);
-assert.deepEqual(ids(story.granted),['past','helped']);
-assert.equal(memberWishStory('nobody',wishes,tasks,'2026-09-23').current.length,0);
-console.log('PASS: wish history, starred current ask, correct help direction, no self-help credit, cycle boundary, and pending steps.');
+function load(file) { const module = { exports: {} }; vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText, { module, exports: module.exports, require: name => name === './wishDisplay' ? load('lib/wishDisplay.ts') : require(name) }); return module.exports; }
+const { meetingFocus, compactWishSteps } = load('lib/memberWishStory.ts');
+const wishes = [
+ {id:'old',user_id:'me',description:'Broken ankle help',status:'fulfilled',is_active:false},
+ {id:'yarn',user_id:'me',description:'Find yarn',status:'public',is_active:true},
+ {id:'chosen',user_id:'me',description:'Bridal shower',status:'public',is_active:true,is_spotlight:true},
+];
+assert.equal(meetingFocus(wishes,'chosen','Bridal shower',true).id,'chosen');
+assert.equal(meetingFocus(wishes,'old','Broken ankle help',true),null);
+assert.equal(meetingFocus(wishes,'deleted','Find yarn',true),null,'never substitute an unrelated open ask');
+assert.equal(meetingFocus(wishes,null,'  Bridal Shower! ',true).id,'chosen');
+assert.equal(meetingFocus(wishes,null,'',true),null,'unanswered survey never falls back to all wishes');
+assert.equal(meetingFocus(wishes,null,'',false).id,'chosen');
+const task=(id,description,wish,assigned,completed=false)=>({id,description,related_wish_id:wish,assigned_to:assigned,completed,completed_at:completed?'2026-10-26':null});
+const summary=compactWishSteps([
+ task('one','Book venue (re: Nat)', 'chosen','a'),
+ task('two','Book venue', 'chosen','b'),
+ task('old','Ankle chores','old','a'),
+ task('done','Venue research','chosen','a',true),
+ task('unrelated','Get yarn','yarn','a'),
+],'chosen','2026-09-23');
+assert.equal(summary.next.helpers.size,2);
+assert.equal(summary.completed,1);
+assert.equal(compactWishSteps([],undefined,'2026-09-23').next,null);
+console.log('PASS: submitted focus, removed choice, no random fallback, grouped helpers, relevant cycle progress.');

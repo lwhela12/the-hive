@@ -41,7 +41,7 @@ assert.equal(meetingVoteResults(['a'],votes,'different_question',options).voted,
  const old=carry.normalizeCarryForwardResponse([{id:'wish',type:'wish',label:'Existing wish',status:'needs_attention',note:'A note already written'}])[0];
  assert.equal(old.status,'keep_active');assert.equal(old.note,'A note already written');
  const screen=fs.readFileSync('app/(app)/meeting-helper.tsx','utf8');
- assert.ok(screen.includes("['meetups', 'treasurer'].includes(deck.slides[slideIndex])"),'decision slides refresh their answers');
+ assert.ok(screen.includes("useArrivalBoard({ pollingEnabled: true })"),'decision slides refresh their answers');
  assert.ok(screen.includes('meetingVoteResults(members.map'));
  console.log('PASS: day percentages, current-member denominator, duplicate/outside/unanswered exclusion, updated votes, source-HIVE owned archive, failure guards and retired flag note preservation. Offline fixtures.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
