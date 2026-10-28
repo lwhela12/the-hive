@@ -1366,7 +1366,7 @@ export function buildMergedPreMeeting(
       // Keep the October OG draft's explanatory blocks with its questions.
       // Other historical HIVE section headers still stay out of this form.
       if (question.type === 'note' && !((hive.slug ?? '').trim().toLowerCase() === 'default'
-        && ['ball_context', 'clothing_interest'].includes(question.id))) continue;
+        && ['ball_context', 'nat_feedback_context', 'clothing_interest'].includes(question.id))) continue;
       // Even arrival and energy can differ next week in another HIVE.
       // Keep every answer in the HIVE section; never copy another room's answer.
       mine.push(question);

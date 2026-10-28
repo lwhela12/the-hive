@@ -1,6 +1,6 @@
 /** Check-in interest only: these choices are not an order or price quote. */
 export const CLOTHING_INTEREST_KEY = 'q_oct_clothing_interests';
-export const CLOTHING_INTEREST_OPTIONS = ['Hoodies', 'Pants', 'Shorts', 'T-shirts'] as const;
+export const CLOTHING_INTEREST_OPTIONS = ['Hoodies', 'Pants', 'Shorts', 'T-shirts', 'Socks', 'Fanny packs'] as const;
 
 export function clothingInterests(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];

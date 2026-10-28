@@ -993,7 +993,6 @@ export default function MeetingHelperScreen() {
   const GOLD_SOFT = tintWash(0.5);
 
   const [slideIndex, setSlideIndex] = useState(0);
-  const [showOctoberCheckInAnswers, setShowOctoberCheckInAnswers] = useState(false);
 
   // Is there actually a call on? DeckVideo tells us, and the layout gives the
   // panel real room only once there is somebody in it.
@@ -2420,23 +2419,9 @@ export default function MeetingHelperScreen() {
       {deckIsOg && nextMeeting?.id === '131d6001-43e4-4426-b07c-9cb7f51e1ab7'
         && profile?.is_owner && profile.email?.trim().toLowerCase() === 'natwalstead@gmail.com'
         && canViewIndividualCheckIns && <View style={{ marginBottom: 14 }}>
-          <Pressable accessibilityRole="button" accessibilityState={{ expanded: showOctoberCheckInAnswers }} onPress={() => setShowOctoberCheckInAnswers(value => !value)} style={{ alignSelf: 'flex-start', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: GOLD_SOFT }}>
-            <Text style={{ color: GOLD_DEEP, fontFamily: 'Lato_700Bold' }}>{showOctoberCheckInAnswers ? 'Hide check-in answers' : 'View check-in answers'}</Text>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/nat-feedback' as never)} style={{ alignSelf: 'flex-start', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: GOLD_SOFT }}>
+            <Text style={{ color: GOLD_DEEP, fontFamily: 'Lato_700Bold' }}>Open private feedback</Text>
           </Pressable>
-          {showOctoberCheckInAnswers && <View style={{ marginTop: 10, gap: 10 }}>
-            <Text style={{ color: MUTED }}>These answers are visible on this screen while open.</Text>
-            {members.map(member => {
-              const answer = responsesByUser.get(member.id)?.answers ?? {};
-              const fields = [
-                ['Bumblebee Ball', 'ball_choice'], ['Timing', 'ball_timing'], ['Guests', 'ball_audience'],
-                ['Goal', 'member_goal'], ['Support', 'member_support'], ['HIVE value', 'member_value'],
-              ].map(([label, key]) => ({ label, value: getTextAnswer(answer, key) })).filter(field => field.value);
-              return fields.length ? <View key={member.id} style={{ padding: 12, borderWidth: 1, borderColor: GOLD_SOFT, borderRadius: 12, gap: 4 }}>
-                <Text style={{ color: CHARCOAL, fontFamily: 'Lato_700Bold' }}>{member.name}</Text>
-                {fields.map(field => <Text key={field.label} style={{ color: CHARCOAL }}>{field.label}: {field.value}</Text>)}
-              </View> : null;
-            })}
-          </View>}
         </View>}
       {arrivalLoading ? (
         <View style={{ paddingVertical: 60, alignItems: 'center' }}>

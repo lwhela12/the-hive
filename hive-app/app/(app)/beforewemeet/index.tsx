@@ -276,9 +276,14 @@ export default function BeforeWeMeetScreen() {
       const ordered = groupCheckInHives(memberships, (upcoming ?? []) as MeetingPreview[], today);
       const next = [...ordered.prominent, ...ordered.future].map(item => item.event!) as MeetingPreview[];
       const { data: receipts, error: receiptError } = await supabase.from('check_in_completions')
-        .select('community_id, occurrence, answers').eq('survey_id', found.id).eq('user_id', profile.id);
+        .select('id, community_id, occurrence, answers').eq('survey_id', found.id).eq('user_id', profile.id);
       if (cancelled) return;
       if (receiptError) { setState('broken'); return; }
+      const { data: privateRows, error: privateError } = await (supabase as any).from('nat_check_in_feedback')
+        .select('source_id, answers').eq('source_table', 'check_in_completions').eq('survey_id', found.id).eq('user_id', profile.id);
+      if (cancelled) return;
+      if (privateError) { setState('broken'); return; }
+      const privateByReceipt = new Map<string, SurveyAnswers>((privateRows ?? []).map((r: any) => [r.source_id, r.answers]));
       const hydrated: Record<string, SurveyAnswers> = {};
       for (const item of [...ordered.prominent, ...ordered.future, ...ordered.missing]) {
         const event = linkedMeeting?.community_id === item.member.community_id ? linkedMeeting : item.event;
@@ -287,7 +292,7 @@ export default function BeforeWeMeetScreen() {
           ?? (event && event.id === item.event?.id
             ? receipts?.find(r => r.community_id === item.member.community_id && r.occurrence === nextMeetingOccurrence(item.member.community_id))
             : undefined);
-        if (receipt) hydrated[item.member.community_id] = receipt.answers as SurveyAnswers;
+        if (receipt) hydrated[item.member.community_id] = { ...(receipt.answers as SurveyAnswers), ...(privateByReceipt.get(receipt.id) ?? {}) };
       }
       setSaved(hydrated);
       setMeetings(next);

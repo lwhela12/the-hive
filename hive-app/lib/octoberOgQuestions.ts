@@ -9,7 +9,7 @@ export const TOMORROW_CHECK_IN_QUESTIONS: SurveyQuestion[] = [
     type: 'note',
     text: 'A possible Bumblebee Ball',
     body: [
-      'We’re considering a catered gathering at Passion Vine House during the first two weeks of January 2027. Nothing is booked or final.',
+      'We’re considering a catered gathering at Passion Vine House during the first two weeks of January 2027. Nothing is booked or final. Your Ball answers go to the planning chat with Nat, Nic, Izzy, and Meg.',
     ],
     required: false,
   },
@@ -32,11 +32,16 @@ export const TOMORROW_CHECK_IN_QUESTIONS: SurveyQuestion[] = [
   },
   {
     id: 'ball_audience',
-    type: 'long',
-    text: 'Who do you think should be invited? HIVE members and their plus-ones is one idea.',
+    type: 'choice',
+    text: 'Who should be invited to the Bumblebee Ball?',
+    options: ['Just OG HIVE', 'HIVE-wide', 'HIVE members and their plus-ones', 'All members, their plus-ones, and HIVE hopefuls'],
     required: false,
     show_if: { question_id: 'ball_choice', equals: 'I’d like to give input.' },
   },
+  { id: 'ball_food', type: 'long', text: 'What food would you enjoy at the Bumblebee Ball?', required: false, show_if: { question_id: 'ball_choice', equals: 'I’d like to give input.' } },
+  { id: 'ball_awards', type: 'long', text: 'Any ideas for awards or people we should celebrate?', required: false, show_if: { question_id: 'ball_choice', equals: 'I’d like to give input.' } },
+  { id: 'ball_dress', type: 'choice', text: 'What should we wear?', options: ['Ballgowns and fancy clothes', 'Onesies', 'Costumes', 'Cozies', 'Dealer’s choice — wear what you like'], required: false, show_if: { question_id: 'ball_choice', equals: 'I’d like to give input.' } },
+  { id: 'nat_feedback_context', type: 'note', text: 'Just for Nat', body: ['Your goals, support, HIVE feedback, and plans for next year are private between you and Nat. They will not appear on the meeting screen or in the planning chat.'], required: false },
   {
     id: 'member_goal',
     type: 'long',
@@ -55,12 +60,13 @@ export const TOMORROW_CHECK_IN_QUESTIONS: SurveyQuestion[] = [
     text: 'Are you getting enough value from HIVE? What could make it more useful or better integrated into your life?',
     required: false,
   },
+  { id: 'member_next_year', type: 'choice', text: 'Do you intend to stay in HIVE next year?', options: ['Yes', 'Not sure yet — I’d like to talk with Nat', 'No'], required: false },
   {
     id: 'clothing_interest',
     type: 'note',
-    text: 'HIVE clothing interest',
+    text: 'HIVE swag interest',
     body: [
-      'Explore hoodie choices in the clothing form, and share your interest in more HIVE clothing below.',
+      'Explore the current hoodie choices, then select other HIVE swag you’d like us to offer below.',
       'This is an interest/selection form, not a confirmed order or fulfillment promise.',
     ],
     link_label: 'Open the clothing form',
@@ -70,7 +76,7 @@ export const TOMORROW_CHECK_IN_QUESTIONS: SurveyQuestion[] = [
   {
     id: CLOTHING_INTEREST_KEY,
     type: 'choice',
-    text: 'Which HIVE clothing would you like to explore? Select any that interest you.',
+    text: 'Which HIVE swag interests you? Select any.',
     options: [...CLOTHING_INTEREST_OPTIONS],
     required: false,
   },

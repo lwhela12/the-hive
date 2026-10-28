@@ -49,7 +49,7 @@ import('../lib/surveyQuestionVisibility.mjs').then(({ getVisibleSurveyQuestions,
     ['outside-hive', { answers: { q_oct_clothing_interests: ['Hoodies'] } }],
   ]);
   const counts = clothing.clothingInterestCountsForMembers([{ id: 'member-1' }, { id: 'member-2' }, { id: 'no-response' }], responsesByUser);
-  assert.deepEqual(Array.from(counts, item => [item.option, item.count]), [['Hoodies', 0], ['Pants', 2], ['Shorts', 0], ['T-shirts', 1]]);
+  assert.deepEqual(Array.from(counts, item => [item.option, item.count]), [['Hoodies', 0], ['Pants', 2], ['Shorts', 0], ['T-shirts', 1], ['Socks', 0], ['Fanny packs', 0]]);
   assert.ok(merged.sections[0].questions.find(question => question.id === clothing.CLOTHING_INTEREST_KEY), 'interest selection is part of the real check-in section');
   console.log('PASS: October scope, notes, Ball skip, fixture submission and member-scoped organizer aggregation.');
 }).catch(error => { console.error(error); process.exitCode = 1; });
