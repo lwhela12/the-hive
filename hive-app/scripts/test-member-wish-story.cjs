@@ -41,3 +41,13 @@ const help=monthlyHelp([
 assert.equal(help.received.length,1);assert.equal(help.received[0].people.size,2);
 assert.equal(help.given.length,1);assert.equal(help.given[0].completed,false);
 console.log('PASS: prior month boundary, named help directions, grouped copies, pending truth, stale and self-help excluded.');
+
+const {speakingCue, focusCues, helpByPerson}=load('lib/memberWishStory.ts');
+const focusText="I'm hyper focused on the Bridal Shower! I can't wait. Also hoping to finish my memoir this 2026 year. And finish my garage.";
+assert.deepEqual(Array.from(focusCues(focusText), x=>x.label), ['Bridal Shower','Finish my memoir this 2026 year','Finish my garage']);
+assert.equal(speakingCue("We're doing 'Box o’ Beanies' again this year & it will be great!"), "'Box o’ Beanies'");
+assert.equal(speakingCue('Do not buy yarn until we confirm the budget'), 'Do not buy yarn until we confirm the budget');
+assert.equal(speakingCue('Could we find some resources? I have not done this yet.'), 'Could we find some resources');
+const grouped=helpByPerson([{description:'One',completed:true,people:new Set(['a','b'])},{description:'Two',completed:false,people:new Set(['a'])}]);
+assert.equal(grouped.length,2);assert.equal(grouped[0].items.length,2);assert.equal(grouped[0].items[1].completed,false);
+console.log('PASS: compact source cues, separate focus topics, all actions grouped by person, status preserved.');

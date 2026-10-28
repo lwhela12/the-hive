@@ -46,3 +46,36 @@ export function precedingPeriod(period: string) {
   const date = new Date(Date.UTC(Number(match[1]), Number(match[2])-2, 1));
   return date.toISOString().slice(0,7);
 }
+
+/** Source excerpts, not generated claims. Original wording stays available on tap. */
+export function speakingCue(source: string, wordLimit = 9): string {
+  const clean = source.replace(/^[✓•\s]+/, '').replace(/\s+/g, ' ').trim();
+  const first = clean.split(/(?<=[.!?])\s+(?=[A-Z])/)[0];
+  const recurring = /^(?:we['’]re|we are|i['’]m|i am) doing (.+?) again\b/i.exec(first);
+  const phrase = (recurring?.[1] || first)
+    .replace(/^(?:and |also )/i, '')
+    .replace(/^reach out to (.+?) to (.+)$/i, '$2 · $1')
+    .replace(/^let .+? know if you want to /i, 'Interest: ')
+    .replace(/^[\p{L} .'-]+ needs help /iu, 'Help ')
+    .replace(/^(?:i['’]m|i am) (?:hyper )?focus(?:ed|ing) on (?:the )?/i, '')
+    .replace(/^(?:i['’]m |i am )?hoping to /i, '')
+    .replace(/[.!?]+$/, '').trim();
+  const words = phrase.split(' ');
+  const shortened = words.length > wordLimit ? words.slice(0, wordLimit).join(' ') + '…' : phrase;
+  return shortened ? shortened[0].toLocaleUpperCase() + shortened.slice(1) : clean;
+}
+/** Each sentence remains its own cue; emotional/context sentences stay in details. */
+export function focusCues(source: string): { label: string; original: string }[] {
+  const sentences = source.split(/\n+|(?<=[.!?])\s+(?=[A-Z])/).map(s => s.trim()).filter(Boolean);
+  const cues = sentences.filter(s => !/^i can['’]t wait[.!]?$/i.test(s));
+  return (cues.length ? cues : sentences).map(original => ({ label: speakingCue(original), original }));
+}
+export function helpByPerson(rows: ReturnType<typeof monthlyHelp>['given']) {
+  const people = new Map<string, { description: string; completed: boolean }[]>();
+  for (const row of rows) for (const id of row.people) {
+    const items = people.get(id) ?? [];
+    items.push({ description: row.description, completed: row.completed });
+    people.set(id, items);
+  }
+  return [...people].map(([id, items]) => ({ id, items }));
+}

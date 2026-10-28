@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { supabase } from '../../lib/supabase';
-import { meetingFocus, monthlyHelp, precedingPeriod, type StoryWish, type StoryTask } from '../../lib/memberWishStory';
+import { meetingFocus, monthlyHelp, precedingPeriod, speakingCue, focusCues, helpByPerson, wishIdentity, type StoryWish, type StoryTask } from '../../lib/memberWishStory';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 
 type Reflection = { progress?: string; help_received?: string; help_given?: string };
@@ -16,6 +16,7 @@ export function MemberWishStory({ communityId, memberId, since, meetingId, selec
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
+  useEffect(() => { setExpanded({}); }, [memberId, meetingId]);
   useEffect(() => {
     let active = true;
     setData(null); setError(false);
@@ -55,54 +56,73 @@ export function MemberWishStory({ communityId, memberId, since, meetingId, selec
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
   }, [meetingId, memberId]);
-  const text = { fontFamily: 'Lato_400Regular', color: '#313130', fontSize: 20 * scale, lineHeight: 29 * scale };
-  const heading = { ...text, fontFamily: 'Lato_700Bold', color: '#8b6828', fontSize: 16 * scale, lineHeight: 23 * scale };
+  const text = { fontFamily: 'Lato_400Regular', color: '#313130', fontSize: 16 * scale, lineHeight: 22 * scale };
+  const heading = { ...text, fontFamily: 'Lato_700Bold', color: '#8b6828', fontSize: 20 * scale, lineHeight: 26 * scale };
   if (error) return <View accessibilityRole="alert"><Text style={text}>Couldn’t load this person’s focus.</Text><Pressable accessibilityRole="button" onPress={() => setRetry(n => n+1)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={heading}>Try again</Text></Pressable></View>;
   if (!data) return <ActivityIndicator accessibilityLabel="Loading meeting focus" color="#bd9348" />;
   const focus = meetingFocus(data.wishes, selectedId, selectedText, hasCheckIn);
   const help = monthlyHelp(data.tasks, memberId, since);
   const ownDone = data.tasks.filter(t => t.assigned_to === memberId && (!t.related_user_id || t.related_user_id === memberId) && t.completed && !!t.completed_at && t.completed_at >= since);
-  const update = data.reflection.progress || progressText || ownDone.slice(0,2).map(t => '✓ ' + parseActionItemDescription(t.description).text).join('\n');
   const toggle = (key: string) => setExpanded(v => ({ ...v, [key]: !v[key] }));
-  const more = (key: string, label = 'Read more') => <Pressable accessibilityRole="button" accessibilityState={{ expanded: !!expanded[key] }} onPress={() => toggle(key)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={heading}>{expanded[key] ? 'Show less' : label}</Text></Pressable>;
-  const paragraph = (key: string, value: string, lines = 4) => <View><Text numberOfLines={expanded[key] || value.length <= 180 ? undefined : lines} style={text}>{value}</Text>{value.length > 180 ? more(key) : null}</View>;
-  const column = { flexGrow: 1, flexBasis: width >= 900 ? '30%' as const : '100%' as const, minWidth: 0, gap: 8, backgroundColor: '#fbf6e9', borderRadius: 14, padding: 16 };
-  const helpColumn = (key: 'received' | 'given', title: string) => {
-    const rows = help[key];
+  const subheading = { ...text, fontFamily: 'Lato_700Bold', color: '#75571f', fontSize: 14 * scale, lineHeight: 20 * scale };
+  const column = { flexGrow: 1, flexBasis: width >= 900 ? '30%' as const : '100%' as const, minWidth: 0, gap: 16, backgroundColor: '#fbf6e9', borderRadius: 14, padding: 16 };
+  const cue = (key: string, original: string, completed?: boolean, label = speakingCue(original)) => <Pressable
+    key={key} accessibilityRole="button" accessibilityLabel={`${label}. ${completed === true ? 'Completed. ' : completed === false ? 'Still open. ' : ''}${expanded[key] ? 'Hide' : 'Show'} full wording`}
+    accessibilityState={{ expanded: !!expanded[key] }} onPress={() => toggle(key)}
+    style={({ pressed }) => ({ minHeight: 44, justifyContent: 'center', paddingVertical: 5, borderRadius: 6, backgroundColor: pressed || expanded[key] ? '#f0e5ca' : 'transparent' })}>
+    <View style={{ flexDirection: 'row', gap: 7, alignItems: 'flex-start' }}>
+      <Text style={{ ...text, color: completed === true ? '#52613d' : '#8b6828' }}>{completed === true ? '✓' : '•'}</Text>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={text}>{expanded[key] ? original : label}</Text>
+        {completed === false ? <Text style={{ ...subheading, fontSize: 12 * scale }}>Still open</Text> : null}
+      </View>
+    </View>
+  </Pressable>;
+  const helpList = (key: 'received' | 'given') => {
+    const people = helpByPerson(help[key]);
     const spoken = key === 'received' ? data.reflection.help_received : data.reflection.help_given;
     return <View style={{ gap: 12 }}>
-      <Text accessibilityRole="header" style={heading}>{title}</Text>
-      {spoken ? paragraph(key+'spoken', spoken) : null}
-      {(expanded[key] ? rows : rows.slice(0,2)).map((row, i) => {
-        const names = [...row.people].map(id => memberNames[id]?.split(' ')[0] || 'A member');
-        const label = names.slice(0,3).join(', ') + (names.length > 3 ? ` +${names.length-3}` : '');
-        return <View key={i} style={{ gap: 3 }}><Text style={{ ...heading, fontSize: 15 * scale }}>{label} · {row.completed ? 'Done' : 'Still open'}</Text><Text numberOfLines={expanded[key] || row.description.length <= 120 ? undefined : 2} style={text}>{parseActionItemDescription(row.description).text}</Text></View>;
-      })}
-      {!rows.length && !spoken ? <Text style={text}>Nothing recorded this month yet.</Text> : null}
-      {rows.length > 2 ? more(key, `See all ${rows.length}`) : rows.some(r => r.description.length > 120) ? more(key) : null}
+      {people.map(person => <View key={person.id} style={{ gap: 0 }}>
+        <Text style={subheading}>{memberNames[person.id]?.split(' ')[0] || 'A member'}</Text>
+        {person.items.map((row, i) => cue(`${key}:${person.id}:${i}`, row.description, row.completed, speakingCue(parseActionItemDescription(row.description).text)))}
+      </View>)}
+      {spoken ? cue(key + ':spoken', spoken) : null}
+      {!people.length && !spoken ? <Text style={text}>Nothing recorded yet.</Text> : null}
     </View>;
   };
+  const progress = new Map<string, { original: string; completed?: boolean }>();
+  for (const task of ownDone) {
+    const original = task.description;
+    progress.set(wishIdentity(parseActionItemDescription(original).text), { original, completed: true });
+  }
+  for (const original of (data.reflection.progress || progressText).split(/\n+/).map(s => s.trim()).filter(Boolean)) {
+    const key = wishIdentity(parseActionItemDescription(original).text);
+    if (!progress.has(key)) progress.set(key, { original, completed: /^✓/.test(original) ? true : undefined });
+  }
+  const next = focus?.description || (!hasCheckIn ? reportedWish : '');
   return <View onLayout={e => setWidth(e.nativeEvent.layout.width)} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
     <View style={column}>
-      {helpColumn('given', 'How I helped others')}
+      <Text accessibilityRole="header" style={heading}>I helped</Text>
+      {helpList('given')}
     </View>
-    <View style={{ ...column, gap: 18 }}>
-      <Text accessibilityRole="header" style={heading}>How my projects went</Text>
-      <View style={{ gap: 6 }}>
-        <Text style={{ ...heading, fontSize: 14 * scale }}>Last month’s focus</Text>
-        {paragraph('previous', data.previous || 'No wish saved in last month’s check-in.', 3)}
+    <View style={column}>
+      <Text accessibilityRole="header" style={heading}>My month</Text>
+      <View>
+        <Text style={subheading}>Last month’s focus</Text>
+        {data.previous ? cue('previous', data.previous) : <Text style={text}>No focus saved last month.</Text>}
       </View>
-      {update ? <View style={{ gap: 6 }}>
-        <Text style={{ ...heading, fontSize: 14 * scale }}>Progress</Text>
-        {paragraph('progress', update)}
+      {progress.size ? <View>
+        <Text style={subheading}>Progress</Text>
+        {[...progress.values()].map((row, i) => cue(`progress:${i}`, row.original, row.completed, speakingCue(parseActionItemDescription(row.original).text)))}
       </View> : null}
-      <View style={{ borderTopWidth: 1, borderColor: '#e9d5ad', paddingTop: 14 }}>
-        {helpColumn('received', 'Who helped me')}
+      <View style={{ borderTopWidth: 1, borderColor: '#e9d5ad', paddingTop: 12, gap: 10 }}>
+        <Text style={subheading}>Help I received</Text>
+        {helpList('received')}
       </View>
     </View>
     <View style={column}>
-      <Text accessibilityRole="header" style={heading}>My focus for next month</Text>
-      {paragraph('next', focus?.description || (!hasCheckIn ? reportedWish : '') || (selectedText || selectedId ? 'The selected wish was closed or removed. Choose a new focus.' : 'No new focus shared yet.'))}
+      <Text accessibilityRole="header" style={heading}>Next month</Text>
+      <View>{next ? focusCues(next).map((row, i) => cue(`next:${i}`, next, undefined, row.label)) : <Text style={text}>{selectedText || selectedId ? 'The selected wish was closed or removed. Choose a new focus.' : 'No new focus shared yet.'}</Text>}</View>
     </View>
   </View>;
 }
