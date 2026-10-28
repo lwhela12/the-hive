@@ -1,3 +1,4 @@
+import { meetingDeck, meetingSlidePosition } from '../../lib/meetingAgenda';
 import { MemberWishStory } from '../../components/meetings/MemberWishStory';
 import { meetingVoteResults } from '../../lib/meetingVoteResults';
 import { quarterPulseDeckLines, recentQuarterPulsePeriod, type QuarterPulseCount } from '../../lib/quarterPulse';
@@ -760,6 +761,7 @@ const HD_STORY_PATH =
 
 type MeetingHelperNotes = {
   news?: string;
+  meetingAgendaOmissions?: Record<string, DeckSlideKey[]>;
   appnews?: string;
   meetups?: string;
   /** Nat's shortlist for one meeting, separate from members' board votes. */
@@ -792,7 +794,7 @@ type MeetingHelperNotes = {
   fourquestions?: string;
 };
 
-type EditableNoteKey = Exclude<keyof MeetingHelperNotes, 'ideasMeetingId' | 'techMeetingTimePoll'>;
+type EditableNoteKey = Exclude<keyof MeetingHelperNotes, 'ideasMeetingId' | 'techMeetingTimePoll' | 'meetingAgendaOmissions'>;
 
 type DeckEvent = {
   id: string;
@@ -963,7 +965,6 @@ export default function MeetingHelperScreen() {
     community?.slug === 'tech' ? 'tech'
     : community?.slug === 'show' ? 'show'
     : 'default';
-  const deck = DECKS[deckSlug];
   // Tech gathers on Google Meet. The built-in Daily/room-recording pane is
   // for the other HIVE decks; showing it here offers a second, unused call.
   const usesBuiltInMeetingRoom = deckSlug !== 'tech';
@@ -1058,6 +1059,17 @@ export default function MeetingHelperScreen() {
 
   // Deck data — loaded once on mount, refreshed via the subtle refresh button.
   const [notes, setNotes] = useState<MeetingHelperNotes>({});
+  const deck = useMemo(() => meetingDeck(DECKS[deckSlug], nextMeeting?.id, notes.meetingAgendaOmissions),
+    [deckSlug, nextMeeting?.id, notes.meetingAgendaOmissions]);
+  const previousSlides = useRef(deck.slides);
+  useEffect(() => {
+    const old = previousSlides.current;
+    if (old !== deck.slides) {
+      setSlideIndex(index => Math.max(0, meetingSlidePosition(old[index] ?? '', old, deck.slides)));
+      previousSlides.current = deck.slides;
+    }
+  }, [deck.slides]);
+
   const [events, setEvents] = useState<DeckEvent[]>([]);
   const [honeyPotBalance, setHoneyPotBalance] = useState<number | null>(null);
   const [duesLedgerRows, setDuesLedgerRows] = useState<DuesTransactionRecognitionRow[] | null>(null);
@@ -2585,6 +2597,18 @@ export default function MeetingHelperScreen() {
       {/* Home-page vibes (Lucas): tighter paper cards, quiet labels, body
           text that reads instead of shouting. */}
       <View style={{ gap: sz(14, 9), maxWidth: sz(940, 640) }}>
+        {deckIsOg ? <View style={{ backgroundColor: CARD, borderWidth: 1, borderColor: GOLD_SOFT,
+          borderRadius: sz(16, 12), paddingHorizontal: sz(20, 13), paddingVertical: sz(15, 10), gap: sz(8, 5) }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 15), color: GOLD_DEEP }}>HIVE swag</Text>
+          <Pressable accessibilityRole="link" accessibilityLabel="Open the HIVE clothing studio"
+            onPress={() => Linking.openURL('https://app.the-hive.app/hoodie-studio/')}
+            style={({ pressed }) => ({ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start',
+              borderRadius: 999, paddingHorizontal: sz(18, 12), paddingVertical: 10, backgroundColor: tintWash(0.25), opacity: pressed ? 0.7 : 1 })}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 14), color: GOLD_DEEP }}>Open the clothing studio →</Text>
+          </Pressable>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 12), color: MUTED }}>Also on the board: “It’s hoodie season!!”</Text>
+        </View> : null}
+
         {/* Production's night starts by walking the research together, and the
             rest of the deck answers itself afterwards. Nat, 2026-08-14:
             *"normally it goes like this, but we're going to go through this
@@ -5212,10 +5236,10 @@ export default function MeetingHelperScreen() {
   // send the number).
   const onRoomMoved = useCallback(
     (slideKey: string) => {
-      const position = deck.slides.indexOf(slideKey as DeckSlideKey);
+      const position = meetingSlidePosition(slideKey, DECKS[deckSlug].slides, deck.slides);
       if (position >= 0) setSlideIndex(position);
     },
-    [deck]
+    [deck, deckSlug]
   );
   const {
     session: deckSession,

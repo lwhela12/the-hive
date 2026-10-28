@@ -1,0 +1,16 @@
+const assert = require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
+const moduleRef={exports:{}};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/meetingAgenda.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:moduleRef,exports:moduleRef.exports});
+const {meetingDeck,meetingSlidePosition}=moduleRef.exports;
+const base={slides:['news','treasurer','spend','meetups','hummdinger'],agenda:['news','treasurer','spend','meetups','hummdinger'].map(key=>({key}))};
+const skipped={'tonight':['spend']};
+const tonight=meetingDeck(base,'tonight',skipped);
+assert.deepEqual(Array.from(tonight.slides),['news','treasurer','meetups','hummdinger']);
+assert.deepEqual(Array.from(tonight.agenda,item=>item.key),Array.from(tonight.slides));
+assert.equal(meetingDeck(base,'next-month',skipped),base);
+assert.equal(meetingDeck(base,undefined,skipped),base);
+assert.ok(base.slides.includes('spend'));
+assert.equal(meetingSlidePosition('spend',base.slides,tonight.slides),2);
+assert.equal(meetingSlidePosition('hummdinger',base.slides,tonight.slides),3);
+assert.equal(meetingSlidePosition('unknown',base.slides,tonight.slides),-1);
+console.log('PASS: meeting-specific skip, matching outline, unchanged future meetings, and follower recovery from a skipped slide.');
