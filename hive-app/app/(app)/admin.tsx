@@ -1261,7 +1261,7 @@ export default function AdminScreen() {
       >
         <View style={dashboardWrapStyle}>
           {profile?.id === 'd85dd42e-81fc-4b4c-8f3a-b2cf39c76359' && (
-            <Pressable accessibilityRole="button" onPress={() => router.push('/nat-feedback' as never)} style={({ pressed }) => ({ padding: 16, borderWidth: 1, borderColor: '#d3b477', borderRadius: 12, marginBottom: 16, backgroundColor: pressed ? '#f5e9ce' : '#fff8e7', gap: 6 })}>
+            <Pressable accessibilityRole="button" onPress={() => router.push('/nat-feedback' as never)} style={({ pressed }) => ({ width: '100%', alignSelf: 'flex-start', padding: 16, borderWidth: 1, borderColor: '#d3b477', borderRadius: 12, marginBottom: 16, backgroundColor: pressed ? '#f5e9ce' : '#fff8e7', gap: 6 })}>
               <Text style={{ color: '#765b2d', fontFamily: 'Lato_700Bold', fontSize: 16 }}>Private check-in feedback</Text>
               <Text style={{ color: '#665c4b', fontFamily: 'Lato_400Regular', fontSize: 13 }}>Just for Nat · Read members’ private answers</Text>
             </Pressable>
