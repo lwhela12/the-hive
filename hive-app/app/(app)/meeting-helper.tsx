@@ -56,7 +56,7 @@ import {
 import { NEW_MEETING_WISH_ID, meetingWishCopy } from '../../lib/meetingWishCapture';
 import { parseFocusAnswer, focusAnswerDidIt, focusAnswerScore } from '../../components/surveys/SurveyQuestionField';
 import { Avatar } from '../../components/ui/Avatar';
-import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
+import { ArrivalAttendanceGroups } from '../../components/meetings/ArrivalAttendanceGroups';
 import { clothingInterestCountsForMembers } from '../../lib/clothingInterest';
 import { AdminMemberUpdate } from '../../components/meetings/AdminMemberUpdate';
 import { surveyUsesLegacyEnergy } from '../../lib/arrivalSurveySelection';
@@ -80,7 +80,6 @@ import { useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import {
   formatMeetingDate,
   getReportedAttendance,
-  getCheckInOrder,
   getFirstName,
   getLocalIsoDate,
   getMonthNameFromPeriod,
@@ -2455,41 +2454,10 @@ export default function MeetingHelperScreen() {
           </Text>
         </View>
       ) : (
-        <View>
-          {(() => {
-            const remote = members.filter((member) => getReportedAttendance(responsesByUser.get(member.id), reportsByUser.get(member.id)) === 'remote');
-            const missing = members.filter((member) => getReportedAttendance(responsesByUser.get(member.id), reportsByUser.get(member.id)) === 'missing');
-            if (remote.length === 0 && missing.length === 0) return null;
-            const parts = [
-              remote.length > 0
-                ? `💻 Joining remotely: ${remote.map((member) => getFirstName(member.name)).join(', ')} — open the Meet`
-                : null,
-              missing.length > 0
-                ? `😢 Missing tonight: ${missing.map((member) => getFirstName(member.name)).join(', ')}`
-                : null,
-            ].filter(Boolean);
-            return (
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), color: GOLD_DEEP, marginBottom: sz(12, 8) }}>
-                {parts.join('   ·   ')}
-              </Text>
-            );
-          })()}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: sz(-8, -5) }}>
-          {getCheckInOrder(members, responsesByUser, reportsByUser).map((member) => (
-            <View key={member.id} style={{ width: `${100 / roomColumns}%`, padding: sz(8, 5) }}>
-              <ArrivalMemberCard
-                member={member}
-                response={responsesByUser.get(member.id)}
-                report={reportsByUser.get(member.id)}
-                onAdminPress={isAdmin && nextMeeting ? () => setArrivalMemberToEdit(member.id) : undefined}
-                isTV={isTV}
-                compact
-                showLegacyEnergy={!!survey && surveyUsesLegacyEnergy(survey)}
-              />
-            </View>
-          ))}
-        </View>
-        </View>
+        <ArrivalAttendanceGroups members={members} responsesByUser={responsesByUser} reportsByUser={reportsByUser}
+          columns={roomColumns} isTV={isTV} compact
+          showLegacyEnergy={!!survey && surveyUsesLegacyEnergy(survey)}
+          onAdminPress={isAdmin && nextMeeting ? setArrivalMemberToEdit : undefined} />
       )}
     </View>
   );

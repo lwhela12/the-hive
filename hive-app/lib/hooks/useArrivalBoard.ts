@@ -119,6 +119,34 @@ export function getCheckInOrder(
   return [...checkedIn, ...reported, ...notYet];
 }
 
+export const ARRIVAL_STATUSES = {
+  in_person: { label: 'In person', icon: 'person-outline', ink: '#215c43', wash: '#edf6ef', border: '#87b59a' },
+  remote: { label: 'Remote', icon: 'videocam-outline', ink: '#285780', wash: '#edf4fc', border: '#8daed0' },
+  missing: { label: 'Not coming', icon: 'close-circle-outline', ink: '#884335', wash: '#fbefeb', border: '#caa096' },
+  unconfirmed: { label: 'Attendance not confirmed', icon: 'help-circle-outline', ink: '#765b2d', wash: '#fff7e5', border: '#cbb47d' },
+  not_checked_in: { label: 'Not checked in', icon: 'time-outline', ink: '#555b64', wash: '#f0f1f3', border: '#b4b8bf' },
+} as const;
+export type ArrivalStatus = keyof typeof ARRIVAL_STATUSES;
+
+export function getArrivalStatus(response?: SurveyResponse, report?: MeetingAttendanceReport): ArrivalStatus {
+  const attendance = getReportedAttendance(response, report);
+  if (attendance !== 'unknown') return attendance;
+  return response || report ? 'unconfirmed' : 'not_checked_in';
+}
+
+export function getArrivalGroups(
+  members: ArrivalBoardMember[],
+  responses: Map<string, SurveyResponse>,
+  reports: Map<string, MeetingAttendanceReport> = new Map(),
+) {
+  const ordered = getCheckInOrder(members, responses, reports);
+  return (Object.keys(ARRIVAL_STATUSES) as ArrivalStatus[]).map(status => ({
+    status,
+    ...ARRIVAL_STATUSES[status],
+    members: ordered.filter(member => getArrivalStatus(responses.get(member.id), reports.get(member.id)) === status),
+  }));
+}
+
 // Energy is answered on a 1–10 scale; show one ⚡ per point so the bolts
 // match the number people picked (5 bolts for a "10" read as confusing).
 export const ENERGY_DOTS_MAX = 10;

@@ -1,10 +1,11 @@
 import { personalHardOut } from '../../lib/personalHardOut';
 import { Pressable, Text, View } from 'react-native';
 import { Avatar } from '../ui/Avatar';
+import { Ionicons } from '@expo/vector-icons';
 import {
   ENERGY_DOTS_MAX,
-  getAttendance,
-  getReportedAttendance,
+  ARRIVAL_STATUSES,
+  getArrivalStatus,
   getEnergyDots,
   getFirstName,
   getNumberAnswer,
@@ -20,13 +21,6 @@ function plateAtAGlance(answer: string) {
   if (/pretty full/i.test(answer)) return '🍲 One small thing';
   if (/full to the brim/i.test(answer)) return '🫙 Listening today';
   return answer;
-}
-
-function attendanceAtAGlance(attendance: ReturnType<typeof getAttendance>) {
-  if (attendance === 'in_person') return '🐝 In person';
-  if (attendance === 'remote') return '💻 Remote';
-  if (attendance === 'missing') return '😢 Missing';
-  return '';
 }
 
 function ArrivalFact({
@@ -108,24 +102,25 @@ export function ArrivalMemberCard({
   const energyLevel = showLegacyEnergy ? getNumberAnswer(answers, 'q_energy_level') : null;
   const energyMode = showLegacyEnergy ? getTextAnswer(answers, 'q_energy_mode') : '';
   const plate = getTextAnswer(answers, 'q_plate');
-  const hardOut = personalHardOut(answers.q_hard_out).label;
-  const attendance = getReportedAttendance(response, report);
-  const attendanceLabel = attendanceAtAGlance(attendance);
+  const status = getArrivalStatus(response, report);
+  const attendanceStyle = ARRIVAL_STATUSES[status];
+  const hardOut = status === 'in_person' || status === 'remote' ? personalHardOut(answers.q_hard_out).label : '';
   const energyDots = energyLevel !== null ? getEnergyDots(energyLevel) : null;
   const scale = compact ? 0.78 : 1;
 
   return (
     <Pressable
+      testID={`arrival-member-${member.id}`}
       onPress={onAdminPress}
       disabled={!onAdminPress}
       accessibilityRole={onAdminPress ? 'button' : undefined}
       accessibilityLabel={onAdminPress ? `Update ${member.name}'s meeting information` : undefined}
       accessibilityHint={onAdminPress ? 'Opens the admin form with this member selected' : undefined}
       style={({ pressed }) => ({
-        backgroundColor: active ? '#fffdf5' : 'rgba(255,253,245,0.55)',
+        backgroundColor: '#fffdf5',
         borderRadius: isTV ? 26 * scale : 18,
-        borderWidth: 1,
-        borderColor: active ? 'rgba(222,193,129,0.65)' : 'rgba(222,193,129,0.28)',
+        borderWidth: 2,
+        borderColor: attendanceStyle.border,
         paddingVertical: (isTV ? 26 : 18) * scale,
         paddingHorizontal: (isTV ? 18 : 14) * scale,
         alignItems: 'center',
@@ -141,7 +136,7 @@ export function ArrivalMemberCard({
          * so the board stays a grid rather than a ragged pile.
          */
         minHeight: (isTV ? (checkedIn ? 340 : 210) : checkedIn ? 220 : 132) * scale,
-        opacity: (active ? 1 : 0.55) * (pressed ? 0.86 : 1),
+        opacity: pressed ? 0.86 : 1,
         shadowColor: '#bd9348',
         shadowOpacity: active ? 0.12 : 0,
         shadowRadius: 14,
@@ -168,6 +163,11 @@ export function ArrivalMemberCard({
       >
         {nameToday}
       </Text>
+
+      <View testID="arrival-status" style={{ alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: attendanceStyle.wash, borderRadius: 9, paddingHorizontal: 8, paddingVertical: 8, marginTop: 10 * scale }}>
+        <Ionicons name={attendanceStyle.icon} size={isTV ? 19 : 16} color={attendanceStyle.ink} />
+        <Text style={{ flexShrink: 1, fontFamily: 'Lato_700Bold', fontSize: Math.max(12, (isTV ? 18 : 14) * scale), lineHeight: Math.max(17, (isTV ? 24 : 19) * scale), color: attendanceStyle.ink, textAlign: 'center' }}>{attendanceStyle.label}</Text>
+      </View>
 
       {checkedIn ? (
         <>
@@ -199,7 +199,7 @@ export function ArrivalMemberCard({
               </Text>
             </View>
           ) : null}
-          {feelingNote || attendanceLabel || hardOut || plate ? (
+          {feelingNote || hardOut || plate ? (
             <View
               style={{
                 width: '100%',
@@ -211,7 +211,6 @@ export function ArrivalMemberCard({
               }}
             >
               {feelingNote ? <ArrivalFact label="Note" value={`“${feelingNote}”`} isTV={isTV} scale={scale} /> : null}
-              {attendanceLabel ? <ArrivalFact label="Attending" value={attendanceLabel} isTV={isTV} scale={scale} /> : null}
               {hardOut ? <ArrivalFact label="Leaving" value={`⏰ ${hardOut}`} isTV={isTV} scale={scale} danger /> : null}
               {plate ? <ArrivalFact label="Capacity" value={plateAtAGlance(plate)} isTV={isTV} scale={scale} /> : null}
             </View>
@@ -264,24 +263,11 @@ export function ArrivalMemberCard({
         </>
       ) : hasReport ? (
         <View style={{ alignItems: 'center', marginTop: (isTV ? 14 : 10) * scale, gap: 5 * scale }}>
-          {attendanceLabel ? <Text style={{ fontFamily: 'Lato_700Bold', fontSize: (isTV ? 18 : 14) * scale, color: '#8a6b30', textAlign: 'center' }}>{attendanceLabel}</Text> : null}
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: (isTV ? 13 : 11) * scale, color: '#9a8060', textAlign: 'center' }}>Reported by admin</Text>
           {report?.hd_wish ? <Text numberOfLines={2} style={{ fontFamily: 'Lato_400Regular', fontSize: (isTV ? 14 : 11) * scale, color: '#765b31', textAlign: 'center' }}>HD: {report.hd_wish}</Text> : null}
           {report?.help_idea ? <Text numberOfLines={2} style={{ fontFamily: 'Lato_400Regular', fontSize: (isTV ? 14 : 11) * scale, color: '#765b31', textAlign: 'center' }}>Help: {report.help_idea}</Text> : null}
         </View>
-      ) : (
-        <Text
-          style={{
-            fontFamily: 'Lato_400Regular',
-            fontSize: (isTV ? 17 : 13) * scale,
-            color: '#9a8060',
-            textAlign: 'center',
-            marginTop: (isTV ? 14 : 10) * scale,
-          }}
-        >
-          hasn't checked in yet 🌙
-        </Text>
-      )}
+      ) : null}
     </Pressable>
   );
 }

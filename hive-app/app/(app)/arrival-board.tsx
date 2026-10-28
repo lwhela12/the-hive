@@ -11,11 +11,11 @@ import { Image } from 'expo-image';
 
 import {
   formatMeetingDate,
-  getCheckInOrder,
   getMonthNameFromPeriod,
   useArrivalBoard,
 } from '../../lib/hooks/useArrivalBoard';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
+import { ArrivalAttendanceGroups } from '../../components/meetings/ArrivalAttendanceGroups';
 import { AdminMemberUpdate } from '../../components/meetings/AdminMemberUpdate';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { surveyUsesLegacyEnergy } from '../../lib/arrivalSurveySelection';
@@ -181,20 +181,9 @@ export default function ArrivalBoardScreen() {
             ))}
           </View>
         ) : (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: isTV ? -10 : -6 }}>
-            {getCheckInOrder(members, responsesByUser, reportsByUser).map((member) => (
-              <View key={member.id} style={{ width: `${100 / columns}%`, padding: isTV ? 10 : 6 }}>
-                <ArrivalMemberCard
-                  member={member}
-                  response={responsesByUser.get(member.id)}
-                  report={reportsByUser.get(member.id)}
-                  onAdminPress={isAdmin && nextMeeting ? () => setMemberToEdit(member.id) : undefined}
-                  isTV={isTV}
-                  showLegacyEnergy={!!survey && surveyUsesLegacyEnergy(survey)}
-                />
-              </View>
-            ))}
-          </View>
+          <ArrivalAttendanceGroups members={members} responsesByUser={responsesByUser} reportsByUser={reportsByUser}
+            columns={columns} isTV={isTV} showLegacyEnergy={!!survey && surveyUsesLegacyEnergy(survey)}
+            onAdminPress={isAdmin && nextMeeting ? setMemberToEdit : undefined} />
         )}
       </BounceScrollView>
     </SafeAreaView>
