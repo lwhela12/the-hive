@@ -120,7 +120,7 @@ interface ParsedSummary {
     meeting_date?: string;
     generated_from?: string[];
     transcript_used?: boolean;
-    transcript_status?: 'reconciled' | 'not_available_at_seal';
+    transcript_status?: 'reconciled' | 'reconciliation_failed' | 'not_available_at_seal';
     transcript_original_line_count?: number;
     transcript_evidence_line_count?: number;
     helper_structure_preserved?: boolean;
@@ -482,7 +482,13 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         return { ...parsed, ...nested };
       }
     } catch {
-      // It was simply a summary that happened to start with a brace.
+      // A cut-off model response used to print a page of braces and partial
+      // private discussion to members. Keep the source on the meeting record,
+      // but never present broken JSON as a finished recap.
+      return {
+        ...parsed,
+        summary: 'This recap is not ready yet. The complete meeting transcript is saved, and the recap can be rebuilt without losing the meeting.',
+      };
     }
     return parsed;
   };
@@ -2153,7 +2159,9 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
             <Text className="text-honey-800 text-sm mt-1 leading-5">
               {parsedSummary.provenance.transcript_used
                 ? 'Reconciled with the current to-do ledger and transcript evidence.'
-                : 'Reconciled with the current to-do ledger. No transcript was available when this record was sealed.'}
+                : parsedSummary.provenance.transcript_status === 'reconciliation_failed'
+                  ? 'The transcript is saved, but its automatic condensation failed. This version contains only confirmed Meeting Helper details and can be rebuilt.'
+                  : 'Reconciled with the current to-do ledger. No transcript was available when this record was sealed.'}
             </Text>
             {(parsedSummary.provenance.conflicts_need_review ?? 0) > 0 ? (
               <Text className="text-amber-800 text-sm mt-1">

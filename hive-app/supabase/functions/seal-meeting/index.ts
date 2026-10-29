@@ -4,6 +4,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { recordAssistantUsage } from '../_shared/metering.ts';
+import { parseCompleteModelJson } from '../_shared/strictModelJson.ts';
 import {
   MONTHLY_CHECK_IN_PATTERN,
   PRE_MEETING_CHECK_IN_PATTERN,
@@ -53,8 +54,6 @@ type SummarySection = {
 type TranscriptReconciliation = {
   overview: string;
   news_highlights: string[];
-  tools_in_use: string[];
-  lessons: string[];
   help_plan: string[];
   member_focuses: { person: string; focus: string }[];
   attendance: {
@@ -67,6 +66,12 @@ type TranscriptReconciliation = {
   member_context: { person: string; context: string }[];
   duty_labels: { task: string; label: string }[];
   conflicts: { topic: string; helper_record: string; transcript_evidence: string; action_item_id?: string }[];
+};
+
+type ReconciledTranscript = {
+  result: TranscriptReconciliation;
+  evidence: ReturnType<typeof transcriptEvidenceCopy>;
+  status: 'reconciled' | 'fallback';
 };
 
 type MeetingHelperSnapshot = {
@@ -216,15 +221,6 @@ async function condenseHummdingers(
   }
 }
 
-function parseModelJson(text: string) {
-  const raw = text.trim()
-    .replace(/^```json\s*\n?/, '')
-    .replace(/\n?```\s*$/, '')
-    .replace(/^```\s*\n?/, '')
-    .replace(/\n?```\s*$/, '');
-  return JSON.parse(raw) as Record<string, unknown>;
-}
-
 /**
  * Daily can hand us the same room recording more than once. August contained
  * three near-identical passes: feeding all three to the model makes repetition
@@ -241,11 +237,13 @@ function transcriptEvidenceCopy(transcript: string) {
     seen.add(key);
     return true;
   });
+  const completeText = kept.join('\n');
+  const maxEvidenceCharacters = 80_000;
   return {
-    text: kept.join('\n').slice(0, 150_000),
+    text: completeText.slice(0, maxEvidenceCharacters),
     originalLineCount: original.length,
     evidenceLineCount: kept.length,
-    truncated: kept.join('\n').length > 150_000,
+    truncated: completeText.length > maxEvidenceCharacters,
   };
 }
 
@@ -260,7 +258,7 @@ async function reconcileTranscript(
   snapshot: MeetingHelperSnapshot,
   duties: { task: string; owners: string[]; about: string | null; status: string; action_item_ids: string[] }[],
   communityId: string,
-): Promise<{ result: TranscriptReconciliation; evidence: ReturnType<typeof transcriptEvidenceCopy> }> {
+): Promise<ReconciledTranscript> {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) throw new Error('The transcript is present, but transcript reconciliation is not configured.');
 
@@ -268,8 +266,11 @@ async function reconcileTranscript(
   const anthropic = new Anthropic({ apiKey });
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-5',
-    max_tokens: 8000,
-    output_config: { effort: 'medium' as const },
+    // The response must finish as one JSON object. Low reasoning effort plus a
+    // generous output cap keeps the model from spending the whole allowance
+    // thinking and then cutting the object off mid-field.
+    max_tokens: 12000,
+    output_config: { effort: 'low' as const },
     system: [
       'You reconcile a HIVE meeting record. The Meeting Helper snapshot is the authoritative operating record.',
       'Its authored notes, pre-meeting inputs, final absentee selection, flow, and the supplied current duty ledger outrank the transcript.',
@@ -280,15 +281,15 @@ async function reconcileTranscript(
       'If confirmed_absentee_names is non-empty, never say everyone or all members attended. Missing pre-meeting input is not itself a conflict.',
       'If sources disagree, put the discrepancy in conflicts. Do not guess. Use first names from the roster exactly.',
       'Return only valid JSON with this shape:',
-      '{"overview":"2-4 humane sentences","news_highlights":["2-4 short paraphrased bullets"],"tools_in_use":["2-4 concrete products, tools, or workflows actually shown or discussed"],"lessons":["2-4 practical takeaways supported by the meeting"],"help_plan":["short steps of any explicitly discussed HIVE Help plan"],"member_focuses":[{"person":"First","focus":"the help or focus explicitly requested in this meeting"}],"attendance":{"in_person":[],"remote":[],"absent":[],"unclear":[]},"decisions":[{"section":"treasurer|meetups|hummdinger|wrapup","text":"..."}],"member_context":[{"person":"First","context":"1-2 concise sentences"}],"duty_labels":[{"task":"exact CURRENT_DUTIES task","label":"humane concise wording"}],"conflicts":[{"topic":"...","helper_record":"...","transcript_evidence":"...","action_item_id":"exact id when this conflict concerns a current duty, otherwise empty"}]}',
+      '{"overview":"2-4 humane sentences","news_highlights":["2-4 short paraphrased bullets"],"help_plan":["short steps of any explicitly discussed HIVE Help plan"],"member_focuses":[{"person":"First","focus":"the help or focus explicitly requested in this meeting"}],"attendance":{"in_person":[],"remote":[],"absent":[],"unclear":[]},"decisions":[{"section":"treasurer|meetups|hummdinger|wrapup","text":"..."}],"member_context":[{"person":"First","context":"1-2 concise sentences"}],"duty_labels":[{"task":"exact CURRENT_DUTIES task","label":"humane concise wording"}],"conflicts":[{"topic":"...","helper_record":"...","transcript_evidence":"...","action_item_id":"exact id when this conflict concerns a current duty, otherwise empty"}]}',
       'Attendance rule: confirmed absentees are absent. Pre-meeting attendance is an intention; use explicit transcript statements to resolve remote vs in-person, and leave unclear when unsupported.',
       'News highlights are the high-level meaning of Nat\'s authored news plus what she actually said about it. Merge repetition, paraphrase instead of transcribing, keep each bullet under 150 characters, and omit dates, HIVE Help, and individual member wishes because those have their own sections.',
-      'Tools in use name real products or workflows demonstrated or meaningfully discussed, and what they were used for. Lessons are practical takeaways the group actually reached. Do not invent features, outcomes, endorsements, or a decision from a suggestion.',
       'Help plan is only the concrete HIVE Help focus or sequence explicitly discussed in the Helper or transcript. If none was discussed, return an empty array. Do not carry a plan from a different meeting.',
       'Member focuses are only the help, wish, or next focus a person explicitly asked for during this meeting. A duty clearly created to help that person may support the focus. Never carry forward an old profile wish, never turn general biography into a wish, and omit anyone whose focus is not clear.',
       'If a person explicitly opts out of a full round or says they have no ask, preserve that as a confirmed "No specific ask this month" rather than inventing a need or marking them absent.',
       'Member context should summarize what each person brought or needed, not repeat their assigned duties.',
       'For every CURRENT_DUTIES task, return one duty_labels row. The task key must be exact. The label may repair shorthand into humane English but must preserve the same obligation, specificity, and tone; it must not change owners.',
+      'Keep the entire response under 3,500 output tokens. Do not quote the transcript, repeat discussion, or add fields that are not in the requested shape.',
     ].join('\n'),
     messages: [{
       role: 'user',
@@ -300,14 +301,18 @@ async function reconcileTranscript(
     }],
   });
   recordAssistantUsage({ functionName: 'seal-meeting', model: 'claude-sonnet-5', usage: response.usage, communityId });
-  if ((response as { stop_reason?: string }).stop_reason === 'refusal') {
+  const stopReason = (response as { stop_reason?: string }).stop_reason;
+  if (stopReason === 'refusal') {
     throw new Error('The transcript reconciliation was refused; the existing summary was preserved.');
+  }
+  if (stopReason === 'max_tokens') {
+    throw new Error('Transcript reconciliation ran out of output space before its JSON was complete.');
   }
   const text = response.content
     .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
     .map((block) => block.text)
     .join('');
-  const parsed = parseModelJson(text);
+  const parsed = parseCompleteModelJson(text);
   const attendance = (parsed.attendance && typeof parsed.attendance === 'object')
     ? parsed.attendance as Record<string, unknown>
     : {};
@@ -322,11 +327,10 @@ async function reconcileTranscript(
   const exactActionItemIds = new Set(duties.flatMap((duty) => duty.action_item_ids));
   return {
     evidence,
+    status: 'reconciled',
     result: {
       overview: typeof parsed.overview === 'string' ? parsed.overview.trim() : '',
       news_highlights: stringArray(parsed.news_highlights).slice(0, 5),
-      tools_in_use: stringArray(parsed.tools_in_use).slice(0, 4),
-      lessons: stringArray(parsed.lessons).slice(0, 4),
       help_plan: stringArray(parsed.help_plan).slice(0, 4),
       member_focuses: memberFocuses.flatMap((entry) => {
         if (!entry || typeof entry !== 'object') return [];
@@ -377,6 +381,34 @@ async function reconcileTranscript(
           ? [{ topic, helper_record: helper, transcript_evidence: transcriptLine, action_item_id: actionItemId }]
           : [];
       }),
+    },
+  };
+}
+
+function fallbackTranscriptReconciliation(
+  transcript: string,
+  snapshot: MeetingHelperSnapshot,
+  duties: { task: string }[],
+): ReconciledTranscript {
+  const absent = snapshot.confirmed_absentee_names.map(firstName);
+  return {
+    status: 'fallback',
+    evidence: transcriptEvidenceCopy(transcript),
+    result: {
+      overview: 'The Meeting Helper record is saved. The transcript could not be condensed automatically, so only confirmed Helper details are shown here.',
+      news_highlights: [],
+      help_plan: [],
+      member_focuses: [],
+      attendance: {
+        in_person: [],
+        remote: [],
+        absent,
+        unclear: snapshot.roster.map((person) => firstName(person.name)).filter((name) => !absent.includes(name)),
+      },
+      decisions: [],
+      member_context: [],
+      duty_labels: duties.map((duty) => ({ task: duty.task, label: duty.task })),
+      conflicts: [],
     },
   };
 }
@@ -837,9 +869,19 @@ serve(async (req) => {
           : 'open',
     }));
     const transcript = (existing?.transcript_raw ?? '').trim();
-    const reconciled = transcript
-      ? await reconcileTranscript(transcript, helperSnapshot, dutyRows, communityId)
-      : null;
+    let reconciled: ReconciledTranscript | null = null;
+    if (transcript) {
+      try {
+        reconciled = await reconcileTranscript(transcript, helperSnapshot, dutyRows, communityId);
+      } catch (error) {
+        // A model response that is cut off is not permission to abandon the
+        // whole meeting or leave an older blob looking complete. Seal the
+        // authoritative Helper data into a safe, honest recap and preserve the
+        // transcript so an admin can rebuild it later.
+        console.error('Transcript reconciliation failed; using the Helper-only fallback:', error);
+        reconciled = fallbackTranscriptReconciliation(transcript, helperSnapshot, dutyRows);
+      }
+    }
     const transcriptResult = reconciled?.result ?? null;
     const resolvedConflictIds = new Set(
       (Array.isArray(previous.conflict_resolutions) ? previous.conflict_resolutions : [])
@@ -1160,8 +1202,11 @@ serve(async (req) => {
       news: transcriptResult?.news_highlights?.length
         ? transcriptResult.news_highlights.map((line) => compactRecapBullet(line))
         : fallbackNewsHighlights,
-      using: (transcriptResult?.tools_in_use ?? []).map((line) => compactRecapBullet(line)),
-      learned: (transcriptResult?.lessons ?? []).map((line) => compactRecapBullet(line)),
+      // The missed-member recap answers what changed, what is next, and who
+      // asked for help. Tool lists and general lessons made it feel like a
+      // transcript digest instead of a one-minute catch-up.
+      using: [],
+      learned: [],
       dates: completeRecapDates,
       help_focus: helperSnapshot.help_focus
         || wrapDecisions.find((line) => /\bHIVE Help\b/i.test(line))
@@ -1234,8 +1279,10 @@ serve(async (req) => {
           'current_live_todo_ledger',
           ...(transcript ? ['live_transcript_supporting_evidence'] : []),
         ],
-        transcript_used: Boolean(reconciled),
-        transcript_status: reconciled ? 'reconciled' : 'not_available_at_seal',
+        transcript_used: reconciled?.status === 'reconciled',
+        transcript_status: reconciled
+          ? reconciled.status === 'reconciled' ? 'reconciled' : 'reconciliation_failed'
+          : 'not_available_at_seal',
         transcript_original_line_count: reconciled?.evidence.originalLineCount ?? 0,
         transcript_evidence_line_count: reconciled?.evidence.evidenceLineCount ?? 0,
         transcript_evidence_truncated: reconciled?.evidence.truncated ?? false,
