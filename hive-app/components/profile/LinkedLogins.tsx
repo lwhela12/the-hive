@@ -29,13 +29,9 @@ export function LinkedLogins() {
   const [loading, setLoading] = useState(true);
   const [linking, setLinking] = useState(false);
   const [emailLinking, setEmailLinking] = useState(false);
-  const [signInEmail, setSignInEmail] = useState('');
+  const [emailCode, setEmailCode] = useState('');
   const [confirmationSent, setConfirmationSent] = useState(false);
   const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (profile?.email) setSignInEmail((current) => current || profile.email);
-  }, [profile?.email]);
 
   const fetchIdentities = useCallback(async () => {
     const { data, error } = await supabase.auth.getUserIdentities();
@@ -133,28 +129,33 @@ export function LinkedLogins() {
     }
   };
 
-  const handleEmailLink = async () => {
-    const address = signInEmail.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
-      showAlert('Check the address', 'Enter the email address you want to use for sign-in.');
+  const handleEmailLink = async (action: 'start' | 'confirm') => {
+    if (action === 'confirm' && !/^\d{8}$/.test(emailCode.trim())) {
+      showAlert('Check the code', 'Enter the eight-digit code sent to your contact email.');
       return;
     }
-
     try {
       setEmailLinking(true);
-      const emailRedirectTo = Platform.OS === 'web'
-        ? `${window.location.origin}/callback?returnTo=${encodeURIComponent('/settings')}`
-        : Linking.createURL('auth/callback', { queryParams: { returnTo: '/settings' } });
-      // This runs in the current signed-in session. Supabase keeps the user's
-      // ID and existing Google identity while it verifies the new email.
-      const { error } = await supabase.auth.updateUser(
-        { email: address },
-        { emailRedirectTo }
-      );
+      // The server reads the address on this member's profile. It verifies
+      // that inbox and updates this same Auth user; no old Gmail inbox or
+      // second member account is involved.
+      const { error } = await supabase.functions.invoke('connect-contact-email', {
+        body: { action, ...(action === 'confirm' ? { code: emailCode.trim() } : {}) },
+      });
       if (error) throw error;
-      setConfirmationSent(true);
+      if (action === 'start') {
+        setConfirmationSent(true);
+      } else {
+        setConfirmationSent(false);
+        setEmailCode('');
+        await supabase.auth.refreshSession();
+        await fetchIdentities();
+        showAlert('Email connected', 'You can now sign in with a code sent to this address.');
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not start email verification.';
+      const response = (error as { context?: Response })?.context;
+      const detail = await response?.json().catch(() => null) as { error?: string } | null | undefined;
+      const message = detail?.error || (error instanceof Error ? error.message : 'Could not verify this email.');
       showAlert('Could not connect email', message);
     } finally {
       setEmailLinking(false);
@@ -270,45 +271,49 @@ export function LinkedLogins() {
               )}
             </Pressable>
 
-            {EMAIL_AUTH_ENABLED && (
+            {EMAIL_AUTH_ENABLED && profile?.email && !identities.some((identity) =>
+              identity.provider === 'email' &&
+              (identity.identity_data?.email as string | undefined)?.toLowerCase() === profile.email.toLowerCase()
+            ) && (
               <View className="mt-4 pt-4 border-t border-gold/20">
                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal">
-                  Sign in with another email
+                  Sign in with your contact email
                 </Text>
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/60 mt-1">
-                  Connect the address you use most. Your HIVE profile and history stay together.
+                  Send a code to {profile.email}. Your HIVE profile and history stay together.
                 </Text>
-                <TextInput
-                  value={signInEmail}
-                  onChangeText={(value) => { setSignInEmail(value); setConfirmationSent(false); }}
-                  onSubmitEditing={() => void handleEmailLink()}
-                  accessibilityLabel="Email address to connect"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoComplete="email"
-                  keyboardType="email-address"
-                  textContentType="emailAddress"
-                  editable={!emailLinking}
-                  className="border border-gold/30 rounded-xl px-3 py-2.5 mt-3 text-charcoal"
-                />
+                {confirmationSent ? (
+                  <>
+                    <TextInput
+                      value={emailCode}
+                      onChangeText={setEmailCode}
+                      onSubmitEditing={() => void handleEmailLink('confirm')}
+                      accessibilityLabel="Eight-digit contact email code"
+                      keyboardType="number-pad"
+                      autoComplete="one-time-code"
+                      maxLength={8}
+                      editable={!emailLinking}
+                      placeholder="Eight-digit code"
+                      className="border border-gold/30 rounded-xl px-3 py-2.5 mt-3 text-charcoal"
+                    />
+                    <Text accessibilityRole="alert" style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/70 mt-2">
+                      Check that inbox, then enter the code here. No access to your old email is needed.
+                    </Text>
+                  </>
+                ) : null}
                 <Pressable
-                  onPress={() => void handleEmailLink()}
-                  disabled={emailLinking || !signInEmail.trim()}
+                  onPress={() => void handleEmailLink(confirmationSent ? 'confirm' : 'start')}
+                  disabled={emailLinking}
                   accessibilityRole="button"
                   className="border border-gold/30 rounded-full py-2.5 px-4 mt-3 items-center"
-                  style={{ opacity: emailLinking || !signInEmail.trim() ? 0.5 : 1 }}
+                  style={{ opacity: emailLinking ? 0.5 : 1 }}
                 >
                   {emailLinking ? <ActivityIndicator size="small" color="#bd9348" /> : (
                     <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal">
-                      Send verification email
+                      {confirmationSent ? 'Connect this email' : 'Send verification code'}
                     </Text>
                   )}
                 </Pressable>
-                {confirmationSent && (
-                  <Text accessibilityRole="alert" style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/70 mt-2">
-                    Check your inboxes for the confirmation message. Your sign-in address changes only after verification.
-                  </Text>
-                )}
               </View>
             )}
 

@@ -1,11 +1,6 @@
 # =============================================================================
-# AUTH AND EDGE FUNCTIONS CONFIGURATION
+# EDGE FUNCTIONS CONFIGURATION
 # =============================================================================
-
-# The HIVE sign-in field and Auth email template both promise a six-digit code.
-# Keep the hosted OTP length in the same versioned configuration as the UI.
-[auth.email]
-otp_length = 6
 
 # We disable gateway-level JWT verification and handle it in our function code.
 # This gives us:
@@ -37,9 +32,14 @@ verify_jwt = false
 [functions.invite]
 verify_jwt = false
 
-# A bearer invite token, not an app session, authorizes provisioning a new
-# email-code account for that one address. The function validates both itself.
-[functions.prepare-email-login]
+# A bearer invite token or a matching existing member account authorizes a
+# login code. The function checks identity and rate limits before sending.
+[functions.request-email-code]
+verify_jwt = false
+
+# The member's own session and a code to their profile contact email authorize
+# adding an email identity to the same Auth user. Both are checked in code.
+[functions.connect-contact-email]
 verify_jwt = false
 
 # Internal notification system - uses service_role key

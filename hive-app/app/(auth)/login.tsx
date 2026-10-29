@@ -22,7 +22,7 @@ import {
 WebBrowser.maybeCompleteAuthSession();
 
 // The implementation can be shipped ahead of the operational dependency, but
-// the door must stay closed until Email Auth, a verified sender, the OTP template and the
+// the door must stay closed until the verified sender, custom OTP delivery and
 // existing-Google-account migration have all been rehearsed. Undefined, false,
 // "1" and every other value fail closed; only the literal string "true" opens
 // it in a deliberately configured build.
@@ -335,18 +335,6 @@ export default function LoginScreen() {
     await handleGoogleSignIn(true);
   };
 
-  const emailRedirectTo = () => {
-    if (Platform.OS === 'web') {
-      const callback = `${window.location.origin}/callback`;
-      return safeReturnTo
-        ? `${callback}?returnTo=${encodeURIComponent(safeReturnTo)}`
-        : callback;
-    }
-    return Linking.createURL('auth/callback', {
-      queryParams: safeReturnTo ? { returnTo: safeReturnTo } : undefined,
-    });
-  };
-
   const handleEmailCodeRequest = async () => {
     const address = usableEmail(email);
     if (!address) {
@@ -357,25 +345,11 @@ export default function LoginScreen() {
     setEmailLoading(true);
     setEmailError(null);
     try {
-      // Only an invite for this address may prepare a brand-new Auth user.
-      // Otherwise a member's preferred contact email could silently become
-      // a second user before they have linked it to their existing profile.
       const inviteToken = safeReturnTo?.startsWith('/join?')
         ? new URLSearchParams(safeReturnTo.slice('/join?'.length)).get('token')
         : null;
-      if (inviteToken) {
-        const { error: preparationError } = await supabase.functions.invoke('prepare-email-login', {
-          body: { email: address, token: inviteToken },
-        });
-        if (preparationError) throw preparationError;
-      }
-
-      const { error } = await supabase.auth.signInWithOtp({
-        email: address,
-        options: {
-          shouldCreateUser: false,
-          emailRedirectTo: emailRedirectTo(),
-        },
+      const { error } = await supabase.functions.invoke('request-email-code', {
+        body: { email: address, inviteToken },
       });
       if (error) throw error;
       setEmail(address);
@@ -383,8 +357,8 @@ export default function LoginScreen() {
     } catch (error) {
       console.error('Email code request error:', error);
       const status = (error as { context?: { status?: number } })?.context?.status;
-      setEmailError(status === 409
-        ? 'This address is already on a HIVE profile. Sign in with the account you already use, then connect it in Settings.'
+      setEmailError(status === 429
+        ? 'Please wait a minute before asking for another code.'
         : 'We could not send that code. Check the address and try again.');
     } finally {
       setEmailLoading(false);
@@ -394,8 +368,8 @@ export default function LoginScreen() {
   const handleEmailCodeVerification = async (code: string) => {
     const address = usableEmail(email);
     const token = code.replace(/\D/g, '');
-    if (!address || token.length !== 6) {
-      setEmailError('Enter the six-digit code from your email.');
+    if (!address || token.length !== 8) {
+      setEmailError('Enter the eight-digit code from your email.');
       return;
     }
 
@@ -612,24 +586,24 @@ export default function LoginScreen() {
                   color: 'rgba(246,244,229,0.72)', textAlign: 'center', marginBottom: 12,
                 }}
               >
-                Enter the six-digit code sent to {maskEmailForHint(email) ?? 'your email'}.
+                If this email is connected to HIVE, enter the eight-digit code sent to {maskEmailForHint(email) ?? 'your inbox'}.
               </Text>
               <TextInput
                 value={emailCode}
                 onChangeText={(value) => {
-                  setEmailCode(value.replace(/\D/g, '').slice(0, 6));
+                  setEmailCode(value.replace(/\D/g, '').slice(0, 8));
                   setEmailError(null);
                 }}
                 onSubmitEditing={() => void handleEmailCodeVerification(emailCode)}
                 editable={!authBusy}
-                accessibilityLabel="Six-digit sign-in code"
+                accessibilityLabel="Eight-digit sign-in code"
                 autoComplete="one-time-code"
                 keyboardType="number-pad"
                 textContentType="oneTimeCode"
-                placeholder="123456"
+                placeholder="12345678"
                 placeholderTextColor="rgba(51,39,26,0.35)"
                 returnKeyType="done"
-                maxLength={6}
+                maxLength={8}
                 style={{
                   width: '100%', minHeight: 50, borderRadius: 12,
                   borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)',
