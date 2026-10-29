@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, Image, ActivityIndicator, Platform, ScrollView } from 'react-native';
+import { View, Text, Pressable, Image, ActivityIndicator, Platform, ScrollView, TextInput } from 'react-native';
 import { SafeAreaView } from '../../components/ui/SafeArea';
 import * as WebBrowser from 'expo-web-browser';
 import { StatusBar } from 'expo-status-bar';
@@ -20,6 +20,13 @@ import {
 } from '../../lib/webStorage';
 
 WebBrowser.maybeCompleteAuthSession();
+
+// The implementation can be shipped ahead of the operational dependency, but
+// the door must stay closed until Email Auth, SMTP, the OTP template and the
+// existing-Google-account migration have all been rehearsed. Undefined, false,
+// "1" and every other value fail closed; only the literal string "true" opens
+// it in a deliberately configured build.
+const EMAIL_AUTH_ENABLED = process.env.EXPO_PUBLIC_EMAIL_AUTH_ENABLED === 'true';
 
 /* ---------------------------------------------------------------------------
    Naming the account you are about to sign in with — and then actually
@@ -146,17 +153,38 @@ if (Platform.OS !== 'web' || typeof window !== 'undefined') {
       void forgetSignIn();
       return;
     }
-    void rememberSignIn(session?.user?.email);
+
+    // This storage value is a GOOGLE login_hint, not a generic account label.
+    // Once email-code sign-in exists, remembering every session would make an
+    // email-only member's next visit promise "Continue as X" on a Google
+    // button even though X has no Google identity. Linked accounts keep the
+    // hint because Google really is one of their available doors.
+    const googleIdentityEmail = session?.user?.identities?.find(
+      (identity) => identity.provider === 'google'
+    )?.identity_data?.email;
+    if (typeof googleIdentityEmail === 'string') {
+      // A linked account may have Hotmail as its primary Auth email while its
+      // Google identity still uses Gmail. The Google button must hint Gmail.
+      void rememberSignIn(googleIdentityEmail);
+    } else if (session?.user) {
+      void forgetSignIn();
+    }
   });
 }
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [emailCode, setEmailCode] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
   // The whole address, held only long enough to hand to Google. The screen
   // never shows it — `accountHint` below is what the button reads.
   const [rememberedEmail, setRememberedEmail] = useState<string | null>(null);
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const safeReturnTo = sanitizeReturnTo(returnTo);
+  const authBusy = loading || emailLoading;
 
   const accountHint = rememberedEmail ? maskEmailForHint(rememberedEmail) : null;
 
@@ -307,6 +335,89 @@ export default function LoginScreen() {
     await handleGoogleSignIn(true);
   };
 
+  const emailRedirectTo = () => {
+    if (Platform.OS === 'web') {
+      const callback = `${window.location.origin}/callback`;
+      return safeReturnTo
+        ? `${callback}?returnTo=${encodeURIComponent(safeReturnTo)}`
+        : callback;
+    }
+    return Linking.createURL('auth/callback', {
+      queryParams: safeReturnTo ? { returnTo: safeReturnTo } : undefined,
+    });
+  };
+
+  const handleEmailCodeRequest = async () => {
+    const address = usableEmail(email);
+    if (!address) {
+      setEmailError('Enter a complete email address.');
+      return;
+    }
+
+    setEmailLoading(true);
+    setEmailError(null);
+    try {
+      // Only an invite for this address may prepare a brand-new Auth user.
+      // Otherwise a member's preferred contact email could silently become
+      // a second user before they have linked it to their existing profile.
+      const inviteToken = safeReturnTo?.startsWith('/join?')
+        ? new URLSearchParams(safeReturnTo.slice('/join?'.length)).get('token')
+        : null;
+      if (inviteToken) {
+        const { error: preparationError } = await supabase.functions.invoke('prepare-email-login', {
+          body: { email: address, token: inviteToken },
+        });
+        if (preparationError) throw preparationError;
+      }
+
+      const { error } = await supabase.auth.signInWithOtp({
+        email: address,
+        options: {
+          shouldCreateUser: false,
+          emailRedirectTo: emailRedirectTo(),
+        },
+      });
+      if (error) throw error;
+      setEmail(address);
+      setEmailSent(true);
+    } catch (error) {
+      console.error('Email code request error:', error);
+      const status = (error as { context?: { status?: number } })?.context?.status;
+      setEmailError(status === 409
+        ? 'This address is already on a HIVE profile. Sign in with the account you already use, then connect it in Settings.'
+        : 'We could not send that code. Check the address and try again.');
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
+  const handleEmailCodeVerification = async (code: string) => {
+    const address = usableEmail(email);
+    const token = code.replace(/\D/g, '');
+    if (!address || token.length !== 6) {
+      setEmailError('Enter the six-digit code from your email.');
+      return;
+    }
+
+    setEmailLoading(true);
+    setEmailError(null);
+    try {
+      // Supabase labels returning-user and first-sign-in codes differently.
+      // Trying the other type after a type mismatch does not consume the code.
+      let result = await supabase.auth.verifyOtp({ email: address, token, type: 'email' });
+      if (result.error) {
+        result = await supabase.auth.verifyOtp({ email: address, token, type: 'signup' });
+      }
+      if (result.error) throw result.error;
+      router.replace((safeReturnTo ?? '/') as never);
+    } catch (error) {
+      console.error('Email code verification error:', error);
+      setEmailError('That code did not work. Ask for a new one if it has been a while.');
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
   return (
     // Behind the door it's dark. The public site is cream and says what HIVE is;
     // this page is the other side of the invitation and shouldn't read as more
@@ -354,7 +465,7 @@ export default function LoginScreen() {
                 second tells you what to do. Run together they read as one long
                 apology (Nat 2026-08-03). */}
             HIVE is invitation only.{'\n'}
-            Sign in with the email address that received your invite.
+            Use your HIVE email or the address that received your invite.
           </Text>
 
           {/* The button is sized to its own words. At full width it was a white
@@ -371,14 +482,14 @@ export default function LoginScreen() {
               you recognise yourself by, so that is the half that survives. */}
           <Pressable
             onPress={() => handleGoogleSignIn()}
-            disabled={loading}
+            disabled={authBusy}
             accessibilityRole="button"
             accessibilityLabel={
               accountHint
                 ? `Continue as ${accountHint}, the account that signed in on this device last`
                 : 'Continue with Google'
             }
-            style={{ minWidth: 236, maxWidth: '100%', opacity: loading ? 0.5 : 1 }}
+            style={{ minWidth: 236, maxWidth: '100%', opacity: authBusy ? 0.5 : 1 }}
             className="flex-row items-center justify-center bg-white rounded-xl py-4 px-5 active:opacity-80"
           >
             {loading ? (
@@ -419,7 +530,7 @@ export default function LoginScreen() {
               showing — that is precisely when somebody needs it. */}
           <Pressable
             onPress={() => void handleDifferentAccount()}
-            disabled={loading}
+            disabled={authBusy}
             accessibilityRole="button"
             style={{ marginTop: 18, paddingVertical: 12, paddingHorizontal: 8 }}
             className="active:opacity-60"
@@ -428,6 +539,165 @@ export default function LoginScreen() {
               {accountHint ? 'Use a different account' : 'Choose a Google account'} &rarr;
             </Text>
           </Pressable>
+
+          {EMAIL_AUTH_ENABLED ? (
+            <View style={{ width: '100%', maxWidth: 320, flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(222,193,129,0.22)' }} />
+              <Text
+                style={{
+                  fontFamily: 'Lato_400Regular', fontSize: 12,
+                  color: 'rgba(246,244,229,0.58)', marginHorizontal: 12,
+                }}
+              >
+                Or use your email
+              </Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(222,193,129,0.22)' }} />
+            </View>
+          ) : null}
+
+          {EMAIL_AUTH_ENABLED ? (!emailSent ? (
+            <View style={{ width: '100%', maxWidth: 320, marginTop: 18 }}>
+              <TextInput
+                value={email}
+                onChangeText={(value) => {
+                  setEmail(value);
+                  setEmailError(null);
+                }}
+                onSubmitEditing={() => void handleEmailCodeRequest()}
+                editable={!authBusy}
+                accessibilityLabel="Email address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                keyboardType="email-address"
+                textContentType="emailAddress"
+                placeholder="you@example.com"
+                placeholderTextColor="rgba(51,39,26,0.45)"
+                returnKeyType="send"
+                style={{
+                  width: '100%', minHeight: 50, borderRadius: 12,
+                  borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)',
+                  backgroundColor: '#f6f4e5', color: '#313130',
+                  fontFamily: 'Lato_400Regular', fontSize: 15,
+                  paddingHorizontal: 16, paddingVertical: 13,
+                }}
+              />
+              <Pressable
+                onPress={() => void handleEmailCodeRequest()}
+                disabled={authBusy}
+                accessibilityRole="button"
+                accessibilityLabel="Email me a sign-in code"
+                style={({ pressed }) => ({
+                  minHeight: 50, marginTop: 12, borderRadius: 12,
+                  alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: '#dec181',
+                  opacity: authBusy ? 0.5 : pressed ? 0.8 : 1,
+                })}
+              >
+                {emailLoading ? (
+                  <ActivityIndicator size="small" color="#33271A" />
+                ) : (
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#33271A' }}>
+                    Email me a sign-in code
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ width: '100%', maxWidth: 320, marginTop: 18 }}>
+              <Text
+                accessibilityLiveRegion="polite"
+                style={{
+                  fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 20,
+                  color: 'rgba(246,244,229,0.72)', textAlign: 'center', marginBottom: 12,
+                }}
+              >
+                Enter the six-digit code sent to {maskEmailForHint(email) ?? 'your email'}.
+              </Text>
+              <TextInput
+                value={emailCode}
+                onChangeText={(value) => {
+                  setEmailCode(value.replace(/\D/g, '').slice(0, 6));
+                  setEmailError(null);
+                }}
+                onSubmitEditing={() => void handleEmailCodeVerification(emailCode)}
+                editable={!authBusy}
+                accessibilityLabel="Six-digit sign-in code"
+                autoComplete="one-time-code"
+                keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                placeholder="123456"
+                placeholderTextColor="rgba(51,39,26,0.35)"
+                returnKeyType="done"
+                maxLength={6}
+                style={{
+                  width: '100%', minHeight: 50, borderRadius: 12,
+                  borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)',
+                  backgroundColor: '#f6f4e5', color: '#313130',
+                  fontFamily: 'Lato_700Bold', fontSize: 22, letterSpacing: 8,
+                  textAlign: 'center', paddingHorizontal: 16, paddingVertical: 10,
+                }}
+              />
+              <Pressable
+                onPress={() => void handleEmailCodeVerification(emailCode)}
+                disabled={authBusy}
+                accessibilityRole="button"
+                style={({ pressed }) => ({
+                  minHeight: 50, marginTop: 12, borderRadius: 12,
+                  alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: '#dec181',
+                  opacity: authBusy ? 0.5 : pressed ? 0.8 : 1,
+                })}
+              >
+                {emailLoading ? (
+                  <ActivityIndicator size="small" color="#33271A" />
+                ) : (
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#33271A' }}>
+                    Sign in with the code
+                  </Text>
+                )}
+              </Pressable>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 8 }}>
+                <Pressable
+                  onPress={() => void handleEmailCodeRequest()}
+                  disabled={authBusy}
+                  accessibilityRole="button"
+                  style={{ padding: 10 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: 'rgba(246,244,229,0.52)' }}>
+                    Send it again
+                  </Text>
+                </Pressable>
+                <Text style={{ color: 'rgba(246,244,229,0.3)' }}>·</Text>
+                <Pressable
+                  onPress={() => {
+                    setEmailSent(false);
+                    setEmailCode('');
+                    setEmailError(null);
+                  }}
+                  disabled={authBusy}
+                  accessibilityRole="button"
+                  style={{ padding: 10 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: 'rgba(246,244,229,0.52)' }}>
+                    Use a different email
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          )) : null}
+
+          {EMAIL_AUTH_ENABLED && emailError ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              style={{
+                maxWidth: 320, fontFamily: 'Lato_400Regular', fontSize: 12,
+                lineHeight: 18, color: '#f2b8a8', textAlign: 'center', marginTop: 10,
+              }}
+            >
+              {emailError}
+            </Text>
+          ) : null}
 
           {/* Nat, 2026-08-06: "this is still too squishy, there needs to be a
               space here." The join line used to be the same tappable box as

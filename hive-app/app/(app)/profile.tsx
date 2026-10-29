@@ -3895,7 +3895,7 @@ export default function ProfileScreen() {
       <ConfirmDialog
         visible={confirmingSignOut}
         title="Sign out of the HIVE?"
-        body="You’ll need to sign in again with Google to get back in."
+        body="You’ll need to sign in again to get back in."
         confirmLabel="Sign out"
         cancelLabel="Stay"
         onConfirm={() => {

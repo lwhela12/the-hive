@@ -96,8 +96,8 @@ export default function JoinScreen() {
       } else {
         setInviteBlock({
           title: 'Sign in with the invited account',
-          message: 'We could not read an email address from this Google session, so HIVE did not open the invite.',
-          detail: 'Sign out, then continue with the Google account that received the invite.',
+          message: 'We could not read an email address from this sign-in session, so HIVE did not open the invite.',
+          detail: 'Sign out, then continue with the account that received the invite.',
           action: 'switch-account',
         });
         setLoading(false);
@@ -127,8 +127,8 @@ export default function JoinScreen() {
     if (!normalizedUserEmail) {
       setInviteBlock({
         title: 'Sign in with the invited account',
-        message: 'We could not read an email address from this Google session, so HIVE did not open the invite.',
-        detail: 'Sign out, then continue with the Google account that received the invite.',
+        message: 'We could not read an email address from this sign-in session, so HIVE did not open the invite.',
+        detail: 'Sign out, then continue with the account that received the invite.',
         action: 'switch-account',
       });
       setLoading(false);
@@ -179,7 +179,7 @@ export default function JoinScreen() {
         if (!tokenInvite) {
           setInviteBlock({
             title: 'Invite needs the right account',
-            message: 'This invite link is private to the Google account it was sent to. We did not open your current HIVE session.',
+            message: 'This invite link is private to the email address it was sent to. We did not open your current HIVE session.',
             detail: userEmail
               ? `You are signed in as ${userEmail}. Sign out, then open the invite with the email address that received it.`
               : 'Sign in with the email address that received the invite.',
@@ -191,7 +191,7 @@ export default function JoinScreen() {
         const inviteEmail = normalizeEmail(tokenInvite.email);
         if (inviteEmail !== normalizedUserEmail) {
           setInviteBlock({
-            title: 'Use the invited Google account',
+            title: 'Use the invited account',
             message: 'This invite is for a different email than the one currently signed in. HIVE will not open the current member profile from this link.',
             detail: `Current browser session: ${userEmail}. Invited account: ${tokenInvite.email}. Sign out, then continue with the invited account.`,
             action: 'switch-account',
@@ -451,7 +451,7 @@ export default function JoinScreen() {
     }
     if (normalizeEmail(invite.email) !== normalizedUserEmail) {
       setInviteBlock({
-        title: 'Use the invited Google account',
+        title: 'Use the invited account',
         message: 'This invite is for a different email than the one currently signed in. HIVE will not open the current member profile from this link.',
         detail: `Current browser session: ${userEmail}. Invited account: ${invite.email}. Sign out, then continue with the invited account.`,
         action: 'switch-account',

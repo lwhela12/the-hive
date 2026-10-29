@@ -31,7 +31,15 @@ export default function AuthCallbackScreen() {
 
       // Try code exchange flow first
       if (params.code) {
-        await supabase.auth.exchangeCodeForSession(params.code);
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(params.code);
+        if (exchangeError) {
+          // The web client may have exchanged an email-change confirmation
+          // before this screen mounts. A live session is enough for Settings,
+          // but never use it to paper over a failed sign-in callback.
+          if (sanitizeReturnTo(params.returnTo) !== '/settings') throw exchangeError;
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          if (userError || !user) throw exchangeError;
+        }
         router.replace((sanitizeReturnTo(params.returnTo) ?? '/') as any);
         return;
       }
@@ -53,6 +61,17 @@ export default function AuthCallbackScreen() {
             router.replace((sanitizeReturnTo(params.returnTo) ?? '/') as any);
             return;
           }
+        }
+      }
+
+      // An email-change confirmation can return to the app after Supabase has
+      // already updated the current session, with no new sign-in code in the
+      // redirect. Only the Settings return path uses this case.
+      if (sanitizeReturnTo(params.returnTo) === '/settings') {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (!userError && user) {
+          router.replace('/settings');
+          return;
         }
       }
 

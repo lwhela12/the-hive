@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, Pressable, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, Pressable, Alert, ActivityIndicator, Platform, TextInput } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { UserIdentity } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../lib/hooks/useAuth';
 
 import { ThinkingBee } from '../ui/ThinkingBee';
 // Cross-platform alert (Alert.alert is a no-op on web)
@@ -18,13 +19,23 @@ const showAlert = (title: string, message: string) => {
 };
 
 const providerLabel = (provider: string) =>
-  provider === 'google' ? 'Google' : provider.charAt(0).toUpperCase() + provider.slice(1);
+  provider === 'google' ? 'Google' : provider === 'email' ? 'Email code' : provider.charAt(0).toUpperCase() + provider.slice(1);
+
+const EMAIL_AUTH_ENABLED = process.env.EXPO_PUBLIC_EMAIL_AUTH_ENABLED === 'true';
 
 export function LinkedLogins() {
+  const { profile, session } = useAuth();
   const [identities, setIdentities] = useState<UserIdentity[]>([]);
   const [loading, setLoading] = useState(true);
   const [linking, setLinking] = useState(false);
+  const [emailLinking, setEmailLinking] = useState(false);
+  const [signInEmail, setSignInEmail] = useState('');
+  const [confirmationSent, setConfirmationSent] = useState(false);
   const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (profile?.email) setSignInEmail((current) => current || profile.email);
+  }, [profile?.email]);
 
   const fetchIdentities = useCallback(async () => {
     const { data, error } = await supabase.auth.getUserIdentities();
@@ -122,6 +133,34 @@ export function LinkedLogins() {
     }
   };
 
+  const handleEmailLink = async () => {
+    const address = signInEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+      showAlert('Check the address', 'Enter the email address you want to use for sign-in.');
+      return;
+    }
+
+    try {
+      setEmailLinking(true);
+      const emailRedirectTo = Platform.OS === 'web'
+        ? `${window.location.origin}/callback?returnTo=${encodeURIComponent('/settings')}`
+        : Linking.createURL('auth/callback', { queryParams: { returnTo: '/settings' } });
+      // This runs in the current signed-in session. Supabase keeps the user's
+      // ID and existing Google identity while it verifies the new email.
+      const { error } = await supabase.auth.updateUser(
+        { email: address },
+        { emailRedirectTo }
+      );
+      if (error) throw error;
+      setConfirmationSent(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not start email verification.';
+      showAlert('Could not connect email', message);
+    } finally {
+      setEmailLinking(false);
+    }
+  };
+
   const handleUnlink = (identity: UserIdentity) => {
     if (identities.length <= 1) return;
 
@@ -178,7 +217,7 @@ export function LinkedLogins() {
                   key={identity.identity_id}
                   className={`flex-row items-center ${index > 0 ? 'mt-3 pt-3 border-t border-gold/20' : ''}`}
                 >
-                  <Ionicons name="logo-google" size={18} color="#bd9348" style={{ marginRight: 10 }} />
+                  <Ionicons name={identity.provider === 'google' ? 'logo-google' : 'mail-outline'} size={18} color="#bd9348" style={{ marginRight: 10 }} />
                   <View className="flex-1">
                     <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal" numberOfLines={1}>
                       {email}
@@ -231,8 +270,51 @@ export function LinkedLogins() {
               )}
             </Pressable>
 
+            {EMAIL_AUTH_ENABLED && (
+              <View className="mt-4 pt-4 border-t border-gold/20">
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal">
+                  Sign in with another email
+                </Text>
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/60 mt-1">
+                  Connect the address you use most. Your HIVE profile and history stay together.
+                </Text>
+                <TextInput
+                  value={signInEmail}
+                  onChangeText={(value) => { setSignInEmail(value); setConfirmationSent(false); }}
+                  onSubmitEditing={() => void handleEmailLink()}
+                  accessibilityLabel="Email address to connect"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  textContentType="emailAddress"
+                  editable={!emailLinking}
+                  className="border border-gold/30 rounded-xl px-3 py-2.5 mt-3 text-charcoal"
+                />
+                <Pressable
+                  onPress={() => void handleEmailLink()}
+                  disabled={emailLinking || !signInEmail.trim()}
+                  accessibilityRole="button"
+                  className="border border-gold/30 rounded-full py-2.5 px-4 mt-3 items-center"
+                  style={{ opacity: emailLinking || !signInEmail.trim() ? 0.5 : 1 }}
+                >
+                  {emailLinking ? <ActivityIndicator size="small" color="#bd9348" /> : (
+                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal">
+                      Send verification email
+                    </Text>
+                  )}
+                </Pressable>
+                {confirmationSent && (
+                  <Text accessibilityRole="alert" style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/70 mt-2">
+                    Check your inboxes for the confirmation message. Your sign-in address changes only after verification.
+                  </Text>
+                )}
+              </View>
+            )}
+
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mt-2 text-center">
-              Sign in with any linked account to reach this same profile.
+              {session?.user.email ? `Current sign-in email: ${session.user.email}. ` : ''}
+              Linked sign-ins lead to this same profile.
             </Text>
           </>
         )}

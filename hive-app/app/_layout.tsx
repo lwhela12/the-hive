@@ -358,9 +358,10 @@ function RootLayoutInner() {
   const [memberships, setMemberships] = useState<MembershipWithCommunity[]>([]);
   const [hivePickerOpen, setHivePickerOpen] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
-  // True once the first read of the saved sign-in gave up. It puts a screen
-  // with a Try again button in front of the member instead of a spinning bee.
-  const [startupFailed, setStartupFailed] = useState<boolean>(false);
+  // A failed connection can be retried. An identity conflict deliberately
+  // stops here so a second auth id never grows an empty HIVE profile beside
+  // the member's existing one.
+  const [startupFailure, setStartupFailure] = useState<'connection' | 'identity' | null>(null);
 
   const [fontsLoaded, fontError] = useFonts({
     LibreBaskerville_400Regular,
@@ -487,7 +488,7 @@ function RootLayoutInner() {
     initializingUserIdRef.current = userId;
     // A fresh attempt takes the "could not reach the hive" screen back down —
     // signing in again counts as a retry, not only the button.
-    setStartupFailed(false);
+    setStartupFailure(null);
     const isCurrentLoad = () => initializingUserIdRef.current === userId;
     try {
     // Fetch profile AND all memberships (with community data) in parallel
@@ -513,8 +514,10 @@ function RootLayoutInner() {
     let profileData = profileResult.data as Profile | null;
 
     if (profileResult.error && profileResult.error.code === 'PGRST116') {
-      // Profile doesn't exist - create one from OAuth data
-      const { data: newProfile } = await supabase
+      // Profile doesn't exist - create one from the verified Auth identity.
+      // A unique profile-email guard catches a second Auth ID using an address
+      // already attached to a member; never merge their content by guesswork.
+      const { data: newProfile, error: profileInsertError } = await supabase
         .from('profiles')
         .insert({
           id: userId,
@@ -525,6 +528,11 @@ function RootLayoutInner() {
         })
         .select()
         .single();
+
+      if (profileInsertError?.code === '23505') {
+        throw new Error('HIVE_AUTH_IDENTITY_CONFLICT');
+      }
+      if (profileInsertError) throw profileInsertError;
 
       profileData = newProfile as Profile | null;
     } else if (profileResult.error) {
@@ -645,7 +653,11 @@ function RootLayoutInner() {
       // offer the Try again button instead.
       console.error('[Auth] initializeUserData failed:', err);
       if (isCurrentLoad()) {
-        setStartupFailed(true);
+        setStartupFailure(
+          err instanceof Error && err.message === 'HIVE_AUTH_IDENTITY_CONFLICT'
+            ? 'identity'
+            : 'connection'
+        );
         setLoading(false);
       }
     } finally {
@@ -659,12 +671,12 @@ function RootLayoutInner() {
   // Read the saved sign-in. Separated out from the effect below so the Try
   // again button can run it again without tearing down the auth listener.
   const loadInitialSession = useCallback(() => {
-    setStartupFailed(false);
+    setStartupFailure(null);
     setLoading(true);
 
     withDeadline(supabase.auth.getSession(), SESSION_DEADLINE_MS, 'Reading your sign-in')
       .then(({ data: { session } }) => {
-        setStartupFailed(false);
+        setStartupFailure(null);
         setSession(session);
         if (session?.user) {
           setProfile(prev => prev?.id === session.user.id ? prev : null);
@@ -680,7 +692,7 @@ function RootLayoutInner() {
         // Usually a phone that has drifted off its connection. Say so and give
         // the member a button, rather than leaving the bee flying forever.
         console.error('[Auth] Could not read the saved sign-in:', err);
-        setStartupFailed(true);
+        setStartupFailure('connection');
         setLoading(false);
       });
   }, [initializeUserData]);
@@ -879,7 +891,7 @@ function RootLayoutInner() {
   // The connection gave out before HIVE could read who is signed in. This is
   // the same gold splash the member was already looking at, now with words on
   // it and a button — the state it used to sit in silently, forever.
-  if (startupFailed) {
+  if (startupFailure) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 28, backgroundColor: arrivalBackground }}>
         <View style={{ maxWidth: 340, alignItems: 'center' }}>
@@ -890,7 +902,9 @@ function RootLayoutInner() {
               color: HIVE_SKIN.card, textAlign: 'center',
             }}
           >
-            HIVE could not reach the hive
+            {startupFailure === 'identity'
+              ? 'This sign-in belongs to an existing HIVE account'
+              : 'HIVE could not reach the hive'}
           </Text>
           <Text
             style={{
@@ -898,11 +912,17 @@ function RootLayoutInner() {
               color: HIVE_SKIN.card, opacity: 0.85, textAlign: 'center', marginTop: 12,
             }}
           >
-            Your connection dropped while HIVE was checking you in. Have a look
-            at your signal, then give it another go.
+            {startupFailure === 'identity'
+              ? 'HIVE stopped before creating a second profile. Sign in with the account you already use, then connect this email in Settings.'
+              : 'Your connection dropped while HIVE was checking you in. Have a look at your signal, then give it another go.'}
           </Text>
           <Pressable
-            onPress={loadInitialSession}
+            onPress={startupFailure === 'identity'
+              ? async () => {
+                  await supabase.auth.signOut();
+                  router.replace('/(auth)/login');
+                }
+              : loadInitialSession}
             style={({ pressed }) => ({
               marginTop: 24, paddingVertical: 14, paddingHorizontal: 34,
               borderRadius: 14, backgroundColor: HIVE_SKIN.card,
@@ -910,7 +930,7 @@ function RootLayoutInner() {
             })}
           >
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: HIVE_GOLD }}>
-              Try again
+              {startupFailure === 'identity' ? 'Back to sign in' : 'Try again'}
             </Text>
           </Pressable>
         </View>
