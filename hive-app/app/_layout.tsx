@@ -259,7 +259,7 @@ watchForStaleBundle();
 // Register service worker for PWA home screen caching (web only).
 // Local development should always use fresh bundles, so clear any old dev worker.
 if (Platform.OS === 'web' && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
+  const registerServiceWorker = () => {
     if (isLocalWeb) {
       navigator.serviceWorker.getRegistrations()
         .then((registrations) => registrations.forEach((registration) => registration.unregister()))
@@ -297,7 +297,16 @@ if (Platform.OS === 'web' && typeof window !== 'undefined' && 'serviceWorker' in
         return registration.update();
       })
       .catch((err) => console.warn('Service worker registration failed:', err));
-  });
+  };
+
+  // The Expo bundle can finish after the window load event, especially on a
+  // returning phone. Register immediately in that case; otherwise the worker
+  // never installs and the home-screen app misses its update path.
+  if (document.readyState === 'complete') {
+    registerServiceWorker();
+  } else {
+    window.addEventListener('load', registerServiceWorker, { once: true });
+  }
 }
 
 function RootLayoutInner() {
