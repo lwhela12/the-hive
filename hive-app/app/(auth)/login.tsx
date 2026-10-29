@@ -376,13 +376,18 @@ export default function LoginScreen() {
     setEmailLoading(true);
     setEmailError(null);
     try {
-      // Supabase labels returning-user and first-sign-in codes differently.
-      // Trying the other type after a type mismatch does not consume the code.
-      let result = await supabase.auth.verifyOtp({ email: address, token, type: 'email' });
-      if (result.error) {
-        result = await supabase.auth.verifyOtp({ email: address, token, type: 'signup' });
-      }
-      if (result.error) throw result.error;
+      // The server verifies either a normal Auth code or a code sent to an
+      // existing member's profile inbox. In the latter case it attaches that
+      // inbox to the same Auth user before returning the session.
+      const { data, error } = await supabase.functions.invoke('verify-email-code', {
+        body: { email: address, code: token },
+      });
+      if (error) throw error;
+      if (!data?.access_token || !data?.refresh_token) throw new Error('No sign-in session received');
+      const { data: signedIn, error: sessionError } = await supabase.auth.setSession({
+        access_token: data.access_token, refresh_token: data.refresh_token,
+      });
+      if (sessionError || !signedIn.user) throw sessionError ?? new Error('Could not finish sign-in');
       router.replace((safeReturnTo ?? '/') as never);
     } catch (error) {
       console.error('Email code verification error:', error);
@@ -439,95 +444,8 @@ export default function LoginScreen() {
                 second tells you what to do. Run together they read as one long
                 apology (Nat 2026-08-03). */}
             HIVE is invitation only.{'\n'}
-            Use your HIVE email or the address that received your invite.
+            Use the email on your HIVE profile or invitation—Hotmail, Yahoo, Gmail, and other inboxes work.
           </Text>
-
-          {/* The button is sized to its own words. At full width it was a white
-              slab with about seventy points of empty either side of the
-              wordmark, which made it the loudest thing on a quiet dark page
-              (Nat 2026-08-06, testing on her phone). minWidth holds the shape
-              while the spinner is in there, so it doesn't collapse to a dot
-              mid sign-in and snap back; maxWidth keeps it inside the column on
-              a narrow phone. Vertical padding is unchanged, so it still stands
-              about 52 points tall — comfortably over the 44 a thumb needs.
-
-              With an address on it the label is longer, so it shrinks and
-              ellipsises from the middle — the provider at the end is the half
-              you recognise yourself by, so that is the half that survives. */}
-          <Pressable
-            onPress={() => handleGoogleSignIn()}
-            disabled={authBusy}
-            accessibilityRole="button"
-            accessibilityLabel={
-              accountHint
-                ? `Continue as ${accountHint}, the account that signed in on this device last`
-                : 'Continue with Google'
-            }
-            style={{ minWidth: 236, maxWidth: '100%', opacity: authBusy ? 0.5 : 1 }}
-            className="flex-row items-center justify-center bg-white rounded-xl py-4 px-5 active:opacity-80"
-          >
-            {loading ? (
-              // Charcoal, because the spinner sits on the white button. It was
-              // cream on cream, so signing in looked like nothing happening.
-              <ActivityIndicator size="small" color="#313130" />
-            ) : (
-              <>
-                <Image
-                  source={{ uri: 'https://www.google.com/favicon.ico' }}
-                  style={{ width: 20, height: 20, marginRight: 12 }}
-                />
-                <Text
-                  numberOfLines={1}
-                  ellipsizeMode="middle"
-                  // minWidth 0 is what lets a long address actually shrink in a
-                  // browser; without it the flex row refuses to go under the
-                  // text's own width and the button pushes past the column.
-                  style={{ fontFamily: 'Lato_700Bold', flexShrink: 1, minWidth: 0 }}
-                  className="text-base text-charcoal"
-                >
-                  {accountHint ? `Continue as ${accountHint}` : 'Continue with Google'}
-                </Text>
-              </>
-            )}
-          </Pressable>
-
-          {/* Without a remembered address there is no "current" account, so
-              "different" would be measuring against nothing. The wording
-              changes rather than the button disappearing — a browser can be
-              quietly signed into a Google account nobody on this screen has
-              named, and this is still the way past it.
-
-              It matters more now that the button above skips the chooser: this
-              line is the only remaining door to the full list, and the only
-              thing that clears a remembered address that has gone stale. It
-              stays on screen in every state. Do not hide it when a name is
-              showing — that is precisely when somebody needs it. */}
-          <Pressable
-            onPress={() => void handleDifferentAccount()}
-            disabled={authBusy}
-            accessibilityRole="button"
-            style={{ marginTop: 18, paddingVertical: 12, paddingHorizontal: 8 }}
-            className="active:opacity-60"
-          >
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: 'rgba(246,244,229,0.5)' }}>
-              {accountHint ? 'Use a different account' : 'Choose a Google account'} &rarr;
-            </Text>
-          </Pressable>
-
-          {EMAIL_AUTH_ENABLED ? (
-            <View style={{ width: '100%', maxWidth: 320, flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(222,193,129,0.22)' }} />
-              <Text
-                style={{
-                  fontFamily: 'Lato_400Regular', fontSize: 12,
-                  color: 'rgba(246,244,229,0.58)', marginHorizontal: 12,
-                }}
-              >
-                Or use your email
-              </Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(222,193,129,0.22)' }} />
-            </View>
-          ) : null}
 
           {EMAIL_AUTH_ENABLED ? (!emailSent ? (
             <View style={{ width: '100%', maxWidth: 320, marginTop: 18 }}>
@@ -672,6 +590,93 @@ export default function LoginScreen() {
               {emailError}
             </Text>
           ) : null}
+
+          {EMAIL_AUTH_ENABLED ? (
+            <View style={{ width: '100%', maxWidth: 320, flexDirection: 'row', alignItems: 'center', marginTop: 24, marginBottom: 18 }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(222,193,129,0.22)' }} />
+              <Text
+                style={{
+                  fontFamily: 'Lato_400Regular', fontSize: 12,
+                  color: 'rgba(246,244,229,0.58)', marginHorizontal: 12,
+                }}
+              >
+                Or continue with Google
+              </Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(222,193,129,0.22)' }} />
+            </View>
+          ) : null}
+
+          {/* The button is sized to its own words. At full width it was a white
+              slab with about seventy points of empty either side of the
+              wordmark, which made it the loudest thing on a quiet dark page
+              (Nat 2026-08-06, testing on her phone). minWidth holds the shape
+              while the spinner is in there, so it doesn't collapse to a dot
+              mid sign-in and snap back; maxWidth keeps it inside the column on
+              a narrow phone. Vertical padding is unchanged, so it still stands
+              about 52 points tall — comfortably over the 44 a thumb needs.
+
+              With an address on it the label is longer, so it shrinks and
+              ellipsises from the middle — the provider at the end is the half
+              you recognise yourself by, so that is the half that survives. */}
+          <Pressable
+            onPress={() => handleGoogleSignIn()}
+            disabled={authBusy}
+            accessibilityRole="button"
+            accessibilityLabel={
+              accountHint
+                ? `Continue as ${accountHint}, the account that signed in on this device last`
+                : 'Continue with Google'
+            }
+            style={{ minWidth: 236, maxWidth: '100%', opacity: authBusy ? 0.5 : 1 }}
+            className="flex-row items-center justify-center bg-white rounded-xl py-4 px-5 active:opacity-80"
+          >
+            {loading ? (
+              // Charcoal, because the spinner sits on the white button. It was
+              // cream on cream, so signing in looked like nothing happening.
+              <ActivityIndicator size="small" color="#313130" />
+            ) : (
+              <>
+                <Image
+                  source={{ uri: 'https://www.google.com/favicon.ico' }}
+                  style={{ width: 20, height: 20, marginRight: 12 }}
+                />
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode="middle"
+                  // minWidth 0 is what lets a long address actually shrink in a
+                  // browser; without it the flex row refuses to go under the
+                  // text's own width and the button pushes past the column.
+                  style={{ fontFamily: 'Lato_700Bold', flexShrink: 1, minWidth: 0 }}
+                  className="text-base text-charcoal"
+                >
+                  {accountHint ? `Continue as ${accountHint}` : 'Continue with Google'}
+                </Text>
+              </>
+            )}
+          </Pressable>
+
+          {/* Without a remembered address there is no "current" account, so
+              "different" would be measuring against nothing. The wording
+              changes rather than the button disappearing — a browser can be
+              quietly signed into a Google account nobody on this screen has
+              named, and this is still the way past it.
+
+              It matters more now that the button above skips the chooser: this
+              line is the only remaining door to the full list, and the only
+              thing that clears a remembered address that has gone stale. It
+              stays on screen in every state. Do not hide it when a name is
+              showing — that is precisely when somebody needs it. */}
+          <Pressable
+            onPress={() => void handleDifferentAccount()}
+            disabled={authBusy}
+            accessibilityRole="button"
+            style={{ marginTop: 18, paddingVertical: 12, paddingHorizontal: 8 }}
+            className="active:opacity-60"
+          >
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: 'rgba(246,244,229,0.5)' }}>
+              {accountHint ? 'Use a different account' : 'Choose a Google account'} &rarr;
+            </Text>
+          </Pressable>
 
           {/* Nat, 2026-08-06: "this is still too squishy, there needs to be a
               space here." The join line used to be the same tappable box as

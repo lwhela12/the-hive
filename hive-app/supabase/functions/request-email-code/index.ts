@@ -3,6 +3,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const encoder = new TextEncoder();
+
+async function hashContactCode(userId: string, email: string, code: string, secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey('raw', encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const bytes = new Uint8Array(await crypto.subtle.sign('HMAC', key,
+    encoder.encode(`${userId}:${email}:${code}`)));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
 
 async function opaqueEmailKey(email: string, secret: string): Promise<string> {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret),
@@ -11,11 +20,10 @@ async function opaqueEmailKey(email: string, secret: string): Promise<string> {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-// Supabase generates and verifies the actual OTP; HIVE delivers it through its
-// existing verified Resend sender. The profile/invite checks happen first so
-// generateLink cannot quietly create a second Auth ID for a member's contact
-// email. The same code entry works inside an installed web app, with no OAuth
-// trip out to another browser's storage.
+// A member may use the email on their HIVE profile, even when their original
+// Auth email was a different Google inbox. In that case we first prove control
+// of the profile inbox with a code; verification updates the existing Auth ID.
+// Everyone else gets a Supabase OTP, sent through HIVE's verified mail sender.
 serve(async (req) => {
   const preflight = handleCors(req);
   if (preflight) return preflight;
@@ -42,23 +50,24 @@ serve(async (req) => {
     .select('id').ilike('email', email).maybeSingle();
   if (profileError) return errorResponse('Email sign-in is temporarily unavailable.', 503);
 
-  let eligible = false;
+  let mode: 'auth' | 'contact' | 'invite' | null = null;
   if (profile) {
     const { data, error } = await admin.auth.admin.getUserById(profile.id);
     if (error) return errorResponse('Email sign-in is temporarily unavailable.', 503);
-    eligible = data.user?.email?.trim().toLowerCase() === email;
+    if (!data.user) return errorResponse('Email sign-in is temporarily unavailable.', 503);
+    mode = data.user.email?.trim().toLowerCase() === email ? 'auth' : 'contact';
   } else if (/^[0-9a-f-]{36}$/i.test(inviteToken)) {
     const { data: invite, error } = await admin.from('community_invites')
       .select('email, accepted_at, expires_at').eq('token', inviteToken).maybeSingle();
     if (error) return errorResponse('Email sign-in is temporarily unavailable.', 503);
-    eligible = !!invite && invite.email?.trim().toLowerCase() === email
-      && !invite.accepted_at && (!invite.expires_at || Date.parse(invite.expires_at) > Date.now());
+    if (invite && invite.email?.trim().toLowerCase() === email
+      && !invite.accepted_at && (!invite.expires_at || Date.parse(invite.expires_at) > Date.now())) {
+      mode = 'invite';
+    }
   }
 
-  // Do not reveal which addresses belong to HIVE. The login screen also
-  // explains that an existing Google member must connect another address
-  // while signed in, rather than opening a new member ID here.
-  if (!eligible) return jsonResponse({ sent: true });
+  // Do not reveal which addresses belong to HIVE.
+  if (!mode) return jsonResponse({ sent: true });
 
   const emailHash = await opaqueEmailKey(email, serviceKey);
   const { data: reserved, error: rateError } = await admin.rpc('reserve_email_login_send', {
@@ -67,15 +76,28 @@ serve(async (req) => {
   if (rateError) return errorResponse('Email sign-in is temporarily unavailable.', 503);
   if (!reserved) return errorResponse('Please wait before asking for another code.', 429);
 
-  const { data: link, error: linkError } = await admin.auth.admin.generateLink({
-    type: 'magiclink', email,
-  });
-  if (linkError || !link?.properties?.email_otp || (profile && link.user?.id !== profile.id)) {
-    console.error('Could not generate an email sign-in code:', linkError);
-    return errorResponse('Email sign-in is temporarily unavailable.', 503);
+  let code: string;
+  if (mode === 'contact' && profile) {
+    const value = crypto.getRandomValues(new Uint32Array(1))[0] % 100_000_000;
+    code = value.toString().padStart(8, '0');
+    const codeHash = await hashContactCode(profile.id, email, code, serviceKey);
+    const { error: saveError } = await admin.from('email_link_challenges').upsert({
+      user_id: profile.id, email, code_hash: codeHash, attempts: 0,
+      expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+      last_sent_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+    if (saveError) return errorResponse('Email sign-in is temporarily unavailable.', 503);
+  } else {
+    const { data: link, error: linkError } = await admin.auth.admin.generateLink({
+      type: 'magiclink', email,
+    });
+    if (linkError || !link?.properties?.email_otp || (profile && link.user?.id !== profile.id)) {
+      console.error('Could not generate an email sign-in code:', linkError);
+      return errorResponse('Email sign-in is temporarily unavailable.', 503);
+    }
+    code = link.properties.email_otp;
   }
 
-  const code = link.properties.email_otp;
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
@@ -87,6 +109,9 @@ serve(async (req) => {
   });
   if (!response.ok) {
     console.error('Email sign-in delivery was refused:', response.status);
+    if (mode === 'contact' && profile) {
+      await admin.from('email_link_challenges').delete().eq('user_id', profile.id);
+    }
     return errorResponse('HIVE could not send a code right now. Try again later.', 503);
   }
   return jsonResponse({ sent: true });

@@ -37,6 +37,11 @@ verify_jwt = false
 [functions.request-email-code]
 verify_jwt = false
 
+# The emailed code is checked here before a session is returned. Existing
+# members keep their Auth ID when their profile inbox replaces an old login.
+[functions.verify-email-code]
+verify_jwt = false
+
 # The member's own session and a code to their profile contact email authorize
 # adding an email identity to the same Auth user. Both are checked in code.
 [functions.connect-contact-email]

@@ -37,7 +37,7 @@
     "lint:enter-key": "node scripts/test-submit-on-enter.cjs",
     "lint:hive-wide-identity": "node scripts/test-hive-wide-identity.cjs",
     "lint:mobile-safe-area": "node scripts/test-mobile-safe-area.cjs",
-    "lint:auth-door": "node scripts/test-passwordless-auth.cjs"
+    "lint:auth-door": "node scripts/test-passwordless-auth.cjs && node scripts/test-email-contact-recovery.cjs"
   },
   "dependencies": {
     "@daily-co/daily-js": "^0.92.0",
