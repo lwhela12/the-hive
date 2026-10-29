@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { supabase } from '../../lib/supabase';
-import { meetingFocus, monthlyHelp, precedingPeriod, speakingCue, focusCues, helpByPerson, wishIdentity, type StoryWish, type StoryTask } from '../../lib/memberWishStory';
+import { meetingFocus, monthlyHelp, completedStoryTasks, precedingPeriod, speakingCue, focusCues, helpByPerson, wishIdentity, type StoryWish, type StoryTask } from '../../lib/memberWishStory';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 
 type Reflection = { progress?: string; help_received?: string; help_given?: string };
-export function MemberWishStory({ communityId, memberId, since, meetingId, selectedId, selectedText, hasCheckIn, reportedWish = '', progressText = '', scale = 1, surveyId, responsePeriod, memberNames }: {
+export function MemberWishStory({ communityId, memberId, since, before, meetingId, selectedId, selectedText, hasCheckIn, reportedWish = '', progressText = '', scale = 1, surveyId, responsePeriod, memberNames }: {
   surveyId: string; responsePeriod: string; memberNames: Record<string, string>;
-  communityId: string; memberId: string; since: string; meetingId: string;
+  communityId: string; memberId: string; since: string; before: string; meetingId: string;
   selectedId?: unknown; selectedText: string; hasCheckIn: boolean;
   reportedWish?: string; progressText?: string; scale?: number;
 }) {
@@ -61,8 +61,8 @@ export function MemberWishStory({ communityId, memberId, since, meetingId, selec
   if (error) return <View accessibilityRole="alert"><Text style={text}>Couldn’t load this person’s focus.</Text><Pressable accessibilityRole="button" onPress={() => setRetry(n => n+1)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={heading}>Try again</Text></Pressable></View>;
   if (!data) return <ActivityIndicator accessibilityLabel="Loading meeting focus" color="#bd9348" />;
   const focus = meetingFocus(data.wishes, selectedId, selectedText, hasCheckIn);
-  const help = monthlyHelp(data.tasks, memberId, since);
-  const ownDone = data.tasks.filter(t => t.assigned_to === memberId && (!t.related_user_id || t.related_user_id === memberId) && t.completed && !!t.completed_at && t.completed_at >= since);
+  const help = monthlyHelp(data.tasks, memberId, since, before);
+  const ownDone = completedStoryTasks(data.tasks, since, before).filter(t => t.assigned_to === memberId && (!t.related_user_id || t.related_user_id === memberId));
   const toggle = (key: string) => setExpanded(v => ({ ...v, [key]: !v[key] }));
   const subheading = { ...text, fontFamily: 'Lato_700Bold', color: '#75571f', fontSize: 14 * scale, lineHeight: 20 * scale };
   const column = { flexGrow: 1, flexBasis: width >= 900 ? '30%' as const : '100%' as const, minWidth: 0, gap: 16, backgroundColor: '#fbf6e9', borderRadius: 14, padding: 16 };

@@ -1,6 +1,6 @@
 import { MeetingNoteSection } from '../../components/meetings/MeetingNoteSection';
 import { meetingTurnOrder } from '../../lib/meetingTurnOrder';
-import { meetingFocus } from '../../lib/memberWishStory';
+import { meetingFocus, storyCutoff } from '../../lib/memberWishStory';
 import { meetingDeck, meetingSlidePosition } from '../../lib/meetingAgenda';
 import { MemberWishStory } from '../../components/meetings/MemberWishStory';
 import { meetingVoteResults } from '../../lib/meetingVoteResults';
@@ -4525,7 +4525,7 @@ export default function MeetingHelperScreen() {
                 selectedId={answers.q_hd_wish_id} selectedText={getTextAnswer(answers, 'q_hd_wish')} hasCheckIn={!!response}
                 progressText={detailSections.find(section => section.key === 'q_pop_progress')?.text}
                 communityId={communityId} memberId={member.id} reportedWish={reportedWish}
-                since={cycleStart.toISOString()} scale={sz(24, 18) / 18}
+                since={cycleStart.toISOString()} before={storyCutoff(nextMeeting.event_date, nextMeeting.event_time)} scale={sz(24, 18) / 18}
               /> : null}
               {deckSlug === 'tech' ? detailSections.map((section) => (
                 <View key={section.key}>

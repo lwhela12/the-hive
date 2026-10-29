@@ -1,3 +1,4 @@
+import { parseCalendarTime } from './timeInput';
 export type StoryWish = { id: string; user_id: string; description: string; status?: string | null; is_active?: boolean | null; is_spotlight?: boolean | null };
 export type StoryTask = { id: string; description: string; assigned_to: string | null; related_wish_id: string | null; completed: boolean; completed_at: string | null; created_at?: string; related_user_id?: string | null };
 export const wishIdentity = (text: string) => text.normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
@@ -21,9 +22,26 @@ export function compactWishSteps(tasks: StoryTask[], wishId: string | undefined,
   return { next: [...groups.values()][0] ?? null, completed: linked.filter(t => t.completed && !!t.completed_at && t.completed_at >= since).length };
 }
 
-/** A month of reminders, grouped by action; unchecked promises stay visibly open. */
-export function monthlyHelp(tasks: StoryTask[], memberId: string, since: string) {
-  const recent = tasks.filter(t => t.completed ? !!t.completed_at && t.completed_at >= since : !!t.created_at && t.created_at >= since);
+/** Use the meeting's Pacific wall clock, independent of the viewer's timezone. */
+export function storyCutoff(date: string, time: string | null) {
+  return `${date}T${parseCalendarTime(time ?? '')?.start ?? '00:00'}:00`;
+}
+const pacificTimestamp = new Intl.DateTimeFormat('sv-SE', {
+  timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+});
+/** Completed during the month, strictly before this meeting. New promises are next steps. */
+export function completedStoryTasks(tasks: StoryTask[], since: string, before: string) {
+  const start = Date.parse(since);
+  return tasks.filter(task => {
+    const completedAt = Date.parse(task.completed_at ?? '');
+    return task.completed && Number.isFinite(completedAt) && completedAt >= start
+      && pacificTimestamp.format(new Date(completedAt)).replace(' ', 'T') < before;
+  });
+}
+/** Only completed help belongs under "I helped" / "Help I received". */
+export function monthlyHelp(tasks: StoryTask[], memberId: string, since: string, before: string) {
+  const recent = completedStoryTasks(tasks, since, before);
   function group(direction: 'given' | 'received') {
     const rows = recent.filter(t => direction === 'given'
       ? t.assigned_to === memberId && t.related_user_id && t.related_user_id !== memberId
