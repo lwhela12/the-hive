@@ -22,7 +22,7 @@ import {
 WebBrowser.maybeCompleteAuthSession();
 
 // The implementation can be shipped ahead of the operational dependency, but
-// the door must stay closed until Email Auth, SMTP, the OTP template and the
+// the door must stay closed until Email Auth, a verified sender, the OTP template and the
 // existing-Google-account migration have all been rehearsed. Undefined, false,
 // "1" and every other value fail closed; only the literal string "true" opens
 // it in a deliberately configured build.
