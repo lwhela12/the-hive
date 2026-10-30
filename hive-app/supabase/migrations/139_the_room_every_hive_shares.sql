@@ -15,9 +15,9 @@
 -- WHAT IT DOES NOT: every other room. A HIVE's own General is still shut to
 -- everybody outside that HIVE — those policies are untouched below.
 --
--- ON PRODUCTION HIVE, WHOSE CEILING IS 'hive': its members can still read and
--- write here. That is not a leak of Production's contents — max_share_scope
--- governs what a HIVE publishes outward, and nothing in Production is being
+-- ON A PRIVATE HIVE, WHOSE CEILING IS 'hive': its members can still read and
+-- write here. That is not a leak of a private HIVE's contents — max_share_scope
+-- governs what a HIVE publishes outward, and nothing private is being
 -- published by this. It is a person choosing to say something in a room they
 -- know is shared, which is exactly the choice the boards decision already made
 -- on 2026-08-03. Their HIVE's own room stays sealed.

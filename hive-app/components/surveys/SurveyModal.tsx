@@ -218,9 +218,8 @@ export function SurveyModal({
 }: SurveyModalProps) {
   const router = useRouter();
   /**
-   * Nat, 2026-09-01: every survey still wore honey gold inside Tech HIVE and
-   * Production HIVE — the number chips, the selected answers, the submit
-   * button — in a HIVE whose whole shell is blue or purple.
+   * Every survey uses the active HIVE's colour for its number chips, selected
+   * answers, and submit button.
    *
    * Read off the SURVEY, not off the screen behind it. Gold returns its exact
    * hand-tuned family, so OG HIVE does not move a pixel.
@@ -610,9 +609,8 @@ export function SurveyModal({
 
   const renderCarryForwardContext = (
     items: CarryForwardItem[] = carryForwardItems,
-    heading = hiveSlug === 'show' || hiveSlug === 'production' ? 'Your Production HIVE jobs' : 'Still to do',
+    heading = 'Still to do',
   ) => {
-    const isProduction = hiveSlug === 'show' || hiveSlug === 'production';
     if (carryForwardLoading) {
       return (
         <View style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: tint.line(0.45), borderRadius: 16, padding: 16, marginBottom: 24, alignItems: 'center' }}>
@@ -668,9 +666,7 @@ export function SurveyModal({
           <>
             <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 6 }}>{heading}</Text>
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#7f715f', lineHeight: 19, marginBottom: 14 }}>
-              {isProduction
-                ? 'Open each job’s thread to add findings, photos or files. Tick it done when the work and the record are complete.'
-                : 'Tick off anything else you’ve finished.'}
+              Tick off anything else you’ve finished.
             </Text>
           </>
         )}
@@ -717,15 +713,6 @@ export function SurveyModal({
                 </View>
 
                 {renderCarryForwardControls(item)}
-                {isProduction && item.type === 'action_item' && item.relatedBoardPostId ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => router.push({ pathname: '/board', params: { postId: item.relatedBoardPostId!, from: 'beforewemeet', open: String(Date.now()) } })}
-                    style={{ alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', paddingHorizontal: 4 }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', color: tint.accent, fontSize: 13 }}>Add findings, photos or files →</Text>
-                  </Pressable>
-                ) : null}
               </View>
             );
           })}

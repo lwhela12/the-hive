@@ -2057,7 +2057,6 @@ export default function HiveScreen() {
   // for a title containing "bug report", opened as a wish sheet. It is a screen
   // of its own now (`/app-feedback`, migration 138), because a wish needs a HIVE
   // and feedback about the app does not — which is exactly how Nat found it,
-  // by pressing App Feedback at HIVE-Wide and arriving in Production HIVE.
   //
   // The ?feedback=1 parameter is gone with it. Nothing points here any more:
   // the rail and the Home honeycomb both go straight to the screen.
@@ -2091,7 +2090,6 @@ export default function HiveScreen() {
       return { label: 'Go to wish', onPress: () => openWishFromActivity(wishId) };
     }
     // A thread beats a whole board: if the to-do knows which conversation it
-    // belongs to, land on that conversation. Production's jobs arrive this way
     // — the thread holds the phone number and the questions, and it is where
     // whoever took the job writes down what they found out.
     if (item.related_board_post_id) {
@@ -2934,30 +2932,11 @@ export default function HiveScreen() {
     return () => { active = false; };
   }, [communityId, profile?.id]));
   // `flow: 'tuneup'` means this card is the door. Every HIVE reads that way as
-  // of 2026-08-28 — Production's halfway became a copy of OG's rather than a
   // survey of its own — and the value is kept rather than assumed so a HIVE
   // whose halfway is a bare survey is still one entry, not a rewrite.
   const inHalfwayWindow = !!halfwayShape
     && halfwayShape.flow === 'tuneup'
     && isInHalfwayWindow(halfwayShape, todayDate, nextMeetingDate);
-  /**
-   * ...and when it IS the door, the survey behind it does not get a second one.
-   *
-   * Production's halfway row is now the filing cabinet the wizard writes the
-   * newsletter answer into, not a screen anybody is meant to open. Left alone,
-   * Home would have offered both in the same window — "Halfway check-in · take
-   * 2 min" sitting directly above "Halfway check-in", one of them the nudge Nat
-   * approved and the other the raw survey behind it. Two cards for one job is
-   * the same trap the old `flow: 'survey'` note warned about, arrived at from
-   * the opposite direction.
-   *
-   * It is the SHAPE that decides, not today's window and not whether she has
-   * finished. Tied to the window, the raw survey would have reappeared on 1
-   * September and sat there for a week; tied to `halfwayDone`, it would have
-   * popped up the moment somebody completed the wizard — finish your check-in,
-   * and here is your check-in again. If the wizard is this HIVE's door, it is
-   * the door on every day of the month.
-   */
   const halfwayWizardOwnsTheDoor = halfwayShape?.flow === 'tuneup';
 
   const homeTodos: HomeTodo[] = [

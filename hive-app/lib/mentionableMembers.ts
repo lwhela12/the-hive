@@ -280,9 +280,7 @@ async function dispatchMentionNotifications({
   if (!text || !shownPreview) return;
 
   // Resolve typed handles against every HIVE there is, not only the ones the
-  // screen's reach object happened to know. An owner tags "@production" from
-  // a HIVE she is standing outside of; detection has to know Production HIVE
-  // exists before the server can be asked to reach it.
+  // screen's reach object happened to know.
   let sendReach = reach;
   if (sendReach && !sendReach.noGroups && !sendReach.closedRoom && sendReach.hive && text.includes('@')) {
     try {

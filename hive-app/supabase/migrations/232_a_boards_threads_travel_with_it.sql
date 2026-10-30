@@ -1,7 +1,7 @@
 -- A board's threads travel with the board.
 --
 -- Nat, 2026-09-04: she opened HIVE Approved — OG's board of trusted brands,
--- shops and local gems — and moved it to HIVE-Wide so Tech and Production could
+-- shops and local gems — and moved it to HIVE-Wide so Tech could
 -- read it too. Two things were wrong.
 --
 -- The first was the app refusing the save (fixed in `board.tsx`: a built-in

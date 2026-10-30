@@ -121,8 +121,8 @@ serve(async (req) => {
    * A survey belonging to a HIVE reaches that HIVE. A survey belonging to none
    * is one of the two merged check-ins, and the two do NOT reach the same room:
    *
-   *   End of the month   active OG and Tech members, once however many of
-   *                      those HIVEs they are in. Production is paused.
+   *   End of the month   active HIVE members, once however many HIVEs they
+   *                      are in.
    *
    *   Before we meet     the members of whichever HIVE meets TOMORROW, minus
    *                      anyone who has already answered that HIVE's part.
@@ -144,16 +144,8 @@ serve(async (req) => {
    * the question "has this person done Tech yet" has an honest answer even
    * though Tech shares a survey with everybody else.
    *
-   * ## The letter never names another HIVE
-   *
-   * The first version of this gathered every meeting in the next seven days and
-   * wrote them into the letter — *"Tech HIVE, Tuesday · Production HIVE,
-   * Thursday"* — and sent it to all eleven people. Nat: *"Production HIVE is
-   * lord voldemort, we cant have that just out and about for people to see."*
-   * Naming it outside itself is one leak; naming the DAY it meets is a second,
-   * and the fact that a meeting happened at all is a fact about that HIVE (see
-   * migration 224). Tying the letter to one meeting removes the temptation:
-   * everyone who receives it is already inside the HIVE it is about.
+   * The letter is tied to one meeting, so everyone who receives it is already
+   * inside the HIVE it is about.
    */
   const PACIFIC_TZ = 'America/Los_Angeles';
   const pacificDate = (at: Date) =>
@@ -211,10 +203,8 @@ serve(async (req) => {
     ? [survey.community_id]
     : meetingTomorrow.map((h) => h.id);
   if (shape.kind === 'monthCheckIn') {
-    // Production is paused for this rollout. Resolve active HIVE IDs without
-    // ever putting another HIVE's name or content in a member letter.
     const { data: activeHives, error: activeError } = await admin.from('communities')
-      .select('id').in('slug', ['default', 'tech']);
+      .select('id');
     if (activeError) return errorResponse('Could not resolve check-in scope. Nothing sent.', 503);
     scopeIds = (activeHives ?? []).map((hive: { id: string }) => hive.id);
     if (!scopeIds.length) return errorResponse('No active HIVE is available for this check-in.', 409);

@@ -197,38 +197,13 @@ const TECH_MIDPOINT_STEPS: Step[] = [
 ];
 
 /**
- * Production's halfway — OG's, minus the one ritual Production does not have.
- *
- * Nat, 2026-08-28: *"Pro HIVE 1/2 way check in is ALMOST beat for beat like OG
- * HIVE, except Pro HIVE does NOT have a HIVE Help."* HIVE Help is OG's ritual
- * — the 15-minute favour swap that has its own board and its own monthly focus
- * thread — and Production has never run it. Offering the step anyway would ask
- * five people to log an act of help against a ritual that does not exist, which
- * is the same "answer with nowhere to go" Nat cut the POP questions for.
- *
- * So: newsletter, then to-dos. Two steps, and the letter that invites people to
- * it lists exactly these two (`_shared/halfwaySteps.ts`).
- */
-const SHOW_MIDPOINT_STEPS: Step[] = [
-  { key: 'newsletter', label: 'Newsletter' },
-  { key: 'todos', label: 'To-dos' },
-  { key: 'reach', label: 'How we reach you' },
-];
-
-/**
  * One flow pair per HIVE that has tailored check-ins. `hasTailoredCheckIns`
  * (lib/checkIns.ts) gates the pre-meeting tune-up and `hasHalfwayTuneup` gates
  * the halfway one; this table is what opens once you're through either.
- *
- * Production reaches only the `midpoint` half of its entry — its pre-meeting
- * survey is designed separately and closer to its meeting — so `tuneup` here is
- * OG's list, unreachable and honest about it rather than a lie waiting to be
- * switched on.
  */
-const FLOWS: Record<'default' | 'tech' | 'show', { tuneup: Step[]; midpoint: Step[] }> = {
+const FLOWS: Record<'default' | 'tech', { tuneup: Step[]; midpoint: Step[] }> = {
   default: { tuneup: STEPS, midpoint: MIDPOINT_STEPS },
   tech: { tuneup: TECH_STEPS, midpoint: TECH_MIDPOINT_STEPS },
-  show: { tuneup: STEPS, midpoint: SHOW_MIDPOINT_STEPS },
 };
 
 // What someone might want in the newsletter. Pills, not a blank box — the whole
@@ -799,7 +774,7 @@ export default function MonthlyTuneupScreen() {
   // member mid-wizard. Only slugs that pass `hasTailoredCheckIns` (checked
   // below, before anything renders) ever reach their FLOWS entry.
   const isTechFlow = community?.slug === 'tech';
-  const flow = FLOWS[community?.slug === 'tech' ? 'tech' : community?.slug === 'show' ? 'show' : 'default'];
+  const flow = FLOWS[community?.slug === 'tech' ? 'tech' : 'default'];
   const steps = isMidpoint ? flow.midpoint : flow.tuneup;
   const privacyChoices = usePrivacyChoices();
   const reachChoices = useReachChoices();
@@ -983,24 +958,6 @@ export default function MonthlyTuneupScreen() {
   const [doneForMe, setDoneForMe] = useState<TodoRow[]>([]);
   const [newTodoText, setNewTodoText] = useState('');
   const [todoSaving, setTodoSaving] = useState(false);
-  /**
-   * Whether this list has actually been read for the HIVE you are standing in.
-   *
-   * An empty array used to mean three different things — not loaded yet, loaded
-   * and genuinely empty, and the query failed — and the screen said the happiest
-   * of the three out loud: **"Nothing open — clean slate ✨"**.
-   *
-   * Nat, 2026-08-28, arriving from the OG email with six open to-dos: *"this
-   * says i have nothing on my to do list, which is not true."* She had opened
-   * the tune-up inside Production first (0 open), and Expo Router keeps this
-   * screen mounted after you leave it — the note on the focus effect above says
-   * so — so Production's empty list was still sitting in state when OG's
-   * check-in opened on top of it.
-   *
-   * Congratulating somebody on a clean slate is the worst possible thing to say
-   * while holding the wrong HIVE's list, so the three states are three states
-   * now, and only the middle one gets the sparkles.
-   */
   const [todosState, setTodosState] = useState<'loading' | 'ready' | 'error'>('loading');
   /** The HIVE the list in state belongs to — a stale reply cannot overwrite a fresh one. */
   const todosForCommunityRef = useRef<string | null>(null);
@@ -1205,26 +1162,6 @@ export default function MonthlyTuneupScreen() {
   const [checkInSaving, setCheckInSaving] = useState(false);
   const [checkInError, setCheckInError] = useState<string | null>(null);
 
-  /**
-   * The row this HIVE's check-in answers are filed onto.
-   *
-   * OG's is titled "Monthly Check-in: POP + Energy", and for a long time that
-   * title WAS the question — one `find`, and every HIVE either had a monthly
-   * check-in or had nowhere to file.
-   *
-   * Production has a halfway check-in and no monthly one, so on 2026-08-28,
-   * the first time its halfway rode this wizard, the newsletter step would have
-   * answered *"Your HIVE has no check-in open right now, so there is nowhere to
-   * file this yet"* — a member typing a shout-out into a box that then refuses
-   * it. Nat's rule from the day before is the one this breaks: *"Having people
-   * fill out surveys and then not having their answers go anywhere is just
-   * having them do busy work, and it's bad."*
-   *
-   * So the question is "where does this HIVE file a check-in answer", and a
-   * HIVE's halfway row answers it just as well as a monthly one. The monthly
-   * row still wins where both exist — OG's pre-meeting deck writes seven
-   * answers onto it and must not start splitting them across two rows.
-   */
   const monthlyCheckInSurvey = availableSurveys.find(isMonthlyCheckInSurvey)
     ?? availableSurveys.find((survey) => isEndOfMonthCheckInSurvey(survey, community))
     /**
@@ -4208,10 +4145,7 @@ export default function MonthlyTuneupScreen() {
   // A link that named a HIVE gets to finish arriving first (see the top of this
   // component) — otherwise the door slams on the way in.
   //
-  // **The two modes are two doors.** Production's HALFWAY is OG's, copied, and
-  // it goes out with the newsletter; Production's PRE-MEETING is undesigned and
   // deliberately shut until Nat designs it. Asking one boolean for both is what
-  // would hand Production the arrival/energy/POP deck it was never meant to
   // have, so the halfway asks `hasHalfwayTuneup` and everything else still asks
   // `hasTailoredCheckIns`. Both fail closed.
   if (switchPending) {

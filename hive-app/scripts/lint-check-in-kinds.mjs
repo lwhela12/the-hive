@@ -1,32 +1,4 @@
 #!/usr/bin/env node
-/**
- * ONE TRUTH ABOUT WHAT A CHECK-IN IS, CHECKED ON EVERY BUILD.
- *
- * A survey's TITLE IS ITS TYPE — there is no `kind` column — so the regexes
- * that read a title are load-bearing in a way that ordinary strings are not.
- * `supabase/functions/_shared/checkInPatterns.ts` exists because they used to
- * live in two files with a comment saying "change one, change both", and on
- * 2026-08-15 somebody changed one. Nat, that afternoon: *"the same truth
- * written twice ... that's part of why today's break happened."*
- *
- * The comment came back anyway, because the shared file cannot be imported
- * everywhere it is needed: the app's tsconfig excludes `supabase/functions`
- * (it is Deno), and Postgres cannot import TypeScript at all. So there are
- * legitimately four transcriptions, and this replaces the comment that asked a
- * person to keep them in step with a build step that will not let them drift.
- *
- * On 2026-09-04 the cost of the drift showed up on a screen: Production's
- * end-of-month row was still titled "Halfway check-in", which the DISPLAY
- * pattern recognised and the MATCHER — an exact-title list, a fifth private
- * copy of the same idea — did not. Two "End of the month" items on one Home,
- * and nothing anywhere reporting a problem.
- *
- * WHAT THIS FAILS ON
- *   1. A registered copy whose regex no longer matches the shared file's.
- *   2. A NEW copy nobody registered — any `*_CHECK_IN_PATTERN` or
- *      `*_TITLE_PATTERN` regex in the app that is not in COPIES below. A fifth
- *      private list is exactly what caused this, so appearing is the failure.
- */
 import { readFileSync } from 'node:fs';
 import { globSync } from 'node:fs';
 import path from 'node:path';

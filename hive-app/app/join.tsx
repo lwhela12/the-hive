@@ -593,7 +593,6 @@ export default function JoinScreen() {
   // Show invite acceptance screen
   if (invite) {
     // The invited HIVE's own color, everywhere this page says its name —
-    // Tech's blue, Production's purple, OG's gold. Nat, on her phone
     // (2026-08-11): "this tech hive being amber is wrong colors."
     const inviteAccent = hiveAccent(invite.community);
     return (

@@ -46,7 +46,7 @@ create policy "Survey responses viewable by scope"
 -- 2. Daily questions and surveys
 -- ---------------------------------------------------------------------------
 --
--- Both carry community_id on every row. A Production HIVE member could read
+-- Both carry community_id on every row. A a private HIVE member could read
 -- every daily-question answer written in OG HIVE and Tech HIVE, and the full
 -- question set of every survey anywhere. Neither table was touched by 124 or
 -- 125, so no ceiling applied to them at all.
@@ -133,7 +133,7 @@ create policy "You can only add meeting audio to your own HIVE"
 -- ---------------------------------------------------------------------------
 --
 -- The `attachments` bucket is PUBLIC. Every image on every board — including
--- Production HIVE's, whose promise is that nothing leaves — has a URL that
+-- a private HIVE's, whose promise is that nothing leaves — has a URL that
 -- works for anyone holding it, forever, whatever the board says.
 --
 -- Not fixed here because closing it means every image in the app has to be

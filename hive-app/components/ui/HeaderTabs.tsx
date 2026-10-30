@@ -25,20 +25,6 @@ type HeaderTabsProps<T extends string> = {
   accent?: string;
 };
 
-/**
- * Shared section-header grammar: folder tab(s) on the left, action pills on
- * the right. One style for single- and multi-tab headers (tab label 15,
- * padding 12/8; pill label 12, padding 10/6).
- *
- * It reads the HIVE and the page skin ITSELF, the way AppHeader does, rather
- * than taking them as props. Nat, 2026-08-03: "all OG HIVE have creams & all
- * Tech tabs are blue and all Production tabs are purple". Every tab in the app
- * was gold regardless of which HIVE you were standing in, because the accent
- * lived only in the header bar and the rail — and threading it through the
- * dozen screens that use these tabs is a dozen chances to miss one. Per-screen
- * opt-in is exactly what caused the "colours don't stay with me" bug earlier
- * the same day; the fix there was the same as the fix here.
- */
 export function HeaderTabs<T extends string>({
   tabs,
   activeTab,

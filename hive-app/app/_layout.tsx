@@ -956,9 +956,6 @@ function RootLayoutInner() {
       />
       <AuthContext.Provider value={authContextValue}>
         <ThemeProvider value={wholeHive ? SPACE_NAV_THEME : HIVE_NAV_THEME}>
-          {/* The transparent iPhone status bar sits on the same colour as the
-              page header. Tech and Production need light system lettering;
-              OG's brighter honey needs dark; HIVE-Wide stays light on black. */}
           <StatusBar style={statusBarStyle} />
           <Stack
             screenOptions={{

@@ -107,7 +107,6 @@ export default function AppLayout() {
   const insets = useSafeAreaInsets();
   // The phone's top inset is hardware space, but it is still part of the
   // current place. Paint it with the same colour as AppHeader so a Tech-blue,
-  // Production-purple, OG-gold or HIVE-Wide-black header reaches the top of
   // the glass instead of starting below a pasted-on cream strip.
   const topChrome = wholeHive ? HIVE_WIDE_HEADER : hiveAccent(community);
   // Signed here in the body rather than inside `tabBarIcon`, which is a plain
@@ -403,7 +402,6 @@ export default function AppLayout() {
           // container (`MaybeScreenContainer`, flex only, no colour), the screen
           // wrapper (`MaybeScreen`, absoluteFill only), `SafeAreaProviderCompat`
           // (flex only), and the suspense fallback for a code-split route, which
-          // is `null` in a production build — expo-router's
           // build/views/SuspenseFallback.js only draws its "Bundling…" toast in
           // development. Every one of those is transparent, so this scene style
           // and the stack's `contentStyle` really are the only two surfaces.

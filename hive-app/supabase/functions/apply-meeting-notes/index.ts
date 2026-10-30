@@ -143,18 +143,6 @@ function cleanStringArray(value: unknown): string[] {
     : [];
 }
 
-/**
- * A reply that put its whole answer inside its own `summary` string.
- *
- * The model is asked for strict JSON and usually gives it. When it does not —
- * when the body comes back nested one layer deeper — every field except the
- * summary reads as missing, and the summary itself becomes a page of braces on
- * the member's screen. Nat opened August's Production meeting to exactly that
- * on 2026-08-19: *"I hate the way this looks."*
- *
- * Unwrapped once, here, before anything is normalised. The inner object wins
- * wherever both speak, because it is the real answer.
- */
 function unwrapNestedAnalysis(value: Record<string, any>): Record<string, any> {
   const inner = typeof value.summary === 'string' ? stripCodeFence(value.summary) : '';
   if (!inner.startsWith('{')) return value;

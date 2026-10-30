@@ -9,7 +9,7 @@
 alter table public.communities
   add column if not exists publicly_listed boolean not null default false;
 
--- OG HIVE and Tech HIVE may be acknowledged publicly. Production HIVE is
+-- OG HIVE and Tech HIVE may be acknowledged publicly. a private HIVE is
 -- deliberately absent from public pages, APIs, newsletters and event feeds.
 update public.communities
 set publicly_listed = (slug in ('default', 'tech'));

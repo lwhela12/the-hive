@@ -36,7 +36,6 @@ vm.runInNewContext(ts.transpileModule(`${extracted}\nthis.result = { DECKS, HIVE
 const { DECKS, HIVE_INTRO, APP_TOUR, renderWhatIsHive } = context.result;
 assert.deepEqual(Array.from(DECKS.tech.slides), ['room', 'outline', 'whatis', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks']);
 assert.deepEqual(Array.from(DECKS.default.slides), ['room', 'outline', 'rollcall', 'news', 'treasurer', 'spend', 'meetups', 'hummdinger', 'wrapup', 'thanks']);
-assert.deepEqual(Array.from(DECKS.show.slides), ['room', 'outline', 'rollcall', 'news', 'meetups', 'assignments', 'wrapup', 'thanks']);
 for (const deck of Object.values(DECKS)) {
   assert.deepEqual(Array.from(deck.agenda, item => item.key), Array.from(deck.slides).filter(key => key !== 'thanks'), 'Outline and navigation agree with actual slide order');
   assert.equal(new Set(deck.slides).size, deck.slides.length, 'Every shared presentation key is unique');
@@ -50,4 +49,4 @@ assert.match(html, /<h1>What is HIVE\?<\/h1>/);
 for (const point of HIVE_INTRO.points) assert.ok(html.includes(point.heading) && html.includes(point.body), 'Every explanation renders in full');
 assert.ok(!/<(button|input|textarea|a)\b/.test(html), 'The introduction has no writes or detours');
 assert.ok([HIVE_INTRO.lead, ...HIVE_INTRO.points.map(point => point.body)].join(' ').split(/\s+/).length < 75, 'Keep the presentation copy glanceable');
-console.log('PASS: Tech introduction, all three slide orders, agenda parity, shared presentation key, full rendered copy, unchanged app tour and shared HIVE-Wide meaning.');
+console.log('PASS: Tech introduction, both slide orders, agenda parity, shared presentation key, full rendered copy, unchanged app tour and shared HIVE-Wide meaning.');

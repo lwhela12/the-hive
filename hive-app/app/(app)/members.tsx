@@ -229,27 +229,6 @@ type TravellingPieces = {
   reachByUser: Record<string, { piece_reach: Record<string, string> | null; profile_scope: string | null }>;
 };
 
-/**
- * The pieces of these people that have left their own HIVE.
- *
- * This is the fix for the thing Nat hit twice on 2026-08-19. `lib/hooks/
- * useMembersQuery.ts` asks for one HIVE's rows — `.eq('community_id', …)` on
- * both skills and wishes — which is right for the HIVE you are standing in and
- * is the whole answer nowhere else. So her Nellie wish, written in OG HIVE and
- * marked HIVE-Wide, appeared in OG HIVE and vanished in Production: *"it only
- * showed up on the HIVE-wide and OG HIVE. It skipped Production HIVE."*
- *
- * This asks the other half of the question — **everything of theirs that
- * reaches this far, whichever HIVE it was written in** — and the screen puts
- * the two answers together. No community filter here on purpose: row-level
- * security already decides what may cross a HIVE line, and it checks the
- * OWNING HIVE's ceiling while it does it, so a HIVE that keeps its things to
- * itself still does.
- *
- * If any of it fails — most likely because migration 190 has not been applied
- * yet — the screen keeps doing exactly what it did before rather than showing
- * an emptier card. See `honoured`.
- */
 function useTravellingPiecesQuery({ userIds, enabled }: { userIds: string[]; enabled: boolean }) {
   const ids = [...userIds].sort();
 

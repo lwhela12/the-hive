@@ -8,9 +8,7 @@ export function BuzzContributionInput({ value, onChangeText, placeholder, disabl
   value: string; onChangeText: (text: string) => void; placeholder: string; disabled: boolean;
 }) {
   const { profile, memberships } = useAuth();
-  // The Buzz is HIVE-Wide editorial space. Production is a sealed HIVE: its
-  // name, members and tag target must never appear in this form.
-  const buzzMemberships = memberships.filter(membership => membership.community?.slug !== 'show');
+  const buzzMemberships = memberships;
   const ids = buzzMemberships.map(membership => membership.community_id).sort();
   const { data: members = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['buzzMentionMembers', profile?.id, ids], enabled: !!profile && ids.length > 0,

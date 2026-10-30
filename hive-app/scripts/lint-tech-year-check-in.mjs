@@ -7,7 +7,7 @@ const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const source = readFileSync(path.join(ROOT, 'lib/checkIns.ts'), 'utf8');
 
 const yearDecks = source.match(/const YEAR_QUESTIONS_BY_SLUG:[\s\S]*?\n};/)?.[0] ?? '';
-const techDeck = yearDecks.match(/tech:\s*\[(.*?)\n\s*\],\n\s*show:/s)?.[1] ?? '';
+const techDeck = yearDecks.match(/tech:\s*\[(.*?)\n\s*\],\n\s*};/s)?.[1] ?? '';
 const questionId = 'q_year_honey_pot';
 
 if (!techDeck.includes(`'${questionId}'`)) {

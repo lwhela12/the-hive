@@ -24,12 +24,6 @@ import { getHiveWideActivityAuthorName } from '../../lib/hiveWideIdentity';
 import { isEndOfMonthCheckInSurvey } from '../../lib/checkIns';
 import { wideCompletedMonthTodo, wideMonthTodo, type MonthReceipt, type MonthResponse } from '../../lib/wideCheckInTodos';
 
-/**
- * HIVE-Wide is a Home, not a separate orientation product. Its layout is the
- * same Home grammar members already know inside OG, Tech, and Production:
- * updates first, then four live panels. The data boundary is the distinction:
- * every item here has deliberately travelled to HIVE-Wide.
- */
 
 const INK = '#FFF8E9';
 const INK_SOFT = 'rgba(255,248,233,0.72)';

@@ -1,23 +1,5 @@
 import Svg, { Polygon } from 'react-native-svg';
 
-/**
- * One HIVE, as a shape you can recognise before you've read anything.
- *
- * Nat, 2026-08-05: *"I think these should all be size/shape/colour coded,
- * because we want to be able to notice at a glance which meeting for who."*
- *
- * A single honeycomb cell, filled in that HIVE's own colour: OG's gold, Tech's
- * blue, Production's purple. It is deliberately the same cell the logo is built
- * out of — the app already draws seven of them clustered in `HexagonIcon`, and
- * this is one of those, pulled out and given a colour to carry.
- *
- * Pointy-top, matching `HexagonIcon` exactly, so a lone mark and the honeycomb
- * cluster look like the same object at two magnifications rather than two
- * different hexagons.
- *
- * The counterpart is `WorldMark` — the Earth — which is what something wears
- * once it has left its own HIVE. Hexagon means here, world means everywhere.
- */
 
 /** Pointy-top hexagon, centred in a 24-unit box. */
 function points(r: number): string {

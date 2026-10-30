@@ -6,7 +6,7 @@ import type { Community } from '../../types';
 /**
  * What a HIVE without a Honey Pot sees.
  *
- * Tech and Production were both being shown OG's Honey Pot screen: a £0
+ * Some HIVEs were being shown OG's Honey Pot screen: a £0
  * balance, an empty ledger, and a quarterly dues line for dues nobody had
  * agreed to. A fund that looks abandoned is worse than no fund — it reads as
  * something the HIVE is failing at rather than something it hasn't chosen.
@@ -32,18 +32,6 @@ const IDEAS_BY_SLUG: Record<string, IdeaSet> = {
       'One shared subscription nobody wants to buy alone',
       'Covering a member’s ticket to a conference or a course, on the understanding they bring it back to the group',
       'Seed money for whoever’s idea the HIVE decides to get behind this quarter',
-    ],
-  },
-  show: {
-    // Production TALKED about it and said not at this time (the room,
-    // 2026-08-18; Nat: "pause, don't delete"). Saying the decision out loud is
-    // what keeps this page from reading like something the HIVE forgot.
-    lead: 'Production talked it over at the first meeting and said: not at this time. The section stays right here for whenever that changes — and when it does, it tends to go toward reach.',
-    ideas: [
-      'Marketing a show — posters, a boosted post, a photographer for the night',
-      'Props, costumes or a rehearsal space nobody wants to fund on their own',
-      'Submission fees for a festival, split so one person isn’t carrying it',
-      'Feeding everybody on a build day keeps the whole room going',
     ],
   },
 };

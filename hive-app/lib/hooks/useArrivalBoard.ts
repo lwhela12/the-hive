@@ -232,7 +232,6 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
       ]);
 
       // The room lights up from whichever check-in this HIVE runs before a
-      // meeting. OG and Tech have a monthly one; Production has a pre-meeting
       // one with a title of its own, and without this fallback its deck would
       // have opened on Tuesday showing an empty room while every member had
       // in fact checked in.

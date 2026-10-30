@@ -96,7 +96,7 @@ comment on function public.is_community_admin is
 --
 -- A HIVE admin should run their HIVE — rename it, set its colour, manage its
 -- people. How far its contents may travel is a different kind of decision, and
--- Production HIVE's promise that nothing leaves is not something its own
+-- a private HIVE's promise that nothing leaves is not something its own
 -- members should be able to switch off.
 
 create or replace function public.guard_community_ceiling()

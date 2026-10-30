@@ -1,105 +1,3 @@
-/**
- * The Meet transcripts come home.
- *
- * Nat and Lucas, 2026-08-19: **Tech HIVE meets on Google Meet.** Everybody in
- * Tech is remote on their own machine, Meet is free where the in-app video is
- * metered, and the Library pipeline was already built on Meet transcripts. Nat,
- * on the last manual step left in that chain: *"let's have an auto import from
- * that, that'd be great."*
- *
- * Before this, a Meet transcript was a Google Doc sitting in Drive waiting for
- * somebody to notice it, open it, copy it, and paste it into HIVE. This function
- * is that person.
- *
- * ============================================================================
- * TWO THINGS MUST BE TRUE BEFORE THIS CAN READ ANYTHING (both verified missing
- * on 2026-08-19, both need a person)
- * ============================================================================
- *
- * 1. **The HIVE Google token needs permission to read Drive.**
- *    `scripts/get-google-token.js` asks for `calendar.events` and nothing else.
- *    Add `https://www.googleapis.com/auth/drive.readonly` to its SCOPES, run it
- *    again with consent forced, and store the new `HIVE_GOOGLE_REFRESH_TOKEN`.
- *
- * 2. **The transcripts folder has to be shared with the HIVE Google account.**
- *    They live in `Default Folder for Meeting Recordings`
- *    (`1iuPeidhXAMzLWNxc3L2nCxjYR9at_qzh`), which is owned by
- *    **natwalstead@gmail.com** — Nat's personal account, not the account whose
- *    refresh token this app holds. Until Nat shares that folder read-only with
- *    the HIVE account, the folder does not exist as far as this function is
- *    concerned.
- *
- * These two failures look nothing alike in a log — one is a 403 from the API,
- * the other is a folder id that simply is not there — so each is reported in its
- * own words below rather than as "Drive said no".
- *
- * ## Where the documents actually are (Drive, checked 2026-08-19)
- *
- * Not in the recordings folder itself. Each meeting gets its own subfolder named
- * `YYYY-MM-DD — <event title>`, and the five artifacts sit inside it:
- *
- *     2026-08-13 — Le Mis Tech Podcast Call — Outline
- *     2026-08-13 — Le Mis Tech Podcast Call — Chat
- *     2026-08-13 — Le Mis Tech Podcast Call — Recording
- *     2026-08-13 — Le Mis Tech Podcast Call — Notes by Gemini
- *     2026-08-13 — Le Mis Tech Podcast Call — Transcript (Google Meet)
- *
- * So this looks one level down: the subfolders of the recordings folder, then
- * the documents in those. With no folder configured it searches the whole Drive
- * by name instead, which also works and is slower.
- *
- * ## The three name shapes
- *
- * 1. The common one today, after a Hermes automation renames them:
- *    `2026-08-13 — Le Mis Tech Podcast Call — Transcript (Google Meet)`
- * 2. Google Meet's own, untouched:
- *    `Hive Meeting - 2026/06/10 17:40 PDT - Transcript`
- * 3. An ad-hoc Meet with no calendar event behind it, named after the meeting
- *    code: `kwj-uivt-gti (2025-11-26 16:43 GMT-8) - Chat Transcript`
- *
- * The first two are read. The third is **skipped and says so**: a meeting code
- * is not a title, there is no calendar event to match it against, and there is
- * no honest way to guess whose conversation it was.
- *
- * "Notes by Gemini" is a different artifact from a transcript and goes through
- * its own door, `import-meeting-notes`. So do Recording, Outline and Chat.
- *
- * ## Which HIVE does this transcript belong to? — the conservative ladder
- *
- * Filing a transcript against the wrong HIVE puts one community's private
- * conversation inside another one. There is no undo for that in anybody's
- * memory, so this function would rather do nothing.
- *
- * Two signals are trusted, in order:
- *
- *   1. **The name says a HIVE by name** — "Tech HIVE", "OG HIVE", "Production
- *    HIVE". The HIVE's own word has to be sitting next to the word HIVE.
- *    A bare "tech" is not a signal, and the real Drive proves why: the most
- *    recent transcript in there is `Le Mis Tech Podcast Call`, which is Kelly's
- *    podcast and has nothing to do with Tech HIVE. Naming two HIVEs is not a
- *    signal either, it is a coin toss, so that skips.
- *   2. **The title is a scheduled meeting's title** — an `events` row with
- *    `event_type = 'meeting'` within a day either side. `schedule-meeting`
- *    writes the calendar event, Meet names the folder and the document after it,
- *    so this is the same string coming back around.
- *
- * **The date on its own is deliberately NOT a signal.** Nat is on Google Meet
- * all week for work that has nothing to do with a HIVE — Density calls, Le Mis
- * Tech, client calls. "Only one HIVE met that day, so this must be theirs" would
- * quietly file a client call into Tech HIVE. A day is a coincidence; a name is
- * an answer.
- *
- * When neither signal lands, the document is skipped with its reason in the
- * reply, and an owner can file it by hand with one call (see `document_id` +
- * `community` in the body). A skipped document is looked at again on every run,
- * so adding the missing meeting to the calendar is enough to make it import
- * itself next time.
- *
- * This mostly earns its keep on future Tech HIVE meetings. Nat's whole Drive
- * holds exactly one native Meet transcript from the last two months, so there is
- * almost nothing to backfill — hence a modest default window that `days` widens
- * on request.
- */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
@@ -429,9 +327,8 @@ function readName(name: string): { title: string; meetingCode: string | null } {
 /**
  * The words that distinguish one HIVE from another, with the word HIVE itself
  * thrown away — every HIVE has it, so it identifies none of them. OG HIVE keeps
- * "og"; Tech HIVE keeps "tech"; Production HIVE keeps "production" and answers
- * to its slug "show" as well. OG's slug is `default`, which means nothing to a
- * person naming a meeting, so it is not a signal.
+ * "og" and Tech HIVE keeps "tech". OG's slug is `default`, which means nothing
+ * to a person naming a meeting, so it is not a signal.
  */
 function hiveWords(community: CommunityRow): string[] {
   const words = new Set<string>();
@@ -449,8 +346,7 @@ function hiveWords(community: CommunityRow): string[] {
  * The HIVE's word has to be sitting next to the word HIVE — "Tech HIVE", "HIVE
  * Tech". A bare "tech" is not a signal and the real Drive is the proof: the most
  * recent transcript in it is `Le Mis Tech Podcast Call`, which is Kelly's
- * podcast, recorded outside HIVE on purpose. "Show" is worse — it is an ordinary
- * English word that turns up in half the meeting titles anybody writes.
+ * podcast, recorded outside HIVE on purpose.
  *
  * The cost of being this strict is a HIVE meeting titled loosely falls through
  * to the calendar-event signal below, or is skipped and named in the reply. The

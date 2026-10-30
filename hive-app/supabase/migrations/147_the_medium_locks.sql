@@ -21,7 +21,7 @@
 -- Look at what is missing: there is no `cm.community_id = anything`. It asks
 -- "are you an admin somewhere", not "are you an admin here" — and there is no
 -- "here" to ask about, because neither table has a community_id. They are
--- app-wide lists. So the moment Tech HIVE or Production HIVE gets its own
+-- app-wide lists. So the moment Tech HIVE or a private HIVE gets its own
 -- admin, that person can read and edit every address on the whole app's
 -- newsletter list and everybody who ever asked to be let in.
 --

@@ -33,7 +33,6 @@ interface AppHeaderProps {
 // The one page-title treatment for the whole app: WHERE above WHAT, and stop.
 //
 // Nat's HIVE-wide decree, 2026-08-24: page headers keep the place (HIVE-Wide,
-// OG HIVE, Tech HIVE, Production HIVE) and the destination (Members, Boards,
 // Clive, etc.), with no explanatory sentence underneath. Functional guidance
 // belongs beside the control or content it explains, never in this masthead.
 // Keeping the prop out of this interface makes the rule compile-time enforced.
@@ -67,7 +66,6 @@ export const AppHeader = memo(function AppHeader({
   const accent = resolvedTone === 'hive' ? hiveAccent(community) : HIVE_WIDE_HEADER;
   const hiveName = hiveDisplayName(community?.name);
   // The line above the title says WHERE. It never disappears: Home is still a
-  // page inside OG HIVE / Tech HIVE / Production HIVE, and Admin is a page at
   // HIVE-Wide. The large title says WHAT and matches the side rail.
   //
   // HIVE-Wide used to say nothing here, on the reasoning that it sits above the

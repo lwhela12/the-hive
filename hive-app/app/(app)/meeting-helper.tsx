@@ -74,7 +74,6 @@ import { parseAmericanDate } from '../../lib/dateUtils';
 import { networkingEventDescription, normalizeEventInfoUrl } from '../../lib/networkingEvent';
 import { AppHeader } from '../../components/navigation';
 import { showAlert } from '../../lib/showAlert';
-import { fetchProductionProjectStatus, groupProductionJobs, type ProductionProjectJob } from '../../lib/productionProject';
 import { getMentionedMembers, hasBroadcastMention } from '../../lib/mentions';
 import { useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import {
@@ -146,7 +145,6 @@ const PLAIN_FIELD = {
 
 // ---- Per-HIVE deck definitions ----
 // Each HIVE that has a designed rhythm gets a deck here — a declarative list,
-// so Production's future deck becomes a third entry rather than a third
 // branch. OG (slug 'default') is the original deck, byte-for-byte; Tech is
 // Tech's deck keeps its work-and-craft focus and networking instead of hangs.
 // Its Honey Pot slide now records the group's decision to wait until January.
@@ -174,13 +172,6 @@ type DeckSlideKey =
   | 'spend'
   | 'meetups'
   | 'hummdinger'
-  /**
-   * Production's replacement for the member-conversation slide. OG spends it
-   * on HD wishes and Tech starts with tools and discoveries; Production has
-   * one shared goal, so that stretch is spent handing out the jobs that move it.
-   * Same mechanism underneath — @-mention a member and it lands on their list.
-   */
-  | 'assignments'
   | 'wrapup'
   | 'thanks';
 
@@ -267,152 +258,15 @@ type DeckDefinition = {
    * Answers from the pre-meeting check-in, printed on the slide that decides
    * the thing they answer.
    *
-   * Nat, 2026-08-14, on Production's night: *"we can put the how often do you
-   * want to meet and the HIVE Help questions in the pre-production meeting
-   * survey... that information can kind of precede the meeting helper, and
-   * then we can decide things."* So the room walks in already knowing where
-   * everybody stands, and spends the meeting deciding rather than surveying.
+   * The room walks in already knowing where everybody stands, and spends the
+   * meeting deciding rather than surveying.
    */
   checkInSays?: { slide: DeckSlideKey; heading: string; keys: { key: string; label: string }[] }[];
   wrapupReminders: string[];
 };
 
-/**
- * Production HIVE's opening jobs.
- *
- * Every one of these turns a blank on the research site into a real number.
- * They live here rather than in the database because the FIRST meeting needs
- * them on screen before anyone has typed anything — and because the questions
- * matter as much as the job does. Nat, 2026-08-14: *"it doesn't have a task
- * attached to it... it should say who's going to call, these are the questions
- * that you need to ask, and then who's getting assigned to that."*
- *
- * Once the first meeting has handed these out they are ordinary to-dos like
- * any other, and the next round of work is written by the group, not by this
- * list. This is a starting grid, not a permanent fixture.
- */
-const PRODUCTION_JOBS: { key: string; title: string; why: string; asks: string[]; threadId: string }[] = [
-  {
-    key: 'circus-center',
-    threadId: 'ac33d3c4-7a7c-47dc-b2af-54ac37d0b93f',
-    title: 'Call Las Vegas Circus Center',
-    why: 'They already built a rigged circus facility in a Las Vegas warehouse, under these exact codes. One call answers what a hundred property listings could not.',
-    asks: [
-      'What is your ceiling height, floor to lowest obstruction?',
-      'What was the building before?',
-      'Who engineered your rigging points, and would you use them again?',
-      'Did you need a Special Use Permit, and how long did it take?',
-      'What surprised you most about the buildout?',
-    ],
-  },
-  {
-    key: 'broker',
-    threadId: 'fa605a5d-15ec-4e1a-a0f8-9d135d9bed79',
-    title: 'Call a tenant-rep industrial broker',
-    why: 'A broker can search by ceiling height, which is the one thing the public listings leave out.',
-    asks: [
-      'Las Vegas metro, 36 ft clear or more, under 50,000 sq ft — what exists?',
-      'Can we see the broker flyers? They carry heights the web listings do not.',
-      'Who handles aircraft hangars, soundstages, gyms and ice rinks?',
-    ],
-  },
-  {
-    key: 'rigging',
-    threadId: 'b603855c-0376-49dc-8f2c-fcf5945a70dd',
-    title: 'Get a rigging quote',
-    why: 'A real number here changes the whole budget. It takes one call to get it.',
-    asks: [
-      'What does it cost to engineer and install points for silks, lyra and straps?',
-      'Do we need a Nevada-licensed structural engineer stamp, and do you provide one?',
-      'Lead time from survey to certified and load-tested?',
-      'How much height do your points and the lighting grid actually eat?',
-    ],
-  },
-  {
-    key: 'insurance',
-    threadId: 'b551b839-4455-4aca-8eaa-49469c6daa85',
-    title: 'Call an entertainment insurance broker',
-    why: 'Performers need their own cover, separate from ordinary liability — and some carriers cap the height they will insure. Worth knowing early.',
-    asks: [
-      'General liability plus participant accident, for an eight-person aerial show — what does it run?',
-      'Do you impose a height restriction?',
-      'Does the premium change if we also run daytime classes?',
-    ],
-  },
-  {
-    key: 'fire',
-    threadId: 'dbb6d9ef-9f3c-4e34-ac82-c8bf4c2107ad',
-    title: 'Call Clark County Fire Prevention · 702-455-7316',
-    why: 'The sprinkler ruling is the largest cost in a conversion, and it turns on one official\'s reading. Get it in writing before anyone signs.',
-    asks: [
-      'Warehouse to theatre — does the 5,000 sq ft whole-building sprinkler rule apply?',
-      'Please confirm in writing.',
-      'What occupancy would you calculate for our seating plan?',
-    ],
-  },
-  {
-    key: 'notoriety',
-    threadId: '9aef35af-f028-467a-abbe-60ad9a0d93ee',
-    title: 'Call Notoriety · 702-243-0654',
-    why: 'The cheapest way to open at all — a licensed room by the day. The Robin Leach Lounge has 30 ft ceilings.',
-    asks: [
-      'Spec sheet with real ceiling heights per room?',
-      'What does the mandatory in-house catering cost per head?',
-      'Can we rig from your ceiling, and what are the load limits?',
-    ],
-  },
-  /* Nat, 2026-08-14: "the Pre-Production board is seeded with the calls that
-     need to be made, but it doesn't have the venues that we need to visit and
-     who's in charge of that — Sara and Charlee probably need to go do that
-     together." Standing in a room answers things a phone call cannot. */
-  {
-    key: 'see-notoriety',
-    threadId: '5e1b16d9-94d4-4301-83a4-be5bb00bf6fc',
-    title: 'Go and see Notoriety',
-    why: 'Downtown, rents by the day, and the Robin Leach Lounge has 30 ft ceilings.',
-    asks: [
-      'Does 26 ft of clear air feel real in there?',
-      'Where would the rigging points go?',
-      'Where do performers change, and where do they warm up?',
-      'What does the room feel like with 100 people in it?',
-    ],
-  },
-  {
-    key: 'see-space',
-    threadId: '33b1a4f9-6a94-4433-8d18-b17f6e15a167',
-    title: 'Go and see The Space',
-    why: '$5,000 a day, 220 seats, and a working box office we would not have to build.',
-    asks: [
-      'Ceiling height, floor to the lowest thing hanging down?',
-      'Can we rig from it, and what are the load limits?',
-      'How does their box office work, and what do they take?',
-    ],
-  },
-  {
-    key: 'see-vtc',
-    threadId: '3cf03adc-02dc-44ba-be1f-7e979aa7fc81',
-    title: 'Go and see Vegas Theatre Company',
-    why: '$1,000 for four hours, 60 to 95 seats, with lights, sound and bar service in it.',
-    asks: [
-      'Ceiling height and rigging — what is possible?',
-      'What does a recurring weekly booking cost against one-offs?',
-      'Who runs the bar, and who keeps that money?',
-    ],
-  },
-  {
-    key: 'see-tent',
-    threadId: '32959bc9-96d0-43dd-afa6-28f75c387bd6',
-    title: 'Go and see the Henderson tent',
-    why: 'Circus Freaks and Jailbirds both play here, and the park is city-owned so the rate may be public record.',
-    asks: [
-      'What does the tent rent for, and who do we ask?',
-      'What is the height inside, and what can we hang from?',
-      'Power, air conditioning, and what happens at 110 degrees?',
-    ],
-  },
-];
 
-const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
+const DECKS: Record<'default' | 'tech', DeckDefinition> = {
   default: {
     slides: ['room', 'outline', 'rollcall', 'news', 'treasurer', 'spend', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
     agenda: [
@@ -446,19 +300,6 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
       'Dues: $25 / quarter · CashApp $HiveLV',
     ],
   },
-  /**
-   * Tech HIVE has NO roll call, and that is deliberate.
-   *
-   * Nat, 2026-09-01: all eight members are remote, so the room is a grid of
-   * faces with names printed under them — a roll call reads out a list
-   * everybody is already looking at. And the HummDinger sesh opens with
-   * introductions on a HIVE's first night (see `introsFirst` below), so on the
-   * one night a roll call would have earned its place it was the second
-   * go-round of the same names.
-   *
-   * OG and Production keep theirs: those rooms are in person, where knowing
-   * who actually walked in is a real question.
-   */
   tech: {
     slides: ['room', 'outline', 'whatis', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
     agenda: [
@@ -517,86 +358,6 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
     wrapupReminders: [
       'Next meeting — confirm the date in Plan',
       'Before we meet — bring one tech discovery',
-    ],
-  },
-  /**
-   * Production HIVE, designed out loud by Nat on 2026-08-14 for the first
-   * pre-production meeting.
-   *
-   * The order is hers and it is deliberately back-to-front against OG's. Her
-   * words: *"normally it goes like this, but we're going to go through this
-   * website first of my findings... and then that's going to help us answer a
-   * lot of questions."* So News from Nat carries the research site, everyone
-   * walks it together, and only THEN does the room decide cadence, whether it
-   * wants a HIVE Help, whether it wants a treasurer, who goes to look at
-   * venues, and who takes which job.
-   *
-   * Two deliberate departures from the other two decks:
-   *  - No "new in the app" block on the news slide. Nat: *"we don't need new
-   *    tech in the app"* — this room is about the show, not the software.
-   *  - The member-conversation slide becomes `assignments`. OG works through
-   *    wishes and Tech shares tools and discoveries; Production spends it
-   *    handing out work for one shared goal.
-   */
-  show: {
-    slides: ['room', 'outline', 'rollcall', 'news', 'meetups', 'assignments', 'wrapup', 'thanks'],
-    agenda: [
-      { key: 'room', label: 'Arrivals' },
-      { key: 'outline', label: 'Outline' },
-      { key: 'rollcall', label: 'Roll call' },
-      { key: 'news', label: 'News from Nat' },
-      { key: 'meetups', label: 'Next meeting' },
-      { key: 'assignments', label: 'Who takes what' },
-      { key: 'wrapup', label: 'Wrap-Up' },
-    ],
-    welcomeNudge: 'grab a seat',
-    // PAUSED, not deleted (Charlee said no in the room, 2026-08-18; Nat:
-    // "pause, don't delete"). The slide is out of `slides` above, so none of
-    // this draws — it waits here for the day Production wants the conversation.
-    treasurer: {
-      kind: 'duesConversation',
-      kicker: 'Ours to decide',
-      title: 'Honey Pot',
-      lead: 'This is the conversation. Everything here is still ours to pick.',
-      questions: [
-        'Do we want a Honey Pot — money the five of us put in to get this moving?',
-        'If yes: how much each, and what does it cover?',
-        'Who wants to be treasurer?',
-      ],
-    },
-    // One card, because Production schedules exactly one thing: the monthly
-    // meeting (decided in the room, 2026-08-18 — second Thursday). HIVE Help
-    // is out (Charlee said no), venue visits are sorted between the people
-    // going, and "How we run" was first-meeting framing — the how is decided
-    // (Nat, memo 229: "we don't need a how-we-run, we just need schedule the
-    // next meeting").
-    plan: {
-      kicker: 'On the calendar',
-      title: 'Schedule the next meeting',
-      cards: [
-        { key: 'meeting', title: 'The monthly meeting', blurb: 'Second Thursday, 5–7. Confirm the next one here and it lands on everyone\'s calendar.' },
-      ],
-      hangCardExpands: false,
-      // Never drawn — there is no Help card to expand. The type asks for it.
-      helpExpansion: { kind: 'conversation', lead: '', points: [] },
-      hasHelpFocusHeader: false,
-    },
-    // The recurring Production check-in works from live to-do rows rather than
-    // asking members to write a second account of the same project. Completed
-    // jobs are read directly onto News below. Capacity is the one survey answer
-    // the assignment slide still needs before handing out more work.
-    checkInSays: [
-      {
-        slide: 'assignments',
-        heading: 'Before anyone takes anything on',
-        keys: [
-          { key: 'q_plate', label: "What's on their plate" },
-        ],
-      },
-    ],
-    wrapupReminders: [
-      'The Research lives at show-proposal.vercel.app',
-      'Everything we decided tonight is on your to-do list',
     ],
   },
 };
@@ -927,46 +688,19 @@ export default function MeetingHelperScreen() {
   // Kept for the handful of DISCRETE choices — column counts, how many lines a
   // label may wrap to — where there is no in-between value to interpolate.
   const isTV = stageW >= 1180;
-  /**
-   * A phone held upright, where the deck's floating chrome stops floating and
-   * starts landing on the slide.
-   *
-   * Nat, 2026-08-17, testing the deck on her phone three days before the first
-   * Production meeting: *"the meeting helper on the phone is AWFUL!!!! FIX
-   * IT!!!!"* — with the tagline printed across the Present button, the clock
-   * sitting on top of Charlee's face, and the slide counter squashed into the
-   * corner of both. Three separate things had each been given the bottom strip,
-   * and on a wide screen there is room for all three.
-   *
-   * There is not, here. Below this width the footer becomes one honest row and
-   * the clock comes off the slide and joins it.
-   *
-   * **Short counts as narrow.** A phone turned sideways is 852 wide and 393
-   * tall — wide enough to pass a width test, and then the whole deck has about
-   * 270px of height to put a title, a date, a subtitle and the arrival board
-   * in. Nat, 2026-08-17, sending portrait and landscape together: *"it still
-   * looks sensationally bad in these 2 views on my phone."* Landscape was the
-   * one still wearing the full chrome — the tagline printed through "August
-   * 2026 Meeting", the clock card sat on the slide, and "Present to the room"
-   * lay across the title. The floating chrome needs room in BOTH directions,
-   * so it stands down when either one runs out.
-   */
   const deckIsNarrow = stageW < 560 || stageH < 480;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
 
   // Which deck tonight is. Any HIVE without a designed deck falls to 'default'
   // here, but never reaches the slides — the hasTailoredCheckIns() gate below
-  // shows those HIVEs (Production, for now) the coming-soon screen instead.
+  // shows those HIVEs the coming-soon screen instead.
   // The footer says where you are: HIVE › Meetings › Meeting Helper.
   // No deep crumb any more: the Meeting Helper is its own row in the rail as of
   // 2026-08-19, so the footer already names it as the page you are on. Adding
-  // one here made the strip read "Production HIVE › Meeting Helper › Meeting
-  // Helper".
   useDeepTrail([]);
 
   const deckSlug: keyof typeof DECKS =
     community?.slug === 'tech' ? 'tech'
-    : community?.slug === 'show' ? 'show'
     : 'default';
   // Tech gathers on Google Meet. The built-in Daily/room-recording pane is
   // for the other HIVE decks; showing it here offers a second, unused call.
@@ -1085,11 +819,6 @@ export default function MeetingHelperScreen() {
   const [completedAssists, setCompletedAssists] = useState<
     { id: string; description: string; assignedTo: string | null; relatedUserId: string | null; assigneeName: string }[]
   >([]);
-  const [productionJobs, setProductionJobs] = useState<ProductionProjectJob[]>([]);
-  const productionJobGroups = useMemo(
-    () => groupProductionJobs(productionJobs),
-    [productionJobs],
-  );
   // Tonight's live recap for the Wrap-Up slide — because the meeting happens
   // IN the app now, the summary is just "what changed today".
   const [tonightRecap, setTonightRecap] = useState<{
@@ -1161,7 +890,6 @@ export default function MeetingHelperScreen() {
       ),
     [deck.agenda, deckSlug, introsFirst]
   );
-  // Production borrows the HummDinger's readable card-and-spotlight shell, but
   // not its wishes, visited roster, pacing, or live-note semantics.
   const [expandedCheckInAnswer, setExpandedCheckInAnswer] = useState<{
     slide: DeckSlideKey;
@@ -1249,18 +977,6 @@ export default function MeetingHelperScreen() {
     }
   };
 
-  /**
-   * The clock counts to the HIVE's official end. Pace uses the earlier of that
-   * end and a present member's personal hard out, so the room can plan enough
-   * time for everyone without rewriting the HIVE's saved meeting time.
-   *
-   * The official meeting end belongs to the HIVE (migration 184), not to this
-   * render and not to any member's personal hard-out check-in answer.
-   * It used to be React state defaulting to 8pm, so it reset on every page load
-   * and anybody who needed a different one set it again every meeting. Nat,
-   * Production's first meeting ended at 5pm, while its September meeting is
-   * scheduled 5–7pm. Set the official end once; the HIVE remembers it.
-   */
   const [hardOutTime, setHardOutTime] = useState(community?.meeting_hard_out || '20:00');
   useEffect(() => {
     setHardOutTime(community?.meeting_hard_out || '20:00');
@@ -1610,13 +1326,6 @@ export default function MeetingHelperScreen() {
         })));
       })().catch((error) => console.warn('Could not load assists', error)),
 
-      // Production is a shared project: this joins every assigned job to the
-      // board thread where the team records findings, photos and files.
-      (async () => {
-        const result = await fetchProductionProjectStatus(communityId);
-        if (result.error) console.warn(result.error);
-        setProductionJobs(result.assignments);
-      })().catch((error) => console.warn('Could not load Production status', error)),
 
       // Live notes jotted on the HummDinger spotlight. These used to live in
       // component state only, so the list under each member vanished on reload
@@ -1926,163 +1635,6 @@ export default function MeetingHelperScreen() {
     }
   };
 
-  // Production's job hand-out. Same mechanism as the HummDinger jots below —
-  // @-mention a member and it lands on their to-do list — but the subject is a
-  // job rather than a person's wish, so there is no `related_user_id` and no
-  // "(re: someone's HummDinger)" suffix to add.
-  //
-  // Nat, 2026-08-14, describing exactly this: *"I could at each person... I'd
-  // be like @Charlee and that would go onto her to-do list, and I could be like
-  // @Ollie and that would go onto his to-do list."*
-  const [openJobKey, setOpenJobKey] = useState<string | null>(null);
-  const [jobDrafts, setJobDrafts] = useState<Record<string, string>>({});
-  const [jobSaving, setJobSaving] = useState<string | null>(null);
-
-  /**
-   * Who has each job, read back from the lists it landed on.
-   *
-   * This used to be a plain object set when the Assign button succeeded, so it
-   * knew only what had happened while this screen happened to be open. Nat
-   * refreshed mid-meeting and the room concluded nothing had saved — *"when I
-   * refreshed, my tag went away"* — and started assigning everything a second
-   * time, which is where ten of the thirty-one rows on 2026-08-18 came from.
-   * The to-dos were fine the whole time; the panel had simply forgotten.
-   */
-  const [jobTakers, setJobTakers] = useState<Record<string, string[]>>({});
-
-  const loadJobTakers = useCallback(async () => {
-    if (!communityId || members.length === 0) return;
-    const { data, error } = await supabase
-      .from('action_items')
-      .select('related_board_post_id, assigned_to')
-      .eq('community_id', communityId)
-      .in('related_board_post_id', PRODUCTION_JOBS.map((job) => job.threadId))
-      .is('archived_at', null);
-    if (error) {
-      console.warn('Could not read who has which job:', error);
-      return;
-    }
-    const nameOf = new Map(members.map((member) => [member.id, getFirstName(member.name)]));
-    const byThread = new Map<string, Set<string>>();
-    ((data ?? []) as { related_board_post_id: string | null; assigned_to: string | null }[]).forEach((row) => {
-      if (!row.related_board_post_id || !row.assigned_to) return;
-      const found = byThread.get(row.related_board_post_id) ?? new Set<string>();
-      const name = nameOf.get(row.assigned_to);
-      if (name) found.add(name);
-      byThread.set(row.related_board_post_id, found);
-    });
-    setJobTakers(
-      Object.fromEntries(
-        PRODUCTION_JOBS.map((job) => [job.key, [...(byThread.get(job.threadId) ?? [])]])
-      )
-    );
-  }, [communityId, members]);
-
-  useEffect(() => {
-    void loadJobTakers();
-  }, [loadJobTakers]);
-
-  /**
-   * Everybody's screen learns who took what, the moment they take it.
-   *
-   * Nat, describing the room she actually had (2026-08-19): *"we're all sitting
-   * in front of our computers ... it was like, okay, who wants what? It's like,
-   * me, I'll take this one. Me, I'll take this one. And it's like, wait, you
-   * can't do it, only I can — that feels weird."* Assigning was never limited
-   * to one person; seeing it was. So the panel listens to the to-do list
-   * itself, and a job taken on Charlee's laptop shows up on everyone's.
-   */
-  useEffect(() => {
-    if (!communityId) return;
-    const channel = supabase
-      .channel(`job-takers:${communityId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'action_items', filter: `community_id=eq.${communityId}` },
-        () => { void loadJobTakers(); }
-      )
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
-  }, [communityId, loadJobTakers]);
-
-  const handleAssignJob = async (job: { key: string; title: string; asks: string[]; threadId: string }) => {
-    const typed = (jobDrafts[job.key] ?? '').trim();
-    if (!communityId || jobSaving) return;
-
-    const mentioned = hasBroadcastMention(typed)
-      ? members
-      : getMentionedMembers(typed, members, undefined, mentionReach);
-    if (mentioned.length === 0) {
-      showAlert('Who is taking it?', 'Type @ and their name — that is what puts it on their list.');
-      return;
-    }
-
-    setJobSaving(job.key);
-    try {
-      // The questions ride along in the to-do itself. A job that arrives
-      // without them is the exact thing Nat said was useless: "Notoriety spec
-      // sheet — and you're like, okay, what do I do with that?"
-      const questions = job.asks.map((ask) => `  · ${ask}`).join('\n');
-      // Whatever is left once the @names are lifted out. The trim has to take
-      // the punctuation that held the names apart too, or "@Charlee, @Sara"
-      // leaves ", " behind and the to-do reads "Go and see Vegas Theatre
-      // Company — ," — which is a real row from the first Production HIVE.
-      const extra = typed
-        .replace(/@[\w.-]+/g, ' ')
-        .replace(/\s+/g, ' ')
-        .replace(/^[\s,;·&/-]+|[\s,;·&/-]+$/g, '')
-        .trim();
-      const description = `${job.title}${extra ? ` — ${extra}` : ''}\n${questions}`;
-
-      /**
-       * One person, one job, one to-do.
-       *
-       * The first Production HIVE wrote 31 rows for 21 real assignments,
-       * because Assign inserted every time it was pressed and three people
-       * were pressing it — Lucas, Nat and Charlee, none of whom could see what
-       * the others had already done. Anybody who already has this job is
-       * skipped here rather than handed it twice.
-       */
-      const { data: already } = await supabase
-        .from('action_items')
-        .select('assigned_to')
-        .eq('community_id', communityId)
-        .eq('related_board_post_id', job.threadId)
-        .is('archived_at', null);
-      const has = new Set(((already ?? []) as { assigned_to: string | null }[]).map((row) => row.assigned_to));
-
-      const fresh = mentioned.filter((member) => !has.has(member.id));
-      const repeats = mentioned.filter((member) => has.has(member.id));
-
-      if (fresh.length > 0) {
-        const { error } = await (supabase as any).from('action_items').insert(
-          fresh.map((member) => ({
-            description,
-            assigned_to: member.id,
-            community_id: communityId,
-            // The to-do opens the Pre-Production thread that holds the brief and
-            // collects what they find out — Nat's design, 2026-08-14.
-            related_board_post_id: job.threadId,
-          }))
-        );
-        if (error) throw error;
-      }
-
-      setJobDrafts((drafts) => ({ ...drafts, [job.key]: '' }));
-      setOpenJobKey(null);
-      await Promise.all([loadJobTakers(), loadDeckData()]);
-
-      if (fresh.length === 0) {
-        const names = repeats.map((member) => getFirstName(member.name)).join(' & ');
-        showAlert('Already on it', `${names} already ${repeats.length === 1 ? 'has' : 'have'} this one — nothing added twice.`);
-      }
-    } catch (error) {
-      console.error('Could not hand out the job:', error);
-      showAlert('Hmm', 'That did not save — try again in a moment.');
-    } finally {
-      setJobSaving(null);
-    }
-  };
 
   // Live meeting notes from the HummDinger spotlight. Mentions use the same
   // rules as the boards — "@charlee" targets her list, "@all"/"@hive" fans
@@ -2559,7 +2111,7 @@ export default function MeetingHelperScreen() {
     <View style={{ flex: 1 }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginBottom: sz(30, 18) }}>
         <View>
-          <Kicker>{deckSlug === 'show' ? 'Tonight · a different shape' : 'Tonight · house business'}</Kicker>
+          <Kicker>Tonight · house business</Kicker>
           <SlideTitle>News from Nat</SlideTitle>
         </View>
       </View>
@@ -2578,87 +2130,6 @@ export default function MeetingHelperScreen() {
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 12), color: MUTED }}>Also on the board: “It’s hoodie season!!”</Text>
         </View> : null}
 
-        {/* Production's night starts by walking the research together, and the
-            rest of the deck answers itself afterwards. Nat, 2026-08-14:
-            *"normally it goes like this, but we're going to go through this
-            website first of my findings... and then that's going to help us
-            answer a lot of questions."* */}
-        {deckSlug === 'show' && (
-          <View
-            style={{
-              backgroundColor: '#fffdf5',
-              borderWidth: 2,
-              borderColor: GOLD,
-              borderRadius: sz(16, 12),
-              paddingHorizontal: sz(20, 13),
-              paddingVertical: sz(16, 11),
-            }}
-          >
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), letterSpacing: 1.4, textTransform: 'uppercase', color: '#8e7a5e', marginBottom: sz(8, 5) }}>
-              🎪 Start here — The Research
-            </Text>
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(22, 14), lineHeight: sz(34, 21), color: CHARCOAL }}>
-              Tonight runs differently from a usual HIVE meeting. We walk through everything
-              found so far, and then the rest of the questions answer themselves.
-            </Text>
-            <Pressable
-              onPress={() => Linking.openURL('https://show-proposal.vercel.app')}
-              accessibilityRole="link"
-              accessibilityLabel="Open The Research"
-              style={({ pressed }) => ({
-                alignSelf: 'flex-start',
-                marginTop: sz(14, 10),
-                backgroundColor: GOLD,
-                borderRadius: 999,
-                paddingHorizontal: sz(26, 18),
-                paddingVertical: sz(12, 9),
-                opacity: pressed ? 0.75 : 1,
-              })}
-            >
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(21, 14), color: '#fff' }}>
-                Open The Research →
-              </Text>
-            </Pressable>
-          </View>
-        )}
-        {/* The four questions, and somewhere for the answers to stay. Nat's own
-            reasoning for putting them here rather than in the survey or on The
-            Research: "then that keeps it somewhere, and then we have meeting
-            summaries, and then Clive knows stuff." */}
-        {deckSlug === 'show' && (
-          <View
-            style={{
-              backgroundColor: '#fffdf5',
-              borderWidth: 1,
-              borderColor: GOLD_SOFT,
-              borderRadius: sz(16, 12),
-              paddingHorizontal: sz(20, 13),
-              paddingVertical: sz(15, 10),
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: sz(8, 5) }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), letterSpacing: 1.4, textTransform: 'uppercase', color: '#8e7a5e' }}>
-                ❓ The four questions
-              </Text>
-              <EditPill noteKey="fourquestions" />
-            </View>
-            {[
-              'What is the one-sentence promise?',
-              'Who is the first audience?',
-              'What is the smallest real version?',
-              'Is Vegas the requirement, or the first experience?',
-            ].map((question, index) => (
-              <Text
-                key={question}
-                style={{ fontFamily: 'Lato_400Regular', fontSize: sz(19, 13), lineHeight: sz(28, 19), color: CHARCOAL }}
-              >
-                <Text style={{ color: GOLD_DEEP, fontFamily: 'Lato_700Bold' }}>{index + 1}  </Text>
-                {question}
-              </Text>
-            ))}
-            <NoteBody noteKey="fourquestions" emptyText="" />
-          </View>
-        )}
         <View
           style={{
             backgroundColor: '#fffdf5',
@@ -2677,7 +2148,7 @@ export default function MeetingHelperScreen() {
           </View>
           <NoteBody
             noteKey="news"
-            emptyText={deckSlug === 'show' ? '' : "Nat hasn't dropped the news yet — drumroll, please."}
+            emptyText="Nat hasn't dropped the news yet — drumroll, please."
           />
         </View>
         {quarterPulseResult && quarterPulsePeriod && (deckIsOg || deckSlug === 'tech') ? (() => {
@@ -2700,10 +2171,6 @@ export default function MeetingHelperScreen() {
             </Text>)}
           </View>;
         })() : null}
-        {/* Production skips this card. Nat, 2026-08-14: *"news from Nat, new in
-            the app — we don't need new tech in the app."* That room is about the
-            show, not the software carrying it. */}
-        {deckSlug !== 'show' && (
         <View
           style={{
             backgroundColor: '#fdf3dc',
@@ -2762,48 +2229,7 @@ export default function MeetingHelperScreen() {
             </View>
           ) : null}
         </View>
-        )}
       </View>
-      {deckSlug === 'show' && productionJobGroups.length > 0 && (
-        <View style={{ marginTop: sz(18, 12), gap: sz(10, 7) }}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
-            What got done &amp; what we found
-          </Text>
-          <View style={{ backgroundColor: CARD, borderWidth: 1, borderColor: GOLD_SOFT, borderRadius: sz(18, 13), padding: sz(18, 12), gap: sz(10, 7) }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), color: GOLD_DEEP }}>
-              {productionJobGroups.filter(item => !item.completed).length} still to do · {productionJobGroups.filter(item => item.completed).length} done · {productionJobGroups.filter(item => item.findingCount > 0 || item.fileCount > 0).length} with findings
-            </Text>
-            {productionJobGroups.map((item) => (
-              <View key={item.relatedBoardPostId} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sz(10, 7) }}>
-                <Ionicons name={item.completed ? 'checkmark-circle' : 'ellipse-outline'} size={sz(22, 16)} color={GOLD} />
-                <View style={{ flex: 1, gap: sz(3, 2) }}>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(24, 17), color: CHARCOAL }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold' }}>{item.people.map(getFirstName).join(', ')} · </Text>
-                    {item.description}
-                  </Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 10), color: MUTED }}>
-                    {item.completed ? 'Done' : item.completedCount > 0 ? `${item.completedCount}/${item.jobCount} done` : 'Still to do'} · {item.findingCount === 0 && item.fileCount === 0
-                      ? 'No findings added yet'
-                      : `${item.findingCount} update${item.findingCount === 1 ? '' : 's'}${item.fileCount ? ` · ${item.fileCount} file${item.fileCount === 1 ? '' : 's'}` : ''}`}
-                  </Text>
-                  {item.latestFinding ? <Text numberOfLines={2} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 10), lineHeight: sz(18, 14), color: MUTED }}>
-                    Latest: {item.latestFinding}
-                  </Text> : null}
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => router.push({ pathname: '/board', params: { postId: item.relatedBoardPostId, from: 'meeting-helper', open: String(Date.now()) } })}
-                    style={{ alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(12, 9), color: GOLD_DEEP }}>Open findings thread →</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-      {/* The remaining structured Production answer belongs on the slide that
-          uses it. Other HIVEs have no configured block here. */}
       {renderCheckInSays('news')}
     </View>
   );
@@ -2812,11 +2238,7 @@ export default function MeetingHelperScreen() {
   // the stage, not the raw device width (important beside video and the rail).
   const bubbleColumns = stageW >= 1400 ? 5 : stageW >= 1024 ? 4 : stageW >= 760 ? 3 : stageW >= 480 ? 2 : 1;
 
-  /**
-   * Production's recurring check-in, mounted on the slide named by the deck.
-   * One uniform bubble belongs to one person. The slide gets only a one-line
-   * preview; the configured full answers get their space in a bounded sheet.
-   */
+  /** One uniform bubble per person, with full answers in a bounded sheet. */
   const renderCheckInSays = (slide: DeckSlideKey) => {
     if (!canViewIndividualCheckIns) return null;
     const blocks = (deck.checkInSays ?? []).filter((entry) => entry.slide === slide);
@@ -5042,164 +4464,6 @@ export default function MeetingHelperScreen() {
     </View>
   );
 
-  /**
-   * Production's answer to the HummDinger slide: the jobs, and who takes them.
-   *
-   * The questions are printed under each job on purpose. A to-do that says
-   * "call a rigging vendor" and nothing else is the thing Nat named as useless
-   * — the person who takes it has to already know what to ask, and now they do,
-   * because the questions travel with the to-do into their list.
-   */
-  const renderAssignments = () => (
-    <View style={{ flex: 1 }}>
-      <Kicker>Who takes what</Kicker>
-      <SlideTitle>The jobs</SlideTitle>
-      <Text
-        style={{
-          fontFamily: 'Lato_400Regular',
-          fontStyle: 'italic',
-          fontSize: sz(19, 13),
-          lineHeight: sz(28, 19),
-          color: MUTED,
-          marginBottom: sz(12, 9),
-        }}
-      >
-        Tap one, say who is taking it.
-      </Text>
-      {/* Capacity and obstacles come before the room hands out more work. */}
-      {renderCheckInSays('assignments')}
-      {/* A plain column, not a scroller.
-          This was a BounceScrollView inside the stage's own BounceScrollView,
-          and two scrollers stacked on top of each other is why the room could
-          not reach the bottom job — Nat, live: *"my scroll isn't working, so I
-          can't finish tagging everybody"*, and on Charlee's smaller screen the
-          text box under the last job was simply unreachable. The stage already
-          scrolls the whole slide, so the list just grows and everything below
-          it comes with it. */}
-      <View style={{ gap: sz(8, 6), paddingBottom: sz(40, 24) }}>
-        {PRODUCTION_JOBS.map((job) => {
-          const open = openJobKey === job.key;
-          const takenBy = (jobTakers[job.key] ?? []).join(' & ');
-          return (
-            <View
-              key={job.key}
-              style={{
-                backgroundColor: CARD,
-                borderWidth: 1,
-                borderColor: takenBy ? GOLD : GOLD_SOFT,
-                borderRadius: sz(16, 13),
-                overflow: 'hidden',
-              }}
-            >
-              <Pressable
-                onPress={() => {
-                  // Opening a job is settling down to type in it, so the room
-                  // stops dragging you along while you do. The presenter still
-                  // leads everybody through the deck — Nat wants that — but
-                  // *"on that last who's-gonna-do-what screen I want everyone
-                  // to be able to update their own"*, and you cannot finish a
-                  // sentence on a screen that keeps moving. The catch-up pill
-                  // is already there to bring you back.
-                  if (!open && isFollowing) lookAround();
-                  setOpenJobKey(open ? null : job.key);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`${job.title}${takenBy ? `, taken by ${takenBy}` : ''}`}
-                style={{ paddingHorizontal: sz(20, 14), paddingVertical: sz(13, 10) }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8) }}>
-                  <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: sz(21, 15), color: CHARCOAL }}>
-                    {job.title}
-                  </Text>
-                  {takenBy ? (
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 13), color: GOLD_DEEP }}>
-                      {takenBy} ✓
-                    </Text>
-                  ) : (
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(20, 13), color: MUTED }}>
-                      {open ? 'Close' : 'Who?'}
-                    </Text>
-                  )}
-                </View>
-                {!open && (
-                  <Text
-                    numberOfLines={1}
-                    style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 12), lineHeight: sz(23, 17), color: MUTED, marginTop: sz(4, 3) }}
-                  >
-                    {job.why}
-                  </Text>
-                )}
-              </Pressable>
-
-              {open && (
-                <View style={{ paddingHorizontal: sz(24, 16), paddingBottom: sz(20, 14) }}>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(21, 13), lineHeight: sz(32, 20), color: MUTED, marginBottom: sz(14, 10) }}>
-                    {job.why}
-                  </Text>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP, marginBottom: sz(8, 6) }}>
-                    What to ask
-                  </Text>
-                  {job.asks.map((ask) => (
-                    <Text
-                      key={ask}
-                      style={{ fontFamily: 'Lato_400Regular', fontSize: sz(21, 13), lineHeight: sz(32, 20), color: CHARCOAL, marginBottom: sz(4, 3) }}
-                    >
-                      · {ask}
-                    </Text>
-                  ))}
-                  {/* The same composer as everywhere else, so typing "@cha"
-                      offers Charlee instead of leaving you to spell her. Nat,
-                      after doing it by hand all night: *"when I was adding
-                      them, they weren't populating, and I like it when you
-                      type and it shows you who you can select from — that's
-                      the feature you're missing."* */}
-                  <View style={{ marginTop: sz(16, 12) }}>
-                    <ComposerBar
-                      variant="form"
-                      value={jobDrafts[job.key] ?? ''}
-                      onChangeText={(next) =>
-                        setJobDrafts((drafts) => ({
-                          ...drafts,
-                          [job.key]: typeof next === 'function' ? next(drafts[job.key] ?? '') : next,
-                        }))
-                      }
-                      placeholder="@name — and anything else worth remembering"
-                      onSubmit={() => handleAssignJob(job)}
-                      minHeight={sz(70, 52)}
-                      fieldClassName={isTV ? 'text-[17px]' : 'text-[12px]'}
-                      // No currentUserId: whoever is driving must be able to
-                      // put a job on their own list with "@their name".
-                      mentionMembers={members}
-                      mentionReach={mentionReach}
-                    />
-                  </View>
-                  <Pressable
-                    onPress={() => handleAssignJob(job)}
-                    disabled={jobSaving === job.key}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Put ${job.title} on their list`}
-                    style={({ pressed }) => ({
-                      alignSelf: 'flex-start',
-                      marginTop: sz(12, 9),
-                      backgroundColor: GOLD,
-                      borderRadius: 999,
-                      paddingHorizontal: sz(26, 18),
-                      paddingVertical: sz(12, 9),
-                      opacity: pressed || jobSaving === job.key ? 0.7 : 1,
-                    })}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(21, 14), color: '#fff' }}>
-                      {jobSaving === job.key ? 'Adding…' : 'Put it on their list'}
-                    </Text>
-                  </Pressable>
-                </View>
-              )}
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
 
   // The show, in the order this HIVE's deck declares it. Every renderer knows
   // how to wear any deck's content, so a new HIVE's deck is a new list in
@@ -5371,7 +4635,6 @@ export default function MeetingHelperScreen() {
     spend: renderSpend,
     meetups: renderMeetups,
     hummdinger: renderHummdinger,
-    assignments: renderAssignments,
     wrapup: renderWrapup,
     thanks: renderThanks,
   };
@@ -5507,7 +4770,6 @@ export default function MeetingHelperScreen() {
     }
 
     // Nobody has the deck. Any member can pick it up — Nat runs OG's night,
-    // Lucas runs Tech's, and Production hands its jobs out live.
     return (
       <Pressable
         onPress={() => startPresenting(deck.slides[clampedIndex], stateForSlide(activeSlide.key))}
@@ -5845,12 +5107,10 @@ export default function MeetingHelperScreen() {
   if (!profile) return null;
 
   // Only HIVEs with a designed deck in DECKS get past this door — OG, Tech
-  // since 2026-08-11, and Production since 2026-08-14. A bookmarked or typed
   // /meeting-helper URL cannot open a deck while somebody is standing in a
   // HIVE that doesn't have one yet.
   //
   // **This gate has a sibling one floor up**, on the Meeting Helper tile in
-  // `meetings.tsx`. On 2026-08-14 Production's deck shipped, this door opened,
   // and the button in front of it still read "coming soon" — because only one
   // of the two had been changed. If you ever add a fourth HIVE's deck, change
   // both, and check the tile before calling it done.
@@ -6512,8 +5772,6 @@ export default function MeetingHelperScreen() {
         {/* HummDinger spotlight — one member's full story, grid stays put */}
         {renderHummdingerSpotlight()}
 
-        {/* Production check-in spotlight — the same bounded visual shell,
-            without HummDinger wishes, pacing, visited state, or live notes. */}
         {renderCheckInAnswerSpotlight()}
 
         {/* Full meeting scheduler — same one as the Meetings page, seeded

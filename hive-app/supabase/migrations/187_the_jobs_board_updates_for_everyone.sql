@@ -1,6 +1,6 @@
 -- Everybody's screen learns who took what, the moment they take it.
 --
--- Nat, describing the room the first Production HIVE actually was
+-- Nat, describing the room the first a private HIVE actually was
 -- (2026-08-19): *"we're all sitting in front of our computers ... it was like,
 -- okay, who wants what? It's like, me, I'll take this one. Me, I'll take this
 -- one. And it's like, wait, you can't do it, only I can — that feels weird."*

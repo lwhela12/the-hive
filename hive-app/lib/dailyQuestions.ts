@@ -1,12 +1,10 @@
 import type { QuestionTheme } from './questionThemes';
 import { TECH_DAILY_QUESTIONS } from './techQuestions';
-import { PRODUCTION_DAILY_QUESTIONS } from './productionQuestions';
 
 // Each HIVE's year of questions lives in its own file; this one keeps OG's
 // deck (the original), the shared shape, and the picking logic. Re-exported so
 // a screen can keep importing every deck from here.
 export { TECH_DAILY_QUESTIONS } from './techQuestions';
-export { PRODUCTION_DAILY_QUESTIONS } from './productionQuestions';
 
 /**
  * `category` is the label — one per question, useful for showing what was
@@ -397,12 +395,9 @@ export const DAILY_QUESTIONS: DailyQuestion[] = [
 /**
  * Which deck a HIVE draws from. Keyed by slug so a new HIVE picks one
  * deliberately — an unknown slug falls back to OG's deck rather than guessing.
- * Production HIVE keeps the database slug `show` (see checkIns.ts, which
- * learned this the same way).
  */
 export function deckForCommunity(slug?: string | null): DailyQuestion[] {
   if (slug === 'tech') return TECH_DAILY_QUESTIONS;
-  if (slug === 'show') return PRODUCTION_DAILY_QUESTIONS;
   return DAILY_QUESTIONS;
 }
 
@@ -425,25 +420,6 @@ const TECH_EPOCH = new Date(2026, 6, 31); // Tech HIVE's first day
 const TECH_LEGACY_COUNT = 32;
 const TECH_EXPANSION_START = new Date(2026, 7, 13); // August 13, 2026
 
-// Production HIVE has no question history and no meeting rhythm yet, so its
-// deck simply starts the day it shipped: question 0 on August 13, 2026, then
-// one a day. Chosen 2026-08-12; if Production wants its year to start on a
-// meaningful day instead, this is the only line to move.
-const PRODUCTION_EPOCH = new Date(2026, 7, 13);
-
-// Production's deck grew by 56 on 2026-08-15 — a whole block about RUNNING a
-// company rather than performing in one. Nat, having read the original 365:
-// *"those are good questions about being a performer ... but I'm thinking more
-// about how to run the cast and crew, to help inform Charlee."*
-//
-// The new block sits at the end of the file (saved answers store
-// question_index, so nothing is ever reordered) and is reached FIRST from
-// 16 August, the same move OG made on 2 July and Tech on 13 August. Waiting a
-// year for them would be absurd: Production is designing the company this
-// month, and these are the questions that design it.
-const PRODUCTION_LEGACY_COUNT = 365;
-const PRODUCTION_EXPANSION_START = new Date(2026, 7, 16); // August 16, 2026
-
 /** Days-since-epoch walk around a deck, safe on dates before the epoch. */
 function walkFromEpoch(questionDate: Date, epoch: Date, length: number) {
   const days = Math.floor((questionDate.getTime() - epoch.getTime()) / 86_400_000);
@@ -459,18 +435,6 @@ function getQuestionIndexForDate(questionDate: Date, deck: DailyQuestion[] = DAI
       return (TECH_LEGACY_COUNT + daysSinceExpansion) % deck.length;
     }
     return walkFromEpoch(questionDate, TECH_EPOCH, TECH_LEGACY_COUNT);
-  }
-
-  if (deck === PRODUCTION_DAILY_QUESTIONS) {
-    const expansionStart = new Date(PRODUCTION_EXPANSION_START);
-    expansionStart.setHours(0, 0, 0, 0);
-    if (questionDate >= expansionStart) {
-      const daysSinceExpansion = Math.floor((questionDate.getTime() - expansionStart.getTime()) / 86_400_000);
-      return (PRODUCTION_LEGACY_COUNT + daysSinceExpansion) % deck.length;
-    }
-    // The three days Production actually walked (13–15 August) keep the exact
-    // questions its members were asked.
-    return walkFromEpoch(questionDate, PRODUCTION_EPOCH, PRODUCTION_LEGACY_COUNT);
   }
 
   const expansionStart = new Date(DAILY_QUESTION_EXPANSION_START);

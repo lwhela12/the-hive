@@ -39,7 +39,7 @@ select
   bc.id,
   bc.created_by,
   'Welcome to HIVE-Wide',
-  'This is the room every HIVE shares — OG, Tech, Production, and whatever comes next all land here. Drop what you''re working on, ask for help from someone outside your usual HIVE, or just say hi.'
+  'This is the room every HIVE shares — OG, Tech, and whatever comes next all land here. Drop what you''re working on, ask for help from someone outside your usual HIVE, or just say hi.'
 from public.board_categories bc
 where bc.name = 'HIVE-Wide General Discussion'
   and bc.reach = 'all_hives'

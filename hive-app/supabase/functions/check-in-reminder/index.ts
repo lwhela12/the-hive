@@ -35,22 +35,6 @@ const APP_URL = Deno.env.get('EXPO_PUBLIC_APP_URL') || 'https://app.the-hive.app
 /** Where the real logo is served from — the same file the invite and The Buzz use. */
 const PUBLIC_SITE_URL = Deno.env.get('PUBLIC_SITE_URL') || 'https://the-hive.app';
 
-/**
- * Nobody hears from this cron until Nat has read the email herself.
- *
- * Nat, 2026-08-16: *"we said i should get the preview first? always? for all
- * surveys? they should always get emailed to me first & then once I approve
- * them, then we can send them out to everyone, right?"* Right. Every touch this
- * function fires — monthly, day-of, halfway, quarterly, end-of-year, and both of
- * Production's — now goes to this address first and waits.
- *
- * It waits in her inbox and nowhere else. Nat, 2026-08-17: *"it shouldn't live
- * in admin. It should send me a preview email and then once I approve it then
- * you can send it out."* So the preview IS the interface — she reads it, says
- * go, and the send is fired for her. No live link in the email either: a
- * one-click "send to everyone" web address is a members-wide blast that a mail
- * scanner or a forward can trip on its own.
- */
 const PREVIEW_EMAIL = Deno.env.get('CHECK_IN_PREVIEW_EMAIL') || 'natwalstead@gmail.com';
 
 // This function has no generated database schema. Pinning the generic prevents
@@ -342,20 +326,6 @@ function checkInEmailHtml(
    * the email cannot drift from the calendar the way August's did.
    */
   meeting?: MeetingDetails,
-  /**
-   * The HIVE's own costume — its slug, and its row's accent when it has one.
-   *
-   * Only the HALFWAY letter reads these, and only because Production's halfway
-   * became a copy of OG's on 2026-08-28. Nat: *"we basically just need to copy
-   * & re-skin that exact same thing for Pro HIVE."* Copy is the letter, which
-   * is identical to the word; re-skin is these two arguments. Left off, a HIVE
-   * gets OG's honey gold, which is what every caller before Production wanted
-   * and still gets.
-   *
-   * The meeting letters above deliberately do NOT read them. They are OG's
-   * rhythm and OG's alone right now, and a colour that changes nothing is a
-   * colour that will be wrong the first time somebody else uses them.
-   */
   hiveSlug?: string | null,
   hiveAccent?: string | null,
 ): string {
@@ -413,24 +383,6 @@ function checkInEmailHtml(
   `;
   }
   if (kind === 'midpoint') {
-    /**
-     * The halfway letter — the one Nat calls perfect, now worn by every HIVE
-     * whose halfway shape says `flow: 'tuneup'` (OG and Production, 2026-08-28).
-     *
-     * The bullets are the steps of the wizard the button opens, in the order it
-     * walks them, so the letter is a truthful table of contents rather than a
-     * pitch — and they come from `_shared/halfwaySteps.ts` so they cannot drift
-     * from the flow they describe. That drift is not hypothetical: the third
-     * bullet said "Life moved? Update your HD wish", which is a PRE-MEETING step
-     * and is not in this flow at all, and then briefly offered Production a HIVE
-     * Help step it does not have (Nat, 2026-08-28: *"Pro HIVE 1/2 way check in
-     * is ALMOST beat for beat like OG HIVE, except Pro HIVE does NOT have a HIVE
-     * Help"*). Both were the same mistake: the letter written by hand, beside a
-     * flow written in a list.
-     *
-     * Everything colour is `mark`; everything else is byte-for-byte the letter
-     * OG has been sending. That is the whole of the re-skin.
-     */
     return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
       ${logoBlock(mark)}
@@ -516,17 +468,6 @@ function seasonEmailHtml(
    * something worth knowing while it is at it.
    */
   footerNote?: string,
-  /**
-   * The HIVE's own slug and accent, so the letter wears its own costume.
-   *
-   * Nat, 2026-08-27, opening Tech HIVE's check-in: *"Tech HIVE has the wrong
-   * emoji — it has the director's cut board, like for movies. Tech HIVE should
-   * have the little robot… Tech HIVE is the wrong colour too — I just opened
-   * the survey and it's purple."* The clapperboard and the purple were typed
-   * into this file when Production was the only HIVE it wrote to, so every
-   * other HIVE inherited Production's dress. `_shared/hiveMark.ts` is the one
-   * table now; the row's own `accent_color` wins when the caller selected it.
-   */
   hiveSlug?: string | null,
   hiveAccent?: string | null,
   /**
@@ -563,7 +504,6 @@ function seasonEmailHtml(
   const mark = hiveMark(hiveSlug, hiveAccent);
   // Whose HIVE this is, said in the email itself and on the button. Nat,
   // 2026-08-15: *"I think it should have either the hive honeybee or a pro
-  // hive before we meet ... I think it's just open pro hive."*
   const hive = escapeHtml(rawHiveName);
   const kicker = `<p style="text-align: center; color: ${mark.accent}; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 0 0 2px;">${hive}</p>`;
   // The button lands ON the check-in, not near it. Nat, 2026-08-15: *"when I
@@ -695,29 +635,6 @@ function seasonEmailHtml(
   `;
 }
 
-/**
- * Every subject line says which HIVE it is from, first.
- *
- * Nat, 2026-08-15, opening one on her phone: *"there's nothing branded here
- * that lets you know that it's for the hive right off the bat ... I think it
- * needs to stay like, hive or pro hive, your check-in is open."* A person in
- * three HIVEs gets these from all three, and an inbox shows the subject and
- * nothing else.
- *
- * The `endofmonth` branch of this function used to be a copy of the email's
- * HTML — a whole document returned as a subject line, referring to a `name`
- * variable this function has never had. It would have thrown on 28 August, the
- * first time Production's end-of-month check-in came due.
- */
-/**
- * Subject lines get the SHORT name and the short month. Nat, 2026-08-15:
- * *"I like that title, I think shorten it to Pro HIVE otherwise it's super
- * long ... and maybe Aug 18."* A phone shows perhaps forty characters of a
- * subject, and "Production HIVE · Before we meet on August 18 — your check-in
- * is open" spends a quarter of them before it says anything.
- *
- * The email itself keeps the full name; only the subject is squeezed.
- */
 const SHORT_MONTHS: Record<string, string> = {
   January: 'Jan', February: 'Feb', March: 'Mar', April: 'Apr',
   May: 'May', June: 'Jun', July: 'Jul', August: 'Aug',
@@ -730,8 +647,6 @@ function seasonSubject(
   fullMonth: string,
   day: number,
   hiveName: string,
-  /** The HIVE's slug, so its own emoji leads the subject line rather than
-   *  Production's clapperboard (see `_shared/hiveMark.ts`). */
   hiveSlug?: string | null,
   /** A first meeting cannot be announced as "before we meet". */
   firstMeeting?: boolean,
@@ -746,18 +661,6 @@ function seasonSubject(
       : `${emoji} ${from}Before we meet on ${month} ${day} — your check-in is open`;
   }
   if (kind === 'endofmonth') {
-    /**
-     * **`Pro HIVE · End of the month`, and nothing after it.**
-     *
-     * The tail used to read "— no obligations". Nat, 2026-08-27, cut it: an
-     * inbox shows perhaps forty characters, and those are spent apologising for
-     * an email nobody had objected to yet. The words that matter are whose HIVE
-     * it is and what it is, and both HIVEs say them the same way now.
-     *
-     * `day_of` is unreachable for this kind since 2026-08-28 — the halfway is a
-     * single letter, like OG's — and the line stays because deleting it is how
-     * a fifth touch quietly gets no subject at all.
-     */
     return touch === 'day_of'
       ? `${emoji} ${from}Last call — anything for the newsletter?`
       : `${emoji} ${from}End of the month`;
@@ -909,24 +812,6 @@ function previewBanner(held: HeldTouch, hiveName: string, holdId: string | null)
     </div>`;
 }
 
-/**
- * Whether this exact touch has already been let through.
- *
- * The approval lives on the preview row's own metadata, so there is one object
- * per held touch and no second table to keep in step.
- *
- * **A retired preview is not a hold.** Only `pending` (waiting on Nat) and
- * `approved` (already gone out) mean "this touch is spoken for". Anything else
- * is a preview that was taken out of service, and it must not stand in the way
- * of building the real one.
- *
- * This cost Production HIVE its halfway preview on 29 Aug 2026. The 27 Aug
- * preview had been built from the wrong check-in and was marked `superseded`
- * so Nat could not approve it by accident — but it kept Production's period
- * key, `2026-08-30:season-window`, so on the morning the good letter was due
- * this lookup found the dead row, called the touch already held, and Nat's
- * inbox got OG's preview and nothing else. She was at the cabin, expecting two.
- */
 const LIVE_HOLD_STATES = new Set(['pending', 'approved']);
 
 async function findHold(

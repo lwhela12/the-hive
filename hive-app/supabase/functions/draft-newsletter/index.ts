@@ -198,7 +198,7 @@ async function writeNewsletter(
     'contribution can appear in that contribution\'s voluntary shout-out or public',
     'event plug. Add no extra identifying context around it. If the facts are',
     'thin, write a shorter, warmer letter. Short and generous beats padded and cagey.',
-    'Never mention Production HIVE or any work connected to it. Never state an',
+    'Never mention private or unlisted HIVEs or work connected to them. Never state an',
     'exact number of HIVEs; say "multiple HIVEs" when the network itself matters.',
     '',
     'HER VOICE: warm, chatty, a little goofy. Short paragraphs. Exclamation',
@@ -223,8 +223,8 @@ async function writeNewsletter(
     '- Never output a member name, profile detail, role, specific-HIVE membership,',
     '  ownership clue, private wish/post/check-in or internal project detail, except',
     '  for a voluntary name supplied inside an End-of-month contribution itself.',
-    '- Never mention Production HIVE and never say there are three (or any exact',
-    '  number of) HIVEs. The public wording is always "multiple HIVEs".',
+    '- Never mention private or unlisted HIVEs and never state an exact number',
+    '  of HIVEs. The public wording is always "multiple HIVEs".',
     '- Every numbered Newsletter beat is editorial material. Carry the substance',
     '  of every Nat newsletter note into the letter once, in the section where it',
     '  belongs. Merge related notes into a lively passage when useful, but never',
@@ -556,8 +556,6 @@ serve(async (req) => {
       ? body.appNews
         .map((line) => String(line).trim())
         .filter(Boolean)
-        .filter((line) => !/\bproduction(?:\s+hive)?\b/i.test(line))
-        .filter((line) => !/\b(?:three|3)\s+hives?\b/i.test(line))
         .slice(0, 5)
       : [];
     if (appNews.length > 0) {

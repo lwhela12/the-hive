@@ -5,19 +5,6 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
 
-/**
- * A survey wears its own HIVE's colour.
- *
- * Nat, 2026-09-01: every check-in inside Tech HIVE and Production HIVE was
- * still honey gold — the number chips, the selected answers, the submit
- * button — in a HIVE whose entire shell is blue or purple. The two survey
- * files imported `hiveBrand` zero times; every accent was typed in by hand.
- *
- * Hand-written branding is how one HIVE ends up wearing another's costume, so
- * the accent now arrives as a prop and gold's exact family comes back from
- * `accentPalette` — OG does not move a pixel. This guard fails the build if a
- * gold gets typed straight back in.
- */
 const GOLDS = [
   ['#bd9348', 'the accent — use `tint.accent`'],
   ['#8a5a16', 'gold’s deep ink — use `tint.ink`'],

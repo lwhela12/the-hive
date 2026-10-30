@@ -634,7 +634,6 @@ serve(async (req) => {
     const [nextMeetingRows, upcomingRows, focusRows] = await Promise.all([
       supabaseAdmin.from('events')
         // The address comes along. "Next HIVE meeting: Thursday, September 10"
-        // does not tell somebody catching up where to go, and Production moved
         // to Charlee's house at the meeting that line is summarising.
         .select('title, event_date, event_time, end_time, location')
         .eq('community_id', communityId).eq('event_type', 'meeting')

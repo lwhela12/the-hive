@@ -79,8 +79,8 @@ if (
 const deckSlides = [...meetingHelper.matchAll(/slides: \[([^\]]*)\]/g)].map((match) =>
   match[1].split(',').map((slide) => slide.trim().replace(/^'|'$/g, ''))
 );
-if (deckSlides.length !== 3) {
-  failures.push(`Expected 3 decks with a slide list, found ${deckSlides.length}.`);
+if (deckSlides.length !== 2) {
+  failures.push(`Expected 2 decks with a slide list, found ${deckSlides.length}.`);
 }
 deckSlides.forEach((slides, index) => {
   if (slides[0] !== 'room' || slides[1] !== 'outline') {

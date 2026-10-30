@@ -58,7 +58,7 @@ create policy "Members see their hive's deck session"
   using (public.is_community_member(community_id));
 
 -- Any member can pick up the deck (Nat drives OG, but Lucas runs Tech and
--- whoever is in the room runs Production's opening jobs). You can only ever
+-- whoever is in the room runs a private HIVE's opening jobs). You can only ever
 -- present as yourself.
 drop policy if exists "Members can present their hive's deck" on public.deck_sessions;
 create policy "Members can present their hive's deck"

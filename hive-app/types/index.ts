@@ -52,7 +52,7 @@ export interface Community extends Record<string, unknown> {
   /**
    * Whether this HIVE runs a shared pot of money (migration 140). False shows
    * the explainer instead of an empty ledger — a fund that looks abandoned
-   * reads as neglect, and Tech and Production never chose to have one.
+   * reads as neglect when the HIVE never chose to have one.
    */
   honey_pot_enabled?: boolean;
   /**
@@ -95,11 +95,6 @@ export interface CommunityMembership extends Record<string, unknown> {
   user_id: string;
   role: UserRole;
   created_at: string;
-  /** This HIVE's singular question, if it has one (migration 179) — e.g.
-   *  Production HIVE's "what are your production goals?". Per membership,
-   *  not per profile: a person's answer for one HIVE means nothing in
-   *  another they also belong to. */
-  hive_goal?: string | null;
   community?: Community;
   user?: Profile;
 }
@@ -458,12 +453,7 @@ export interface ActionItem extends Record<string, unknown> {
   edited_by?: string | null;
   related_wish_id?: string | null;
   related_board_category_id?: string | null;
-  /**
-   * The one thread this to-do opens (migration 180). More specific than
-   * `related_board_category_id`, which lands you on a whole board — this lands
-   * you on the conversation that holds the brief and collects what you find
-   * out. Production HIVE's jobs arrive carrying one.
-   */
+  /** The one thread this to-do opens (migration 180). */
   related_board_post_id?: string | null;
   related_user_id?: string | null;
   created_at: string;

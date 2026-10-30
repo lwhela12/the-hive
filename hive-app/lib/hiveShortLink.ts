@@ -7,16 +7,12 @@
  *
  * `og` is the odd one: OG HIVE still carries `default` from before there was
  * more than one HIVE, and that slug is load-bearing in `lib/checkIns.ts`, so
- * it is aliased rather than renamed. `pro` is here because Nat says
- * "Pro HIVE" out loud and Production answers to both.
+ * it is aliased rather than renamed.
  */
 export const SHORT_LINK_ALIASES: Record<string, string> = {
   og: 'default',
   default: 'default',
   tech: 'tech',
-  show: 'show',
-  pro: 'show',
-  production: 'show',
 };
 
 /** What the address asked for, lowercased and de-aliased. */

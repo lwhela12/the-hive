@@ -5,11 +5,7 @@
  * again at the top of `supabase/functions/check-in-reminder/index.ts` for the
  * email — with a comment on each saying "change one, change both."
  *
- * That comment is not a safeguard, it is a note about a bug that has not
- * happened yet. On 2026-08-15 it happened: Production's end-of-month check-in
- * was renamed "Pro HIVE POP" and two files had to be found and edited to keep
- * one rename working. Nat, the same afternoon: *"the same truth written twice
- * ... that's part of why today's break happened. Okay, let's fix that."*
+ * That comment is not a safeguard, it is a note about a bug waiting to happen.
  *
  * It lives under `_shared/` because that folder is uploaded with every edge
  * function deploy, and the app reaches it perfectly well from `lib/`. Plain
@@ -30,11 +26,7 @@ export const QUARTERLY_CHECK_IN_PATTERN = /quarterly\s+check-?in/i;
 /** The year, once. */
 export const END_OF_YEAR_CHECK_IN_PATTERN = /end[-\s]of[-\s]year\s+check-?in/i;
 
-/**
- * A HIVE that checks in before each meeting rather than on the calendar month.
- * Production's is the first (2026-08-14): the first meeting keeps its own warm
- * title, and every meeting after it uses the stable one.
- */
+/** A HIVE that checks in before each meeting rather than by calendar month. */
 export const PRE_MEETING_CHECK_IN_PATTERN = /before (our first meeting|we meet)/i;
 
 /**
@@ -48,11 +40,6 @@ export const PRE_MEETING_CHECK_IN_PATTERN = /before (our first meeting|we meet)/
  */
 export const FIRST_MEETING_CHECK_IN_PATTERN = /before our first meeting/i;
 
-/**
- * Production's end-of-month check-in. It is a "Halfway check-in" as of
- * 2026-08-15 — a gentle nudge and a newsletter ask, after the POP questions
- * moved to the pre-meeting deck where a meeting can actually use them. Both
- * earlier titles stay so rows created before either rename still answer.
- */
+/** The shared end-of-month check-in, including its earlier halfway name. */
 export const END_OF_MONTH_CHECK_IN_PATTERN =
-  /(end of the month|where the show got to this month|pro hive pop|halfway check-?in)/i;
+  /(end of the month|halfway check-?in)/i;

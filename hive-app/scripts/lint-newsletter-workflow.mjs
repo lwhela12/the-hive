@@ -80,12 +80,9 @@ if (!buzzArchiveMigration.includes('HIVE members locate the Buzz archive')
 if (!writer.includes('.filter(isPublicNewsletterSafeAppNews)')) {
   failures.push('Newsletter app news must be filtered before it leaves the client.');
 }
-if (!appNews.includes("!/\\bproduction(?:\\s+hive)?\\b/i.test(copy)")) {
-  failures.push('The public app-news filter must exclude Production HIVE.');
-}
-if (!draftFunction.includes('Never mention Production HIVE')
+if (!draftFunction.includes('Never mention private or unlisted HIVEs')
   || !draftFunction.includes('exact number of HIVEs')) {
-  failures.push('The newsletter writer must never expose Production HIVE or an exact HIVE count.');
+  failures.push('The newsletter writer must never expose private HIVEs or an exact HIVE count.');
 }
 const upcomingQuery = draftFunction.slice(draftFunction.indexOf("supabaseAdmin.from('events')"), draftFunction.indexOf('// Counted, never named'));
 if (!upcomingQuery.includes(".eq('visibility', 'public').eq('invited_scope', 'public')")

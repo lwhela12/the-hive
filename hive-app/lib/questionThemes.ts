@@ -1,39 +1,3 @@
-/**
- * The handful of things every daily question is really about.
- *
- * Nat, 2026-08-05: *"if all HIVEs are getting different questions, will this
- * swarm report still show who you match with, even across different hives &
- * different types of questions?"*
- *
- * It could not, and the reason was structural. The Swarm Report paired answers
- * by **date** — everyone who answered on the 5th was assumed to have answered
- * the same question, which was true when there was one HIVE. Every HIVE now
- * carries its own 365 (Nat's call, 2026-08-12: a person in two HIVEs should
- * never be asked the same question twice), they walk from different start
- * dates, and their categories overlap in exactly zero places: OG asks about
- * *comfort food* and *scent memory*, Tech asks about *scar tissue* and
- * *shipping*. Matching those by date would have compared an answer about a
- * childhood snack against one about a bad deploy, found the word "the" in
- * both, and reported a percentage.
- *
- * A question's `category` is its label — 365 of them, one per question, useful
- * for showing what was asked and useless for comparing anything. A **theme** is
- * what it is reaching for underneath, and there are few enough of them that two
- * different questions in two different HIVEs can land on the same one. That is
- * the whole trick: you and somebody in Tech HIVE never answered the same
- * question and never will, but you both lit up about COURAGE, and that is a
- * real thing to have in common.
- *
- * ## Rules for this list
- *
- * Keep it SHORT. Every theme added makes two people less likely to share one,
- * and the list stops being a way of finding each other the moment it grows
- * towards the number of questions. Twenty or so is the ceiling.
- *
- * Each theme has to be answerable by both a question about your grandmother's
- * kitchen and a question about a production outage, or it is a category
- * wearing a theme's clothes.
- */
 
 export const QUESTION_THEMES = [
   'comfort',

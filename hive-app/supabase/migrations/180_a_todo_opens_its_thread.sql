@@ -1,6 +1,6 @@
 -- A to-do can point at the thread it belongs to.
 --
--- Nat designed this out loud on 2026-08-14, looking at Production HIVE's first
+-- Nat designed this out loud on 2026-08-14, looking at a private HIVE's first
 -- set of jobs and asking the question the app had no answer to: *"when people
 -- go get that information, where should they put all of it? ... maybe there's
 -- like a pre-production board and each one of these tasks is its own thread,

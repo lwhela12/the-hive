@@ -158,7 +158,7 @@ export function useHiveGrid(): Grid & { refresh: () => Promise<void> } {
       });
 
       // Sorted the way Nat says them, not the way the database returns them.
-      const order = ['default', 'show', 'tech'];
+      const order = ['default', 'tech'];
       const slugOf = (id: string) =>
         (communities.data ?? []).find((c: any) => c.id === id)?.slug ?? '';
       rows.sort((a, b) => order.indexOf(slugOf(a.communityId)) - order.indexOf(slugOf(b.communityId)));

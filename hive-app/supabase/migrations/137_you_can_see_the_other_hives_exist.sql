@@ -12,9 +12,9 @@
 -- WHAT THIS OPENS: a HIVE's name, its colour, and the fact that it is there.
 -- WHAT IT DOES NOT: anything inside one. Boards, wishes, events, members,
 -- messages and check-ins are each gated separately, by their own policies and by
--- the HIVE's ceiling (migrations 124/125). A Production HIVE event is still
+-- the HIVE's ceiling (migrations 124/125). A a private HIVE event is still
 -- invisible to an OG HIVE member unless somebody shared it. All this changes is
--- that "Production HIVE — tbd" can appear at all, instead of the HIVE seeming
+-- that "a private HIVE — tbd" can appear at all, instead of the HIVE seeming
 -- not to exist.
 --
 -- Worth being plain about the tradeoff, because it IS one: everybody in any HIVE

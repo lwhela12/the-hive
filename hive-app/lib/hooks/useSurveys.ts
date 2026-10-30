@@ -65,36 +65,7 @@ const RETIRED_SURVEY_PATTERNS = [
 // meeting. (Was 3 back when this was a pre-meeting-only form.)
 const MONTHLY_CHECK_IN_WINDOW_DAYS = 33;
 const MONTHLY_CHECK_IN_PATTERN = /monthly\s+check-?in/i;
-/**
- * The end-of-month check-in, by title — the same repeating shape as the monthly
- * one and so the same need for a per-month answer key.
- *
- * **"End of the month" had to be added, and the cost of missing it was silent.**
- * The row Nat created on 2026-09-02 carries the new name, matched neither
- * pattern, and so keyed every answer to `'default'` — one row per person for
- * ever, with October's answers landing on top of September's and nothing on
- * screen saying so. Exactly the bug the note on `getSurveyResponsePeriod`
- * records being fixed once already for Production.
- *
- * Still narrower than `END_OF_MONTH_CHECK_IN_PATTERN` in
- * `_shared/checkInPatterns.ts`: that one also answers to two retired titles,
- * and a period key is not the place to start honouring names nothing sends.
- */
 const HALFWAY_CHECK_IN_PATTERN = /halfway\s+check-?in|end of the month/i;
-/**
- * And the merged pre-meeting one, for the third time this has bitten.
- *
- * "Before we meet" matched neither pattern above, so every answer to it would
- * have keyed to `'default'` — one row per person per HIVE for ever, with
- * October's answers landing silently on top of September's. It is a STANDING
- * monthly check-in, answered again every cycle, which is precisely the shape
- * migration 096 introduced periods for.
- *
- * Found on 2026-09-04 by walking the cutover before doing it, not by it going
- * wrong. The same omission has now cost Production once and "End of the month"
- * once; the note above records the second. A title that repeats needs a period
- * — that is the rule, and this is the third title to need telling.
- */
 const PRE_MEETING_CHECK_IN_PATTERN = /before we meet|before our first meeting/i;
 const DEFAULT_RESPONSE_PERIOD = 'default';
 
@@ -120,20 +91,6 @@ function getLocalDateFromSurveyDueDate(dueDate?: string | null) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-/**
- * Which occurrence of a repeating check-in an answer belongs to.
- *
- * A check-in that comes round every month is ONE survey row answered many
- * times, so the answer is keyed by month as well as by survey — otherwise
- * September's upsert lands on August's row and the month before is gone.
- *
- * The HALFWAY check-in repeats exactly the same way, and was reading
- * `'default'` — the key for a one-off survey that is answered once, ever.
- * Nobody had noticed because Production's halfway had no answers at all until
- * 2026-08-28, when it became a copy of OG's and started collecting the
- * newsletter ask. Left alone, the first September shout-out would have
- * overwritten the August one it was filed beside.
- */
 export function getSurveyResponsePeriod(survey: Survey) {
   const title = survey.title ?? '';
   const repeats = isMonthlyCheckInSurvey(survey)

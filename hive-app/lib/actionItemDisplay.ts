@@ -58,7 +58,6 @@ export function parseActionItemDescription(description: string): ParsedActionIte
     text = text.slice(0, dashIndex).trim();
   }
 
-  // Production assignments put the field questions on following bullet
   // lines. Keep the job title scannable and carry the questions as context.
   const lineIndex = text.indexOf('\n');
   if (!elaboration && lineIndex > 0) {

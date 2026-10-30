@@ -9,7 +9,7 @@
 --
 -- She was right about the cause. Every meeting the app has ever made is CREATED
 -- and ORGANIZED by lucas@whelanpartners.com — checked on the real events, 3
--- Sept: Production's Sep 10 and OG's Sep 23 both come back
+-- Sept: a private HIVE's Sep 10 and OG's Sep 23 both come back
 -- `organizer: lucas@whelanpartners.com`. They appear on Nat's calendar because
 -- she is invited to them, not because they are hers, and a guest cannot edit an
 -- event, move it, or own the Meet room it carries.

@@ -12,7 +12,6 @@ import { SharedPlate } from '../../../components/surveys/SharedPlate';
 import { CheckInNextMeetings } from '../../../components/surveys/CheckInNextMeetings';
 import { CheckInHiveCard } from '../../../components/surveys/CheckInHiveCard';
 import { CheckInAction } from '../../../components/surveys/CheckInAction';
-import { ProductionProjectOverview } from '../../../components/surveys/ProductionProjectOverview';
 import { checkInQuestions, groupCheckInHives, upcomingCheckIns, meetingLabel, pacificToday, type MeetingPreview } from '../../../lib/checkInPresentation';
 import { withOctoberMeetingQuestions } from '../../../lib/octoberOgQuestions';
 import {
@@ -392,9 +391,7 @@ export default function BeforeWeMeetScreen() {
       // Each HIVE's form carries the same identity as its own meeting.
       community_id: selectedMembership?.community_id ?? null,
       due_date: currentMeetings.find(m => m.community_id === selected)?.event_date ?? row.due_date,
-      description: selectedMembership?.community?.slug === 'show'
-        ? 'Review your Production HIVE jobs, tick off what is done, then tell the room whether you are coming and how much room you have.'
-        : selectedMembership?.community?.slug === 'tech'
+      description: selectedMembership?.community?.slug === 'tech'
           ? 'Share what you are working on, a tech high and low from this month, and where this HIVE could help.'
         : selectedMembership ? `Your ${hiveDisplayName(selectedMembership.community?.name)} check-in.` : merged.description,
       questions: mergedPreMeetingQuestions({ ...merged, sections: merged.sections.filter(s => s.communityId === selected) }).map(({ question, key }) => ({
@@ -443,14 +440,7 @@ export default function BeforeWeMeetScreen() {
         survey={forThisReader}
         answerCommunityId={selected}
         initialAnswers={mine}
-        introduction={isOgMeeting ? undefined : selectedMembership?.community?.slug === 'show' ? <>
-          <ProductionProjectOverview
-            communityId={selected}
-            accent={hiveAccent(selectedMembership.community)}
-            isManager={selectedMembership.role === 'admin'}
-          />
-          {personalQuestion}
-        </> : personalQuestion}
+        introduction={isOgMeeting ? undefined : personalQuestion}
         afterQuestionId={isOgMeeting ? 'q_feeling_note' : undefined}
         afterQuestion={isOgMeeting ? personalQuestion : undefined}
         ideaMeetingId={currentMeetings.find(m => m.community_id === selected)?.id}

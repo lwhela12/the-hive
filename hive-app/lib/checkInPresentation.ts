@@ -48,38 +48,18 @@ const standardizedArrivalIds = new Set([
   FEELING_QUESTION.id,
   FEELING_NOTE_QUESTION.id,
 ]);
-const productionHomeworkIds = new Set([
-  'q_show_progress',
-  'q_on_board',
-  'q_pictures',
-  'q_show_obstacles',
-  'q_show_next',
-  'q_biggest_question',
-  'q_pop_progress',
-  'q_pop_obstacles',
-  'q_pop_priorities',
-  'q_hd_wish',
-]);
 /** Presentation only: persisted survey rows and old answers remain untouched; never convert energy to capacity. */
 export function checkInQuestions(questions: SurveyQuestion[], month = false, hiveSlug?: string | null): SurveyQuestion[] {
-  const productionMeeting = !month && ['show', 'production'].includes((hiveSlug ?? '').trim().toLowerCase());
   const techMeeting = !month && (hiveSlug ?? '').trim().toLowerCase() === 'tech';
   const alreadyHasHdFocus = questions.some(q => q.id === HD_FOCUS_QUESTION.id);
   const presented = questions.filter(q => (
     !standardizedArrivalIds.has(q.id)
     && q.id !== 'q_contact'
-    // Production HIVE is one shared project. Its assigned jobs and their live
-    // status are already drawn above the questions; asking members to retype
-    // the same work into four prose boxes made the check-in unusable and left
-    // a second, hidden account of the project. Keep the stored answers, retire
-    // these fields from Before we meet, and let the board and to-do rows remain
-    // the source of truth.
-    && (!productionMeeting || !productionHomeworkIds.has(q.id))
     // The live roster above the questions already brings completed and open
     // work to the member. A second blank "what moved" box turns that useful
     // pre-seed into homework, so the old progress question is presentation-only
     // retired. Keep stored answers and stable ids untouched.
-    && !['q_pop_progress', 'q_show_progress'].includes(q.id)
+    && q.id !== 'q_pop_progress'
     // One room-help question is enough. `q_pop_priorities` is the surviving
     // free-text answer in End of the month. Before a meeting, the actionable
     // version is the member's HD focus below.
@@ -124,9 +104,7 @@ export function checkInQuestions(questions: SurveyQuestion[], month = false, hiv
   // the shared picker when there is nothing to replace.
   // This changes presentation only; persisted survey rows and old answers stay
   // untouched.
-  // Production's HummDinger is the shared show and its assigned jobs. The
-  // personal HD picker belongs to the individual-goal HIVEs.
-  if (!month && !productionMeeting && !presented.some(q => q.id === HD_FOCUS_QUESTION.id)) {
+  if (!month && !presented.some(q => q.id === HD_FOCUS_QUESTION.id)) {
     const hardOutIndex = presented.findIndex(q => q.id === 'q_hard_out');
     presented.splice(hardOutIndex >= 0 ? hardOutIndex + 1 : 0, 0, {
       ...HD_FOCUS_QUESTION,

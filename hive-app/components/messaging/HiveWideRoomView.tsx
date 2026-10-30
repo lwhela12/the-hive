@@ -11,20 +11,6 @@ import {
   getHiveWideEmptyCopy,
 } from './hiveWideRoom';
 
-/**
- * HIVE-Wide, opened.
- *
- * THE FALLBACK, not the room. The room is real now — one row with
- * `reach = 'all_hives'` (migration 139), rendered by RoomChatView like any
- * other. This panel only appears if that row cannot be found, which would mean
- * something is broken rather than unbuilt, and it still says so plainly.
- *
- * Every colour here is SPACE_SKIN. It used to be a cream header and charcoal
- * copy laid over SpaceGlobe's black — so the heading, the body and the footer
- * were charcoal on a starfield, i.e. invisible, under a cream bar that made the
- * panel look like two half-pages stitched together. That frame, wrapped in
- * Production HIVE's purple chrome, is the one Nat photographed on 2026-08-03.
- */
 export function HiveWideRoomView({
   hiveName,
   onBack,

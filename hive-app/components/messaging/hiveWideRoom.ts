@@ -49,7 +49,6 @@ export function getMessagesRoomLabel(
   // It is a `community` room by type — that is how it gets its everyone-in-it
   // membership — so without this it fell through to `return hiveName` and wore
   // the name of whichever HIVE you happened to be signed into. Nat opened it at
-  // HIVE-Wide and the header said "Production HIVE · Everyone in this HIVE"
   // (2026-08-03), which is the opposite of what the room is.
   if ((room as { reach?: string }).reach === 'all_hives') return HIVE_WIDE_ROOM_NAME;
   const ownTitle = getRoomCustomization(room, currentUserId).title;

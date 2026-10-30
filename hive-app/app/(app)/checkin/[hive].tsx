@@ -16,7 +16,7 @@ import { shortLinkSlug } from '../../../lib/hiveShortLink';
  * it wraps into three lines of noise that looks like a scam.
  *
  * So the HIVE gets a name in the address instead of an id. The name is the one
- * she says out loud — `og`, `tech`, `show`, `pro` (`lib/hiveShortLink.ts`,
+ * she says out loud — `og`, `tech` (`lib/hiveShortLink.ts`,
  * shared with `/halfway/<hive>`) — because a link she has to look up
  * is a link she will not use (the same reason the URL, the screen and the words
  * for a thing all have to match).

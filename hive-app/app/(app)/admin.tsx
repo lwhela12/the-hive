@@ -510,14 +510,10 @@ function AdminPanel({
         )}
         {(tabs ?? []).map(renderTab)}
         {/* THE ACTION, wearing the folder's shape and the folder's OWN colour.
-            Gold for OG, blue for Tech, purple for Production.
-
-            Nat, 2026-08-06: *"why can't the + New Member match its HIVE? Gold
-            for OG, Blue for Tech & Purple for Production? I feel like I've asked
-            for that 100 times."* She has. It was solid #bd9348 on all three, on
+            It was solid #bd9348 everywhere, on
             the rule that gold is the doing-colour everywhere in HIVE — Send
             Invite, Add. That rule is real and it loses to being asked three
-            times, and the tab is inside a HIVE's folder where the HIVE's colour
+            repeatedly, and the tab is inside a HIVE's folder where the HIVE's colour
             is what everything else is already wearing.
 
             What keeps it from reading as a PLACE is everything else about it: it

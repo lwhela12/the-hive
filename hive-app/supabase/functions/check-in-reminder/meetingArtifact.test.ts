@@ -90,8 +90,8 @@ Deno.test('monthly subject and timing are built from the meeting artifact', () =
   assertEquals(meeting.weekday, 'Sunday', 'weekday');
   assertEquals(meetingTimeWindow(meeting), '5:00 – 7:00 PM', 'time window');
   assertEquals(
-    monthlyMeetingSubject('window', 'Production HIVE', meeting),
-    '🐝 Pro HIVE · Your check-in is open — Page <to> Screen on Sept 20',
+    monthlyMeetingSubject('window', 'Tech HIVE', meeting),
+    '🐝 Tech HIVE · Your check-in is open — Page <to> Screen on Sept 20',
     'window subject',
   );
   assertEquals(

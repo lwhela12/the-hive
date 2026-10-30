@@ -1,41 +1,10 @@
-/**
- * The library door.
- *
- * One way in for something outside the app to file what it learned into a HIVE
- * board — Hermes, after a Le Mis Tech call or a Density call, with the bits
- * worth keeping.
- *
- * Nat, 2026-08-17, on what Tech HIVE is FOR: *"OG hive is more about social
- * connection and personal goals ... production hive is the project management,
- * we're all working towards the same goal ... Tech hive is different. It's
- * people who are interested in tech, tech developments, coding, software,
- * podcasts, building apps — where we can share information."* And the member
- * who makes the case: *"my brother-in-law wants to be in the tech hive, but he
- * can't make the meetings."* A library is what serves him. A meeting record is
- * not.
- *
- * **The shape a library page has**, which is the shape Nat already built on the
- * Agentic Coding Principles board without calling it that:
- *
- *   - the THREAD is a topic — "Which model is good at what"
- *   - its top post is the CURRENT ANSWER, rewritten as it learns
- *   - each reply is a DATED ENTRY that says where it came from
- *
- * So the page is always true today, and you can still see which call taught it
- * what. `summary` rewrites the top; `entry` appends underneath. A caller that
- * sends both has updated the library in one move.
- *
- * Kelly's weekly call deliberately stays OUTSIDE HIVE — he records it for the
- * Le Mis Tech podcast — which is exactly why this door exists. The recording
- * never comes near the app; only what was worth writing down does.
- */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 type Body = {
-  /** A community slug ('tech', 'default', 'show') or its id. */
+  /** A community slug ('tech', 'default') or its id. */
   community?: string;
   /** The board, by name (case-insensitive, partial) or id. Must already exist. */
   board?: string;

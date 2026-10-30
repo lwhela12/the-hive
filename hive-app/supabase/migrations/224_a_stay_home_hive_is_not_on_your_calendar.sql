@@ -1,7 +1,7 @@
 -- A HIVE that keeps things at home is not on anybody else's calendar.
 --
 -- Nat, 2026-09-02, describing the rule in her own words: *"Izzy, who is in OG &
--- Tech, can't see that Pro HIVE has a meeting, cos that visibility is locked
+-- Tech, can't see that a private HIVE has a meeting, cos that visibility is locked
 -- down."*
 --
 -- Migration 176 built the HIVE-Wide calendar to show every HIVE's meeting days,
@@ -10,12 +10,12 @@
 -- ceiling, so a stay-home HIVE showed an unlabelled bee reading "Meeting".
 --
 -- That was a defensible reading in August, when every HIVE shared at least
--- HIVE-Wide and no ceiling was ever set to `hive`. **Production's was set to
--- `hive` earlier today**, at Nat's instruction — *"Production is the most
+-- HIVE-Wide and no ceiling was ever set to `hive`. **a private HIVE's was set to
+-- `hive` earlier today**, at Nat's instruction — *"This is the most
 -- private of all of them... they should not even stop at HIVE-Wide"* — and the
 -- day that landed, the sentence "the bee ignores the ceiling" stopped being a
 -- design choice and became a leak. Izzy would have seen an anonymous meeting on
--- 10 September and known Production met that day.
+-- 10 September and known a private group met that day.
 --
 -- The fact that a meeting happens is itself a fact about a HIVE. A HIVE that
 -- shares nothing shares that too.
@@ -81,7 +81,7 @@ as $$
     -- 176 skipped this deliberately, on the grounds that *"nearly every real
     -- meeting sits at 'members', so a member of one HIVE gets an empty calendar
     -- for the others."* That was true on 12 August and is not true now: Tech's
-    -- September meeting is `public`, OG's is `all_hives`, and Production's is
+    -- September meeting is `public`, OG's is `all_hives`, and a private HIVE's is
     -- `members` — every one of them says exactly what it wants, so the calendar
     -- can simply believe them.
     and (

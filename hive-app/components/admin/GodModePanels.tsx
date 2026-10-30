@@ -203,31 +203,6 @@ function sentWhen(iso: string) {
   return `on ${formatDateMedium(iso)}`;
 }
 
-/**
- * Where each box sits on the Admin dashboard, in the order Nat reaches for them.
- *
- * Nat 2026-08-03: "meeting helpers & surveys in the first box, cos that is what
- * I use the most, 2nd would be newsletter drafter & signups & then the other
- * hives below that."
- *
- * Nat 2026-08-06, from her phone: Surveys, then Newsletter, then the HIVEs —
- * and then, later the same day, the Surveys box itself went (see admin.tsx for
- * her words). So: 1 Newsletter, 2 onwards the HIVEs in membership order.
- *
- * The numbers used to skip — HIVEs on 1, 3, 5 and the tools on 2 and 4 — to
- * satisfy a different request from the same week ("left hand side, top to bottom
- * should go OG HIVE, Tech HIVE, Production HIVE, and on the right it should be
- * Meeting tools and newsletter"). The dashboard wraps half-width cells
- * left-to-right, so odd positions land in the left column and even ones in the
- * right, and interleaving was the only way to describe a column split.
- *
- * A column split and a ranking are two different ideas and one sequence cannot
- * hold both. On a phone there is one column, so the interleave read as OG HIVE,
- * Surveys, Tech HIVE, Newsletter, Production HIVE — the ranking shredded. The
- * ranking wins, because it is what she asked for twice. On a wide screen it now
- * puts the Newsletter first and the HIVEs after it, which still reads
- * top-down in importance.
- */
 export const ADMIN_PANEL_ORDER = {
   newsletter: 1,
   hives: 2,
@@ -312,21 +287,6 @@ export type HivePanelSkin = {
   washedTab: string;
 };
 
-/**
- * A HIVE's box, wearing that HIVE's colour.
- *
- * Nat 2026-08-03: a thin stripe of colour along the top wasn't enough to tell
- * the boxes apart — "we just need to make the purple and blue ones more
- * obvious". So the folder tab carries the HIVE's colour and the body sits in
- * the faintest wash of it. You know whose box you're in before you read the
- * name.
- *
- * Deep colours (Tech's navy, Production's purple) fill the tab at full strength
- * and take cream lettering. A light colour like HIVE gold would vanish that way
- * against a cream page, so it wears the same colour as a tint with charcoal
- * lettering — which is the cream-and-gold OG HIVE already had. Every value
- * comes off accent_color, so a fourth HIVE picks its own side of that line.
- */
 export function hivePanelSkin(accent: string): HivePanelSkin {
   const rgb = toRgb(accent);
   const { h, s } = toHsl(rgb);

@@ -1,7 +1,7 @@
 -- App Feedback stops being a wish in a costume.
 --
 -- Nat, 2026-08-03, after clicking App Feedback while standing at HIVE-Wide and
--- landing on Production HIVE's home page: "ohhhhhhhhhhhh probably because the
+-- landing on a private HIVE's home page: "ohhhhhhhhhhhh probably because the
 -- app feedback is just a shortcut to my wishes, and my wishes aren't HIVE wide.
 -- I think it could look cooler & more upscale if the app feedback was its own
 -- entity, instead of just linked to a wish... Have a little intake form there,

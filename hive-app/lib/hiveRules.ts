@@ -109,10 +109,6 @@ export const HIVE_RULES: RuleGroup[] = [
         source: 'profile_scope, default_share_scope',
       },
       {
-        text: 'Production is the exception. Nothing in Production is offered HIVE-Wide at all — it stays inside Production.',
-        source: "max_share_scope = 'hive', 2 Sept",
-      },
-      {
         text: 'No member can make anything public, in any HIVE. Public means the newsletter and the invitation on the-hive.app, and you write both.',
         source: 'public is editorial',
       },
@@ -134,7 +130,7 @@ export const HIVE_RULES: RuleGroup[] = [
         source: 'dateUtils.ts + lint:event-continuity',
       },
       {
-        text: 'The meeting target is the second week: Tech Tuesday, OG Wednesday, Production Thursday, all 6–8pm Pacific. This is a planning target, not a calendar booking; agreed exceptions win.',
+        text: 'The meeting target is the second week: Tech Tuesday and OG Wednesday, both 6–8pm Pacific. This is a planning target, not a calendar booking; agreed exceptions win.',
         source: 'set 2026-09-03; the shape, not a booking',
       },
       {

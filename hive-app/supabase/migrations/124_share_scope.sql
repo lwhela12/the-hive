@@ -20,7 +20,7 @@
 -- ---------------------------------------------------------------------------
 -- Per-item settings depend on somebody choosing correctly every single time.
 -- This is the lock above them: a HIVE that doesn't publish cannot leak through
--- a mis-tapped setting, because the door isn't there. Show HIVE is the reason
+-- a mis-tapped setting, because the door isn't there. a private HIVE is the reason
 -- this exists — its whole premise is a promise to somebody outside it.
 
 alter table public.communities

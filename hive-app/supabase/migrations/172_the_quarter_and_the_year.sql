@@ -1,7 +1,7 @@
 -- 172: the quarter and the year become real check-ins (2026-08-12).
 --
--- Nat's Trello, Phase 2: BUILD the end-of-quarter check-in for OG, Tech and
--- Production HIVE (three days before the quarter ends), and the end-of-year
+-- Nat's Trello, Phase 2: BUILD the end-of-quarter check-in for OG and Tech
+-- (three days before the quarter ends), and the end-of-year
 -- check-in for each HIVE, same shape. Both were listed in italics as coming
 -- soon; this is the moment they exist, so the italics flip.
 --
@@ -14,7 +14,7 @@
 -- survey, which is the property that keeps the cron safe.
 --
 -- This seeds THE FIRST occurrence of each — Q3 2026 and the 2026 year-end —
--- for all three HIVEs, so the rhythm starts without waiting on a button.
+-- for both HIVEs, so the rhythm starts without waiting on a button.
 -- Members see nothing until three days before the quarter/year ends (Sep 27
 -- and Dec 28 — the app computes those from the due date, nothing here is a
 -- nudge date), which leaves weeks for Nat to reword the questions in the
@@ -93,36 +93,6 @@ join (
         {"id":"q_year_next","text":"What do you want to take a real swing at next year?","type":"long","required":false},
         {"id":"q_year_wish_hive","text":"One wish for this HIVE next year.","type":"long","required":false},
         {"id":"q_year_cup","text":"How charged is your battery heading into the new year?","type":"scale","required":false}
-      ]',
-      '2027-01-01T00:00:00Z'
-    ),
-    -- ---------------------------------------------------------- Production HIVE (slug `show`)
-    (
-      'show',
-      'Quarterly Check-in · Q3 2026',
-      'Three months went by — take five quiet minutes to look back before the next ones start. Short answers are perfect.',
-      '[
-        {"id":"q_quarter_stage","text":"What did you perform, book, or bring to life this quarter?","type":"long","required":false},
-        {"id":"q_quarter_proud","text":"What moment are you proudest of — on stage or behind the scenes?","type":"long","required":false},
-        {"id":"q_quarter_wings","text":"What''s been waiting in the wings that didn''t get its moment yet?","type":"long","required":false},
-        {"id":"q_quarter_next","text":"What are you building toward for the next three months?","type":"long","required":false},
-        {"id":"q_quarter_hive","text":"How can this HIVE help you get there?","type":"long","required":false},
-        {"id":"q_quarter_word","text":"One word for the quarter.","type":"short","required":false}
-      ]',
-      '2026-10-01T00:00:00Z'
-    ),
-    (
-      'show',
-      'End-of-Year Check-in · 2026',
-      'The year is wrapping up. Look back with us, celebrate a little, and point at what comes next. Short answers are perfect.',
-      '[
-        {"id":"q_year_headline","text":"Your year, in one line — the marquee version.","type":"short","required":false},
-        {"id":"q_year_proud","text":"What was your favorite moment on stage this year? And your favorite one off it?","type":"long","required":false},
-        {"id":"q_year_growth","text":"What can you do now that you couldn''t at the start of the year?","type":"long","required":false},
-        {"id":"q_year_thanks","text":"Who deserves a standing ovation for showing up for you this year?","type":"long","required":false},
-        {"id":"q_year_next","text":"What''s the dream booking, act, or project for next year?","type":"long","required":false},
-        {"id":"q_year_wish_hive","text":"One wish for this HIVE next year.","type":"long","required":false},
-        {"id":"q_year_cup","text":"How full is your tank heading into the new year?","type":"scale","required":false}
       ]',
       '2027-01-01T00:00:00Z'
     )

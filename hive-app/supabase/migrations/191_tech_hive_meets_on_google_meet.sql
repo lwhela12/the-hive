@@ -1,8 +1,8 @@
 -- Which HIVEs meet on Google Meet, and which meet inside HIVE.
 --
 -- The app grew one door on 2026-08-15 and it was the right call for a room:
--- OG sits around Nat's table with the deck on the TV, Production sits around
--- Charlee's with five laptops open, and a second front door there leads to an
+-- OG sits around Nat's table with the deck on the TV, while another group may
+-- have five laptops open, and a second front door there leads to an
 -- empty Meet with nobody in it.
 --
 -- Tech HIVE is not a room. Nat and Lucas, 2026-08-19: *"everyone who's in Tech

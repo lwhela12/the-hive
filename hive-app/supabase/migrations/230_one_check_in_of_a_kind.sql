@@ -9,7 +9,7 @@
 -- Migration 225 made `community_id` nullable and NULL mean HIVE-Wide, and the
 -- shared "End of the month" was created the next day. What it never did was
 -- CLOSE the per-HIVE rows the shared one replaces. OG's and Tech's had already
--- been retired by hand, so the gap left exactly one row standing — Production's
+-- been retired by hand, so the gap left exactly one row standing — a private HIVE's
 -- "Halfway check-in" — and one row standing is invisible until somebody counts.
 --
 -- The merge was written as a creation and the retirement was left to a person's
@@ -37,8 +37,8 @@
 -- lint:check-in-kinds` fails the build if the app's copy ever drifts from the
 -- edge functions'.
 --
--- Retired titles are kept on purpose. "Halfway check-in", "Where the show got
--- to this month" and "Pro HIVE POP" are all the end-of-month row under names it
+-- Retired titles are kept on purpose. "Halfway check-in" and older POP labels
+-- are all the end-of-month row under names it
 -- used to carry, and a rule that only recognises today's name is a rule that
 -- stops applying the moment somebody renames something.
 
@@ -50,7 +50,7 @@ as $$
   select case
     when title ~* 'end[-\s]of[-\s]year\s+check-?in' then 'year'
     when title ~* 'quarterly\s+check-?in' then 'quarter'
-    when title ~* '(end of the month|where the show got to this month|pro hive pop|halfway check-?in)'
+    when title ~* '(end of the month|halfway check-?in)'
       then 'endofmonth'
     when title ~* '(before (our first meeting|we meet)|monthly\s+check-?in)' then 'premeeting'
   end;
@@ -63,7 +63,7 @@ comment on function public.check_in_kind(text) is
 -- THE ONE-TIME SWEEP
 -- --------------------------------------------------------------------------
 --
--- Closes what is standing today. Production's active "Halfway check-in" is the
+-- Closes what is standing today. a private HIVE's active "Halfway check-in" is the
 -- only row this touches; its one answer (Nat's own, August, "@sara") stays
 -- exactly where it is, because closing a check-in never removes what people
 -- wrote in it.
@@ -104,7 +104,7 @@ update public.surveys s
 --                               somebody remembering three rows.
 --
 -- Within one scope the newest wins, which is what stops a second "Halfway
--- check-in" being created beside the first — the shape Production was in on
+-- check-in" being created beside the first — the shape one group was in on
 -- 2026-08-20 and nobody saw for a fortnight.
 
 create or replace function public.close_check_ins_of_the_same_kind()

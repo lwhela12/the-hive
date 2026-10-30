@@ -7,7 +7,6 @@ const assert = require('node:assert/strict');
   const db = new PGlite();
   const og = '00000000-0000-0000-0000-000000000001';
   const tech = '00000000-0000-0000-0000-000000000002';
-  const show = '00000000-0000-0000-0000-000000000003';
   const survey = '00000000-0000-0000-0000-000000000004';
   const a = '00000000-0000-0000-0000-000000000011';
   const b = '00000000-0000-0000-0000-000000000012';
@@ -26,7 +25,7 @@ const assert = require('node:assert/strict');
     create table surveys(id uuid, community_id uuid, is_active boolean, title text, created_at timestamptz);
     create table survey_responses(id uuid, survey_id uuid, user_id uuid, community_id uuid,
       response_period text, answers jsonb, submitted_at timestamptz);
-    insert into communities values ('${og}','default'),('${tech}','tech'),('${show}','show');
+    insert into communities values ('${og}','default'),('${tech}','tech');
     insert into community_memberships values ('${a}','${og}'),('${a}','${tech}'),
       ('${b}','${og}'),('${c}','${tech}'),('${d}','${og}');
     insert into surveys values ('${survey}',null,true,'End of the month',now());
@@ -58,7 +57,6 @@ const assert = require('node:assert/strict');
   assert.equal(count(techRows, 'q_quarter_helping', 'Not sure'), 0, 'OG-only legacy answer stays out of Tech');
   await db.exec(`select set_config('request.jwt.claim.sub','${d}',false);`);
   await assert.rejects(summary(tech), /HIVE membership required/);
-  await assert.rejects(summary(show), /no pulse summary/);
   await db.close();
   console.log('Shared quarter summary: scoped counts, shared priority, OG history fallback, and membership guards passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

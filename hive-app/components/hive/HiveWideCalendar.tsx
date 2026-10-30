@@ -12,31 +12,6 @@ import { getLocalIsoDate } from '../../lib/hooks/useArrivalBoard';
 import { useHiveWideMeetings, type HiveWideMeetingDay } from '../../lib/hooks/useHiveWideMeetings';
 import type { Community } from '../../types';
 
-/**
- * The HIVE-Wide calendar — the whole month of HIVE life at a glance.
- *
- * Nat's parked idea, her words (2026-08-12): "A genuinely HIVE-Wide calendar,
- * with a coloured bee per HIVE's meeting day." The "Your Meetings" box next
- * door lists the meetings YOU are expected at; this is the other half of the
- * view from up here — every HIVE's meeting days, each wearing its own HIVE's
- * colour, including the HIVEs you are not in.
- *
- * The marker is a bee sitting on a honeycomb cell filled in that HIVE's accent
- * — the same cell the rail, the wishes and the meetings box already use, so a
- * gold cell means OG wherever you see one. Two HIVEs meeting the same day is
- * two bees side by side. The cells use the shared small-mark colour, so Tech
- * carries Signal Blue and Production carries Curtain Violet here just as they
- * do in the rail.
- *
- * Tapping a marked day names what's there under the grid. A meeting of a HIVE
- * you belong to is a door — it steps you into that HIVE's Meetings page, same
- * as the meetings box. A HIVE you are not in is a fact, so it gets no arrow
- * and no press: the day and time travel up here (migration 176), the Meet
- * link, notes and recordings never do.
- *
- * The grid itself never scrolls — a calendar is a fixed shape, and a scroll
- * inside it would be a scroll inside a scroll. Walking months is the arrows.
- */
 
 type CalendarColours = {
   ink: string;

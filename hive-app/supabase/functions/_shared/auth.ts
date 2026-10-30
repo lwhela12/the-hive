@@ -118,18 +118,6 @@ export function isAuthError(result: AuthResult | AuthError): result is AuthError
   return 'error' in result;
 }
 
-/**
- * Being signed in is not the same as being allowed.
- *
- * An audit on 2026-08-03 found the same shape in five functions: verify the
- * token, then read or write with the service-role key using an id that came out
- * of the request body. The service-role key ignores row-level security, so
- * "which HIVE?" was answered by whoever was asking. A Production HIVE member
- * could hand over an OG HIVE id and be served its contents.
- *
- * These two are the missing half of every one of those checks. Call one
- * immediately after verifySupabaseJwt, before touching any caller-supplied id.
- */
 
 /** Is this person actually in the HIVE whose data they're asking about? */
 export async function isCommunityMember(

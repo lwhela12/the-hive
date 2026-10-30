@@ -21,8 +21,7 @@ export function isHiveWideEventScope(event: { visibility?: string | null }): boo
 }
 
 export function eligibleUpcomingEvent(event: UpcomingEvent, audience: 'hive_wide' | 'public', today: string, end: string): boolean {
-  const source = Array.isArray(event.community) ? event.community[0] : event.community;
-  if (source?.slug === 'show' || event.event_date > end || (event.end_date ?? event.event_date) < today) return false;
+  if (event.event_date > end || (event.end_date ?? event.event_date) < today) return false;
   if (/\b(out of town|away|trip|travel|galavant)\b/i.test(event.title ?? '')) return false;
   if (audience === 'public') return event.visibility === 'public' && event.invited_scope === 'public'
     && event.event_type !== 'meeting' && event.event_type !== 'birthday';

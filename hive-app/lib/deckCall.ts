@@ -1,36 +1,6 @@
 import DailyIframe, { type DailyCall } from '@daily-co/daily-js';
 import { supabase } from './supabase';
 
-/**
- * The call that does not hang up when you walk away from the deck.
- *
- * Nat, 2026-08-19, after the first Production HIVE: *"I go in and out of the
- * meeting helper a lot... we were in the meeting helper, and then we were on
- * the research page, and then we were on the meeting helper, and then I opened
- * up the board, and then I went back... we need to make sure that if we have
- * the record button on, that it stays on."*
- *
- * It used to do the opposite. `DeckVideo` created the Daily frame inside its
- * own tree and its unmount cleanup called `leave()` and `destroy()`, so every
- * time she opened a board the room hung up and the transcript closed itself.
- * The meeting kept going; the recording of it did not.
- *
- * So the call does not live in the screen any more. The iframe is parented to
- * one fixed layer on `document.body` that React never owns and nothing ever
- * unmounts:
- *
- * - **Docked** — the deck is open, so the layer is moved to sit exactly over
- *   the panel's placeholder and looks like it is in the page.
- * - **Parked** — she has gone to a board, so the layer shrinks to a corner
- *   tile that says it is still recording and offers the way back.
- *
- * Either way the same iframe stays joined the whole evening. An iframe reloads
- * if you move it in the DOM, which is exactly what re-parenting it into each
- * new screen would do, so it is never moved — only measured and repositioned.
- *
- * Hanging up is a decision now, never a side effect of navigation, and the
- * transcript is kept at that moment and no other.
- */
 
 export type CallState = 'idle' | 'opening' | 'live' | 'error';
 

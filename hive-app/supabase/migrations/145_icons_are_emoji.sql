@@ -8,8 +8,8 @@
 --
 -- Nothing decodes those. `EMOJI_MAP[item.icon] || item.icon` falls through to
 -- the raw string, so a board card renders the literal characters "1F4AC" where
--- its icon should be. Two of them are the Tech and Production General
--- Discussions — the first board a member of either HIVE ever opens.
+-- its icon should be. One is Tech General Discussion — the first board a
+-- member opens.
 --
 -- Converted, not guessed: each is the real code point for the emoji named.
 update public.board_categories set icon = '💬' where icon = '1F4AC';  -- speech balloon

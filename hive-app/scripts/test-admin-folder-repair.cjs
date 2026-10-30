@@ -13,9 +13,9 @@ const text=t=>nodes(t).filter(n=>n.type==='Text').map(n=>JSON.stringify(n.props.
 (async()=>{
  let calls=[];
  const template={key:'message',name:'Somebody sent you a message',when:'When a message lands',approved:true,revision:'unchanged-hash',html:'<p>Original</p>',subject:'Original subject'};
- const email=harness('EmailTemplatesPanel',{from:()=>({select:()=>Promise.resolve({data:[{id:'tech',name:'Tech HIVE'},{id:'og',name:'OG HIVE'},{id:'prod',name:'Production HIVE'}]})}),functions:{invoke:async(path,opts)=>{calls.push({path,opts});return {data:{templates:[template]}};}}});
+ const email=harness('EmailTemplatesPanel',{from:()=>({select:()=>Promise.resolve({data:[{id:'tech',name:'Tech HIVE'},{id:'og',name:'OG HIVE'}]})}),functions:{invoke:async(path,opts)=>{calls.push({path,opts});return {data:{templates:[template]}};}}});
  const props={Panel:'Panel'};email.render(props);await email.flush();let tree=email.render(props),panel=nodes(tree).find(n=>n.type==='Panel');
- assert.equal(panel.props.tabs.map(t=>t.label).join('|'),'HIVE-Wide|OG HIVE|Production HIVE|Tech HIVE');
+ assert.equal(panel.props.tabs.map(t=>t.label).join('|'),'HIVE-Wide|OG HIVE|Tech HIVE');
  const row=nodes(tree).find(n=>n.props.testID==='email-approval-row');assert.equal(row.props.style.flexDirection,'row');
  const sw=nodes(row).find(n=>n.type==='Switch');assert.equal(sw.props.trackColor.true,'#bd9348');assert.equal(sw.props.thumbColor,'#F6F4E5');assert.match(sw.props.accessibilityLabel,/Approved/);
  nodes(row).find(n=>n.type==='Pressable').props.onPress();tree=email.render(props);assert.equal(nodes(tree).find(n=>n.props.html)?.props.html,template.html);

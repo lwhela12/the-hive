@@ -140,25 +140,6 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   // Every HIVE's next meeting is already on the Whole HIVE page itself, and the
   // meetings screen is where you CREATE one — which has no all-HIVEs meaning.
   { key: 'meetings', label: 'Meetings', emoji: '🗓️', route: '/meetings', gate: 'everyone', atWholeHive: 'hidden' },
-  /**
-   * The deck you actually run a meeting from, one row under Meetings.
-   *
-   * It used to be reachable only from inside Meetings, which is two clicks from
-   * anywhere and no clicks that look like anything. Nat, 2026-08-19, after
-   * running the first Production HIVE off it: *"I want meeting helper on the
-   * left-hand side of the nav bar, instead of just inside of the meetings,
-   * because when I'm running a meeting... I have so many clicks away if I want
-   * to get back to where I was."* And Oliver, in the room: *"I'm locked out, I
-   * can't figure out how to get back."*
-   *
-   * Hidden at HIVE-Wide. It was `same` for about an hour, on her first ask that
-   * it *"always be there"* — and she took it straight back the moment she saw
-   * it up there (2026-08-19): *"meeting helper can't be hive wide because it
-   * depends on which meeting helper you're in. So get rid of meeting helper
-   * from hive wide, but each hive should have its own meeting helper in the
-   * sidebar."* A deck belongs to one HIVE's meeting, so a row above all three
-   * can only guess which one you meant.
-   */
   { key: 'meeting-helper', label: 'Meeting Helper', emoji: '🎬', shortLabel: 'Helper', route: '/meeting-helper', gate: 'everyone', atWholeHive: 'hidden' },
   // Real money, belonging to one HIVE. It is already switched off for Tech.
   { key: 'honey-pot', label: 'Honey Pot', emoji: '🍯', route: '/honey-pot', gate: 'everyone', atWholeHive: 'hidden' },
@@ -193,7 +174,6 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   // Feedback on the app is feedback on all of it, wherever you happen to be.
   // It said 'same' from the day the rail was written, and pointed at /hive —
   // which is the one route that CANNOT mean the same thing wherever you stand.
-  // Nat found it by clicking App Feedback at HIVE-Wide and landing in Production
   // HIVE (2026-08-03). Its own screen now, with no community id in the path.
   // 📣 rather than 💬 (Nat 2026-08-04). The speech balloon rendered as a pale
   // blob against the dark rail, and it sat four rows under 💌 Messages saying
@@ -205,20 +185,6 @@ export const NAV_DESTINATIONS: NavDestination[] = [
 /** The two zoom levels, above the line. HIVE-Wide is always first. */
 export const HIVE_WIDE_ROUTE = '/hive-wide';
 
-/**
- * HIVE-Wide had its own section of the rail with its own children for about an
- * hour, and Nat killed it the same afternoon she asked for it — correctly.
- *
- * "We just move HIVE-Wide under My HIVEs. Then we aren't trying to reinvent the
- * wheel, it's just the same format as all the other ones." Two shapes to learn
- * became one: HIVE-Wide is the first entry under My HIVEs, next to OG, Tech and
- * Production, and the single page list below serves whichever one you picked.
- * Anything added later gets added once instead of twice.
- *
- * The name survived a wobble too ("All HIVEs?"), and stayed HIVE-Wide: it reads
- * like "the whole wide world", and the hyphenated shape can't be mistaken for
- * the name of an individual HIVE.
- */
 export const WHOLE_HIVE_KEY = 'hive-wide';
 
 /** The page list, as it should read from where this person is standing. */
@@ -394,7 +360,6 @@ export function activeKeyForPath(pathname: string | null | undefined): string | 
   // rail, so it belongs to Meetings in the footer trail — without this the
   // strip showed only the HIVE's name and stopped, which is what Nat saw
   // standing in the Meeting Helper on 2026-08-14: *"the footer's not keeping up
-  // with us at the bottom, it just says Production HIVE."*
   //
   // The Meeting Helper is no longer one of them. It has its own row in the rail
   // as of 2026-08-19, so it lights up as itself and names itself in the footer,

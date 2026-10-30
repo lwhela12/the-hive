@@ -28,38 +28,6 @@ import {
 
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
-/**
- * App Feedback — its own place, at last.
- *
- * It used to be a shortcut that hunted through one HIVE's wishes for a title
- * containing "bug report" and opened that wish. Nat found the seam by clicking:
- * she pressed App Feedback at HIVE-Wide and arrived on Production HIVE's home
- * page, because a wish needs a HIVE and HIVE-Wide is not one. Her read was
- * right, and her fix was better than a redirect — "I think it could look cooler
- * & more upscale if the app feedback was its own entity... Have a little intake
- * form there, instead of linking to a wish? i like that a lot."
- *
- * So: no community id anywhere in the path. This screen means the same thing
- * wherever you are standing, which is what `atWholeHive: 'same'` promised in the
- * rail all along. Where you happened to be is still sent, because it is useful
- * context for a bug — but as a fact about the report, not a requirement for
- * filing one.
- *
- * 2026-08-04, three changes, all Nat's:
- *
- *   The words are hers now. The old ones described the plumbing ("not to a
- *   board, not to your HIVE"); hers say who is listening and why, which is the
- *   only part a member cares about.
- *
- *   A clip and a mic, because the fastest bug report is a marked-up screenshot
- *   and the second fastest is talking. "any and every time we have a text box we
- *   always want both of those."
- *
- * Feedback now follows the same operating loop Nat uses everywhere else:
- * send the report to her inbox, fix it, and name the shipped change in What's
- * New. The old in-app tracking loop duplicated email and asked members to
- * monitor a second support system.
- */
 
 type Kind = 'bug' | 'idea' | 'confusing' | 'love';
 

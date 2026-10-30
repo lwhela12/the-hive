@@ -72,6 +72,6 @@ select cron.schedule(
 
 -- Worth saying out loud: seal-meeting-nightly still names OG HIVE's id directly.
 -- That was fine when there was one HIVE. With three it means Tech HIVE and
--- Production HIVE never seal a meeting at all, so their summaries stay blank
+-- a private HIVE never seal a meeting at all, so their summaries stay blank
 -- however many meetings they hold. Not fixed here because it belongs with the
 -- per-HIVE cadence work, which is still open.

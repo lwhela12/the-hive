@@ -163,7 +163,7 @@ grant execute on function public.survey_submission_counts(uuid,uuid,text)
   to authenticated;
 
 -- Fixed choice keys only. A caller cannot use this function to ask for free
--- text, identities, Production responses, or a different HIVE's breakdown.
+-- text, identities, private responses, or a different HIVE's breakdown.
 create function public.quarter_pulse_summary(
   p_community_id uuid, p_period text
 ) returns table(question_id text, option text, response_count bigint)

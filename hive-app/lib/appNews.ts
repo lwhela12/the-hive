@@ -133,14 +133,6 @@ export const APP_NEWS: AppNewsEntry[] = [
     action: 'See your choices',
   },
   {
-    id: '2026-08-20-production-meeting-end-and-personal-hard-outs',
-    date: '2026-08-20',
-    title: 'Your leaving time stays separate from the meeting clock',
-    detail: 'Every HIVE’s pre-meeting check-in can share your personal hard out. That never changes the HIVE’s countdown — and Production’s September 10 clock now runs to its scheduled 7:00 PM end.',
-    href: { pathname: '/meeting-helper' },
-    action: 'See the meeting clock',
-  },
-  {
     id: '2026-08-20-meeting-night-email-reads-the-meeting',
     date: '2026-08-20',
     title: 'The meeting-night email says what the meeting says',
@@ -155,22 +147,6 @@ export const APP_NEWS: AppNewsEntry[] = [
     detail: 'When a meeting\'s notes catch a line worth keeping, the meeting summary now offers it to you — post it to Things We Learned under your own name, or put it away. Nobody posts your words but you.',
     href: { pathname: '/meetings' },
     action: 'See a summary',
-  },
-  {
-    id: '2026-08-19-production-checkins-live',
-    date: '2026-08-19',
-    title: 'Production HIVE has its own check-ins now',
-    detail: 'Before each meeting: what got done, is it on the board, any pictures to bring. At month\'s end: what moved, what\'s stuck, what has to happen next. Both arrive by email a few days before they\'re due.',
-    href: { pathname: '/meetings' },
-    action: 'See Meetings',
-  },
-  {
-    id: '2026-08-19-production-runs-its-own-way',
-    date: '2026-08-19',
-    title: 'Production\'s meeting flow fits Production',
-    detail: 'The deck spends the night on the show: Honey Pot is paused ("not at this time" — the page says so), HIVE Help is out, and venue visits are sorted by the people going, never as a group scheduling step.',
-    href: { pathname: '/meeting-helper' },
-    action: 'See the deck',
   },
   {
     id: '2026-08-19-meetings-page-tidy',
@@ -219,14 +195,6 @@ export const APP_NEWS: AppNewsEntry[] = [
     detail: 'When a meeting catches you wishing for something out loud, it appears in italics on your wishes panel — add it, refine it with Clive, or ✕ it away. Only you can turn your own into a real wish.',
     href: { pathname: '/profile' },
     action: 'See what was heard',
-  },
-  {
-    id: '2026-08-19-voices-named-production',
-    date: '2026-08-19',
-    title: 'The August Production meeting knows who said what',
-    detail: 'The transcript now reads Nat, Lucas, Charlee and Sara instead of Speaker A, B, C and D.',
-    href: { pathname: '/meetings' },
-    action: 'Read the meeting',
   },
   {
     id: '2026-08-19-badge-is-the-toggle',
@@ -279,20 +247,6 @@ export const APP_NEWS: AppNewsEntry[] = [
     date: '2026-08-19',
     title: 'Put names to the voices in a recording',
     detail: 'A recorded meeting comes back as Speaker A, Speaker B. On the summary you get a row for each voice with a line of what they said, and a box for their name. Do a quick roll call at the top of the meeting and the boxes fill themselves in for you to confirm.',
-    href: { pathname: '/meetings' },
-    action: 'Open Meeting Summaries',
-  },
-  {
-    id: '2026-08-19-tech-meets-on-meet',
-    date: '2026-08-19',
-    title: 'Tech HIVE meets on Google Meet',
-    detail: 'Tech is the one HIVE where everybody is somewhere else, and Meet is where they already are. Its invitations carry a Meet link again. OG and Production still meet in the app, where the room shares one screen.',
-  },
-  {
-    id: '2026-08-19-summary-fits-the-hive',
-    date: '2026-08-19',
-    title: 'A summary only mentions a treasurer if your HIVE has one',
-    detail: 'Production said no to a Honey Pot and its summary still opened with a balance of $0.00. And the next meeting line carries the address now, so catching up tells you where to go as well as when.',
     href: { pathname: '/meetings' },
     action: 'Open Meeting Summaries',
   },
@@ -445,68 +399,12 @@ export const APP_NEWS: AppNewsEntry[] = [
     action: 'Open the deck',
   },
   {
-    id: '2026-08-14-production-boards-slimmed',
-    date: '2026-08-14',
-    title: 'Production HIVE has fewer boards and more useful ones',
-    detail: 'Six research boards that nobody could act on are archived. What is left is Pre-Production — ten threads, six calls to make and four rooms to go and stand in, each with the questions and what to look for already in it — plus the general discussion and The Other 20 Hours.',
-    href: { pathname: '/board' },
-    action: 'Open the boards',
-  },
-  {
     id: '2026-08-14-deck-fits-your-screen',
     date: '2026-08-14',
     title: 'The meeting deck fits whatever screen it is on',
     detail: 'It measures the space it actually has now — so opening a sidebar, shrinking the window or casting to a TV all resize the slide smoothly instead of jumping between two fixed sizes. The footer stays out from under the text, and a long name stays on one line.',
     href: { pathname: '/meeting-helper' },
     action: 'Open the deck',
-  },
-  {
-    id: '2026-08-14-production-end-of-month',
-    date: '2026-08-14',
-    title: 'Production HIVE has an end-of-month check-in too',
-    detail: 'What moved on the show, what is stuck and what would unstick it, and what you are taking on before we meet again. It asks about the show rather than about you, because this HIVE has one shared goal.',
-    href: { pathname: '/hive' },
-    action: 'Open Home',
-  },
-  {
-    id: '2026-08-14-production-pre-meeting-checkin',
-    date: '2026-08-14',
-    title: 'Production HIVE has a check-in before each meeting',
-    detail: 'Three minutes on Home: how often you want to meet, what day works, how you feel about a Honey Pot, which room you would go and look at, and what your biggest question is. Answering beforehand means the meeting gets to decide instead of ask.',
-    href: { pathname: '/hive' },
-    action: 'Open Home',
-  },
-  {
-    // Nat's own design, 2026-08-14: "maybe there's a pre-production board and
-    // each one of these tasks is its own thread... you can click on your task
-    // and it'll bring you to that thread that has the phone number and the
-    // questions to ask, and then you can leave your notes in it."
-    id: '2026-08-14-a-todo-opens-its-thread',
-    date: '2026-08-14',
-    title: 'A to-do can take you straight to the conversation it came from',
-    detail: 'Production HIVE has a Pre-Production board with one thread per job. Take a job in the meeting and it lands on your list \u2014 tap it and you are in the thread, with the phone number and the questions waiting, and somewhere to write down what you find out.',
-    href: { pathname: '/board' },
-    action: 'Open the boards',
-  },
-  {
-    // Production HIVE's meeting was designed out loud by Nat on 8/14 and runs
-    // back-to-front against OG's on purpose: the research first, then every
-    // other question answers itself.
-    id: '2026-08-14-production-meeting-helper',
-    date: '2026-08-14',
-    title: 'Production HIVE has its own meeting night now',
-    detail: 'It runs differently to the others on purpose \u2014 we walk through the research together first, then decide how often we meet, whether we want a HIVE Help, what happens with money, who goes to look at venues, and who takes which job. Say @someone and the job lands on their to-do list with the questions already in it.',
-    href: { pathname: '/meeting-helper' },
-    action: 'Open the deck',
-  },
-  {
-    // Nat read a real Production invite the morning of 8/14 and found the
-    // letter explaining how Production differs from the other HIVEs before
-    // anything had said what a HIVE is.
-    id: '2026-08-14-invite-email-says-what-a-hive-is',
-    date: '2026-08-14',
-    title: 'The invite email introduces the HIVE properly now',
-    detail: 'Our real logo up top, then what a HIVE is, then what your HIVE is — in that order. It also tells you about the little tour waiting on the other side of the button, and that you can skip it if you already know your way around.',
   },
   {
     // The bees have matched skills to wishes for a while and nobody was ever
@@ -542,12 +440,6 @@ export const APP_NEWS: AppNewsEntry[] = [
     date: '2026-08-12',
     title: 'You can tag a whole HIVE',
     detail: 'Writing @og or @tech in a shout-out or a post that travels HIVE-Wide reaches every member of that HIVE — each one gets their own little nudge, even if you\'re not in that HIVE yourself.',
-  },
-  {
-    id: '2026-08-12-your-hives-own-questions',
-    date: '2026-08-12',
-    title: 'Each HIVE asks its own daily questions now',
-    detail: 'Tech HIVE and Production HIVE each have a full year of their own — flavored to who they are. Your answers quietly show how you think and work, so you can find the people who work like you, and the ones who think exactly opposite.',
   },
   {
     id: '2026-08-12-one-answer-per-hive',
@@ -890,12 +782,6 @@ export const APP_NEWS: AppNewsEntry[] = [
     detail: 'Off to begin with. Your own HIVE always sees you either way.',
     href: { pathname: '/profile' },
     action: 'Open your profile',
-  },
-  {
-    id: '2026-08-02-three-hives',
-    date: '2026-08-02',
-    title: 'There are three HIVEs now',
-    detail: 'OG, Tech and Production. If you are in more than one, you can switch between them from the menu.',
   },
   {
     id: '2026-08-02-share-levels',
@@ -1405,16 +1291,10 @@ export function getAppNewsForMonth(
   return getAppNews(entries.length, entries).filter((entry) => entry.date.slice(0, 7) === month);
 }
 
-/**
- * Internal release notes know more than the public newsletter should.
- * Production HIVE is intentionally private, and an exact HIVE count turns
- * stale the instant another one starts. Keep those facts out before the draft
- * request is assembled; the edge function repeats the check as a backstop.
- */
+/** Exact HIVE counts turn stale as soon as another starts. */
 export function isPublicNewsletterSafeAppNews(entry: AppNewsEntry): boolean {
   const copy = `${entry.title} ${entry.detail ?? ''}`;
   return entry.newsletterEligible === true
-    && !/\bproduction(?:\s+hive)?\b/i.test(copy)
     && !/\b(?:three|3)\s+hives?\b/i.test(copy);
 }
 

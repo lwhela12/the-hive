@@ -23,21 +23,6 @@ interface AuthContextType {
   openHivePicker: () => void;
   /** Move into another hive. Ignores any hive this person isn't a member of. */
   switchCommunity: (communityId: string) => Promise<void>;
-  /**
-   * Are you standing at Whole HIVE rather than inside one of them?
-   *
-   * Nat's simplification, 2026-08-03: HIVE-Wide used to be its own section of
-   * the rail with its own children, which meant two shapes to learn and two
-   * places to add anything new. It is now the first entry under My HIVEs,
-   * alongside OG, Tech and Production — so it is not a different KIND of thing,
-   * it is one more thing of the same kind, and the page list underneath serves
-   * whichever one you picked.
-   *
-   * It is deliberately NOT a community id. There is no row for it and there
-   * should not be: it is the view from above all of them, and inventing a
-   * pretend HIVE would have every query in the app asking a real database for
-   * an imaginary place.
-   */
   wholeHive: boolean;
   /**
    * What this person last PICKED, as opposed to where the route says they are.

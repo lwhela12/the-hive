@@ -3,24 +3,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
-/**
- * Keep the room's own recording, and send it to be written down.
- *
- * Nat, 2026-08-19, after Production met around one table with the video panel
- * untouched and nothing kept: *"I definitely, definitely think 100% of the time
- * we always want transcriptions, because you just never know"* — and one
- * microphone, not five: *"if we had everyone toggle on their mics to record
- * different speakers, the feedback would be crazy. So I think we just want the
- * one, I'll just toggle on the recording."*
- *
- * `save-transcript` is the same shape for the video call's own transcription.
- * This is its sibling for a room with no call in it: the presenter's laptop
- * records, uploads to `meeting-recordings`, and hands the path over here.
- *
- * The recording lands on the SAME `meetings` row Wrap-Up will seal — found by
- * date with exactly the rule `seal-meeting` and `save-transcript` use — so a
- * HIVE night is still one record no matter which of the three happens first.
- */
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';

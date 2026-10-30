@@ -1,11 +1,11 @@
 -- A Honey Pot is something a HIVE decides to have, not something it is given.
 --
--- Tech HIVE and Production HIVE have both been showing OG's Honey Pot screen —
+-- Tech HIVE and a private HIVE have both been showing OG's Honey Pot screen —
 -- a $0 balance, an empty ledger and a quarterly-dues line — as though they had
 -- a fund that nobody had paid into. That reads as neglect. They don't have one;
 -- they haven't chosen to.
 --
--- Nat, 2026-08-03: "Honey pot for Tech & production should say 'not set up yet'
+-- Nat, 2026-08-03: "Honey pot for Tech should say 'not set up yet'
 -- or something. Or explain potential ways it could be used or helpful... Give
 -- ideas & say we have to elect a treasurer 1st and only the treasurer can take
 -- money in and out & all records are here for everyone to see. Interested?

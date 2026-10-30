@@ -32,15 +32,8 @@ export function hiveDisplayName(name?: string | null): string {
  * written-down accent so a HIVE whose row lost its colour still comes back
  * wearing its own instead of everybody's gold.
  *
- * Nat, 2026-08-27, looking at Tech HIVE: *"Tech HIVE has the wrong emoji — it
- * has the director's cut board, like for movies. Tech HIVE should have the
- * little robot, it's cute, that's what I use on my Google Calendar. Tech HIVE
- * is the wrong colour too."* The clapperboard and the purple are
- * **Production's** — it is the theatre HIVE — and they had been written into
- * the check-in email by hand back when Production was the only HIVE that email
- * went to. Hand-written branding is how one HIVE ends up wearing another's
- * costume, so it lives here now: a fourth HIVE is a fourth ENTRY, never a
- * fourth `if`.
+ * Hand-written branding is how one HIVE ends up wearing another's costume, so
+ * every branch keeps its mark here rather than scattering it through screens.
  */
 export type HiveMark = {
   /** The HIVE's own emoji — its face in a subject line, a calendar, a header. */
@@ -52,9 +45,8 @@ export type HiveMark = {
    *
    * HIVE Brand Guidelines, September 2026, gives every branch a DOMINANT PAIR:
    * a dark environment and a light partner. Space + Starlight, Honey + Ink,
-   * Circuit Navy + Signal Blue, Stage Purple + Curtain Violet. Its usage rule
-   * is the whole point — *"Use charcoal on cream or white. Use cream or white
-   * on Space, Circuit Navy, or Stage Purple."*
+   * Circuit Navy + Signal Blue. Its usage rule
+   * is the whole point — light marks sit on dark branch environments.
    *
    * `accent` is the environment: the rail, the header, the button. This is what
    * a small mark wears when it has to sit ON that environment — a 16px hexagon
@@ -79,9 +71,6 @@ const HIVE_MARKS: Record<string, HiveMark> = {
   default: DEFAULT_MARK,
   // Tech HIVE — the little robot. Circuit Navy over Signal Blue.
   tech: { emoji: '🤖', accent: '#011f46', onDark: '#2f82c2' },
-  // Production HIVE — the clapperboard. Stage Purple over Curtain Violet. This
-  // is the show HIVE; the clapperboard belongs here and nowhere else.
-  show: { emoji: '🎬', accent: '#1f0338', onDark: '#a0708b' },
 };
 
 /**
@@ -97,17 +86,15 @@ export function hiveOnDark(slug?: string | null): string {
 /**
  * The hexagon used inside a small HIVE label.
  *
- * Tech's Circuit Navy and Production's Stage Purple are page chrome. In an
- * 11px hexagon either is easily mistaken for HIVE-Wide's near-black mark, so
- * their labels use the light half of their branch pair — Signal Blue and
- * Curtain Violet — exactly like the side rail. Other HIVEs keep their normal
- * accent.
+ * Tech's Circuit Navy is page chrome. In an 11px hexagon it is easily mistaken
+ * for HIVE-Wide's near-black mark, so its labels use Signal Blue, the light
+ * half of its branch pair. Other HIVEs keep their normal accent.
  */
 export function hiveTagMark(
   community?: { accent_color?: string | null; slug?: string | null } | null,
 ): string {
   const slug = community?.slug?.trim().toLowerCase();
-  return slug === 'tech' || slug === 'show' ? hiveOnDark(slug) : hiveAccent(community);
+  return slug === 'tech' ? hiveOnDark(slug) : hiveAccent(community);
 }
 
 /** A HIVE's emoji and written-down accent, by slug. Anything else is the bee. */
@@ -120,8 +107,7 @@ export function hiveMark(slug?: string | null): HiveMark {
  *
  * Nat's round badges, one per HIVE, drawn 2026-09-04 — a bee at the centre of
  * a ring in that HIVE's own colours: OG cream and gold, Tech navy over a
- * circuit board, Production purple behind theatre curtains, and HIVE-Wide
- * black and gold with the cosmos behind it.
+ * circuit board, and HIVE-Wide black and gold with the cosmos behind it.
  *
  * ## Two versions, and only one of them is in here
  *
@@ -149,7 +135,7 @@ export function hiveMark(slug?: string | null): HiveMark {
  * copy under `assets/` means the seal in the app and the seal in the inbox are
  * the same bytes, and cannot drift into being two different logos.
  *
- * A fourth HIVE is a fourth ENTRY, the same as the marks above.
+ * A new HIVE is a new entry, the same as the marks above.
  * -------------------------------------------------------------------------- */
 
 /** The seal for anything belonging to NO single HIVE — the one that is nobody's costume. */
@@ -160,7 +146,6 @@ const HIVE_SEALS: Record<string, number> = {
   // OG HIVE still carries `default` from before there was more than one HIVE.
   default: require('../public/logos/og-hive.png'),
   tech: require('../public/logos/tech-hive.png'),
-  show: require('../public/logos/production-hive.png'),
 };
 
 /**
@@ -221,7 +206,7 @@ export function accentWash(hex: string, alpha: number): string {
  * How bright a colour is, 0–1. Used to decide what can sit ON the accent and
  * whether the accent itself can be read as ink.
  *
- * Gold lands around 0.61, Tech's blue around 0.28, Production's purple similar.
+ * Gold lands around 0.61 and Tech's blue around 0.28.
  * That gap is why the app could get away with assuming gold for so long: gold
  * is light enough to read as text on cream AND dark enough to carry white on
  * top. The other two are not, and every place that assumed one accent behaves
@@ -238,12 +223,9 @@ export function luminance(hex: string): number {
  * Tech's #2f4a63 on HIVE-Wide's near-black is about 1.9:1 — a HIVE name nobody
  * can see. This keeps the hue and raises the lightness until it can be.
  *
- * The lift used to be 0.55, which pushed every non-gold accent most of the
- * way to white — Tech's blue and Production's purple both landed as close to
- * the same pale gray, impossible to tell apart in a small dot (Nat,
- * 2026-08-25). 0.3 keeps both comfortably above the 4.5:1 text-contrast floor
- * on `#0B0B12` while leaving enough of the original hue that a blue still
- * reads as blue next to a purple.
+ * The lift used to be 0.55, which pushed every non-gold accent most of the way
+ * to white. 0.3 keeps a branch accent above the 4.5:1 text-contrast floor on
+ * `#0B0B12` while preserving its hue.
  */
 export function accentOnDark(hex: string): string {
   const [r, g, b] = channels(hex);
@@ -272,8 +254,7 @@ export const normalizeHiveBrandText = (text?: string | null) =>
  * The opposite job to `accentOnDark`. Gold sits at 0.61 luminance — bright
  * enough that a heading in it on `#fffdf5` reads as a highlight rather than
  * words, which is why gold's deep ink `#8a5a16` was written by hand in a dozen
- * places. Tech's blue and Production's purple are already dark enough to read
- * as-is, so they come back untouched.
+ * places. Dark branch accents are already readable and come back untouched.
  */
 export function accentInk(hex: string): string {
   const [r, g, b] = channels(hex);
@@ -285,9 +266,8 @@ export function accentInk(hex: string): string {
 /**
  * One HIVE's accent, in the four weights a form needs.
  *
- * Nat, 2026-09-01: surveys still wore honey gold inside Tech HIVE and
- * Production HIVE — every number chip, every selected answer, every button,
- * in a HIVE whose whole shell is blue or purple.
+ * Surveys use the active HIVE's accent for every number chip, selected answer,
+ * and button rather than assuming honey gold.
  *
  * Gold returns its EXACT hand-tuned family rather than anything computed, so
  * OG HIVE — where gold is correct and every one of these values was chosen by

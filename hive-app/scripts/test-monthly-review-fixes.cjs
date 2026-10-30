@@ -28,20 +28,20 @@ assert.equal(end, '2026-11-15');
 const meetingDates = [
   { id: 'og-meeting', title: 'OG HIVE — Oct', event_type: 'meeting', community_id: 'og', community: { slug: 'default' }, event_date: '2026-10-28', event_time: '17:30', visibility: 'members', invited_scope: 'members' },
   { id: 'tech-meeting', title: 'Tech HIVE — October', event_type: 'meeting', community_id: 'tech', community: { slug: 'tech' }, event_date: '2026-10-08', event_time: '17:00', visibility: 'all_hives', invited_scope: 'members' },
-  { id: 'production-meeting', title: 'Secret Production meeting', event_type: 'meeting', community_id: 'production', community: { slug: 'show' }, event_date: '2026-10-04', visibility: 'members' },
+  { id: 'private-meeting', title: 'Private meeting', event_type: 'meeting', community_id: 'private', community: { slug: 'private' }, event_date: '2026-10-04', visibility: 'members' },
 ];
 assert.equal(surveyCalendarWindow(start, meetingDates).end, '2026-10-28', 'earlier Tech meeting does not truncate the OG window');
 assert.equal(surveyCalendarWindow(start, meetingDates).meetingDate, '2026-10-28');
 assert.equal(surveyCalendarWindow('2026-10-29', [{ ...meetingDates[0], event_date: '2026-11-03' }]).end, '2026-11-03',
   'next OG meeting can cross month end');
 assert.equal(surveyCalendarWindow(start, [meetingDates[1], meetingDates[2]]).meetingDate, null,
-  'Tech and secret Production do not set the OG window');
+  'Tech and another private group do not set the OG window');
 assert.equal(surveyCalendarWindow(start, []).end, end, 'invisible OG meeting uses labeled 45-day fallback');
 assert.equal(eligibleSurveyEvent(meetingDates[0], ['og'], start, '2026-10-28'), true, 'OG member sees own private meeting');
 assert.equal(eligibleSurveyEvent(meetingDates[0], ['tech'], start, '2026-10-28'), false, 'Tech-only member sees no OG-private name');
 assert.equal(eligibleSurveyEvent(meetingDates[1], ['og'], start, '2026-10-28'), true, 'shared Tech meeting appears beside OG');
 assert.equal(eligibleSurveyEvent(meetingDates[1], ['og'], start, '2026-10-07'), false);
-assert.equal(eligibleSurveyEvent(meetingDates[2], ['production'], start, '2026-10-28'), false, 'Production stays out of survey');
+assert.equal(eligibleSurveyEvent(meetingDates[2], ['private'], start, '2026-10-28'), false, 'another private group stays out of the survey');
 assert.equal(buzzCalendarItems(meetingDates.filter(meeting => eligibleSurveyEvent(meeting, ['og'], start, '2026-10-28')), []).length, 2);
 const privateOgBirthday = { ...meetingDates[0], id: 'og-birthday', title: 'OG birthday', event_type: 'birthday', event_date: '2026-10-20' };
 const privateTechEvent = { ...meetingDates[1], id: 'tech-hang', title: 'Tech hang', event_type: 'custom', event_date: '2026-10-24', visibility: 'members' };
@@ -64,7 +64,8 @@ for (const day of ['02', '09', '10', '12', '24', '31']) {
 assert.equal(events.eligibleUpcomingEvent(wide, 'public', start, end), false);
 assert.equal(events.eligibleUpcomingEvent(publicEvent, 'public', start, end), true);
 assert.equal(events.eligibleUpcomingEvent({ ...publicEvent, invited_scope: 'members' }, 'public', start, end), false);
-assert.equal(events.eligibleUpcomingEvent({ ...publicEvent, community: { slug: 'show' } }, 'public', start, end), false);
+assert.equal(events.eligibleUpcomingEvent({ ...publicEvent, community: { slug: 'private' } }, 'public', start, end), true,
+  'a public event is not hidden because of an unrelated source slug');
 assert.equal(events.eligibleUpcomingEvent({ ...wide, visibility: 'members' }, 'hive_wide', start, end), false);
 assert.equal(events.eligibleUpcomingEvent({ ...publicEvent, event_type: 'birthday' }, 'public', start, end), false);
 assert.equal(events.eligibleUpcomingEvent({ ...publicEvent, event_date: '2026-09-30' }, 'public', start, end), false);

@@ -1,13 +1,13 @@
 -- A HIVE gets a ceiling, and nothing inside it can reach above
 --
--- Found by testing migration 124 rather than by reading it. A Show HIVE event
+-- Found by testing migration 124 rather than by reading it. A a private HIVE event
 -- marked "public" was visible to OG HIVE members — because the item said public
 -- and the rule believed it. The publishes_publicly flag only guarded the public
 -- website, so the item leaked sideways into every other HIVE instead.
 --
 -- Per-item settings will always depend on somebody tapping the right thing. The
 -- ceiling doesn't: it is set once, for the whole HIVE, and no item can be seen
--- further out than its HIVE allows. Show HIVE's ceiling is 'hive', so a
+-- further out than its HIVE allows. a private HIVE's ceiling is 'hive', so a
 -- mis-tapped setting in there reaches precisely nobody.
 --
 -- Effective reach is the lower of what the item asks for and what its HIVE
@@ -32,10 +32,9 @@ comment on column public.communities.max_share_scope is
   'How far anything in this HIVE may travel, whatever an individual item asks for. Defaults to hive: a new HIVE keeps its contents to itself until somebody decides otherwise.';
 
 -- OG HIVE has a public site and a public newsletter. Tech HIVE may share with
--- the other HIVEs but publishes nothing outward. Show HIVE keeps everything.
+-- the other HIVEs but publishes nothing outward. a private HIVE keeps everything.
 update public.communities set max_share_scope = 'public'    where slug = 'default';
 update public.communities set max_share_scope = 'all_hives' where slug = 'tech';
-update public.communities set max_share_scope = 'hive'      where slug = 'show';
 
 -- Does this HIVE let its contents travel past its own members?
 create or replace function public.community_shares_beyond_hive(c_id uuid)

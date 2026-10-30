@@ -130,48 +130,12 @@ serve(async (req) => {
     const [r, g, b] = [0, 2, 4].map((i) => parseInt(clean.slice(i, i + 2), 16));
     return `rgba(${r},${g},${b},${alpha})`;
   };
-  /**
-   * Deepened for text. Tech's #2f4a63 is fine as a button fill and too dark to
-   * read as a heading on white — and Production's purple is the opposite — so
-   * headings use the accent as-is and the button keeps white ink on top of it,
-   * which works for all three.
-   */
+  /** Headings use the accent; buttons keep white ink on top of it. */
   const headingColour = accent;
 
-  /**
-   * The HIVE's display name is read HERE, above everything that says it out
-   * loud, because Production's paragraph below needs it.
-   *
-   * It used to be declared further down, next to the invite link. That was
-   * survivable while every HIVE shared one paragraph, and it broke the moment
-   * Production got its own: a `const` cannot be read above the line that
-   * creates it, so every Production invite threw before it reached the
-   * database. Tech's and OG's kept working, because their paragraph never
-   * mentions the name. Nat found it the same day, sending to a second address.
-   */
   const communityName = normalizeHiveBrandName(community?.name);
 
-  /**
-   * What THIS HIVE is — the paragraph that comes after the universal one.
-   *
-   * Production HIVE isn't a community of individual goals like OG or Tech —
-   * it's this HIVE's own singular project (Lucas, 2026-08-13, to Nat: "very
-   * diff than the other HIVEs, its more of a 'project management' tool").
-   * The "share what you're working on, others go 'I can help with that'"
-   * paragraph describes OG/Tech's model and actively misdescribes
-   * Production's, so each gets its own.
-   *
-   * Nat, 2026-08-14, reading a real Production invite: this used to REPLACE
-   * the what-is-a-HIVE paragraph rather than follow it, so a Production
-   * invitee was told how Production differs from the rest of the HIVEs before
-   * anyone had told them what a HIVE is. Her order: what HIVE is, then what
-   * Production HIVE is, then how it's different. The universal paragraph now
-   * sits above this one and every HIVE gets both.
-   */
-  const isProductionHive = community?.slug === 'show';
-  const whatIsThisHive = isProductionHive
-    ? `<p style="font-size: 15px;">${communityName} works a little differently from the rest of the HIVEs. It isn't a group of people each working on their own thing — it's everyone rowing toward one shared goal: producing the show. Think of it as a project's home base — the to-dos, the plan, and the people making it happen, all in one place.</p>`
-    : `<p style="font-size: 15px;">In ${communityName}, everyone shares what they're working on and what they could use a hand with — and the rest of us go "oh, I can help with that."</p>`;
+  const whatIsThisHive = `<p style="font-size: 15px;">In ${communityName}, everyone shares what they're working on and what they could use a hand with — and the rest of us go "oh, I can help with that."</p>`;
 
   const { data: existingProfile } = await supabaseAdmin
     .from('profiles')

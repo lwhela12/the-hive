@@ -5,27 +5,6 @@ import { supabase } from './supabase';
 // early-cycle hangs whenever meetings drifted more than five weeks apart
 // (RIP Alphabet Mafia, June 17).
 
-/**
- * The last meeting this HIVE actually had.
- *
- * **Two tables know, and neither knows on its own.**
- *
- * `events` holds the meeting on the calendar. OG's and Production's dates are
- * set meeting to meeting, so the row that was August's gets MOVED to September
- * rather than copied — and the moment it moves, August stops existing in the
- * past. On 2026-08-27 that is exactly where OG stood: the meeting happened on
- * the 19th and 20th, the newest past `events` row said **21 July**, and every
- * "since the last meeting" window in the app was therefore five weeks wide.
- * Nat's report was that her check-in's "done this cycle" list still showed
- * things she had finished a month and a half ago, month after month — twenty
- * items where ten were hers this cycle.
- *
- * `meetings` holds the night itself: the row written when a meeting is
- * recorded, transcribed or sealed. It cannot go backwards, because it is a
- * record rather than a plan — but a meeting nobody recorded leaves no row.
- *
- * So take the later of the two. Whichever table remembers, the cycle is right.
- */
 export async function getCycleStart(communityId: string, beforeDate: string): Promise<Date> {
   const [scheduled, held] = await Promise.all([
     supabase

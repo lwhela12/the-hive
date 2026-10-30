@@ -20,7 +20,6 @@ const { buildMergedEndOfMonth, mergedPreMeetingQuestions, splitMergedAnswers } =
 const hives = [
   { id: 'og', slug: 'default', name: 'OG HIVE' },
   { id: 'tech', slug: 'tech', name: 'Tech HIVE' },
-  { id: 'pro', slug: 'production', name: 'Production HIVE' },
 ];
 const personal = [{ id: 'month', type: 'long', text: 'Your month' }];
 const ordinary = buildMergedEndOfMonth(personal, hives, new Date(2026, 8, 6));
@@ -32,7 +31,7 @@ assert.equal(mergedPreMeetingQuestions({ ...ordinary, personal: [] }).length, 0,
   'commitments-only forms end after the roster, without an empty introduction');
 assert.equal(mergedPreMeetingQuestions(ordinary).map(e => e.key).join(','), 'month',
   'personal month questions remain available');
-assert.equal(splitMergedAnswers(ordinary, {}, []).map(r => r.communityId).join(','), 'og,tech,pro',
+assert.equal(splitMergedAnswers(ordinary, {}, []).map(r => r.communityId).join(','), 'og,tech',
   'all HIVE completion receipts remain saveable');
 assert.equal(JSON.stringify(ordinary), original, 'rendering does not remove storage sections');
 

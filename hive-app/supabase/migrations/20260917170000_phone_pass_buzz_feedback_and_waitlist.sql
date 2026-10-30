@@ -2,7 +2,7 @@
 -- truth and its screen had drifted apart.
 
 -- Steele already joined Tech HIVE. His older "any HIVE" interest row used a
--- second email address, so it remained in OG and Production as though he still
+-- second email address, so it remained in multiple groups as though he still
 -- needed placing. Preserve the record and close its stage; never delete it.
 update public.waitlist
 set status = 'joined'

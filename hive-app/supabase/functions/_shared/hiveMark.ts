@@ -9,14 +9,7 @@
  *
  * It exists because an email is the one HIVE surface with no `communities`
  * row to read colours off — the HTML is written by hand, and hand-written
- * branding is how one HIVE ends up wearing another's costume. Nat, 2026-08-27,
- * on the Tech HIVE check-in: *"Tech HIVE has the wrong emoji — it has the
- * director's cut board, like for movies. Tech HIVE should have the little
- * robot... Tech HIVE is the wrong colour too — I just opened the survey and
- * it's purple."* The clapperboard and the purple are **Production's**; they
- * had been typed straight into the check-in email back when Production was
- * the only HIVE that email went to, and every other HIVE inherited the
- * costume.
+ * branding is how one HIVE ends up wearing another's costume.
  *
  * A fourth HIVE is a fourth ENTRY here, never a fourth `if`.
  */
@@ -101,16 +94,6 @@ const HIVE_MARKS: Record<string, HiveMark> = {
     logo: `${LOGO_BASE}/tech-hive.png`,
     logoFormal: `${LOGO_BASE}/tech-hive-formal.png`,
   },
-  // Production HIVE — the clapperboard, Stage Purple (#1F0338), and the seal with
-  // the theatre curtains. This is the show HIVE; the clapperboard belongs here
-  // and nowhere else.
-  show: {
-    emoji: '🎬',
-    accent: '#1f0338',
-    companion: '#a0708b',
-    logo: `${LOGO_BASE}/production-hive.png`,
-    logoFormal: `${LOGO_BASE}/production-hive-formal.png`,
-  },
 };
 
 /**
@@ -131,8 +114,7 @@ export const HIVE_WIDE_MARK: HiveMark = {
  * The seal, as an `<img>` ready to drop into a letter.
  *
  * One place, because a letter that builds its own means a letter that can be
- * given the wrong one — the exact way Production's clapperboard ended up on
- * Tech's check-in. `alt` is the HIVE's emoji so a blocked image still says
+ * given the wrong one. `alt` is the HIVE's emoji so a blocked image still says
  * which HIVE this is; `width`/`height` are attributes as well as styles
  * because Outlook ignores the style and would otherwise draw it full size.
  */

@@ -194,24 +194,11 @@ export default function MeetingsScreen() {
   // shows a check-in nobody can act on yet.
   const { availableSurveys, myResponses, submitResponse: submitSeasonSurvey } = useSurveys(communityId ?? undefined, profile?.id);
   const [activeSeasonSurvey, setActiveSeasonSurvey] = useState<any | null>(null);
-  /**
-   * Every check-in this HIVE has open today — the same rule Home uses, so the
-   * two screens can never disagree about whether there is one.
-   *
-   * It used to ask only for the season check-ins (quarterly, end-of-year), and
-   * Production HIVE is what proved that wrong: it has had both its own
-   * check-ins since 2026-08-14 — "Before our first meeting", closing the
-   * afternoon of the 18th, and "Where the show got to this month" — and this
-   * screen still showed it "coming soon" while the email in its members'
-   * inboxes said the check-in was open. Nat, 2026-08-15: *"we made those
-   * already, so that needs to be fixed."*
-   */
   // The monthly check-in is INSIDE the Monthly Tune-up (its check-in step
   // submits the same survey), so on a HIVE with tailored check-ins it does not
   // get a chip of its own — two doors to one set of answers read as two chores
   // (Nat, 2026-08-19: "that seems redundant, right?"). Season check-ins and
   // anything else keep theirs.
-  // The same rule, for the same reason, on the HALFWAY row: Production's is the
   // wizard's filing cabinet as of 2026-08-28, so a chip pointing straight at it
   // would be the second of two doors to one set of answers — and the one that
   // skips the to-dos and HIVE Help on the way.
@@ -233,23 +220,9 @@ export default function MeetingsScreen() {
     && !(halfwayIsAWizard && isEndOfMonthCheckInSurvey(s, community)));
   // The 2026-08-07 decision gated the check-ins in Admin and on the direct
   // tune-up route, but this screen kept offering OG's tune-up pills and the
-  // Meeting Helper deck inside Tech and Production as if they were theirs
   // (Nat, 2026-08-11: "I dont want these blindly brought over from OG hive").
   // Same rule, same shared string, applied to every door on this screen.
 
-  /**
-   * Whether the Meeting Helper tile opens.
-   *
-   * This used to be `tailoredCheckIns`, which is why Production HIVE's deck
-   * shipped on 2026-08-14 and the button in front of it still read "coming
-   * soon" — the screen's own gate had been opened and this one, a floor above
-   * it, had not. Two guards on one feature, and fixing the inner one changed
-   * nothing a member could see.
-   *
-   * They are genuinely different questions: the deck is how a meeting is RUN,
-   * the check-ins are what members fill in BEFORE one. Production has the
-   * first and not yet the second.
-   */
   const meetingDeck = hasMeetingDeck(community);
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -1436,16 +1409,6 @@ export default function MeetingsScreen() {
                 opened a removed import sheet and could not identify which
                 summary Nat meant. */}
 
-            {/* The Newsletter tile is gone (Nat 2026-08-04). Third and last
-                place it was duplicated: it was on Admin's Meeting tools, in the
-                Newsletter box, and here.
-
-                Same reason each time, and it is not really about duplication.
-                There is ONE Buzz across all the HIVEs — that is why The Buzz
-                lives at HIVE-Wide and nowhere else — so a "draft the newsletter"
-                button inside Tech HIVE's Meetings screen said Tech has a
-                newsletter of its own, sitting beside OG's and Production's. It
-                is written from the Newsletter box, once, for everybody. */}
 
             {/* Schedule */}
             <Pressable
@@ -1504,43 +1467,6 @@ export default function MeetingsScreen() {
                   >
                     Your check-ins
                   </Text>
-                  {/* THE TWO CHECK-INS, ALWAYS, IN EVERY HIVE.
-
-                      Nat, 2026-09-04: *"we gotta make sure that the check in
-                      survey pills are always avail in the meetings tab, so if
-                      you checked in for all 3 on monday and feel different on
-                      thurs, you can always go back in and do them whenever you
-                      want. and they are always open."*
-
-                      So there is no gate on them any more. Both check-ins
-                      belong to no HIVE since the 4 September cutover, both are
-                      open all cycle, and both are the same two doors whichever
-                      HIVE you are standing in — which is the entire promise of
-                      merging them. They used to be gated on which HIVE ran OG's
-                      wizard, which is why Production had no End of the month
-                      button at all and nobody had a Before we meet one outside
-                      the three days before a meeting.
-
-                      They point at the merged check-ins now, not at the wizard.
-                      OLD NOTE, kept because it says why the gates existed:
-                      Both pills used to read `tailoredCheckIns`, which is OG
-                      and Tech — and that is right for "Before we meet", whose
-                      wizard is OG's own pre-meeting ritual and which
-                      Production deliberately does not run (Nat, 2026-08-28:
-                      "Pro HIVE's pre-meeting survey will be unique").
-                      It was never right for the other one. Production's
-                      halfway IS OG's, copied on 2026-08-27 — `HALFWAY_BY_SLUG`
-                      has said so ever since — so the one pill that opens it
-                      was missing for the one HIVE, and its members reached
-                      End of the month only in the last three days of a month,
-                      through the card on Home. What stood here instead was
-                      Production's own stale survey row, printed by its retired
-                      title, "Halfway check-in".
-                      This is the third time a feature on this screen has had
-                      two gates and only the inner one opened — see the note on
-                      `meetingDeck` above. The gate is the SHAPE now, so a HIVE
-                      whose halfway is the wizard has the button that opens
-                      it. */}
                   {([
                     { label: 'Before we meet', href: '/beforewemeet' },
                     { label: 'End of the month', href: '/endofmonth' },
@@ -1599,7 +1525,6 @@ export default function MeetingsScreen() {
                 </>
               ) : (
                 // Not a button — the same sentence Admin shows, sitting where
-                // OG's pills sit, so a Tech or Production member learns the
                 // plan instead of borrowing OG's rituals.
                 <Text
                   style={{

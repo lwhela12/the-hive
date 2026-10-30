@@ -20,12 +20,11 @@ export const CHECK_INS_COMING_SOON_MESSAGE =
  * Tech HIVE joined the list on 2026-08-11, when Nat designed its own rhythm
  * out loud: monthly on a Thursday evening, POP-centred check-ins, networking
  * instead of hangs, and the treasurer slide kept deliberately as the place to
- * talk about WHETHER Tech wants dues at all. Production still waits for its
- * own monthly design.
+ * talk about WHETHER Tech wants dues at all.
  *
  * The days, reset by Nat on 2026-09-03: **every HIVE now meets in the second
  * week of the month.** Tech takes the SECOND TUESDAY, 6-8pm on Google Meet;
- * OG the second Wednesday; the third the second Thursday. Her reason was one
+ * OG the second Wednesday. Her reason was one
  * calendar to hold in her head — *"it helps me streamline communication if all
  * HIVEs meet the 2nd week of the month (ish)"*.
  *
@@ -41,52 +40,20 @@ export function hasTailoredCheckIns(
   return community?.slug === 'default' || community?.slug === 'tech';
 }
 
-/**
- * Whether this HIVE's HALFWAY nudge opens the tune-up wizard.
- *
- * **A third question, and Production is why it exists.** The screen used to
- * ask `hasTailoredCheckIns` once, for both of its modes, so the pre-meeting
- * tune-up and the halfway one stood behind a single door. Production needs the
- * halfway open (it is OG's, copied, and it goes out with the newsletter) and
- * the pre-meeting one shut — Nat, 2026-08-28: *"Pro HIVE's pre-meeting survey
- * will be unique, so we'll talk about that closer to the meeting."*
- *
- * One boolean could not say that. Opening `hasTailoredCheckIns` to `show`
- * would have handed Production OG's ARRIVAL/ENERGY/POP deck as well — the
- * exact interview she rejected — through a door nobody meant to open.
- *
- * Read off `HALFWAY_BY_SLUG` rather than a fourth slug list, so a HIVE whose
- * halfway shape says `flow: 'tuneup'` is a HIVE whose halfway wizard opens,
- * and the two can never drift into disagreeing.
- */
+/** Whether this HIVE's halfway nudge opens the tune-up wizard. */
 export function hasHalfwayTuneup(
   community: Pick<Community, 'slug'> | null | undefined,
 ): boolean {
   return getHalfwayShape(community)?.flow === 'tuneup';
 }
 
-/**
- * Whether this HIVE has a meeting deck of its own.
- *
- * This used to be the same question as `hasTailoredCheckIns()`, and the Meeting
- * Helper gated on that one boolean. **They are two different questions**, and
- * Production HIVE is what proved it: on 2026-08-14 Nat designed Production's
- * meeting out loud — talk the group through the research site, then decide
- * cadence, then HIVE Help, then treasurer, then who goes to look at venues,
- * then hand out the jobs — while Production's monthly check-in survey is
- * *still* undesigned and deliberately off.
- *
- * A HIVE can know exactly how its meeting runs and not yet know what to ask
- * people beforehand. Tying the deck to the survey would have forced her to
- * design a survey she doesn't want yet just to get the meeting she does.
- */
+/** Whether this HIVE has a meeting deck of its own. */
 export function hasMeetingDeck(
   community: Pick<Community, 'slug'> | null | undefined,
 ): boolean {
   return (
     community?.slug === 'default'
     || community?.slug === 'tech'
-    || community?.slug === 'show'
   );
 }
 
@@ -110,8 +77,6 @@ export function hasMeetingDeck(
  * Tech's halfway also has no newsletter step at all (pulse and shout-outs
  * only), so OG's copy promised Tech members something that isn't in their flow.
  *
- * A third HIVE is a third entry here, the same way the deck and the check-in
- * flows are third lists rather than third slug checks.
  */
 export type HalfwayShape = {
   /** `month` = last 3 days of the calendar month. `cycle` = ~2 weeks out. */
@@ -121,12 +86,7 @@ export type HalfwayShape = {
   /**
    * Where the halfway nudge actually goes.
    *
-   * `tuneup` is OG and Tech's guided wizard at `/monthly-tuneup?mode=midpoint`.
-   * `survey` is a HIVE whose halfway IS a check-in survey, which already has
-   * its own card on Home — Production works that way on purpose (the note on
-   * `hasTailoredCheckIns` above, and the same call written out in Admin's
-   * check-in schedule). Saying so here is what stops a second Home card being
-   * offered for a door that would answer "coming soon".
+   * `tuneup` is the guided wizard at `/monthly-tuneup?mode=midpoint`.
    */
   flow: 'tuneup' | 'survey';
 };
@@ -142,35 +102,6 @@ const HALFWAY_BY_SLUG: Record<string, HalfwayShape> = {
     window: 'cycle',
     emoji: '🫶',
     detail: "Halfway to the next meeting — how's it going, and who deserves a shout-out?",
-    flow: 'tuneup',
-  },
-  /**
-   * Production HIVE keeps the database slug `show`.
-   *
-   * Nat, 2026-08-27: *"OG and Production HIVE are on the same cadence because
-   * they meet kind of in the middle of the month."* So Production rides the
-   * CALENDAR exactly the way OG does — the last five days of the month — and
-   * the newsletter ask belongs in it, because the newsletter goes out on the
-   * 1st for every HIVE, not only OG's.
-   *
-   * **Its door is OG's halfway wizard, not a survey.** This said
-   * `flow: 'survey'` for one day, and that one value is what made Production's
-   * halfway diverge into an interview: Newsletter → To-dos → HIVE Help became
-   * arrival, energy, POP and three blank prose boxes. Nat, 2026-08-27, opening
-   * it: *"this looks like the three days before the meeting, and there's no
-   * HIVE Help. This is all bad."* And then the instruction this entry now
-   * obeys: *"The OG HIVE halfway check-in is perfect. Can you just do that for
-   * Production HIVE? Why can't you just copy the same thing? Why is it
-   * different?"*
-   *
-   * So it is the same shape as `default`, to the letter. The only thing
-   * Production wears of its own is its costume — purple and the clapperboard,
-   * off `hiveBrand` / `_shared/hiveMark.ts`, never a second flow.
-   */
-  show: {
-    window: 'month',
-    emoji: '🗞️',
-    detail: 'The newsletter goes out in the 1st week — want a shout-out, a plug, or a reminder in it?',
     flow: 'tuneup',
   },
 };
@@ -232,7 +163,7 @@ export function isInHalfwayWindow(
  *
  * Legacy season survey rows and responses remain in storage and Admin history.
  * The current quarter choices live once in the shared End of the month form
- * for active OG and Tech members. Paused Production gets no month form.
+ * for active OG and Tech members.
  *
  * - **December belongs to the year, not the quarter.** Q4's quarter-end and
  *   the year-end are the same three days, and asking somebody to reflect on
@@ -261,16 +192,13 @@ export const SEASON_CHECK_IN_LEAD_DAYS = 3;
  * Days before a MEETING that its check-in appears on Home.
  *
  * Two, not three, because the window is three days long and the last of them is
- * the meeting itself. Nat, 2026-09-02: *"three days before but counting the
- * day... if Production meets on September 10th, then three days before that is
- * 10, 9, 8."*
+ * the meeting itself: a meeting on September 10th opens on September 8th.
  *
  * This exists as its own number because the invariant underneath it is worth
  * more than the saving of sharing one: **what lands in the inbox and what
  * appears on Home happen on the same morning.** The email moved to
  * `getMeetingWindowOpenDate` (meeting − 2) on 2026-09-02 and this did not,
- * which put Production's card on Home a day before the letter that explains it
- * — the exact gap the halfway had for weeks.
+ * which put the Home card a day before the letter that explains it.
  */
 export const PRE_MEETING_LEAD_DAYS = 2;
 
@@ -422,18 +350,6 @@ const YEAR_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
     q('q_year_give_take', 'What did the HIVE give you this year — and what did you give it?'),
     q('q_year_cup', 'How charged is your battery heading into the new year?', 'scale'),
   ],
-  show: [
-    q('q_year_headline', 'Your year, in one line — the marquee version.', 'short'),
-    q('q_year_proud', 'What was your favorite moment on stage this year? And your favorite one off it?'),
-    q('q_year_growth', "What can you do now that you couldn't at the start of the year?"),
-    q('q_year_thanks', 'Who deserves a standing ovation for showing up for you this year?'),
-    q('q_year_next', "What's the dream booking, act, or project for next year?"),
-    q('q_year_wish_hive', 'One wish for this HIVE next year.'),
-    // Nat, 2026-08-13: giving goes both ways — "i dont want it to be peopel
-    // just expecting help."
-    q('q_year_give_take', 'What did the HIVE give you this year — and what did you give it?'),
-    q('q_year_cup', 'How full is your tank heading into the new year?', 'scale'),
-  ],
 };
 
 /** Whether this HIVE has any season deck designed. */
@@ -491,34 +407,8 @@ export function buildSeasonCheckIn(
 }
 
 /* ------------------------------------------------------------------------- *
- * The pre-meeting check-in — questions answered BEFORE a meeting so the
- * meeting itself can decide.
- *
- * Nat, 2026-08-14, walking Production's new meeting deck: "Let's do the
- * monthly, the pre-meeting check-in for sure. It's always good to know
- * people's energy and how much they have on their plate before going to a
- * meeting." And then the reason it matters more than mood: "We can put the
- * 'how often do you want to meet' and the HIVE Help questions in the
- * pre-production meeting survey… Should we have a Honey Pot? Do you want to
- * have dues? How much? Do you want to be treasurer? That information can kind
- * of precede the meeting helper, and then we can decide things."
- *
- * So this deck carries two jobs at once: the arrival questions (name, energy,
- * plate) that set the room, and the standing decisions (cadence, Honey Pot,
- * treasurer, HIVE Help, venues) that the meeting would otherwise spend its
- * hour collecting out loud.
- *
- * It is an ORDINARY survey row, deliberately. Production's Home card, the
- * answer sheet and the response history all already work for those; the
- * `monthly-tuneup` wizard is OG HIVE's own ritual (wishes → hangs → calendar
- * → helpers) and `hasTailoredCheckIns()` keeps Production out of it on
- * purpose. **The title must stay clear of the words this app uses to spot the
- * rhythm check-ins** — `isMonthlyCheckInSurvey()` in `lib/hooks/useSurveys.ts`
- * matches "monthly check-in" in the title OR the description, and a match
- * would send the Home card into that wizard and land Production members on
- * "coming soon".
- *
- * A fourth HIVE is a fourth entry here, the same as every other deck above.
+ * Pre-meeting check-ins are ordinary survey rows. Each HIVE defines its own
+ * questions while sharing the same presentation and response machinery.
  * ------------------------------------------------------------------------- */
 
 /** The ids this deck writes, named once so the meeting deck reads answers by
@@ -597,33 +487,6 @@ export const PERSONAL_HARD_OUT_QUESTION: SurveyQuestion = {
 };
 
 const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
-  // Production HIVE keeps the database slug `show`. This is the RECURRING
-  // check-in — the first meeting's one-time questions (cadence, Honey Pot,
-  // who-can-know, walk-away lines) were asked and answered on 2026-08-18; the
-  // full set and its reasoning live in the brain folder's receipts and on the
-  // answered survey row. Recurring Production check-ins work from the live
-  // project: completed jobs and open assignments are pre-seeded from the
-  // to-do rows, while attendance, hard-out and capacity are the only questions.
-  // Updates belong on their board threads, not in a parallel survey account.
-  show: {
-    title: 'Before we meet',
-    description:
-      'Review your Production HIVE jobs, tick off what is done, then tell the room whether you are coming and how much room you have.',
-    questions: [
-      choice('q_attendance', 'Will we see you at this one?', [
-        "🐝 I'll be there in person",
-        '💻 Joining remotely',
-        '😢 Missing this one — please email me the recap',
-      ]),
-      { ...PERSONAL_HARD_OUT_QUESTION },
-      choice('q_plate', 'How much is on your plate right now?', [
-        '🍽️ Plenty of room — hand me something',
-        "🥄 A bit on there, and I've got room for this",
-        "🍲 Pretty full — I'll take one small thing",
-        '🫙 Full to the brim — I want to listen this time',
-      ]),
-    ],
-  },
   /**
    * Tech HIVE's first night, rebuilt on 2026-09-01.
    *
@@ -670,9 +533,8 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
    * compares the two files character by character and fails the build if they
    * ever drift.
    *
-   * Cut, deliberately: `q_who_can_know` (a Production question — that HIVE is
-   * building a show in public, this one is not), `q_plate` (energy already
-   * asks it), `q_cadence` + `q_when` (replaced by the day vote, which comes
+   * Cut, deliberately: `q_plate` (energy already asks it), `q_cadence` +
+   * `q_when` (replaced by the day vote, which comes
    * back as a percentage instead of prose), and `q_learned`, which promised
    * a Things We Learned board post that did not happen. The recurring Tech
    * check-in later reuses that stable id for a tool story shown in the room,
@@ -764,55 +626,7 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
 /** The title a NEW pre-meeting occurrence is launched under. */
 export const PRE_MEETING_RECURRING_TITLE = 'Before we meet';
 
-/**
- * Every meeting AFTER the first one.
- *
- * Nat, 2026-08-15, correcting a mix-up we had both made: *"pre-meeting is what
- * did you get done, how are you feeling, how much energy do you have to take on
- * for new stuff. And then end of the month is a halfway check-in and getting
- * stuff ready for the newsletter."*
- *
- * The POP lives HERE, not on the end-of-month one. This is the check-in that
- * drives a meeting: *"that way at the Pro HIVE meeting, okay, Charlee called
- * Circus Center and that is loaded here, and Ollie did this and that is here,
- * and that helps us move things forward."*
- *
- * The first meeting keeps its own deck above — nobody has done a job yet, so
- * "what did you get done" has no answer, and that night is for deciding how the
- * HIVE runs instead. From the second meeting on, this is the one.
- */
-const PRE_MEETING_RECURRING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
-  show: {
-    title: PRE_MEETING_RECURRING_TITLE,
-    description:
-      'Three minutes before we meet: where your jobs got to, how you are, and how much you can take on. It is what the meeting runs off.',
-    questions: [
-      q('q_name_today', 'What do you want to be called at this one?', 'short'),
-      choice('q_attendance', 'Will we see you?', [
-        "\u{1F41D} I'll be there in person",
-        '\u{1F4BB} Joining remotely',
-        '\u{1F622} Missing this one — please email me the recap',
-      ]),
-      // Personal availability is shown on this member's arrival card. It is
-      // deliberately only a survey answer; the Meeting Helper's countdown
-      // reads the HIVE's separate `communities.meeting_hard_out` setting.
-      { ...PERSONAL_HARD_OUT_QUESTION },
-      { id: 'q_energy_level', text: 'Energy: what is your energy level right now?', type: 'scale', required: false },
-      // Arrives pre-filled with the to-dos this person ticked off since the
-      // last meeting (SurveyModal). The wording says so, because text you did
-      // not type appearing in a box is alarming unless something explains it.
-      q('q_show_progress', 'What did you get done since we last met? Anything you ticked off is already here — add whatever else you did.', 'long'),
-      q('q_show_obstacles', "What's stuck, and what would unstick it?", 'long'),
-      choice('q_plate', 'How much can you take on this time?', [
-        '\u{1F37D}\u{FE0F} Plenty of room — hand me something',
-        "\u{1F944} A bit on there, and I've got room for this",
-        "\u{1F372} Pretty full — I'll take one small thing",
-        '\u{1FADA} Full to the brim — I want to listen this time',
-      ]),
-      q('q_show_raise', 'Anything you want us to talk about?', 'long'),
-    ],
-  },
-};
+const PRE_MEETING_RECURRING_BY_SLUG: Record<string, PreMeetingCheckIn> = {};
 
 /** The deck for a HIVE's SECOND and later meetings, when it has one. */
 export function getRecurringPreMeetingCheckIn(
@@ -848,22 +662,12 @@ export function getPreMeetingCheckIn(
  * they ever stop being the same sentence. (`230_one_check_in_of_a_kind.sql`
  * holds a third transcription, in Postgres, and the same lint watches it.)
  *
- * **They used to be a list of exact titles, and that is how Production ended
- * up with two "End of the month" items on Home.** Its live row was still
- * called "Halfway check-in" — a retired name the row keeps as an internal
- * identifier, which `checkInDisplayName` below deliberately prints as "End of
- * the month". So the LABEL said end-of-the-month and the MATCHER said no, and
- * every rule written as "if this is the end-of-month row, the wizard owns the
- * door" silently did not apply to the one row it was about. Nat,
- * 2026-09-04: *"i dunno how thats still happening... so i dunno how there is
- * stil a duplicate?"*
- *
  * A pattern cannot drift from the name on screen the way a list can, because
- * `checkInDisplayName` is a pattern too and now they are the same one.
+ * `checkInDisplayName` is a pattern too and both use the same naming rules.
  */
 const PRE_MEETING_TITLE_PATTERN = /before (our first meeting|we meet)/i;
 const END_OF_MONTH_TITLE_PATTERN =
-  /(end of the month|where the show got to this month|pro hive pop|halfway check-?in)/i;
+  /(end of the month|halfway check-?in)/i;
 
 /**
  * Whether a survey row is a pre-meeting check-in, going by its title — the
@@ -902,11 +706,8 @@ export function isSurveyOnHomeToday(
    * A HIVE's OWN check-ins keep to their own dates too.
    *
    * Nat, 2026-08-15, looking at her to-do list three days before the first
-   * Production meeting: *"the only survey in the to do right now should be
-   * this 'pre meeting' one we're working on."* Instead it held "Where the show
-   * got to this month", which is not due until the 31st.
-   *
-   * Both were launched the same afternoon, and nothing was telling them apart
+   * Rows launched together still need their own windows; otherwise nothing
+   * tells them apart
    * — only the quarterly and the end-of-year had a season, so everything else
    * showed from the moment it existed. A check-in that sits in your to-do for
    * a fortnight before it means anything teaches you to ignore your to-do.
@@ -992,28 +793,6 @@ export function isSurveyOnHomeToday(
   return startOfToday >= opens && startOfToday <= lingersUntil;
 }
 
-/* ------------------------------------------------------------------------- *
- * Production HIVE's two recurring check-ins.
- *
- * Nat, 2026-08-14, after answering the first one: *"you did the pre-meeting
- * survey, but we still need an end-of-the-month survey — and we always want a
- * pre-meeting survey. The survey that you made was 'before the first meeting',
- * but we always need, like, a check-in before the meeting, like we have for
- * the other HIVEs."*
- *
- * So the first meeting keeps its own warm title and every meeting after it
- * settles into a stable one. Both titles count as Production's pre-meeting
- * check-in; `PRE_MEETING_TITLE_PATTERN` is what recognises them, and
- * `isPreMeetingCheckInSurvey()` reads it.
- *
- * **Production's end-of-month asks about the show, never about the person.**
- * OG's end-of-month gathers shout-outs for the newsletter and Tech's asks what
- * you learned — both right for a room of people each doing their own thing.
- * Production has one shared goal, so "what are YOU working on" is the wrong
- * question for it (Lucas to Nat, 2026-08-13). It asks what moved, what is
- * stuck, and what comes next.
- * ------------------------------------------------------------------------- */
-
 export type EndOfMonthCheckIn = {
   title: string;
   description: string;
@@ -1035,114 +814,7 @@ export type EndOfMonthCheckIn = {
  */
 export const NEWSLETTER_ANSWER_IDS = ['q_eom_newsletter', 'q_newsletter', 'q_shoutout'] as const;
 
-/**
- * The one newsletter question, worded the way OG's halfway step asks it.
- *
- * OG's wizard offers pills — shout-out, plug an event, a reminder, compliment
- * someone — and a HIVE whose halfway is a survey rather than a wizard has one
- * box, so the box names all five out loud instead. `q_newsletter` is the id
- * OG's own step writes, which is what carries the answer to Nat's Newsletter
- * box with the member's name and their HIVE on it.
- */
-const NEWSLETTER_QUESTION: SurveyQuestion = {
-  id: 'q_newsletter',
-  text: 'Anything for the newsletter? A shout-out, a plug, an event to come to, a reminder, or a compliment for someone — name names, they get read out. The newsletter goes out in the 1st week.',
-  type: 'long',
-  required: false,
-};
-
-/**
- * The end of the month is a nudge, not a report.
- *
- * Nat, 2026-08-15, correcting where the POP belongs: *"end of the month is a
- * halfway check-in and getting stuff ready for the newsletter, just in case
- * there's anything. No obligations."*
- *
- * **Rebuilt 2026-08-27 to OG's shape.** The three questions that stood here —
- * "What moved this month", "What is stuck", "What has to happen before the next
- * meeting" — were three blank prose boxes and nothing else, which is both more
- * work than OG's and less use: *"coarse shit and unusable."* Her rule the same
- * morning, and it is the reason every question below names where its answer
- * goes: *"If you're going to make someone answer a question, you better damn
- * well know what you're going to do with the answer. Having people fill out
- * surveys and then not having their answers go anywhere is just having them do
- * busy work, and it's bad."*
- *
- * So this mirrors OG's `Monthly Check-in: POP + Energy` — arrival, energy, the
- * POP, the HIVE Help recap, the newsletter ask — with Production's subject
- * matter (the show, the venues, the deck) in place of OG's. Every id is one
- * something already reads:
- *
- * - `q_feeling_today`, `q_energy_level`, `q_energy_mode` — the Arrival Board
- *   and OG's own deck.
- * - `q_show_progress`, `q_show_obstacles` — Production's meeting deck reads
- *   both onto its slides by name (`checkInSays` in meeting-helper.tsx), and
- *   the progress box arrives pre-filled with what this member already ticked
- *   off, so nobody is asked to remember what the app knows.
- * - `q_pop_priorities` — the POP export in Admin and the deck's POP sections.
- * - `q_hive_help_recap` — the `focus` field: did it, plus a 1-5 score the deck
- *   can average.
- * - `q_newsletter` — Nat's Newsletter box in Admin, attributed to the member
- *   and their HIVE.
- *
- * Their open to-dos ride ON this survey rather than in it: the carry-forward
- * roster (`lib/hooks/useCarryForwardContext.ts`) draws them above the
- * questions to be ticked off, archived, or kept.
- */
-const END_OF_MONTH_BY_SLUG: Record<string, EndOfMonthCheckIn> = {
-  /**
-   * Production HIVE's halfway check-in — **OG's, copied.**
-   *
-   * This row used to hold eight questions: arrival, energy, energy mode, three
-   * blank prose boxes, the HIVE Help score and the newsletter ask. Nat opened
-   * it on 2026-08-27 and knew in one glance: *"this looks like the three days
-   * before the meeting, and there's no HIVE Help. This is all bad."* She was
-   * right — it had been built from OG's PRE-MEETING check-in (POP + Energy),
-   * which is a different survey from OG's halfway one, and the halfway is the
-   * one she loves. Her instruction: *"The OG HIVE halfway check-in is perfect.
-   * Can you just do that for Production HIVE? Why can't you just copy the same
-   * thing? Why is it different?"*
-   *
-   * **The halfway is a nudge, not an interview.** In her words: *"A lot of
-   * people have a lot of things going on in their life. If we meet every four
-   * weeks, two weeks in it's like 'hey, don't forget about me.' That way it's
-   * not the day before the meeting and you're like, fuck, I didn't go visit any
-   * of those places."*
-   *
-   * So the DOOR is OG's wizard — Newsletter → To-dos → HIVE Help, three steps,
-   * about two minutes (`MIDPOINT_STEPS` in monthly-tuneup.tsx, reached through
-   * `HALFWAY_BY_SLUG.show`). This row is no longer an interview standing in
-   * front of that wizard; it is the FILING CABINET behind it, and it holds the
-   * one answer the wizard has nowhere else to put: the newsletter ask, which
-   * Admin's Newsletter box reads under the member's name and HIVE.
-   *
-   * The other two steps already file themselves — to-dos are ticked on the
-   * member's own list, and HIVE Help posts to the Helpers board — which is why
-   * one question is the whole of it. Every question here still names where its
-   * answer goes, which is Nat's rule from the same morning: *"If you're going
-   * to make someone answer a question, you better damn well know what you're
-   * going to do with the answer."*
-   *
-   * The arrival, energy and POP questions are not lost — they are what a
-   * PRE-MEETING check-in is for, and Production's is designed separately,
-   * closer to its meeting (Nat, 2026-08-28: *"Pro HIVE's pre-meeting survey
-   * will be unique, so we'll talk about that closer to the meeting"*).
-   *
-   * The TITLE is load-bearing — `END_OF_MONTH_CHECK_IN_PATTERN` in
-   * `_shared/checkInPatterns.ts` is how the cron, Home and Meetings all
-   * recognise this check-in, and it already matches "Halfway check-in" — and
-   * the DESCRIPTION must stay clear of the words "monthly check-in", which
-   * would route it into OG's PRE-MEETING wizard instead of the halfway one.
-   */
-  show: {
-    title: 'End of the month',
-    description:
-      'The newsletter goes out in the 1st week. Two minutes: anything for the letter, tick off what you have done, and say if you want a hand.',
-    questions: [
-      { ...NEWSLETTER_QUESTION },
-    ],
-  },
-};
+const END_OF_MONTH_BY_SLUG: Record<string, EndOfMonthCheckIn> = {};
 
 export function hasEndOfMonthCheckIn(
   community: Pick<Community, 'slug'> | null | undefined,
@@ -1181,9 +853,8 @@ export function isEndOfMonthCheckInSurvey(
  *
  * Nat, 2026-09-04: *"make sure that we don't have any lingering, stale names,
  * old names, whatever."* Three live survey rows still carry retired names —
- * OG's says "Monthly Check-in: POP + Energy", Tech's says "Before our first
- * meeting", Production's says "Halfway check-in" — and every screen that
- * printed `survey.title` printed those.
+ * OG's says "Monthly Check-in: POP + Energy" and Tech's says "Before our first
+ * meeting" — and every screen that printed `survey.title` printed those.
  *
  * **Renaming the rows is not the fix, and it is worth writing down why.** In
  * this app a survey's TITLE IS ITS TYPE: seven separate matchers decide what a
@@ -1209,7 +880,7 @@ export function checkInDisplayName(title: string | null | undefined): string {
   const t = raw.toLowerCase();
 
   // The one that belongs to the month, whatever the row happens to be called.
-  if (/end of the month|halfway|midpoint|where the show got to/.test(t)) {
+  if (/end of the month|halfway|midpoint/.test(t)) {
     return 'End of the month';
   }
   // The one that rides a meeting. "Before our first meeting" is the same
@@ -1234,28 +905,27 @@ export function checkInDisplayName(title: string | null | undefined): string {
 /**
  * Nat, 2026-09-04: *"We're going to make 2 check ins: end of the month &
  * 'before the meeting'. I want those to show all the hives people are in, so
- * it doesn't matter if you're in 1 hive or 3, you only get 1 survey at the end
+ * it doesn't matter how many HIVEs you're in, you only get 1 survey at the end
  * of the month & 1 survey the week of meetings & you can look through all of
  * the to do lists & stuff, and update everything."*
  *
  * Two check-ins for everybody, full stop. "End of the month" already belongs
  * to no HIVE (migration 225). This is the other half: one pre-meeting check-in
- * that covers all three, so the five members who are in more than one HIVE
- * stop getting three of everything.
+ * that covers every active HIVE, so members in more than one stop getting
+ * duplicate forms.
  *
  * ## What the merge actually is
  *
  * It is a REGROUPING, not a rewrite. Every HIVE's pre-meeting questions stay
- * exactly as they are — Production still asks about venues seen and what is
- * stuck, OG still asks its POP — because those questions are about that HIVE
- * and only that HIVE. What changes is that the handful of questions about the
+ * exactly as they are because those questions are about that HIVE and only
+ * that HIVE. What changes is that the handful of questions about the
  * PERSON get asked once, at the top, instead of three times.
  *
  * So the shape is two tiers:
  *
  *   ABOUT YOU, ASKED ONCE   how you are arriving, your energy, what you want
  *                           from HIVE this month. The same answer would have
- *                           been typed into all three.
+ *                           been typed into every section.
  *   ABOUT EACH HIVE         one short section per HIVE you belong to, holding
  *                           that HIVE's own existing questions — plus its
  *                           to-dos, which ride on the survey rather than in it
@@ -1331,13 +1001,12 @@ export const MERGED_END_OF_MONTH_TITLE = 'End of the month';
 /**
  * WHERE EACH HIVE'S QUESTIONS COME FROM — the caller, not a table in here.
  *
- * Found by testing the first version of this against all three HIVEs: OG came
+ * Found by testing the first version across the active HIVEs: OG came
  * back with zero questions and Tech came back with its FIRST-NIGHT onboarding
  * deck ("What a HIVE is for", "Which evening suits you best", the Honey Pot
  * vote). Neither is a bug in the merge; both are facts about where a HIVE's
  * pre-meeting questions actually live.
  *
- *   - **Production's** live in this file (`PRE_MEETING_RECURRING_BY_SLUG`).
  *   - **OG's** live in its survey ROW in the database and nowhere else — its
  *     door is the wizard in `monthly-tuneup.tsx`, and the row behind it holds
  *     the real question list.
@@ -1405,11 +1074,9 @@ export function buildMergedPreMeeting(
  * THE KEY AN IN-PROGRESS ANSWER IS HELD UNDER, WHILE THE FORM IS OPEN.
  *
  * Two HIVEs ask `q_attendance`. Both mean it, both need their own answer, and
- * in three separate surveys that was never a problem. In ONE form it is: a
- * draft keyed by bare question id would let Production's "will we see you"
- * overwrite Tech's, and the second HIVE's section would silently mirror the
- * first. Caught by running the builder across all three HIVEs before any of
- * this was wired to a screen.
+ * in separate surveys that was never a problem. In ONE form it is: a draft
+ * keyed by bare question id would let one section overwrite another, and the
+ * second HIVE's section would silently mirror the first.
  *
  * So a question about a HIVE is held under `<community id>:<question id>` while
  * the form is open, and written back under its BARE id into that HIVE's own

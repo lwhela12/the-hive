@@ -159,7 +159,6 @@ async function createCalendarEvent(
   // Nat, 2026-08-15, when the meeting moved into the app: *"we need to make
   // sure that the Google Meet buttons are gone off of everywhere ... all paths
   // lead to the same campfire."* True of a room. OG sits around her table with
-  // the deck on the TV and Production sits around Charlee's with five laptops
   // open, and a second front door there is an empty Meet with nobody in it.
   //
   // Tech HIVE is not a room — everybody is remote on their own machine, Meet is

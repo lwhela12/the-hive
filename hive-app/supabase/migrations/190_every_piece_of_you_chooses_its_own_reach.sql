@@ -1,7 +1,7 @@
 -- Every piece of you chooses its own reach.
 --
 -- Nat, 2026-08-19, after setting her profile visible HIVE-Wide and going
--- looking for it: *"I'm in Production HIVE profile. I did make it visible HIVE
+-- looking for it: *"I'm in a private HIVE profile. I did make it visible HIVE
 -- wide... and then I go into members and I'm only HIVE-wide there, it doesn't
 -- show. It shows About You and the honeycombs and it has my bio and my three
 -- and my cue, but it doesn't show my skills garden or my HD wishes, even though
@@ -10,7 +10,7 @@
 -- And, the same day, about one wish: *"I have a wish here that says Nellie a
 -- personal shopper feedback and it's HIVE wide. So that means that that part of
 -- my profile should show up in all three HIVEs. And it only showed up on the
--- HIVE-wide and OG HIVE. It skipped Production HIVE."*
+-- HIVE-wide and OG HIVE. It skipped a private HIVE."*
 --
 -- Her rule, in her words: *"each chunk of this, you can toggle if you want it
 -- to be just this HIVE or HIVE wide, and if it's HIVE wide, then it shows up in
@@ -93,7 +93,7 @@ comment on column public.profiles.piece_reach is
 -- ---------------------------------------------------------------------------
 
 -- Skills are per-HIVE rows (user_id + community_id), and until now that was the
--- whole story: a garden planted in OG HIVE was invisible in Production HIVE
+-- whole story: a garden planted in OG HIVE was invisible in a private HIVE
 -- with nothing on screen saying why. Charlee read that as the app losing her
 -- work — *"it never saves my profile"* — and she was right about what she saw.
 alter table public.skills
@@ -124,8 +124,8 @@ comment on column public.skills.reach is
 -- to travel out of a HIVE whose ceiling lets it.
 --
 -- `community_shares_beyond_hive(community_id)` is load-bearing and it is the
--- OWNING HIVE's ceiling, not the reader's. Production HIVE's max_share_scope is
--- 'hive' today, so a flower planted in Production stays in Production whatever
+-- OWNING HIVE's ceiling, not the reader's. a private HIVE's max_share_scope is
+-- 'hive' today, so a flower planted in a private HIVE stays there whatever
 -- its owner picks — which is the rule in CLAUDE.md, and which Profile now says
 -- out loud instead of quietly ignoring the toggle.
 drop policy if exists "Skills viewable by community members" on public.skills;
@@ -161,6 +161,6 @@ comment on column public.wishes.share_scope is
   'written in, and this only decides who else may read it. "Wishes viewable by '
   'scope" enforces it, capped by the owning HIVE''s communities.max_share_scope. '
   'Added migration 124; described here 2026-08-19, when a wish marked all_hives '
-  'in OG HIVE turned out to be invisible in Production HIVE because the member '
+  'in OG HIVE turned out to be invisible in a private HIVE because the member '
   'card asked for one HIVE''s rows rather than for everything that reaches this '
   'far.';

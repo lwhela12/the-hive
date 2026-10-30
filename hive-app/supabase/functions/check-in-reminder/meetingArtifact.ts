@@ -90,10 +90,8 @@ export function getWindowOpenDate(deadlineDateOnly: string): string {
 /**
  * Three days INCLUDING the meeting day — which is a different question.
  *
- * Nat, 2026-09-02: *"I want it to go out three days before but counting the
- * day... if Production HIVE meets on September 10th, then three days before
- * that is 10, 9, 8, so the survey should go out on the 8th. So they have 8, 9,
- * 10 to do it, because they can also do it day-of."*
+ * A meeting on September 10th opens on September 8th, including the meeting
+ * day itself in the three-day window.
  *
  * That is the whole difference between a meeting and a deadline. Nobody fills
  * in a check-in on the 1st of October; plenty of people fill one in on the way
@@ -145,7 +143,7 @@ export function meetingTimeWindow(meeting: MeetingDetails): string | null {
 }
 
 export function shortHiveName(hiveName: string): string {
-  return hiveName.replace(/^Production HIVE$/i, 'Pro HIVE');
+  return hiveName;
 }
 
 export function monthlyMeetingSubject(

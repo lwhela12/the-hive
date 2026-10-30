@@ -2,7 +2,7 @@
 -- 193 — the garden follows the switch
 -- ============================================================================
 --
--- Nat, 2026-08-19, voice memo: "because I'm in my Production HIVE and I have
+-- Nat, 2026-08-19, voice memo: "because I'm in my a private HIVE and I have
 -- toggled on visible HIVE-Wide, that means that my skills garden that I've
 -- already done in OG HIVE should also already be visible here... I don't have
 -- to go through and set each one up differently."
@@ -10,7 +10,7 @@
 -- Migration 190 let a skill row travel through its own `reach` column, and
 -- then nothing in the app ever wrote that column — the control was built and
 -- never rendered, so all 276 flowers sat at 'hive' and no garden travelled,
--- ever. That is the gap between "the switch is on" and "Production still
+-- ever. That is the gap between "the switch is on" and "another HIVE still
 -- shows me an empty garden".
 --
 -- The fix removes the second flag instead of wiring it up. One switch decides

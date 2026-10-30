@@ -114,20 +114,6 @@ export function headerForSection(title: string): NewsletterHeader | null {
  * Reading a letter back
  * ------------------------------------------------------------------------- */
 
-/**
- * One piece of a newsletter, so a screen can give it the right typography.
- *
- * Every letter in the app is stored as PLAIN TEXT — the ones Nat imported from
- * the old Wix site and the ones the app drafts today. That is on purpose: a
- * newsletter gets copied into an email, and markdown syntax would land in the
- * email as literal asterisks and hashes. The cost is that nothing in the stored
- * text says "this line is a heading", so we work it out when we read it back.
- *
- * The imported Wix letters DO still have their paragraph breaks (checked against
- * production, 2026-08-05) — what they never had is any mark of what each line
- * was FOR. Rendered as one long `<Text>` they came out as an unbroken slab: a
- * section title, a date, a bullet and a sentence all in the same 15px Lato.
- */
 export type LetterBlock =
   | { kind: 'heading'; text: string }
   /** A short line ending in a colon — Nat writes a lot of these. */

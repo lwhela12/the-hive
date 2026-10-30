@@ -161,7 +161,7 @@ update public.communities set meeting_cadence = 'monthly' where slug = 'tech';
 -- ---------------------------------------------------------------------------
 --
 -- Migration 132 wrote OG HIVE's id into this job's request body and said so out
--- loud: "With three it means Tech HIVE and Production HIVE never seal a meeting
+-- loud: "With three it means Tech HIVE and a private HIVE never seal a meeting
 -- at all, so their summaries stay blank however many meetings they hold." This
 -- is that fix.
 --

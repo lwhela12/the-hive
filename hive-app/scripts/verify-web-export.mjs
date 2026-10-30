@@ -12,7 +12,6 @@ if (!fs.existsSync(indexPath) || !fs.existsSync(webJsDir)) {
 
 const webJs = fs.readdirSync(webJsDir).filter((name) => name.endsWith('.js')).sort();
 
-// HIVE deliberately ships as one web bundle. Production-only async routes made
 // every deploy delete the filenames held by returning phones, producing
 // `Requiring unknown module` before login. A small allowance keeps this guard
 // compatible with a future Expo runtime split, while still rejecting per-screen

@@ -5,7 +5,7 @@ before the app tour, with a short distinction between Tech HIVE and HIVE-Wide.
 
 The slide follows Outline on both first and recurring Tech meetings. The
 existing notes, app tour, vote results, timing and HummDinger introductions
-remain in their original order. OG and Production keep their existing decks.
+remain in their original order. OG keeps its existing deck.
 
 Sources: `lib/checkIns.ts` (`note_what_a_hive_is`), `lib/hiveWide.ts`
 (`SCOPE_LADDER`), and Tech's existing building/learning meeting flow.

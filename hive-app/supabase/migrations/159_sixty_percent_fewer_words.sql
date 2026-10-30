@@ -4,7 +4,7 @@
 -- description of the description of the description." "HIVE-Wide" is already
 -- self-explanatory; cut everywhere it explains itself instead of saying
 -- something new. This also drops the welcome post's list of HIVEs by name
--- (OG, Tech, Production), which Nat separately asked to remove — new HIVEs
+-- by name, which Nat separately asked to remove — new HIVEs
 -- keep landing here without another edit.
 
 -- The category's own subtitle and the welcome post's body were saying the

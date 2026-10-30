@@ -23,7 +23,7 @@
 --
 -- The seed copies each person's current card into the HIVE they joined FIRST,
 -- because that is where they wrote it: Nat's and Charlee's cards were written
--- as OG cards, sara knauer's as a Production one, Kelly's as Tech's. Nobody's
+-- as OG cards and Kelly's as Tech's. Nobody's
 -- card disappears from the room it was written in when they flip the switch —
 -- it disappears (deliberately, her spec) from the rooms it was never written
 -- for.

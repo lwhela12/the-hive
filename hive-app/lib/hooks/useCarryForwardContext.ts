@@ -226,10 +226,8 @@ export function useCarryForwardContext({
   userId,
   survey,
 }: CarryForwardHookArgs) {
-  // OG and Tech's monthly check-in has always carried the roster. Production's
   // end-of-month check-in carries it from 2026-08-27, because Nat's list of
   // what she loves about OG's names it out loud — *"their own open to-dos, to
-  // tick off"* — and Production had a blank prose box where the roster should
   // have been. `isEndOfMonthCheckInSurvey` reads titles from lib/checkIns.ts,
   // so a fourth HIVE's end-of-month deck inherits this without a code change.
   const enabled = !!communityId

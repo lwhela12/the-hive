@@ -229,17 +229,6 @@ const WIDE_BLACK = '#0B0B12';
  * ("they bleed together like that", Nat 2026-08-03). Derived rather than
  * hard-coded, so a HIVE picking any accent still gets a rail that belongs to it.
  */
-/**
- * A HIVE's rail is its own colour, darkened — but never darkened into the
- * near-black that HIVE-Wide owns.
- *
- * The September 2026 brand guidelines make a branch's DOMINANT colour the dark
- * environment itself (Circuit Navy #011F46, Stage Purple #1F0338), so darkening
- * it by another third put Tech's rail and Production's rail both within a few
- * points of `WIDE_BLACK` — three places that are meant to be told apart at a
- * glance, all reading as black. A colour that is already the environment is
- * left alone.
- */
 function deepen(hex: string, amount = 0.32): string {
   const clean = hex.replace('#', '');
   if (clean.length !== 6) return hex;
@@ -668,7 +657,6 @@ export const SideRail = memo(function SideRail({
         >
           {big ? (
             // The place you are standing in wears its own simplified seal here:
-            // OG, Tech, Production, or HIVE-Wide. These are the small-format
             // marks without the motto, built for exactly this size; the formal
             // seals belong where they can be read at 120px or larger.
             //

@@ -7,8 +7,8 @@ const mail=require('../supabase/functions/_shared/reachMail.ts');
 const tomorrow=new Date(Date.now()+86400000).toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
 const rows={
  surveys:{id:'survey',title:'Before we meet',community_id:null,is_active:true},
- events:[{id:'opaque-tech',community_id:'tech',event_date:tomorrow,community:{name:'Tech HIVE'}},{id:'opaque-pro',community_id:'pro',event_date:tomorrow,community:{name:'Production HIVE'}}],
- community_memberships:[{user_id:'tech-only',community_id:'tech'},{user_id:'pro-only',community_id:'pro'},{user_id:'both',community_id:'tech'},{user_id:'both',community_id:'pro'}],
+ events:[{id:'opaque-tech',community_id:'tech',event_date:tomorrow,community:{name:'Tech HIVE'}},{id:'opaque-og',community_id:'og',event_date:tomorrow,community:{name:'OG HIVE'}}],
+ community_memberships:[{user_id:'tech-only',community_id:'tech'},{user_id:'og-only',community_id:'og'},{user_id:'both',community_id:'tech'},{user_id:'both',community_id:'og'}],
  check_in_completions:[{user_id:'both',community_id:'tech',occurrence:'meeting:opaque-tech'}],check_in_reminder_receipts:[],
 };
 const admin={from(table){assert.ok(table in rows,table);return {select(){return this},eq(){return this},in(){return this},maybeSingle:async()=>({data:rows[table]}),then:fn=>Promise.resolve({data:rows[table]}).then(fn)}}};
@@ -20,15 +20,15 @@ new Function('require','exports',ts.transpileModule(fs.readFileSync(path.join(ba
  const response=await handler(new Request('https://offline.invalid/open-check-in',{method:'POST',body:JSON.stringify({survey_id:'survey'})}));
  assert.equal(response.status,200);assert.equal(sent.length,3);
  for(const {user,letter} of sent){
-  const scope=user==='tech-only'?'tech':'pro';
+  const scope=user==='tech-only'?'tech':'og';
   assert.equal(letter.hiveId,scope);assert.equal(letter.href,`https://app.the-hive.app/beforewemeet?meeting=opaque-${scope}`);
-  const scoped=await mail.scopeLetter({from:()=>({select(){return this},eq(){return this},maybeSingle:async()=>({data:{name:scope==='tech'?'Tech HIVE':'Production HIVE',slug:scope==='tech'?'tech':'show'}})})},letter);
+  const scoped=await mail.scopeLetter({from:()=>({select(){return this},eq(){return this},maybeSingle:async()=>({data:{name:scope==='tech'?'Tech HIVE':'OG HIVE',slug:scope==='tech'?'tech':'default'}})})},letter);
   const html=mail.reachEmailHtml({...scoped,toName:'Reader'});
-  assert.match(html,scope==='tech'?/tech-hive.png/:/production-hive.png/);
-  assert.doesNotMatch(html,scope==='tech'?/Production HIVE|production-hive.png/:/Tech HIVE|tech-hive.png/);
+  assert.match(html,scope==='tech'?/tech-hive.png/:/og-hive.png/);
+  assert.doesNotMatch(html,scope==='tech'?/OG HIVE|og-hive.png/:/Tech HIVE|tech-hive.png/);
   assert.doesNotMatch(html,/covers every HIVE|hive-wide.png/);
   assert.match(html,/target="_top"/);
  }
- assert.equal(notifications.find(n=>n.user_id==='both').metadata.meeting_id,'opaque-pro');
- console.log('PASS: real reminder handler binds each recipient to an unanswered own-HIVE meeting; completed Tech routes multi-HIVE member to Production; real HTML contains only source identity and an opaque CTA. Offline only.');
+ assert.equal(notifications.find(n=>n.user_id==='both').metadata.meeting_id,'opaque-og');
+ console.log('PASS: real reminder handler binds each recipient to an unanswered own-HIVE meeting; completed Tech routes a multi-HIVE member to OG; real HTML contains only source identity and an opaque CTA. Offline only.');
 })().catch(error=>{console.error(error);process.exitCode=1});

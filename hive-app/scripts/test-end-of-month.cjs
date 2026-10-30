@@ -23,7 +23,7 @@ const profileRoute = fs.readFileSync('app/(app)/profile.tsx', 'utf8');
 assert.match(profileRoute, /endofmonth: \{ route: '\/endofmonth'/, 'closing Profile returns to the draft check-in');
 assert.match(profileRoute, /focus === 'miq'[\s\S]*?startDeepQuiz\(3, true\)/, '3MIQ link opens the existing profile step directly');
 const task = { id: 'task', type: 'action_item', label: 'Bring props', sourceLabel: 'To-do' };
-const answers = restoreEndOfMonthAnswers(['og', 'tech', 'production'], {
+const answers = restoreEndOfMonthAnswers(['og', 'tech'], {
   og: { quarterly: 'keep this', q_newsletter: 'legacy', q_quarter_helping: 'A little', q_quarter_help_next: 'A gentle nudge' }, month: { q_eom_newsletter: 'My event', q_shoutout: 'Thank you' },
 }, { og: { quarterly: 'new draft' }, month: { q_newsletter: 'My event' } }, 'og');
 assert.equal(answers.hives.og.quarterly, 'new draft');
@@ -39,20 +39,20 @@ assert.equal(restoreEndOfMonthAnswers(['og'], { og: { q_quarter_help_next: 'A ge
 assert.equal(restoreEndOfMonthAnswers(['og'], { og: { q_quarter_helping: 'A little' },
   month: { q_quarter_helping: 'Yes' } }, {}, 'og').month.q_quarter_helping,
   'Yes', 'new shared helping answer takes precedence over saved OG history');
-answers.hives.production.q_carry_forward_items = [{ ...task, status: 'done' }, { ...task, id: 'stale', status: 'archive' }];
-const tasks = endOfMonthTaskResponses([task, { ...task, id: 'wish', type: 'wish' }], answers.hives.production);
+answers.hives.tech.q_carry_forward_items = [{ ...task, status: 'done' }, { ...task, id: 'stale', status: 'archive' }];
+const tasks = endOfMonthTaskResponses([task, { ...task, id: 'wish', type: 'wish' }], answers.hives.tech);
 assert.equal(tasks.length, 1);
 assert.equal(tasks[0].status, 'done');
 async function run() {
   const calls = [];
-  const options = { answers, communityIds: ['og', 'tech', 'production'], todos: { production: [task] },
+  const options = { answers, communityIds: ['og', 'tech'], todos: { tech: [task] },
     applyTasks: async items => { calls.push(['tasks', items]); return { error: null }; },
     save: async (id, value) => { calls.push([id, value]); return { error: null }; } };
   assert.equal((await saveEndOfMonth(options)).error, null);
-  assert.equal(calls.map(call => call[0]).join(','), 'tasks,og,tech,production,');
+  assert.equal(calls.map(call => call[0]).join(','), 'tasks,og,tech,');
   assert.equal(calls[0][1].length, 1);
-  assert.equal(calls[3][1].q_carry_forward_items.length, 2, 'a repeated save preserves archived task history');
-  assert.equal(calls[3][1].q_carry_forward_items[1].id, 'stale');
+  assert.equal(calls[2][1].q_carry_forward_items.length, 2, 'a repeated save preserves archived task history');
+  assert.equal(calls[2][1].q_carry_forward_items[1].id, 'stale');
   assert.equal(calls[1][1].quarterly, 'new draft');
   assert.equal(calls[1][1].q_newsletter, undefined);
   assert.equal(calls.at(-1)[1].q_newsletter, 'My event');

@@ -267,40 +267,12 @@ export default function ProfileScreen() {
   // `memberships` is here for one thing: naming the HIVE a Skills Garden is
   // already planted in, when the garden in front of you is empty.
   const { profile, communityId, community, communityRole, memberships, refreshProfile } = useAuth();
-  // Production HIVE's MVP piece (Nat voice memo, 2026-08-13): "get clear on
-  // what your production goals are... maybe it lives in your profile, where
-  // we have the three MIQs." Lives on the membership row (migration 179),
-  // not the profile — this HIVE's question means nothing in another one the
-  // same person might also belong to. Generic slug check now; any future
-  // HIVE with its own singular focus can flip this on without new code.
-  const showsHiveGoal = community?.slug === 'show';
-  const [hiveGoal, setHiveGoal] = useState('');
-  const [hiveGoalSaving, setHiveGoalSaving] = useState(false);
-  const hiveGoalSaveInFlight = useRef(false);
-  const [hiveGoalDraft, setHiveGoalDraft] = useState('');
-  const [editingHiveGoal, setEditingHiveGoal] = useState(false);
-  useEffect(() => {
-    if (!showsHiveGoal || !communityId || !profile?.id) return;
-    let active = true;
-    supabase
-      .from('community_memberships')
-      .select('hive_goal')
-      .eq('community_id', communityId)
-      .eq('user_id', profile.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!active) return;
-        setHiveGoal((data as { hive_goal?: string | null } | null)?.hive_goal ?? '');
-      });
-    return () => { active = false; };
-  }, [showsHiveGoal, communityId, profile?.id]);
   /**
    * The wish starter — a themed opening question for each HIVE, shown when the
    * wishes panel is empty. Nat, 2026-08-19 memo: "every section that doesn't
    * have an HD wish filled out should have that little starter... a default to
    * help you get started in each HIVE, each one with its own theme," with an X
-   * to close it. Production's theme is the show goal block below; these cover
-   * the rest.
+   * to close it.
    *
    * The X remembers per HIVE, per browser — the same shelf the deck drafts
    * live on. Closing a nudge is a taste call, not shared state.
@@ -386,27 +358,6 @@ export default function ProfileScreen() {
       .eq('id', meetingId);
     return error ?? null;
   }, []);
-  const saveHiveGoal = async (next: string) => {
-    if (!communityId || !profile?.id || hiveGoalSaveInFlight.current) return;
-    hiveGoalSaveInFlight.current = true;
-    setHiveGoalSaving(true);
-    try {
-      const { error: saveError } = await supabase
-        .from('community_memberships')
-        .update({ hive_goal: next.trim() || null })
-        .eq('community_id', communityId)
-        .eq('user_id', profile.id);
-      if (saveError) {
-        showAlert('Error', 'Could not save your goal. Please try again.');
-        return;
-      }
-      setHiveGoal(next.trim());
-      setEditingHiveGoal(false);
-    } finally {
-      hiveGoalSaveInFlight.current = false;
-      setHiveGoalSaving(false);
-    }
-  };
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { grantWish } = useWishes();
   const { availableSurveys, pendingSurveys: allPendingSurveys, myResponses, submitResponse } = useSurveys(communityId ?? undefined, profile?.id);
@@ -477,16 +428,6 @@ export default function ProfileScreen() {
   const [skillsModalVisible, setSkillsModalVisible] = useState(false);
   const [replantingGarden, setReplantingGarden] = useState(false);
   const [replantNotice, setReplantNotice] = useState<string | null>(null);
-  /**
-   * Your skill flowers in your OTHER HIVEs, and only when this garden is bare.
-   *
-   * Charlee told Nat *"it never saves my profile"*. Nothing was lost: a Skills
-   * Garden is rows in one HIVE, hers was planted in OG HIVE, and Production
-   * HIVE showed her a patch of soil with no explanation at all. An empty thing
-   * that says nothing about itself is indistinguishable from a broken one, so
-   * this is what the garden says instead — where the flowers are, and a way to
-   * plant them here too.
-   */
   const [skillsElsewhere, setSkillsElsewhere] = useState<{ communityId: string; descriptions: string[] }[]>([]);
   const bringGardenInFlight = useRef(false);
   const [addWishModalVisible, setAddWishModalVisible] = useState(false);
@@ -663,7 +604,6 @@ export default function ProfileScreen() {
       // This HIVE's wishes plus every wish of yours that travels, whichever
       // HIVE it was written in. Her Nellie wish, written in OG and marked
       // HIVE-Wide, showed on this panel in OG and vanished in Tech and
-      // Production — the same bug the member card fixed on 2026-08-19, on the
       // one screen that fix never reached.
       supabase
         .from('wishes')
@@ -2004,19 +1944,6 @@ export default function ProfileScreen() {
   /** This HIVE's name and colour, for every reach pill on the page. */
   const hiveWord = hiveDisplayName(community?.name);
   const hiveColour = hiveAccent(community);
-  /**
-   * Whether anything in this HIVE is allowed out of it at all.
-   *
-   * `communities.max_share_scope` is the HIVE's ceiling (migration 125) and the
-   * database enforces it: a wish or a skill flower marked HIVE-Wide inside a
-   * HIVE whose ceiling is `hive` stays put whatever its owner picked. Production
-   * HIVE's ceiling is `hive` today, so the pills on wishes and on the garden say
-   * so rather than offering a choice the database will refuse.
-   *
-   * Your card's own pieces are not capped by this, and never have been: a
-   * profile belongs to a person rather than to a HIVE, which is why the
-   * HIVE-Wide switch at the top of this page has never asked a ceiling either.
-   */
   const hiveLetsThingsTravel = ((community as any)?.max_share_scope ?? 'hive') !== 'hive';
 
   /**
@@ -3277,94 +3204,6 @@ export default function ProfileScreen() {
                       paddingBottom: 12,
                     }}
                   >
-                    {/* The goal sits at the top of the wishes, not in a section of
-                        its own. Nat, 2026-08-19, looking at the two of them stacked:
-                        *"I think these production goals should have rolled into
-                        ... where it says 'no wishes yet' ... combine this whole
-                        section."* They are the same conversation — a goal is the
-                        direction, a wish is what you need from the room to get
-                        there — and two headings made them look like two chores. */}
-                    {showsHiveGoal && (hiveGoal || editingHiveGoal || !wishStarterDismissed) ? (
-                      <View style={{ marginBottom: 12 }}>
-                        <View className="flex-row items-center justify-between mb-2">
-                          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/70">
-                            What are you working toward with this show? 🎬
-                          </Text>
-                          {/* The X closes the nudge, never the goal itself — a
-                              written goal keeps its card (Nat, 2026-08-19:
-                              "an X somewhere where we can X out the helper"). */}
-                          {!hiveGoal && !editingHiveGoal ? (
-                            <CloseButton
-                              onPress={dismissWishStarter}
-                              accessibilityLabel="Close this helper"
-                              color="rgba(49,49,48,0.45)"
-                              size={16}
-                            />
-                          ) : null}
-                        </View>
-                        <View className="bg-white rounded-xl shadow-sm p-4">
-                          {editingHiveGoal ? (
-                            <>
-                              <ComposerBar
-                                tone="light"
-                                variant="form"
-                                value={hiveGoalDraft}
-                                onChangeText={setHiveGoalDraft}
-                                placeholder="What are you working toward with this show?"
-                                multiline
-                                submitOnEnterKey={false}
-                              />
-                              <View className="flex-row gap-2 mt-3">
-                                <Pressable
-                                  onPress={() => setEditingHiveGoal(false)}
-                                  className="flex-1 bg-cream rounded-lg py-2 active:opacity-70"
-                                >
-                                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/60 text-center">Cancel</Text>
-                                </Pressable>
-                                <Pressable
-                                  onPress={() => void saveHiveGoal(hiveGoalDraft)}
-                                  disabled={hiveGoalSaving}
-                                  className="flex-1 bg-gold rounded-lg py-2 active:opacity-70"
-                                >
-                                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-center">
-                                    {hiveGoalSaving ? 'Saving…' : 'Save'}
-                                  </Text>
-                                </Pressable>
-                              </View>
-                            </>
-                          ) : (
-                            <>
-                              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
-                                {hiveGoal || "Get clear on it — Clive can help you find the words."}
-                              </Text>
-                              <View className="flex-row gap-4 mt-3">
-                                <Pressable
-                                  onPress={() => { setHiveGoalDraft(hiveGoal); setEditingHiveGoal(true); }} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                                >
-                                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
-                                    {hiveGoal ? 'Edit' : 'Write it myself'}
-                                  </Text>
-                                </Pressable>
-                                <Pressable
-                                  onPress={() => router.push({
-                                    pathname: '/(app)',
-                                    params: {
-                                      prefill: hiveGoal
-                                        ? `Help me refine my production goal for this HIVE. Here's what I have so far: "${hiveGoal}". Help me make it sharper.`
-                                        : 'Help me get clear on my production goal for this HIVE — what am I working toward with this show?',
-                                    },
-                                  })} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                                >
-                                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
-                                    {hiveGoal ? 'Refine with Clive ✨' : 'Find with Clive ✨'}
-                                  </Text>
-                                </Pressable>
-                              </View>
-                            </>
-                          )}
-                        </View>
-                      </View>
-                    ) : null}
                     {/* Desires a meeting heard from you, in italics, waiting
                         on your yes — add it, refine it with Clive, or ✕ it
                         away. Only ever your own; the guard is in
@@ -3421,12 +3260,11 @@ export default function ProfileScreen() {
                       </View>
                     ) : null}
                     {visibleProfileWishes.length === 0 ? (
-                      wishStatusTab !== 'granted' && !showsHiveGoal && !wishStarterDismissed ? (
+                      wishStatusTab !== 'granted' && !wishStarterDismissed ? (
                         /* The starter: each HIVE opens with its own question
                            (Nat, 2026-08-19 memo: "a default to help you get
                            started in each HIVE, each one with its own theme"),
-                           closable with the X. Production's theme is the show
-                           goal block above, so it skips this one. */
+                           closable with the X. */
                         <View>
                           <View className="flex-row items-center justify-between mb-2">
                             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/70">

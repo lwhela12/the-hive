@@ -27,36 +27,36 @@ const db = row => ({ from: () => ({ select() { return this; }, eq() { return thi
     assert.equal(await mail.templateIsApproved(db({ approved: true, revision: 'old' }), kind), false);
     assert.equal(await mail.templateIsApproved(db({ approved: false, revision: revisions[kind] }), kind), false);
     assert.equal(await mail.templateIsApproved(db({ approved: true, revision: revisions[kind] }), kind), true);
-    const letter = mail.genericLetter(kind, { buttonLabel: 'unreviewed copy', href: '/private', hiveId: 'pro' });
+    const letter = mail.genericLetter(kind, { buttonLabel: 'unreviewed copy', href: '/private', hiveId: 'tech' });
     assert.equal(letter.buttonLabel, mail.TEMPLATE_BUTTONS[kind]);
-    const pro = await mail.scopeLetter(db({ name: 'Production HIVE', slug: 'show', accent_color: '#1f0338' }), letter);
+    const tech = await mail.scopeLetter(db({ name: 'Tech HIVE', slug: 'tech', accent_color: '#011f46' }), letter);
     const wide = await mail.scopeLetter(db(null), { ...letter, hiveId: null });
-    assert.match(mail.reachEmailHtml({ ...pro, toName: '' }), /production-hive.png/);
-    assert.doesNotMatch(mail.reachEmailHtml({ ...wide, toName: '' }), /production-hive.png/);
-    if (kind !== 'checkIn') assert.equal(mail.plainTextFrom(mail.reachEmailHtml({ ...pro, toName: '' })), mail.plainTextFrom(mail.reachEmailHtml({ ...wide, toName: '' })));
+    assert.match(mail.reachEmailHtml({ ...tech, toName: '' }), /tech-hive.png/);
+    assert.doesNotMatch(mail.reachEmailHtml({ ...wide, toName: '' }), /tech-hive.png/);
+    if (kind !== 'checkIn') assert.equal(mail.plainTextFrom(mail.reachEmailHtml({ ...tech, toName: '' })), mail.plainTextFrom(mail.reachEmailHtml({ ...wide, toName: '' })));
     assert.equal((await mail.sendReachEmail(db(null), 'fixture', kind, letter)).reason, 'template not approved');
     assert.equal((await mail.sendReachEmail(db({ approved: true, revision: revisions[kind] }), 'fixture', kind, { ...letter, said: 'private post' })).reason, 'template words changed');
     if (kind === 'monthCheckIn') assert.equal((await mail.sendReachEmail(db({ approved: true, revision: revisions[kind] }), 'fixture', kind, { ...letter, greeting: 'Hi Nat,' })).reason, 'template words changed');
   }
   // Exercise the actual sending door, including scope lookup and provider payload.
-  for (const [kind, hiveId] of [['message', 'pro'], ['mention', null], ['checkIn', 'pro']]) {
+  for (const [kind, hiveId] of [['message', 'tech'], ['mention', null], ['checkIn', 'tech']]) {
     const scopedDb = { from(table) {
       const data = table === 'email_template_approvals' ? { approved: true, revision: revisions[kind] }
-        : table === 'communities' ? { name: 'Production HIVE', slug: 'show', accent_color: '#1f0338' }
+        : table === 'communities' ? { name: 'Tech HIVE', slug: 'tech', accent_color: '#011f46' }
         : table === 'profiles' ? { email: 'fixture@example.invalid', name: 'Reader' } : [];
       return { select() { return this; }, eq() { return this; }, maybeSingle: async () => ({ data, error: null }), then: resolve => Promise.resolve({ data, error: null }).then(resolve) };
     } };
     const letter = mail.genericLetter(kind, { buttonLabel: '', href: '/fixture', hiveId });
     assert.equal((await mail.sendReachEmail(scopedDb, 'fixture', kind, letter)).sent, true);
     const payload = deliveries.at(-1);
-    if (hiveId) assert.match(payload.html, /production-hive.png/);
-    else assert.doesNotMatch(payload.html, /production-hive.png/);
+    if (hiveId) assert.match(payload.html, /tech-hive.png/);
+    else assert.doesNotMatch(payload.html, /tech-hive.png/);
     const scoped = await mail.scopeLetter(scopedDb, letter);
     assert.equal(payload.html, mail.reachEmailHtml({ ...scoped, toName: 'Reader' }));
     assert.equal(payload.subject, scoped.subject);
     if (kind === 'checkIn') {
-      assert.match(payload.subject, /^Production HIVE/);
-      assert.doesNotMatch(payload.html, /covers every HIVE|tech-hive/);
+      assert.match(payload.subject, /^Tech HIVE/);
+      assert.doesNotMatch(payload.html, /covers every HIVE|og-hive/);
     }
   }
   assert.equal(deliveries.length, 3);

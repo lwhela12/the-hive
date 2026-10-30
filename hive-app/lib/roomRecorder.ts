@@ -1,30 +1,5 @@
 import { supabase } from './supabase';
 
-/**
- * The room's own recording — one microphone, and it keeps going when you leave
- * the screen.
- *
- * Nat, 2026-08-19, the morning after Production met around Charlee's dining
- * table with nothing written down: *"I definitely, definitely think 100% of the
- * time we always want transcriptions, because you just never know."* And one
- * microphone rather than everybody's: *"if we had everyone toggle on their mics
- * to record different speakers, the feedback would be crazy. So I think we just
- * want the one, I'll just toggle on the recording."*
- *
- * This is deliberately NOT the video call's transcription (`lib/deckCall`).
- * That one needs somebody to join a call and labels every line with the name of
- * the microphone it came from, which is worth having when everyone is on their
- * own device. A HIVE in one room is one microphone either way, so this path
- * skips the call entirely: the presenting laptop records, AssemblyAI splits it
- * into Speaker A / Speaker B / Speaker C afterwards, and the whole thing lands
- * on the same meeting Wrap-Up seals.
- *
- * Like the call, it lives at module scope and not in a screen, because the
- * reason it exists is that Nat walks away from the deck constantly mid-meeting:
- * *"we need to make sure that if we have the record button on, that it stays
- * on."* Nothing here is unmounted by navigation. The only things that stop it
- * are the stop button and closing the tab — and the tab asks first.
- */
 
 export type RecorderSnapshot = {
   recording: boolean;

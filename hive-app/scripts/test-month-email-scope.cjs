@@ -15,7 +15,6 @@ const rows = {
   communities: [
     { id: 'og', slug: 'default', name: 'OG HIVE' },
     { id: 'tech', slug: 'tech', name: 'Tech HIVE' },
-    { id: 'sealed', slug: 'show', name: 'Production HIVE' },
   ],
   community_memberships: [
     { user_id: 'og-only', community_id: 'og' },
@@ -70,7 +69,7 @@ const request = (dryRun, selfOnly = false) => new Request('https://offline.inval
   assert.deepEqual([counts.members, counts.answered, counts.would_reach], [3, 1, 2]);
   assert.equal(counts.hive, 'active HIVEs');
   assert.equal(sent.length, 0, 'dry run never sends');
-  assert.ok(reads.some(read => read.table === 'communities' && read.filters === 1), 'scope resolves by active slugs');
+  assert.ok(reads.some(read => read.table === 'communities' && read.filters === 0), 'scope resolves from the remaining HIVE rows');
   const result = await handler(request(false));
   assert.equal(result.status, 200);
   assert.deepEqual(sent.map(row => row.user).sort(), ['both', 'og-only']);
@@ -79,7 +78,7 @@ const request = (dryRun, selfOnly = false) => new Request('https://offline.inval
     assert.equal(kind, 'monthCheckIn');
     assert.equal(letter.buttonLabel, 'Open the check-in');
     assert.ok(letter.href.endsWith('/endofmonth'));
-    assert.doesNotMatch(JSON.stringify(letter), /Production HIVE|sealed/);
+    assert.doesNotMatch(JSON.stringify(letter), /sealed/);
   }
   sent.length = 0; notes.length = 0; actor = 'og-only';
   const selfPreview = await (await handler(request(true, true))).json();
