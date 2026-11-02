@@ -1,6 +1,16 @@
 import {SNAPSHOT, SIZE_ORDER, COLORS, ART_COLORS, FONTS, LOGOS, GARMENTS, PRICE_GUIDE, FINISHES, VARIANTS, PENDING, PHOTOS,
   initialState, normalize, availableColors, availableSizes, availableFinishes, rowsFor, selectedRow, isBackPlacement, canReview, money, priceFor, selectionText} from './catalog.mjs?v=20261027.3';
 
+import {studioReturnPath} from './navigation.mjs?v=20261102.1';
+
+const closeStudio = document.querySelector('#close-studio');
+closeStudio.href = studioReturnPath(window.location.href, document.referrer);
+closeStudio.addEventListener('click', event => {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  window.location.replace(closeStudio.href);
+});
+
 const app = document.querySelector('#app'), steps = document.querySelector('#steps'), notice = document.querySelector('#notice');
 const DRAFT_KEY = 'hive-clothing-review-v1';
 const titles = ['Choose your style', 'Choose your color & size', 'Make it yours', 'Review your picks'];
@@ -117,7 +127,7 @@ function overlay(g, hasPhoto, nameOnly = false, options = {}) {
 function preview() {
   const g = garment(); if (!g) return '';
   const reference = !state.color, referenceColor = photoFor(g,'Black') ? 'Black' : g.photoColor || 'Catalog reference';
-  const referencePhoto = photoFor(g,referenceColor) || photoFor(g,'Black');
+  const referencePhoto = photoFor(g,referenceColor) || photoFor(g,'Black') || (reference ? `assets/garment-${g.id}.png` : null);
   const back = state.face === 'back', photo = reference ? referencePhoto : photoFor(g,state.color,back?'back':'front');
   // Photos are shown without recoloring. If the exact shade/view is absent,
   // the labeled code-drawn study carries color and placement instead.
@@ -192,7 +202,16 @@ function reviewScreen() {
 function render() {
   steps.innerHTML=stepNames.map((s,i)=>`<button class="step ${state.step===i?'active':''} ${i<state.step?'complete':''}" ${attr('step',i)} ${i>maxStep()?'disabled':''} ${state.step===i?'aria-current="step"':''}><span class="step-number">${i<state.step?'✓':i+1}</span><span>${s}</span></button>`).join('');
   app.innerHTML=`<div class="page-heading"><h1 id="screen-title" tabindex="-1">${titles[state.step]}</h1>${state.step===0?'':`<button class="text-button" data-action="start-over">Start again</button>`}</div>${[styleScreen,sizeScreen,customizeScreen,reviewScreen][state.step]()}`;
-  app.querySelectorAll('[data-photo]').forEach(img=>img.addEventListener('error',()=>{if(state.view!=='sketch'){state.view='sketch';render();say('Photo unavailable. Showing the color and placement study.');}},{once:true}));
+  app.querySelectorAll('[data-photo]').forEach(img=>img.addEventListener('error',()=>{
+    if (!state.color) {
+      const message = document.createElement('p');
+      message.className = 'reference-unavailable';
+      message.textContent = 'Choose a listed color to see a garment study.';
+      img.replaceWith(message);
+    } else if(state.view!=='sketch') {
+      state.view='sketch';render();say('Photo unavailable. Showing the color and placement study.');
+    }
+  },{once:true}));
 }
 document.addEventListener('click',async e=>{
   const target=e.target.closest('[data-action]'); if(!target||target.disabled)return;

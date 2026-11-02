@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useLocalSearchParams, usePathname } from 'expo-router';
 import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,7 +14,8 @@ import { SPACE_SKIN } from '../../lib/pageSkin';
 import { CARRY_FORWARD_ANSWER_KEY, getCarryForwardStatusLabel, normalizeCarryForwardResponse, type CarryForwardItem, type CarryForwardStatus } from '../../lib/carryForward';
 import { endOfMonthTaskResponses, type EndOfMonthAnswers } from '../../lib/endOfMonth';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
-import { HIVE_CLOTHING_ORDER_URL } from '../../lib/hoodieOrdering';
+import { hiveClothingOrderUrl } from '../../lib/hoodieOrdering';
+import { currentReturnTo } from '../../lib/authReturnTo';
 import type { Community, SurveyQuestion } from '../../types';
 import type { SurveyAnswerValue } from '../../lib/hooks/useSurveys';
 
@@ -43,6 +45,14 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
   onEmailMe?: () => void;
   emailingMe?: boolean;
 }) {
+  const pathname = usePathname();
+  const routeParams = useLocalSearchParams();
+  const returnQuery = new URLSearchParams();
+  Object.entries(routeParams).forEach(([key, value]) => {
+    if (Array.isArray(value)) value.forEach(item => returnQuery.append(key, item));
+    else if (typeof value === 'string') returnQuery.append(key, value);
+  });
+  const studioUrl = hiveClothingOrderUrl(currentReturnTo(pathname + (returnQuery.size ? `?${returnQuery}` : '')));
   const [answers, setAnswers] = useState(initialAnswers);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -196,7 +206,7 @@ export function EndOfMonthForm({ sections, initialAnswers, draftKey, legacyDraft
             Not in OG? You can order from the same site at cost. Prices shown are starting estimates; Nat confirms the exact amount before ordering.
           </Text>
           <Pressable accessibilityRole="link" accessibilityLabel="Open the HIVE clothing ordering site"
-            disabled={saving} onPress={() => { void leaveWithDraft(() => { void Linking.openURL(HIVE_CLOTHING_ORDER_URL); }); }}
+            disabled={saving} onPress={() => { void leaveWithDraft(() => { void Linking.openURL(studioUrl); }); }}
             style={({ pressed }) => ({ minHeight: 44, alignSelf: 'flex-start', justifyContent: 'center', paddingHorizontal: 14,
               borderRadius: 999, borderWidth: 1, borderColor: '#8a652f', backgroundColor: '#f5eddc', opacity: pressed || saving ? 0.7 : 1 })}>
             <Text style={{ ...buttonText, color: '#313130' }}>Choose my HIVE clothing</Text>
