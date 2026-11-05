@@ -156,12 +156,14 @@ export interface Waitlist extends Record<string, unknown> {
   message?: string;
   created_at: string;
   /**
-   * The HIVE they asked about, as a slug, or null for "any / not sure"
-   * (migration 168). A slug rather than a foreign key because the public
-   * site writes here anonymously and must not need to read `communities`
+   * The latest HIVE they asked about, kept for older readers, or null for
+   * "any / not sure" (migration 168). A slug rather than a foreign key because
+   * the public site writes here anonymously and must not need to read `communities`
    * to do it.
    */
   interested_in?: string | null;
+  /** All explicitly requested HIVE slugs; repeats never remove an earlier ask. */
+  interest_slugs?: string[];
   /** new -> invited -> joined | passed. Set by an owner in Admin. */
   status?: 'new' | 'invited' | 'joined' | 'passed';
   /** join-page, public-site, newsletter. */

@@ -114,7 +114,7 @@ export default async function handler(req, res) {
         var go = document.getElementById('go'), out = document.getElementById('out'), em = document.getElementById('em');
         go.addEventListener('click', function () {
           var v = (em.value || '').trim();
-          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { out.textContent = 'That email looks off — check it and try again.'; return; }
+          if (!${EMAIL.toString()}.test(v)) { out.textContent = 'That email looks off — check it and try again.'; return; }
           go.disabled = true; out.textContent = 'One moment…';
           var qs = new URLSearchParams(window.location.search); qs.set('email', v);
           fetch(window.location.pathname + '?' + qs.toString(), { method: 'POST' })

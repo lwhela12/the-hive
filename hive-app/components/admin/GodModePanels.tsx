@@ -14,6 +14,7 @@ import { showAlert } from '../../lib/showAlert';
 import { userFacingError } from '../../lib/userFacingError';
 import { currentNewsletterDraft, newsletterIssueHistory } from '../../lib/newsletterIssues';
 import { listDeletedWishes, restoreWishById, type DeletedWish } from '../../lib/wishMutations';
+import { groupWaitlistByHive, waitlistInterests } from '../../lib/waitlist';
 import {
   CHECK_INS_COMING_SOON_MESSAGE,
   getSeasonCheckInKind,
@@ -146,6 +147,7 @@ type WaitlistRow = {
   name: string | null;
   message: string | null;
   interested_in: string | null;
+  interest_slugs?: string[];
   status: string;
   created_at: string;
 };
@@ -1298,8 +1300,8 @@ export function HiveMemberPanels({
    *
    * Nat's own shape, 2026-08-12 — *"people kind of 'move up the totem pole'"*.
    * Interested → invited → member, and somebody stands at exactly ONE of
-   * those at a time, which is why `load()` drops a waitlist row the moment
-   * that person has an invite or a membership. That also answers her
+   * those in each HIVE, which is why `load()` drops a waitlist row from that
+   * HIVE when the person has an invite or a membership there. That answers her
    * question: an invite moves them out of Waiting and into Invited, rather
    * than leaving them in two lists to be chased twice.
    */
@@ -1480,69 +1482,26 @@ export function HiveMemberPanels({
     // against. A row with no slug means "any HIVE, not sure" and shows up
     // under every HIVE you keep, since it is an offer to whoever wants it.
     if (isOwner) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('waitlist')
-        .select('id, email, name, message, interested_in, status, created_at')
+        .select('id, email, name, message, interested_in, interest_slugs, status, created_at')
         .eq('status', 'new')
         .order('created_at', { ascending: false });
 
-      const nextWaiting: Record<string, WaitlistRow[]> = {};
-      memberships.forEach((m) => { nextWaiting[m.community_id] = []; });
-      const slugFor = new Map(
-        memberships.map((m) => [String((m.community as { slug?: string } | undefined)?.slug ?? ''), m.community_id])
-      );
-      const currentMembers = Object.values(next).flat();
-      const currentInvites = Object.values(nextInvites).flat();
-
-      const alreadyAnywhere = (person: WaitlistRow) => {
-        const email = person.email.trim().toLowerCase();
-        const exactName = person.name?.trim().toLocaleLowerCase();
-        const matchingMemberIds = new Set(
-          currentMembers
-            .filter((member) => exactName && member.name?.trim().toLocaleLowerCase() === exactName)
-            .map((member) => member.id)
-        );
-        return currentMembers.some((member) => member.email.trim().toLowerCase() === email)
-          || currentInvites.some((invite) => invite.email.trim().toLowerCase() === email)
-          || matchingMemberIds.size === 1;
-      };
-
-      ((data ?? []) as WaitlistRow[]).forEach((row) => {
-        const already = (person: WaitlistRow, id: string) => {
-          const email = person.email.trim().toLowerCase();
-          const members = next[id] ?? [];
-          const exactName = person.name?.trim().toLocaleLowerCase();
-          // Steele joined Tech under his work address after putting his hand up
-          // with Gmail. An email-only comparison put one real person in two
-          // stages of the pipeline forever. A name match is useful only when
-          // it identifies exactly one current member; two people with the same
-          // name remain visible rather than being silently folded together.
-          const uniqueNameMatch = !!exactName && members.filter((member) =>
-            member.name?.trim().toLocaleLowerCase() === exactName
-          ).length === 1;
-          return members.some((member) => member.email.trim().toLowerCase() === email)
-            || (nextInvites[id] ?? []).some((invite) => invite.email.trim().toLowerCase() === email)
-            || uniqueNameMatch;
-        };
-
-        const targets = row.interested_in
-          ? [slugFor.get(row.interested_in)].filter(Boolean) as string[]
-          : memberships.map((m) => m.community_id);
-
-        // "Any HIVE" is one open-ended interest record, not a request to join
-        // every HIVE. Once that person has joined one, the request is fulfilled
-        // everywhere. Steele used Gmail for the interest form and his work
-        // address for Tech, so the cross-HIVE name check is the necessary join.
-        if (!row.interested_in && alreadyAnywhere(row)) return;
-
-        targets.forEach((id) => {
-          // Somebody already invited or already in has moved up the totem
-          // pole. Listing them here too would ask Nat to chase a person she
-          // has already chased.
-          if (!already(row, id)) nextWaiting[id]?.push(row);
-        });
-      });
-      setWaitingByHive(nextWaiting);
+      if (error) {
+        setWaitingByHive({});
+        showAlert('Could not load interest requests', userFacingError(error, 'Try again to see who has signed up.'));
+      } else {
+        setWaitingByHive(groupWaitlistByHive(
+          (data ?? []) as WaitlistRow[],
+          memberships.map((m) => ({
+            id: m.community_id,
+            slug: String((m.community as { slug?: string } | undefined)?.slug ?? ''),
+          })),
+          next,
+          nextInvites,
+        ));
+      }
     }
 
     setLoading(false);
@@ -2376,7 +2335,7 @@ export function HiveMemberPanels({
                           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(246,244,229,0.55)' }}>
                             {person.name?.trim() ? `${person.email} · ` : ''}
                             asked {sentWhen(person.created_at)}
-                            {person.interested_in ? '' : ' · any HIVE'}
+                            {waitlistInterests(person).length ? '' : ' · any HIVE'}
                           </Text>
                           {person.message?.trim() ? (
                             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, lineHeight: 17, color: 'rgba(246,244,229,0.7)', paddingTop: 3 }}>
