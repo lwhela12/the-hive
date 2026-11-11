@@ -1,5 +1,11 @@
 # HIVE App Agent Notes
 
+## This branch: Tech HIVE
+
+Tech HIVE evolves separately from the 2026 app and Legacy HIVE. Keep the ongoing community and profile continuity in mind; do not implement an annual Tech profile reset merely because Legacy has a 2027 vintage.
+
+Keep this small and simple. Preserve `main` and the live 2026 app. Read `VINTAGE.md` before deployment work. A Git branch separates code, not member data or access. Do not reuse the live 2026 backend, app deployment, EAS project or update channel for a new vintage without an explicit reviewed launch plan. No migration, member reset, deletion or access change is part of this branch's creation.
+
 ## Project
 
 HIVE is an Expo / React Native app for a small community network. The current product direction is a warm community app with:

@@ -1,21 +1,21 @@
 {
   "expo": {
-    "name": "HIVE",
-    "slug": "the-hive",
+    "name": "Tech HIVE",
+    "slug": "hive-tech",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/HIVE Logo Low Res.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "scheme": "thehive",
+    "scheme": "hivetech",
     "splash": {
       "image": "./assets/HIVE Total transparent background.png",
       "resizeMode": "contain",
-      "backgroundColor": "#bd9348"
+      "backgroundColor": "#011F46"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.lucaswhelan.thehive",
+      "bundleIdentifier": "com.lucaswhelan.hivetech",
       "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "HIVE needs camera access to take profile photos and attach images to posts and messages.",
@@ -30,14 +30,14 @@
     },
     "notification": {
       "icon": "./assets/HIVE Bee.png",
-      "color": "#bd9348"
+      "color": "#011F46"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/HIVE Bee.png",
-        "backgroundColor": "#bd9348"
+        "backgroundColor": "#011F46"
       },
-      "package": "com.lucaswhelan.thehive",
+      "package": "com.lucaswhelan.hivetech",
       "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.RECORD_AUDIO",
@@ -47,9 +47,9 @@
     "web": {
       "favicon": "./assets/hive-favicon.png",
       "bundler": "metro",
-      "name": "HIVE",
-      "shortName": "HIVE",
-      "backgroundColor": "#bd9348"
+      "name": "Tech HIVE",
+      "shortName": "Tech HIVE",
+      "backgroundColor": "#011F46"
     },
     "plugins": [
       "expo-router",
@@ -64,7 +64,7 @@
         "expo-notifications",
         {
           "icon": "./assets/HIVE Bee.png",
-          "color": "#bd9348"
+          "color": "#011F46"
         }
       ],
       [
@@ -83,17 +83,18 @@
     },
     "extra": {
       "router": {},
-      "eas": {
-        "projectId": "20097652-8224-4286-aa03-5d7f4f3c0991"
+      "hiveVintage": {
+        "codeBranch": "tech-hive",
+        "year": null,
+        "backendConfigured": false,
+        "launchStatus": "not-deployed"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/20097652-8224-4286-aa03-5d7f4f3c0991",
-      "checkAutomatically": "ON_ERROR_RECOVERY",
-      "fallbackToCacheTimeout": 0
+      "enabled": false
     }
   }
 }
