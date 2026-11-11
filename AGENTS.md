@@ -1,5 +1,11 @@
 # HIVE App Agent Notes
 
+## This branch: Legacy HIVE 2027
+
+Legacy HIVE is the annual 2027 vintage. January sets goals, creeds, dues and structure. The Queen Bee monthly focus returns February through November, with the Bumble Bee Ball in December. This supersedes the old 2026 instruction below to avoid a rotating single-member spotlight. Membership and app access are specific to the vintage and year; the exact cutover must be implemented and tested before launch.
+
+Keep this small and simple. Preserve `main` and the live 2026 app. Read `VINTAGE.md` before deployment work. A Git branch separates code, not member data or access. Do not reuse the live 2026 backend, app deployment, EAS project or update channel for a new vintage without an explicit reviewed launch plan. No migration, member reset, deletion or access change is part of this branch's creation.
+
 ## Project
 
 HIVE is an Expo / React Native app for a small community network. The current product direction is a warm community app with:
