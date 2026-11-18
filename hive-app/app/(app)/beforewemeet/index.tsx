@@ -9,6 +9,7 @@ import { useSurveys, type SurveyAnswers } from '../../../lib/hooks/useSurveys';
 import { AppHeader } from '../../../components/navigation/AppHeader';
 import { SurveyModal } from '../../../components/surveys/SurveyModal';
 import { SharedPlate } from '../../../components/surveys/SharedPlate';
+import { PracticeCheckInReview } from '../../../components/surveys/PracticeCheckInReview';
 import { CheckInNextMeetings } from '../../../components/surveys/CheckInNextMeetings';
 import { CheckInHiveCard } from '../../../components/surveys/CheckInHiveCard';
 import { CheckInAction } from '../../../components/surveys/CheckInAction';
@@ -456,7 +457,11 @@ export default function BeforeWeMeetScreen() {
         carryForwardLoading={!(selected in todoErrors)}
         carryForwardError={todoErrors[selected]}
         onSubmit={onSubmit}
-        renderSuccess={close => <CheckInNextMeetings community={selectedMembership?.community}
+        renderSuccess={(close, answers) => practiceMode && profile ? <PracticeCheckInReview
+          member={{ id: profile.id, name: profile.name ?? 'You', avatar_url: profile.avatar_url ?? null }}
+          questions={forThisReader.questions} answers={{ ...answers, q_plate: plate ?? null }}
+          meetingId={currentMeetings.find(m => m.community_id === selected)?.id}
+          tech={selectedMembership?.community?.slug === 'tech'} onDone={close} /> : <CheckInNextMeetings community={selectedMembership?.community}
           upcoming={upcomingCheckIns(memberships.filter(member => merged?.sections.some(section => section.communityId === member.community_id)), currentMeetings, saved, selected, today)}
           onContinue={event => router.replace(`/beforewemeet?meeting=${encodeURIComponent(event.id)}${practiceMode ? '&practice=1' : ''}` as never)}
           onBrowse={() => { setSelected(null); router.replace(`/beforewemeet?browse=all${practiceMode ? '&practice=1' : ''}` as never); }}
@@ -479,7 +484,7 @@ export default function BeforeWeMeetScreen() {
 
   if (ready && merged) return (
     <View style={{ flex: 1, backgroundColor: skin.page }}>
-      <AppHeader title="Before we meet" />
+      <AppHeader title="Before We Meet" />
       <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }} style={{ backgroundColor: skin.page }}>
         <Text style={{ color: skin.inkSoft, fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21 }}>
           Check in any time. If you haven’t checked in, reminders only go out the day before or day of your meeting.
@@ -503,13 +508,13 @@ export default function BeforeWeMeetScreen() {
         </Text>
       ) : state === 'none' ? (
         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: skin.inkSoft, textAlign: 'center' }}>
-          Before we meet has not been set up yet.
+          Before We Meet has not been set up yet.
         </Text>
       ) : (
         <>
           <ActivityIndicator color={skin.gold} />
           <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft, fontSize: 14, marginTop: 12 }}>
-            Opening Before we meet…
+            Opening Before We Meet…
           </Text>
         </>
       )}

@@ -216,6 +216,9 @@ async function sendHeldCheckIn(admin: { from: (table: string) => any }, actorId:
     return errorResponse('That private preview is stale. Nothing was sent.', 409);
   }
   if (await hiveIsMeetingNow(admin, event.community_id)) return errorResponse('That HIVE is meeting right now, so nothing was sent.', 409);
+  if (!(await templateIsApproved(admin, 'checkIn'))) {
+    return errorResponse('Approve the updated Before We Meet email template first. The group send is still on hold.', 409);
+  }
   const { waiting } = await pendingForEvent(admin, meta.check_in_survey_id, event as EventRow);
   const day = pacificDate();
   const delivery = await deliverCheckIn(admin, waiting, 'checkIn', day,

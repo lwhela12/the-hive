@@ -135,7 +135,7 @@ const GENERIC_LINE: Record<Reach, { line: string; said: string }> = {
   },
   checkIn: {
     line: 'You have a meeting tomorrow',
-    said: 'Take a moment to fill in Before we meet before we get together.',
+    said: 'Take a moment to fill in the Before We Meet survey.',
   },
   monthCheckIn: {
     line: 'Your end of the month check-in is open',

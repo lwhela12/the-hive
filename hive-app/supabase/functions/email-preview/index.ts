@@ -171,7 +171,7 @@ serve(async (req) => {
     },
     {
       key: 'checkIn',
-      name: 'Before we meet',
+      name: 'Before We Meet',
       when: `The day before this HIVE meets. This preview opens its ${previewDay} meeting check-in.`,
       kind: 'checkIn',
       letter: withName(genericLetter('checkIn', {

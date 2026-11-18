@@ -63,7 +63,7 @@ interface SurveyModalProps {
   canEditAvailability?: boolean;
   timingLabel?: string;
   /** Only rendered after a successful save and its follow-up writes finish. */
-  renderSuccess?: (close: () => void) => React.ReactNode;
+  renderSuccess?: (close: () => void, answers: SurveyAnswers) => React.ReactNode;
   isEditingResponse?: boolean;
   carryForwardItems?: CarryForwardItem[];
   /**
@@ -817,7 +817,7 @@ export function SurveyModal({
 
           {submitted ? (
             <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-            {renderSuccess ? renderSuccess(handleClose) : <SurveyCompletion
+            {renderSuccess ? renderSuccess(handleClose, answers) : <SurveyCompletion
               message={isEditingResponse
                 ? 'Your updated answers are saved. HIVE will be working from the latest version.'
                 : 'Your check-in answers are saved.'}

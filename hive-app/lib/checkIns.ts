@@ -887,7 +887,7 @@ export function checkInDisplayName(title: string | null | undefined): string {
   // check-in on a HIVE's opening night; the letter still says so in its own
   // sentence, but the NAME is the name.
   if (/before (we meet|our first meeting)|monthly check-?in|tune-?up|pop \+ /.test(t)) {
-    return 'Before we meet';
+    return 'Before We Meet';
   }
   // Its own thing, and its own name — these are not the monthly pair.
   if (/quarterly/.test(t)) return 'Quarterly check-in';

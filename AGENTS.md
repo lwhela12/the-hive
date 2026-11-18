@@ -60,7 +60,7 @@ tasks that still need doing; how-to-work lives with the repo.
 - Outside-in proof: check a claim from the running app (the email, the button,
   the tile), never from the code.
 - For HIVE email review, deliver the member version to Nat privately from the same sender and template, with the same subject and copy. Keep recipient counts, configuration, and the group send approval in the separate organizer message.
-- The private test button must open the same destination in practice mode through confirmation. Keep answers and drafts local to the page and skip live writes, including task and wish changes. Verify the test path and approval path independently. Wait for Nat's explicit approval before member delivery.
+- The private test button must open the same destination in practice mode through confirmation. Keep answers and drafts local to the page and skip live writes, including task and wish changes. Show practice answers and their destinations at confirmation when the check-in feeds Meeting Helper. Verify the test path and approval path independently. Wait for Nat's explicit approval before member delivery.
 - Preserve live data; archive, never delete.
 
 ## Development rules
