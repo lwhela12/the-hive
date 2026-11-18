@@ -5,7 +5,7 @@ import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
 import { meetingOccurrence, type CheckInMeeting } from '../_shared/checkInSession.ts';
 import { PRE_MEETING_CHECK_IN_PATTERN } from '../_shared/checkInPatterns.ts';
 import { deliverCheckIn } from '../_shared/checkInDelivery.ts';
-import { genericLetter, hiveIsMeetingNow, sendReachEmail, templateIsApproved } from '../_shared/reachMail.ts';
+import { genericLetter, hiveIsMeetingNow, plainTextFrom, reachEmailHtml, scopeLetter, sendReachEmail, templateIsApproved } from '../_shared/reachMail.ts';
 import { hiveMark, hiveSealImg, type HiveMark } from '../_shared/hiveMark.ts';
 
 const PREVIEW_EMAIL = 'natwalstead@gmail.com';
@@ -78,13 +78,9 @@ function previewHtml(opts: { hive: string; touch: string; names: string[]; sendH
   </div>`;
 }
 
-function plainText(html: string) {
-  return html.replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\n{3,}/g, '\n\n').trim();
-}
-
 async function natProfile(admin: { from: (table: string) => any }) {
-  const { data } = await admin.from('profiles').select('id, email').ilike('email', PREVIEW_EMAIL).maybeSingle();
-  return data as { id: string; email: string | null } | null;
+  const { data } = await admin.from('profiles').select('id, email, name').ilike('email', PREVIEW_EMAIL).maybeSingle();
+  return data as { id: string; email: string | null; name: string } | null;
 }
 
 async function pendingForEvent(admin: { from: (table: string) => any }, surveyId: string, event: EventRow) {
@@ -121,9 +117,23 @@ async function sendPreview(to: string, html: string, subject: string) {
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FROM_EMAIL, to, subject, html, text: plainText(html) }),
+    body: JSON.stringify({ from: FROM_EMAIL, to, subject, html, text: plainTextFrom(html) }),
   });
   if (!response.ok) throw new Error('The preview did not reach Nat. Nothing was sent to members.');
+}
+
+function memberLetter(event: CheckInMeeting, practice = false) {
+  const href = new URL('/beforewemeet', APP_URL);
+  href.searchParams.set('meeting', event.id);
+  if (practice) href.searchParams.set('practice', '1');
+  return genericLetter('checkIn', {
+    buttonLabel: 'Open the check-in', href: href.toString(), hiveId: event.community_id,
+  });
+}
+
+async function sendMemberProof(admin: { from: (table: string) => any }, event: CheckInMeeting, name: string) {
+  const letter = await scopeLetter(admin, memberLetter(event, true));
+  await sendPreview(PREVIEW_EMAIL, reachEmailHtml({ ...letter, toName: name }), letter.subject);
 }
 
 async function makeScheduledPreviews(admin: { from: (table: string) => any }) {
@@ -176,6 +186,7 @@ async function makeScheduledPreviews(admin: { from: (table: string) => any }) {
         : []
       : undefined;
     const html = previewHtml({ hive, touch, names, mark, surveyHref, ideaChoices, techMeetingTimes, sendHref: `${APP_URL}/approve-check-in/${encodeURIComponent(holdId)}?action=send`, editHref: `${APP_URL}/admin` });
+    await sendMemberProof(admin, event, nat.name);
     await sendPreview(nat.email, html, `[Waiting on you] ${hive} · Before we meet`);
     previews += 1;
   }
@@ -208,9 +219,7 @@ async function sendHeldCheckIn(admin: { from: (table: string) => any }, actorId:
   const { waiting } = await pendingForEvent(admin, meta.check_in_survey_id, event as EventRow);
   const day = pacificDate();
   const delivery = await deliverCheckIn(admin, waiting, 'checkIn', day,
-    userId => sendReachEmail(admin, userId, 'checkIn', genericLetter('checkIn', {
-      buttonLabel: 'Open the check-in', href: `${APP_URL}/beforewemeet?meeting=${encodeURIComponent(event.id)}`, hiveId: event.community_id,
-    })),
+    userId => sendReachEmail(admin, userId, 'checkIn', memberLetter(event)),
     (userId, emailed) => ({ user_id: userId, community_id: event.community_id, notification_type: 'general', title: 'Your Before we meet check-in is open', content: 'Tap to fill it in.', email_sent: emailed, metadata: { meeting_id: event.id, check_in_preview_id: holdId } }),
   );
   await admin.from('notifications').update({ metadata: { ...meta, check_in_approval: 'sent', check_in_approved_at: new Date().toISOString(), check_in_sent_to: delivery.emailed } }).eq('id', holdId);
@@ -222,13 +231,27 @@ serve(async (req) => {
   if (cors) return cors;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', serviceKey);
-  let body: { action?: string; hold_id?: string } = {};
+  let body: { action?: string; hold_id?: string; event_id?: string } = {};
   try { body = await req.json() as typeof body; } catch { /* scheduled call is an empty object */ }
   const authHeader = req.headers.get('Authorization') ?? '';
   const bySchedule = !!serviceKey && authHeader === `Bearer ${serviceKey}` && !body.action;
   if (bySchedule) {
     try { return jsonResponse(await makeScheduledPreviews(admin)); }
     catch (error) { console.error('[check-in-preview]', error); return errorResponse('Could not prepare the private check-in previews.', 503); }
+  }
+  if (body.action === 'member_proof' && serviceKey && authHeader === `Bearer ${serviceKey}`) {
+    if (!body.event_id) return errorResponse('Choose the meeting to preview.', 400);
+    try {
+      const { data: event } = await admin.from('events').select('id, community_id')
+        .eq('id', body.event_id).eq('event_type', 'meeting').eq('status', 'scheduled').maybeSingle();
+      const nat = await natProfile(admin);
+      if (!event || !nat) return errorResponse('Meeting or private preview recipient was unavailable.', 404);
+      await sendMemberProof(admin, event, nat.name);
+      return jsonResponse({ private_preview_sent: true });
+    } catch (error) {
+      console.error('[check-in-preview] Member proof failed', error);
+      return errorResponse('Could not deliver the private copy.', 503);
+    }
   }
   if (body.action !== 'send' || !body.hold_id) return errorResponse('This check-in preview needs Nat’s signed-in approval.', 403);
   const auth = await verifySupabaseJwt(authHeader);

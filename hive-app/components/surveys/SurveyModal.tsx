@@ -51,6 +51,7 @@ interface SurveyModalProps {
   initialAnswers?: SurveyAnswers;
   /** Isolate drafts by member, HIVE and meeting/month occurrence. */
   draftScope?: string;
+  practice?: boolean;
   closeLabel?: string;
   introduction?: React.ReactNode;
   /** Place the shared capacity picker inside the OG arrival sequence. */
@@ -196,6 +197,7 @@ export function SurveyModal({
   answerCommunityId = survey.community_id,
   initialAnswers,
   draftScope,
+  practice = false,
   closeLabel = "Back to HIVE",
   introduction,
   afterQuestionId,
@@ -376,6 +378,11 @@ export function SurveyModal({
     setError(null);
     setDraftLoaded(false);
 
+    if (practice) {
+      setDraftLoaded(true);
+      return;
+    }
+
     AsyncStorage.getItem(DRAFT_KEY(draftId)).then(raw => {
       if (!active) return;
       if (raw) {
@@ -389,7 +396,7 @@ export function SurveyModal({
     return () => {
       active = false;
     };
-  }, [draftId]);
+  }, [draftId, practice]);
 
   const isStaple = isPreMeetingCheckInSurvey(survey) || isEndOfMonthCheckInSurvey(survey);
   const isOgMeeting = hiveSlug === 'default' && isPreMeetingCheckInSurvey(survey);
@@ -434,10 +441,10 @@ export function SurveyModal({
   const setAnswersPatch = useCallback((patch: Record<string, unknown>) => {
     setAnswers(prev => {
       const next = pruneHiddenSurveyAnswers(survey.questions, { ...prev, ...patch });
-      AsyncStorage.setItem(DRAFT_KEY(draftId), JSON.stringify(next)).catch(() => {});
+      if (!practice) AsyncStorage.setItem(DRAFT_KEY(draftId), JSON.stringify(next)).catch(() => {});
       return next;
     });
-  }, [draftId, survey.questions]);
+  }, [draftId, practice, survey.questions]);
   const setAnswer = useCallback((questionId: string, value: any) => {
     setAnswersPatch({ [questionId]: value });
   }, [setAnswersPatch]);
@@ -451,8 +458,12 @@ export function SurveyModal({
     }
     const departureError = visibleQuestions.some(q => q.id === 'q_hard_out') ? personalHardOutError(submissionAnswers.q_hard_out) : null;
     if (departureError) { setError(departureError); return; }
-    setSubmitting(true);
     setError(null);
+    if (practice) {
+      setSubmitted(true);
+      return;
+    }
+    setSubmitting(true);
     const finalAnswers: SurveyAnswers = carryForwardItems.length > 0
       ? {
           ...submissionAnswers,
@@ -761,6 +772,7 @@ export function SurveyModal({
         </View>
       )}
     <SurveyQuestionField
+      practice={practice}
       wishReviewItems={q.id === 'q_hd_wish' ? wishReviewItems : undefined}
       renderWishReview={q.id === 'q_hd_wish' ? renderCarryForwardControls : undefined}
       hangEvents={currentActivity?.data?.hangs}
@@ -967,12 +979,12 @@ export function SurveyModal({
 
               {draftLoaded && isOgMeeting && answerCommunityId && ideaMeetingId && (
                 <OgIdeaChoices communityId={answerCommunityId} meetingId={ideaMeetingId}
-                  canEdit={canEditIdeas} answers={answers} onSetAnswers={setAnswersPatch} />
+                  canEdit={!practice && canEditIdeas} answers={answers} onSetAnswers={setAnswersPatch} />
               )}
 
               {draftLoaded && hiveSlug === 'tech' && answerCommunityId && availabilityMeetingId && (
                 <TechMeetingTimes communityId={answerCommunityId} meetingId={availabilityMeetingId}
-                  canEdit={canEditAvailability} answers={answers} onSetAnswers={setAnswersPatch} />
+                  canEdit={!practice && canEditAvailability} answers={answers} onSetAnswers={setAnswersPatch} />
               )}
 
               {error && (

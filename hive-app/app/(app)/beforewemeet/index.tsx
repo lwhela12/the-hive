@@ -63,7 +63,8 @@ import type { Survey, SurveyQuestion } from '../../../types';
  */
 export default function BeforeWeMeetScreen() {
   const router = useRouter();
-  const { from, hive, meeting, browse } = useLocalSearchParams<{ from?: string; hive?: string; meeting?: string; browse?: string }>();
+  const { from, hive, meeting, browse, practice } = useLocalSearchParams<{ from?: string; hive?: string; meeting?: string; browse?: string; practice?: string }>();
+  const practiceMode = practice === '1';
   const meetingId = typeof meeting === 'string' ? meeting : null;
   const [linkedMeeting, setLinkedMeeting] = useState<MeetingPreview | null>(null);
   const [linkFailed, setLinkFailed] = useState(false);
@@ -428,10 +429,10 @@ export default function BeforeWeMeetScreen() {
     <CheckInAction title="Open your check-ins" onPress={() => router.replace('/beforewemeet' as never)} />
   </View>;
   const isOgMeeting = selectedMembership?.community?.slug === 'default';
-  const personalQuestion = <SharedPlate scope={`check-in-plate:${profile?.id}:${row?.id}:${today}`} onChange={setPlate} index={isOgMeeting ? 4 : 0} />;
+  const personalQuestion = <SharedPlate practice={practiceMode} scope={`check-in-plate:${profile?.id}:${row?.id}:${today}`} onChange={setPlate} index={isOgMeeting ? 4 : 0} />;
 
   if (ready && forThisReader && selected) {
-    const mine = saved[selected];
+    const mine = practiceMode ? undefined : saved[selected];
     const section = merged?.sections.find(s => s.communityId === selected);
     return (
       <SurveyModal
@@ -440,6 +441,7 @@ export default function BeforeWeMeetScreen() {
         survey={forThisReader}
         answerCommunityId={selected}
         initialAnswers={mine}
+        practice={practiceMode}
         introduction={isOgMeeting ? undefined : personalQuestion}
         afterQuestionId={isOgMeeting ? 'q_feeling_note' : undefined}
         afterQuestion={isOgMeeting ? personalQuestion : undefined}
@@ -456,8 +458,8 @@ export default function BeforeWeMeetScreen() {
         onSubmit={onSubmit}
         renderSuccess={close => <CheckInNextMeetings community={selectedMembership?.community}
           upcoming={upcomingCheckIns(memberships.filter(member => merged?.sections.some(section => section.communityId === member.community_id)), currentMeetings, saved, selected, today)}
-          onContinue={event => router.replace(`/beforewemeet?meeting=${encodeURIComponent(event.id)}` as never)}
-          onBrowse={() => { setSelected(null); router.replace('/beforewemeet?browse=all' as never); }}
+          onContinue={event => router.replace(`/beforewemeet?meeting=${encodeURIComponent(event.id)}${practiceMode ? '&practice=1' : ''}` as never)}
+          onBrowse={() => { setSelected(null); router.replace(`/beforewemeet?browse=all${practiceMode ? '&practice=1' : ''}` as never); }}
           onDone={close} />}
         closeLabel={originMembership ? "Back to Meetings" : "Back to check-ins"}
         hiveSlug={selectedMembership?.community?.slug}

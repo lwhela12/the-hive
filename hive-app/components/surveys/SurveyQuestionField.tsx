@@ -422,9 +422,11 @@ export function SurveyQuestionField({
   onSetAnswer,
   accent = HIVE_GOLD,
   wishReviewItems = [],
+  practice = false,
   renderWishReview,
 }: {
   question: SurveyQuestion;
+  practice?: boolean;
   wishReviewItems?: CarryForwardItem[];
   renderWishReview?: (item: CarryForwardItem) => ReactNode;
   index: number;
@@ -741,7 +743,7 @@ export function SurveyQuestionField({
               const chosen = selectedWish?.id === wish.id;
               const sourceCommunity = memberships.find(member => member.community_id === wish.communityId)?.community
                 ?? (community?.id === wish.communityId ? community : null);
-              const canToggleReach = wish.record.user_id === profile?.id
+              const canToggleReach = !practice && wish.record.user_id === profile?.id
                 && ['hive', 'all_hives'].includes(wish.record.share_scope ?? '')
                 && (wish.reach === 'all_hives' || (!!sourceCommunity && ['all_hives', 'public'].includes(sourceCommunity.max_share_scope ?? '')));
               return <View key={wish.id} style={{ padding: 14,
@@ -764,7 +766,7 @@ export function SurveyQuestionField({
                   {chosen && wish.title && wish.title !== wish.description && <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: '#5c5648' }}>{wish.description}</Text>}
                 </View>
                 </Pressable>
-                <EditButton accessibilityLabel={`Manage wish: ${wish.title || wish.description}`} onPress={() => setManageTarget(wish.record)} />
+                {!practice && <EditButton accessibilityLabel={`Manage wish: ${wish.title || wish.description}`} onPress={() => setManageTarget(wish.record)} />}
                 </View>
                 {chosen && <View style={{ marginLeft: 29, marginTop: 6 }}>
                   <ReachPill reach={wish.reach} communityId={wish.communityId} busy={savingReach}
@@ -788,13 +790,13 @@ export function SurveyQuestionField({
               <Pressable accessibilityRole="button" onPress={() => setWriteOwnWish(true)} style={{ padding: 12, borderRadius: 10, backgroundColor: tint.wash }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', color: tint.ink }}>Write my own</Text>
               </Pressable>
-              <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/(app)', params: {
+              {!practice && <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/(app)', params: {
                 prefill: textValue.trim()
                   ? `Help me turn this into a High Definition wish for my HIVE — specific enough that somebody could actually grant it: "${textValue.trim()}"`
                   : 'Help me find my High Definition wish for this HIVE. Ask me where I am, where I want to be, what I have tried and where I am stuck.',
               } })} style={{ padding: 12, borderRadius: 10, backgroundColor: tint.accent }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', color: 'white' }}>Refine with Clive ✨</Text>
-              </Pressable>
+              </Pressable>}
             </View>
             {(writeOwnWish || !!textValue.trim()) && <>
               <VoiceTextInput value={textValue} multiline communityId={communityId}
