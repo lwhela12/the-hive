@@ -1872,6 +1872,8 @@ export default function MeetingHelperScreen() {
   const NoteBody = useCallback(({ noteKey, emptyText }: { noteKey: EditableNoteKey; emptyText: string }) => {
     const value = (notes[noteKey] ?? '').trim();
     if (!value) return <EmptyNote>{emptyText}</EmptyNote>;
+    const linkedTechNews = deckSlug === 'tech' && noteKey === 'news';
+    const parts = linkedTechNews ? value.split(/(https?:\/\/[^\s]+)/g) : [value];
     return (
       <Text
         style={{
@@ -1881,10 +1883,19 @@ export default function MeetingHelperScreen() {
           color: 'rgba(49,49,48,0.87)',
         }}
       >
-        {value}
+        {parts.map((part, index) => /^https?:\/\//.test(part) ? (
+          <Text
+            key={index}
+            accessibilityRole="link"
+            onPress={() => Linking.openURL(part)}
+            style={{ color: GOLD_DEEP, textDecorationLine: 'underline' }}
+          >
+            {part}
+          </Text>
+        ) : part)}
       </Text>
     );
-  }, [EmptyNote, notes, sz]);
+  }, [EmptyNote, deckSlug, notes, sz]);
 
   /**
    * Why it would not seal, in the words the function used.
