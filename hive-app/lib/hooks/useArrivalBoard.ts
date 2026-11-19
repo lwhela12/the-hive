@@ -128,9 +128,14 @@ export const ARRIVAL_STATUSES = {
 } as const;
 export type ArrivalStatus = keyof typeof ARRIVAL_STATUSES;
 
-export function getArrivalStatus(response?: SurveyResponse, report?: MeetingAttendanceReport): ArrivalStatus {
+export function arrivalStatusStyle(status: ArrivalStatus, googleMeet = false) {
+  const style = ARRIVAL_STATUSES[status];
+  return googleMeet && status === 'remote' ? { ...style, label: 'Google Meet' } : style;
+}
+
+export function getArrivalStatus(response?: SurveyResponse, report?: MeetingAttendanceReport, googleMeet = false): ArrivalStatus {
   const attendance = getReportedAttendance(response, report);
-  if (attendance !== 'unknown') return attendance;
+  if (attendance !== 'unknown') return googleMeet && attendance === 'in_person' ? 'remote' : attendance;
   return response || report ? 'unconfirmed' : 'not_checked_in';
 }
 
@@ -138,12 +143,13 @@ export function getArrivalGroups(
   members: ArrivalBoardMember[],
   responses: Map<string, SurveyResponse>,
   reports: Map<string, MeetingAttendanceReport> = new Map(),
+  googleMeet = false,
 ) {
   const ordered = getCheckInOrder(members, responses, reports);
-  return (Object.keys(ARRIVAL_STATUSES) as ArrivalStatus[]).map(status => ({
+  return (Object.keys(ARRIVAL_STATUSES) as ArrivalStatus[]).filter(status => !googleMeet || status !== 'in_person').map(status => ({
     status,
-    ...ARRIVAL_STATUSES[status],
-    members: ordered.filter(member => getArrivalStatus(responses.get(member.id), reports.get(member.id)) === status),
+    ...arrivalStatusStyle(status, googleMeet),
+    members: ordered.filter(member => getArrivalStatus(responses.get(member.id), reports.get(member.id), googleMeet) === status),
   }));
 }
 

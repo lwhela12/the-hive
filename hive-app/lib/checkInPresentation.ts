@@ -1,3 +1,4 @@
+import { TECH_MEET_ATTENDANCE, TECH_ABSENT_ATTENDANCE } from './arrivalSurveySelection';
 import type { SurveyQuestion } from '../types';
 import { formatDateShort, formatTimeRange } from './dateUtils';
 
@@ -68,6 +69,7 @@ export function checkInQuestions(questions: SurveyQuestion[], month = false, hiv
   )).map(q => {
     if (month && ['q_newsletter', 'q_eom_newsletter', 'q_shoutout'].includes(q.id)) return { ...q, text: 'Anything for the Buzz? Upcoming shows, events, a plug, or a shout-out for someone — include names, dates and links.' };
     if (month && /how (did|has|is).*(month|things)|how.*month.*(go|been)/i.test(q.text)) return { ...q, text: 'How are things going so far this month?' };
+    if (techMeeting && q.id === 'q_attendance') return { ...q, text: 'Will you join us on Google Meet?', options: [TECH_MEET_ATTENDANCE, TECH_ABSENT_ATTENDANCE] };
     if (q.id === 'q_attendance' && q.options) return {
       ...q,
       options: q.options.map(option => /missing this one/i.test(option)

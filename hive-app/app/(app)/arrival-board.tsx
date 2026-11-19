@@ -29,7 +29,7 @@ const hiveBee = require('../../assets/BEE ONLY IN GOLD BG.png');
 
 export default function ArrivalBoardScreen() {
   const router = useRouter();
-  const { communityRole, profile } = useAuth();
+  const { community, communityRole, profile } = useAuth();
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const [memberToEdit, setMemberToEdit] = useState<string | null>(null);
   const { from } = useLocalSearchParams<{ from?: string }>();
@@ -176,12 +176,12 @@ export default function ArrivalBoardScreen() {
               Individual check-in answers stay with each member and the HIVE owners.
             </Text>
             {members.filter(member => member.id === profile?.id).map(member => (
-              <ArrivalMemberCard key={member.id} member={member} response={responsesByUser.get(member.id)}
+              <ArrivalMemberCard googleMeet={community?.slug === 'tech'} key={member.id} member={member} response={responsesByUser.get(member.id)}
                 report={reportsByUser.get(member.id)} isTV={false} showLegacyEnergy={!!survey && surveyUsesLegacyEnergy(survey)} />
             ))}
           </View>
         ) : (
-          <ArrivalAttendanceGroups members={members} responsesByUser={responsesByUser} reportsByUser={reportsByUser}
+          <ArrivalAttendanceGroups googleMeet={community?.slug === 'tech'} members={members} responsesByUser={responsesByUser} reportsByUser={reportsByUser}
             columns={columns} isTV={isTV} showLegacyEnergy={!!survey && surveyUsesLegacyEnergy(survey)}
             onAdminPress={isAdmin && nextMeeting ? setMemberToEdit : undefined} />
         )}

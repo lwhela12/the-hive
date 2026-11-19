@@ -6,6 +6,12 @@ const dateModule = { exports: {} };
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/dateUtils.ts','utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:dateModule.exports,module:dateModule,Date,Intl});
 const moduleObject = { exports: {} };
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/checkInPresentation.ts','utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:moduleObject.exports,module:moduleObject,Date,Set,require:(id)=>{
+  if(id==='./arrivalSurveySelection') {
+    const source=fs.readFileSync('lib/arrivalSurveySelection.ts','utf8');
+    const entry={exports:{}};
+    new Function('exports',ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(entry.exports);
+    return entry.exports;
+  }
   if(id==='./dateUtils') return dateModule.exports;
   throw new Error(`Unexpected import: ${id}`);
 }});

@@ -22,7 +22,7 @@ export function PracticeCheckInReview({ member, questions, answers, meetingId, t
     <Text accessibilityRole="header" style={{ fontSize: 24, fontWeight: '700' }}>Practice check-in complete</Text>
     <Text>Your live attendance and answers are unchanged.</Text>
     <Text accessibilityRole="header" style={{ fontSize: 18, fontWeight: '700' }}>Meeting Helper · Arrivals preview</Text>
-    <ArrivalMemberCard member={member} response={{
+    <ArrivalMemberCard googleMeet={tech} member={member} response={{
       id: 'practice', survey_id: 'practice', user_id: member.id, answers, submitted_at: new Date().toISOString(),
     }} isTV={false} compact />
     {questions.flatMap(question => {

@@ -33,3 +33,10 @@ const ids = Array.from(groups).flatMap(group => Array.from(group.members, member
 assert.equal(new Set(ids).size, members.length, 'every member appears once');
 assert.equal(ids.length, members.length, 'counts cover the whole roster');
 console.log('PASS: attendance groups, missing/unknown distinction, report precedence, newer member replies, and order within groups.');
+
+assert.equal(getArrivalStatus(reply('In person'), undefined, true), 'remote');
+assert.equal(getArrivalStatus(reply('Joining on Google Meet'), undefined, true), 'remote');
+assert.equal(getArrivalStatus(reply('Missing this one'), undefined, true), 'missing');
+const techGroups = getArrivalGroups(members, responses, new Map(), true);
+assert.equal(techGroups.some(group => group.status === 'in_person'), false);
+assert.equal(techGroups.find(group => group.status === 'remote').label, 'Google Meet');

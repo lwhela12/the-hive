@@ -2006,7 +2006,7 @@ export default function MeetingHelperScreen() {
           </Text>
         </View>
       ) : (
-        <ArrivalAttendanceGroups members={members} responsesByUser={responsesByUser} reportsByUser={reportsByUser}
+        <ArrivalAttendanceGroups googleMeet={deckSlug === 'tech'} members={members} responsesByUser={responsesByUser} reportsByUser={reportsByUser}
           columns={roomColumns} isTV={isTV} compact
           showLegacyEnergy={!!survey && surveyUsesLegacyEnergy(survey)}
           onAdminPress={isAdmin && nextMeeting ? setArrivalMemberToEdit : undefined} />

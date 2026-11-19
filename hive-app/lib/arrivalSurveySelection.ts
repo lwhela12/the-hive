@@ -6,6 +6,9 @@ type ArrivalSurveyQuestions = ArrivalSurveyScope & {
   questions?: Array<{ id?: string | null }> | null;
 };
 
+export const TECH_MEET_ATTENDANCE = 'Joining on Google Meet';
+export const TECH_ABSENT_ATTENDANCE = '😢 Missing this one — please email me the recap';
+
 export type ArrivalAttendance = 'in_person' | 'remote' | 'missing' | 'unknown';
 
 export function isCurrentArrivalRequest(

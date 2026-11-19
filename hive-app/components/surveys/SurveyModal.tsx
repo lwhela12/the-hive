@@ -1,3 +1,4 @@
+import { getArrivalAttendance, TECH_ABSENT_ATTENDANCE, TECH_MEET_ATTENDANCE } from '../../lib/arrivalSurveySelection';
 import { fetchCheckInActionItems } from '../../lib/checkInActionItems';
 import { personalHardOutError } from '../../lib/personalHardOut';
 import { Fragment, useState, useEffect, useCallback, useMemo } from 'react';
@@ -383,12 +384,20 @@ export function SurveyModal({
       return;
     }
 
+    const restore = (stored: SurveyAnswers) => {
+      if (!survey.questions.some(q => q.id === 'q_attendance' && q.options?.includes(TECH_MEET_ATTENDANCE))) {
+        return pruneHiddenSurveyAnswers(survey.questions, stored);
+      }
+      const attendance = getArrivalAttendance(stored);
+      const q_attendance = attendance === 'missing' ? TECH_ABSENT_ATTENDANCE : TECH_MEET_ATTENDANCE;
+      return pruneHiddenSurveyAnswers(survey.questions, attendance === 'unknown' ? stored : { ...stored, q_attendance });
+    };
     AsyncStorage.getItem(DRAFT_KEY(draftId)).then(raw => {
       if (!active) return;
       if (raw) {
-        try { setAnswers(pruneHiddenSurveyAnswers(survey.questions, JSON.parse(raw))); } catch {}
+        try { setAnswers(restore(JSON.parse(raw))); } catch {}
       } else {
-        setAnswers(pruneHiddenSurveyAnswers(survey.questions, initialAnswers ?? {}));
+        setAnswers(restore(initialAnswers ?? {}));
       }
       setDraftLoaded(true);
     });

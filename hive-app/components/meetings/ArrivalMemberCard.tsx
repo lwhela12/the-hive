@@ -4,7 +4,7 @@ import { Avatar } from '../ui/Avatar';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ENERGY_DOTS_MAX,
-  ARRIVAL_STATUSES,
+  arrivalStatusStyle,
   getArrivalStatus,
   getEnergyDots,
   getFirstName,
@@ -85,6 +85,7 @@ export function ArrivalMemberCard({
   isTV,
   compact = false,
   showLegacyEnergy = false,
+  googleMeet = false,
 }: {
   member: ArrivalBoardMember;
   response?: SurveyResponse;
@@ -93,6 +94,7 @@ export function ArrivalMemberCard({
   isTV: boolean;
   compact?: boolean;
   showLegacyEnergy?: boolean;
+  googleMeet?: boolean;
 }) {
   const answers = response?.answers ?? {};
   const checkedIn = !!response;
@@ -104,8 +106,8 @@ export function ArrivalMemberCard({
   const energyLevel = showLegacyEnergy ? getNumberAnswer(answers, 'q_energy_level') : null;
   const energyMode = showLegacyEnergy ? getTextAnswer(answers, 'q_energy_mode') : '';
   const plate = getTextAnswer(answers, 'q_plate');
-  const status = getArrivalStatus(response, report);
-  const attendanceStyle = ARRIVAL_STATUSES[status];
+  const status = getArrivalStatus(response, report, googleMeet);
+  const attendanceStyle = arrivalStatusStyle(status, googleMeet);
   const hardOut = status === 'in_person' || status === 'remote' ? personalHardOut(answers.q_hard_out).label : '';
   const energyDots = energyLevel !== null ? getEnergyDots(energyLevel) : null;
   const scale = compact ? 0.78 : 1;

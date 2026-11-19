@@ -20,6 +20,7 @@ export function AdminMemberUpdate({ members, meeting, reportsByUser, onSaved, op
   compact?: boolean;
 }) {
   const { community, communityId, communityRole, profile, session } = useAuth();
+  const googleMeet = community?.slug === 'tech';
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const [open, setOpen] = useState(false);
   const [memberId, setMemberId] = useState('');
@@ -35,7 +36,7 @@ export function AdminMemberUpdate({ members, meeting, reportsByUser, onSaved, op
     if (!openForMemberId || !members.some((member) => member.id === openForMemberId)) return;
     const report = reportsByUser.get(openForMemberId);
     setMemberId(openForMemberId);
-    setAttendance(report?.attendance ?? null);
+    setAttendance(googleMeet && report?.attendance === 'in_person' ? 'remote' : report?.attendance ?? null);
     setHdWish(report?.hd_wish ?? '');
     setHelpIdea(report?.help_idea ?? '');
     setError('');
@@ -48,7 +49,7 @@ export function AdminMemberUpdate({ members, meeting, reportsByUser, onSaved, op
   const selectMember = (id: string) => {
     const report = reportsByUser.get(id);
     setMemberId(id);
-    setAttendance(report?.attendance ?? null);
+    setAttendance(googleMeet && report?.attendance === 'in_person' ? 'remote' : report?.attendance ?? null);
     setHdWish(report?.hd_wish ?? '');
     setHelpIdea(report?.help_idea ?? '');
     setError('');
@@ -128,9 +129,9 @@ export function AdminMemberUpdate({ members, meeting, reportsByUser, onSaved, op
                   <View>
                     <Text style={{ fontFamily: 'Lato_700Bold', color: '#2d2d2d', marginBottom: 8 }}>Attendance</Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
-                      {choices.map((choice) => (
+                      {choices.filter(choice => !googleMeet || choice.value !== 'in_person').map((choice) => (
                         <Pressable key={choice.value} accessibilityRole="button" onPress={() => setAttendance(choice.value)} style={{ borderRadius: 10, borderWidth: 1, borderColor: attendance === choice.value ? '#8a6b30' : '#dfcda8', backgroundColor: attendance === choice.value ? '#f6e9ca' : '#fff', paddingHorizontal: 12, paddingVertical: 9 }}>
-                          <Text style={{ fontFamily: 'Lato_700Bold', color: '#624923' }}>{choice.label}</Text>
+                          <Text style={{ fontFamily: 'Lato_700Bold', color: '#624923' }}>{googleMeet && choice.value === 'remote' ? 'Google Meet' : choice.label}</Text>
                         </Pressable>
                       ))}
                     </View>

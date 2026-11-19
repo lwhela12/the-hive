@@ -145,7 +145,9 @@ const compiled = ts.transpileModule(presentationSource, {
 }).outputText;
 const presentationModule = { exports: {} };
 new Function('require', 'module', 'exports', compiled)(
-  () => ({ formatDateShort: () => '', formatTimeRange: () => '' }),
+  (id) => id === './arrivalSurveySelection'
+    ? { TECH_MEET_ATTENDANCE: 'Joining on Google Meet', TECH_ABSENT_ATTENDANCE: 'Missing this one' }
+    : { formatDateShort: () => '', formatTimeRange: () => '' },
   presentationModule,
   presentationModule.exports,
 );

@@ -5,7 +5,7 @@ import type { SurveyResponse } from '../../lib/hooks/useSurveys';
 import { ArrivalMemberCard } from './ArrivalMemberCard';
 
 /** The same attendance overview on the meeting deck and the Arrival Board. */
-export function ArrivalAttendanceGroups({ members, responsesByUser, reportsByUser, columns, isTV, compact = false, showLegacyEnergy = false, onAdminPress }: {
+export function ArrivalAttendanceGroups({ members, responsesByUser, reportsByUser, columns, isTV, compact = false, showLegacyEnergy = false, googleMeet = false, onAdminPress }: {
   members: ArrivalBoardMember[];
   responsesByUser: Map<string, SurveyResponse>;
   reportsByUser: Map<string, MeetingAttendanceReport>;
@@ -13,9 +13,10 @@ export function ArrivalAttendanceGroups({ members, responsesByUser, reportsByUse
   isTV: boolean;
   compact?: boolean;
   showLegacyEnergy?: boolean;
+  googleMeet?: boolean;
   onAdminPress?: (memberId: string) => void;
 }) {
-  const groups = getArrivalGroups(members, responsesByUser, reportsByUser);
+  const groups = getArrivalGroups(members, responsesByUser, reportsByUser, googleMeet);
   return <View style={{ gap: isTV ? 24 : 18 }}>
     <View accessibilityLabel="Attendance totals" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
       {groups.filter(group => group.status !== 'unconfirmed' || group.members.length > 0).map(group => (
@@ -35,7 +36,7 @@ export function ArrivalAttendanceGroups({ members, responsesByUser, reportsByUse
           {group.members.map(member => <View key={member.id} style={{ width: `${100 / columns}%`, padding: 5 }}>
             <ArrivalMemberCard member={member} response={responsesByUser.get(member.id)} report={reportsByUser.get(member.id)}
               onAdminPress={onAdminPress ? () => onAdminPress(member.id) : undefined}
-              isTV={isTV} compact={compact} showLegacyEnergy={showLegacyEnergy} />
+              isTV={isTV} googleMeet={googleMeet} compact={compact} showLegacyEnergy={showLegacyEnergy} />
           </View>)}
         </View>
       </View>
