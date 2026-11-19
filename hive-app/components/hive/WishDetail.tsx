@@ -19,7 +19,6 @@ import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { formatDateShort } from '../../lib/dateUtils';
 import { GrantWishModal } from './GrantWishModal';
-import { getWishDetailText, getWishQuickTitle, shouldShowWishDescription } from '../../lib/wishDisplay';
 import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { notifyWishMentions } from '../../lib/wishMentions';
 import { confirmAction, showAlert } from '../../lib/showAlert';
@@ -82,9 +81,11 @@ export function WishDetail({
   const isOwnWish = profile?.id === wish.user_id;
   const canGrant = isOwnWish && wish.status === 'public' && onGrant;
   const isGranted = wish.status === 'fulfilled';
-  const wishTitle = getWishQuickTitle(wish, 90);
-  const wishDetailText = getWishDetailText(wish);
-  const showDescription = shouldShowWishDescription(wish);
+  // The detail view shows the original text. A feed preview may shorten it.
+  const wishDetailText = wish.description?.trim() || '';
+  const savedTitle = wish.title?.trim() || '';
+  const wishTitle = savedTitle && savedTitle !== wishDetailText ? savedTitle : '';
+  const showDescription = !!wishDetailText;
   const wishOwnerId = wish.user?.id ?? wish.user_id;
   const wishOwnerName = wish.user?.name?.trim() || 'HIVE member';
   const wishOwnerAvatarUrl = wish.user?.avatar_url;
@@ -408,11 +409,11 @@ export function WishDetail({
                   </View>
                 )}
               </View>
-              <Text
+              {(wishTitle || !showDescription) && <Text
                 style={{ fontFamily: 'Lato_700Bold', color: '#2d2d2d', marginTop: 8, fontSize: 20, lineHeight: 26 }}
               >
-                {wishTitle}
-              </Text>
+                {wishTitle || 'Untitled wish'}
+              </Text>}
               {showDescription && (
                 <LinkifiedText
                   style={{ fontFamily: 'Lato_400Regular', color: 'rgba(49,49,48,0.8)', marginTop: 8, fontSize: 16, lineHeight: 23 }}
