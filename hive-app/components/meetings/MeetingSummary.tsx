@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Platform } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput, Platform, Linking } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '../../lib/supabase';
@@ -506,6 +506,9 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   };
 
   const parsedSummary = parseSummary(meeting.summary);
+  const meetPacketUrl = meeting.tech_meet_packet_folder_id
+    ? `https://drive.google.com/drive/folders/${encodeURIComponent(meeting.tech_meet_packet_folder_id)}`
+    : undefined;
   const conciseRecap = buildMeetingRecapContent(parsedSummary, members);
   const openRecapDate = async (item: RecapDateItem) => {
     const key = `${item.date}:${item.label}`;
@@ -1555,6 +1558,21 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
       </View>
 
       <ScrollView className="flex-1" contentContainerClassName="p-4">
+        {meeting.tech_meet_recap && meetPacketUrl && (
+          <View className="mb-5 rounded-xl border border-gray-200 p-4">
+            <Text className="mb-2 text-lg font-bold text-hive-dark">Google Meet recap</Text>
+            <Text className="mb-4 leading-6 text-gray-800">{meeting.tech_meet_recap}</Text>
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => {
+                void Linking.openURL(meetPacketUrl).catch(() => showAlert('Could not open Drive', 'Try opening the meeting assets again.'));
+              }}
+              className="self-start rounded-full border border-gold px-4 py-2"
+            >
+              <Text className="font-bold text-hive-dark">Open meeting assets</Text>
+            </Pressable>
+          </View>
+        )}
         {meeting.processing_status === 'failed' && (
           <View className="p-4 rounded-xl mb-4 bg-red-50">
             <Text className="font-medium text-red-700">
@@ -2162,7 +2180,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           </View>
         )}
 
-        {!manualCorrection && isLegacy && parsedSummary.summary && (
+        {!manualCorrection && !meeting.tech_meet_recap && isLegacy && parsedSummary.summary && (
           <View className="mb-6">
             <Text className="text-lg font-semibold text-gray-700 mb-2">Summary</Text>
             <View className="bg-gray-50 rounded-xl p-4">

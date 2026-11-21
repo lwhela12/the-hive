@@ -428,6 +428,8 @@ export interface Meeting extends Record<string, unknown> {
   transcript_raw?: string;
   transcript_attributed?: string;
   summary?: string;
+  tech_meet_recap?: string | null;
+  tech_meet_packet_folder_id?: string | null;
   recorded_by?: string;
   processing_status: 'pending' | 'transcribing' | 'summarizing' | 'complete' | 'failed';
   assemblyai_transcript_id?: string;
